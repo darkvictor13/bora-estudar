@@ -17,7 +17,10 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bora Estudar",
+  title: {
+    default: "Bora Estudar",
+    template: "%s | Bora Estudar",
+  },
   description: "Organize seus estudos com o Bora Estudar.",
 };
 
@@ -31,7 +34,9 @@ const appearanceInitializer = `
       ? savedTheme
       : prefersDark ? "dark" : "light";
     const savedProfile = localStorage.getItem("be-profile");
-    const profile = savedProfile === "professor" ? "professor" : "aluno";
+    const profile = ["aluno", "professor", "admin"].includes(savedProfile ?? "")
+      ? savedProfile
+      : "aluno";
 
     if (theme === "dark") root.dataset.theme = "dark";
     else delete root.dataset.theme;

@@ -16,6 +16,27 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Navegação e sessão
+
+O frontend usa o App Router do Next.js 16 e separa as áreas pública, aluno,
+professor e administração. As verificações otimistas de navegação leem o cookie
+HTTP-only `be-session`, assinado com HMAC SHA-256. Defina `SESSION_SECRET` com
+pelo menos 32 caracteres no ambiente do servidor; sem uma chave válida, o
+frontend trata toda requisição como não autenticada.
+
+A autenticação pública usa `@supabase/supabase-js` para login com e-mail e
+senha, Google OAuth, cadastro de aluno e recuperação de senha. Depois de validar
+o token no Supabase, `POST /api/auth/session` carrega o perfil, o estado do
+acesso acadêmico e, para professor, os IDs de alunos com vínculo ativo antes de
+emitir o cookie de navegação. Esses dados servem para a experiência de navegação
+e não substituem RLS, autorização no banco nem a revalidação dos vínculos antes
+de operações ou leituras protegidas.
+
+As credenciais públicas do projeto de referência são usadas como fallback. Para
+outro ambiente, defina `NEXT_PUBLIC_SUPABASE_URL` e
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (ou `NEXT_PUBLIC_SUPABASE_ANON_KEY`), além
+de `SESSION_SECRET` no servidor.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

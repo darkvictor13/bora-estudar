@@ -73,26 +73,6 @@ export function AppearanceControls() {
           Escuro
         </button>
       </div>
-
-      <div className={styles.group} role="group" aria-label="Perfil visual">
-        <span className={styles.label}>Perfil</span>
-        <button
-          className={styles.option}
-          type="button"
-          aria-pressed={profile === "aluno"}
-          onClick={() => updateAppearance(theme, "aluno")}
-        >
-          Aluno
-        </button>
-        <button
-          className={styles.option}
-          type="button"
-          aria-pressed={profile === "professor"}
-          onClick={() => updateAppearance(theme, "professor")}
-        >
-          Professor
-        </button>
-      </div>
     </div>
   );
 }
