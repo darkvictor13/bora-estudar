@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="be-gradient" cx="35%" cy="25%">
+      <stop stop-color="#155FFF"/>
+      <stop offset=".46" stop-color="#0B42B8"/>
+      <stop offset="1" stop-color="#061E5E"/>
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="29" fill="url(#be-gradient)" stroke="#32B9FF" stroke-width="3"/>
+  <text x="29" y="40" fill="#F7F9FF" font-family="Arial, sans-serif" font-size="23" font-weight="700" letter-spacing="-2" text-anchor="middle">BE</text>
+</svg>
