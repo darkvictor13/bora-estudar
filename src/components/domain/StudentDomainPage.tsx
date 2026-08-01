@@ -19,6 +19,12 @@ import type { ResolvedRoute } from "@/lib/routes/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import { PhoneField } from "@/components/form/PhoneField";
+import {
+  ButtonSpinner,
+  InlineLoadingIndicator,
+  LoadingSkeleton,
+  type SkeletonVariant,
+} from "@/components/states/LoadingSkeleton";
 
 import styles from "./StudentDomainPage.module.css";
 
@@ -171,6 +177,13 @@ const emptyWorkspace: StudentWorkspace = {
   waitlist: null,
 };
 
+function skeletonVariantForRoute(route: ResolvedRoute): SkeletonVariant {
+  if (route.pattern === "inicio") return "dashboard";
+  if (["perfil", "lista-de-espera"].includes(route.pattern)) return "form";
+  if (route.pattern.includes(":") || ["acesso", "planejamento"].includes(route.pattern)) return "detail";
+  return "list";
+}
+
 function Panel({ children, title, subtitle }: { children: ReactNode; title?: string; subtitle?: string }) {
   return (
     <section className={`be-card ${styles.panel}`}>
@@ -198,7 +211,11 @@ function Empty({ children, title }: { children: ReactNode; title: string }) {
 }
 
 function SubmitButton({ busy, children }: { busy: boolean; children: ReactNode }) {
-  return <button className="be-button be-button--primary" type="submit" disabled={busy}>{busy ? "Salvando…" : children}</button>;
+  return (
+    <button className="be-button be-button--primary" type="submit" disabled={busy} aria-busy={busy}>
+      {busy ? <><ButtonSpinner />Salvando…</> : children}
+    </button>
+  );
 }
 
 function getMaterials(value: unknown): LessonMaterial[] {
@@ -245,13 +262,15 @@ export function StudentDomainPage({ route }: { route: ResolvedRoute }) {
   const pathname = usePathname();
   const [workspace, setWorkspace] = useState<StudentWorkspace>(emptyWorkspace);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [success, setSuccess] = useState("");
   const [selectedWeek, setSelectedWeek] = useState(1);
 
-  const loadWorkspace = useCallback(async () => {
-    setLoading(true);
+  const loadWorkspace = useCallback(async (mode: "initial" | "refresh" = "refresh") => {
+    if (mode === "initial") setLoading(true);
+    else setRefreshing(true);
     setFailure("");
 
     try {
@@ -328,12 +347,13 @@ export function StudentDomainPage({ route }: { route: ResolvedRoute }) {
     } catch (error) {
       setFailure(errorMessage(error, "Não foi possível carregar os dados do aluno."));
     } finally {
-      setLoading(false);
+      if (mode === "initial") setLoading(false);
+      else setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadWorkspace();
+    void loadWorkspace("initial");
   }, [loadWorkspace]);
 
   const runRpc = useCallback(async (name: string, parameters: Record<string, unknown>, successMessage: string) => {
@@ -344,7 +364,7 @@ export function StudentDomainPage({ route }: { route: ResolvedRoute }) {
       const { error } = await getSupabaseBrowserClient().rpc(name, parameters);
       if (error) throw error;
       setSuccess(successMessage);
-      await loadWorkspace();
+      await loadWorkspace("refresh");
       return true;
     } catch (error) {
       setFailure(errorMessage(error));
@@ -365,12 +385,19 @@ export function StudentDomainPage({ route }: { route: ResolvedRoute }) {
     router.replace(`${pathname}?semana=${week}`, { scroll: false });
   }
 
-  if (loading) return <div className={styles.skeleton} aria-label="Carregando dados"><span /><span /><span /></div>;
+  if (loading) {
+    return (
+      <LoadingSkeleton
+        label="Carregando dados do aluno"
+        variant={skeletonVariantForRoute(route)}
+      />
+    );
+  }
 
-  const messages = <>{failure ? <Feedback message={failure} tone="danger" /> : null}{success ? <Feedback message={success} tone="success" /> : null}</>;
+  const messages = <>{refreshing ? <InlineLoadingIndicator /> : null}{failure ? <Feedback message={failure} tone="danger" /> : null}{success ? <Feedback message={success} tone="success" /> : null}</>;
 
   if (failure && !workspace.userId) {
-    return <><Feedback message={failure} tone="danger" /><button className="be-button" type="button" onClick={() => void loadWorkspace()}>Tentar novamente</button></>;
+    return <><Feedback message={failure} tone="danger" /><button className="be-button" type="button" onClick={() => void loadWorkspace("initial")}>Tentar novamente</button></>;
   }
 
   const studentTimeZone = workspace.profile?.fuso_horario ?? "America/Sao_Paulo";

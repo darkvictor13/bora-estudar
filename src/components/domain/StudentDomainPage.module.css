@@ -276,25 +276,6 @@
   margin: var(--space-1) 0 0;
 }
 
-.skeleton {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.skeleton span {
-  display: block;
-  height: 120px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(100deg, var(--color-surface) 20%, var(--color-surface-muted) 45%, var(--color-surface) 70%);
-  background-size: 300% 100%;
-  animation: pulse 1.2s infinite linear;
-}
-
-@keyframes pulse {
-  from { background-position: 100% 0; }
-  to { background-position: 0 0; }
-}
-
 @media (max-width: 1023px) {
   .metrics,
   .cardGrid {
@@ -331,8 +312,4 @@
     order: -1;
     text-align: center;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton span { animation: none; }
 }

@@ -125,20 +125,6 @@
   min-height: auto;
 }
 
-.spinner {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .filters,
 .filtersWide,
 .formGrid {
@@ -686,10 +672,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation-duration: 1.8s;
-  }
-
   .metric {
     transition: none;
   }

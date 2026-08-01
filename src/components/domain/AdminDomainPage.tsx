@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { todayInTimeZone } from "@/lib/domain/format";
 import type { ResolvedRoute } from "@/lib/routes/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import { PhoneField } from "@/components/form/PhoneField";
+import {
+  ButtonSpinner,
+  InlineLoadingIndicator,
+  LoadingSkeleton,
+  type SkeletonVariant,
+} from "@/components/states/LoadingSkeleton";
 
 import styles from "./AdminDomainPage.module.css";
 
@@ -173,6 +179,7 @@ type RemoteData<T> = {
   data: T | null;
   error: string;
   loading: boolean;
+  refreshing: boolean;
   reload: () => void;
 };
 
@@ -275,31 +282,53 @@ async function loadCourseSubjects(courseId: string): Promise<CourseSubject[]> {
 }
 
 function useRemoteData<T>(loader: () => Promise<T>): RemoteData<T> {
-  const [revision, setRevision] = useState(0);
+  const requestId = useRef(0);
   const [state, setState] = useState<Omit<RemoteData<T>, "reload">>({
     data: null,
     error: "",
     loading: true,
+    refreshing: false,
   });
 
+  const load = useCallback(async (preserveData: boolean) => {
+    const currentRequest = ++requestId.current;
+    setState((current) => {
+      const canPreserve = preserveData && current.data !== null;
+      return {
+        data: canPreserve ? current.data : null,
+        error: "",
+        loading: !canPreserve,
+        refreshing: canPreserve,
+      };
+    });
+
+    try {
+      const data = await loader();
+      if (currentRequest === requestId.current) {
+        setState({ data, error: "", loading: false, refreshing: false });
+      }
+    } catch (reason) {
+      if (currentRequest === requestId.current) {
+        setState((current) => ({
+          data: preserveData ? current.data : null,
+          error: backendMessage(reason),
+          loading: false,
+          refreshing: false,
+        }));
+      }
+    }
+  }, [loader]);
+
   useEffect(() => {
-    let active = true;
-    void loader()
-      .then((data) => {
-        if (active) setState({ data, error: "", loading: false });
-      })
-      .catch((reason: unknown) => {
-        if (active) setState({ data: null, error: backendMessage(reason), loading: false });
-      });
+    void load(false);
     return () => {
-      active = false;
+      requestId.current += 1;
     };
-  }, [loader, revision]);
+  }, [load]);
 
   const reload = useCallback(() => {
-    setState((current) => ({ ...current, error: "", loading: current.data === null }));
-    setRevision((current) => current + 1);
-  }, []);
+    void load(true);
+  }, [load]);
 
   return { ...state, reload };
 }
@@ -415,10 +444,6 @@ function Feedback({ state }: { state: FeedbackState }) {
   );
 }
 
-function LoadingPanel() {
-  return <div className={styles.state} role="status"><span className={styles.spinner} aria-hidden="true" />Carregando dados do Supabase…</div>;
-}
-
 function ErrorPanel({ message, retry }: { message: string; retry: () => void }) {
   return (
     <div className={styles.state} data-kind="error" role="alert">
@@ -432,11 +457,25 @@ function EmptyPanel({ children, title }: { children: ReactNode; title: string })
   return <div className={styles.empty}><strong>{title}</strong><p>{children}</p></div>;
 }
 
-function RemoteContent<T>({ children, remote }: { children: (data: T) => ReactNode; remote: RemoteData<T> }) {
-  if (remote.loading) return <LoadingPanel />;
-  if (remote.error) return <ErrorPanel message={remote.error} retry={remote.reload} />;
-  if (!remote.data) return <ErrorPanel message="O Supabase não retornou dados para esta tela." retry={remote.reload} />;
-  return children(remote.data);
+function RemoteContent<T>({
+  children,
+  remote,
+  skeleton = "list",
+}: {
+  children: (data: T) => ReactNode;
+  remote: RemoteData<T>;
+  skeleton?: SkeletonVariant;
+}) {
+  if (remote.loading) return <LoadingSkeleton label="Carregando dados" variant={skeleton} />;
+  if (remote.error && remote.data === null) return <ErrorPanel message={remote.error} retry={remote.reload} />;
+  if (remote.data === null) return <ErrorPanel message="O servidor não retornou dados para esta tela." retry={remote.reload} />;
+  return (
+    <>
+      {remote.refreshing ? <InlineLoadingIndicator /> : null}
+      {remote.error ? <Feedback state={{ kind: "error", text: `Não foi possível atualizar os dados. ${remote.error}` }} /> : null}
+      {children(remote.data)}
+    </>
+  );
 }
 
 function Section({ actions, children, description, title }: { actions?: ReactNode; children: ReactNode; description?: string; title: string }) {
@@ -456,7 +495,11 @@ function Field({ children, label }: { children: ReactNode; label: string }) {
 }
 
 function SubmitButton({ busy, children = "Salvar" }: { busy: boolean; children?: ReactNode }) {
-  return <button className="be-button be-button--primary" type="submit" disabled={busy}>{busy ? "Salvando…" : children}</button>;
+  return (
+    <button className="be-button be-button--primary" type="submit" disabled={busy} aria-busy={busy}>
+      {busy ? <><ButtonSpinner />Salvando…</> : children}
+    </button>
+  );
 }
 
 function SoftDeleteControl({
@@ -566,7 +609,7 @@ function AdminHome() {
   const remote = useRemoteData(loader);
 
   return (
-    <RemoteContent remote={remote}>{(data) => {
+    <RemoteContent remote={remote} skeleton="dashboard">{(data) => {
       const students = data.profiles.filter((profile) => profile.tipo === "aluno" && profile.ativo && !profile.deleted_at);
       const latestAccess = new Map<string, StudentAccess>();
       for (const access of data.accesses) {
@@ -707,7 +750,7 @@ function UserDetailPage({ userId }: { userId: string }) {
   }
 
   return (
-    <RemoteContent remote={remote}>{(data) => {
+    <RemoteContent remote={remote} skeleton="detail">{(data) => {
       if (!data.profile) return <EmptyPanel title="Usuário não encontrado">O registro não existe ou não está visível para sua sessão.</EmptyPanel>;
       const names = profileMap(data.profiles);
       const links = data.links.filter((link) => link.professor_id === userId || link.aluno_id === userId);
@@ -869,7 +912,7 @@ function LinkDetailPage({ linkId }: { linkId: string }) {
   }
 
   return (
-    <RemoteContent remote={remote}>{(data) => {
+    <RemoteContent remote={remote} skeleton="detail">{(data) => {
       if (!data.link) return <EmptyPanel title="Vínculo não encontrado">O vínculo não existe ou não está visível para esta sessão.</EmptyPanel>;
       const names = profileMap(data.profiles);
       return <div className={styles.stack}>
@@ -1068,7 +1111,7 @@ function CourseSummaryPage({ courseId }: { courseId: string }) {
     return expectRecord<Course>(data, error);
   }, [courseId]);
   const remote = useRemoteData(loader);
-  return <RemoteContent remote={remote}>{(course) => course ? <div className={styles.stack}>
+  return <RemoteContent remote={remote} skeleton="detail">{(course) => course ? <div className={styles.stack}>
     <CourseContext course={course} current="resumo" />
     <Section title="Configuração geral" description="Alterações afetam novas configurações; planejamentos existentes mantêm seus snapshots.">
       {course.deleted_at ? <EmptyPanel title="Curso excluído">Restaure o curso para voltar a editá-lo.</EmptyPanel> : <CourseEditor course={course} onDone={remote.reload} />}
@@ -1143,7 +1186,7 @@ function SubjectDetailPage({ subjectId }: { subjectId: string }) {
     return expectRecord<Subject>(data, error);
   }, [subjectId]);
   const remote = useRemoteData(loader);
-  return <RemoteContent remote={remote}>{(subject) => subject ? <div className={styles.stack}>
+  return <RemoteContent remote={remote} skeleton="form">{(subject) => subject ? <div className={styles.stack}>
     <Section title={subject.nome} description={`Código ${subject.codigo}`} actions={<Status value={subject.deleted_at ? "excluido" : subject.ativo ? "ativo" : "inativo"} />}>
       {subject.deleted_at ? <EmptyPanel title="Disciplina excluída">Restaure o registro para voltar a editá-lo.</EmptyPanel> : <SubjectEditor subject={subject} onDone={remote.reload} />}
     </Section>
@@ -1194,7 +1237,7 @@ function CourseSubjectsPage({ courseId }: { courseId: string }) {
     return { course: courses.find((course) => course.id === courseId) ?? null, subjects, items };
   }, [courseId]);
   const remote = useRemoteData(loader);
-  return <RemoteContent remote={remote}>{(data) => {
+  return <RemoteContent remote={remote} skeleton="form">{(data) => {
     if (!data.course) return <EmptyPanel title="Curso não encontrado">O curso não existe ou não está visível.</EmptyPanel>;
     const subjects = new Map(data.subjects.map((subject) => [subject.id, subject]));
     const alreadyLinked = new Set(data.items.filter((item) => !item.deleted_at).map((item) => item.disciplina_id));
@@ -1267,7 +1310,7 @@ function CourseNotebooksPage({ courseId }: { courseId: string }) {
   const remote = useRemoteData(loader);
   const [selectedLink, setSelectedLink] = useState("");
 
-  return <RemoteContent remote={remote}>{(data) => {
+  return <RemoteContent remote={remote} skeleton="form">{(data) => {
     if (!data.course) return <EmptyPanel title="Curso não encontrado">O curso não existe ou não está visível.</EmptyPanel>;
     const subjects = new Map(data.subjects.map((subject) => [subject.id, subject]));
     const links = new Map(data.links.map((link) => [link.id, link]));
@@ -1387,7 +1430,7 @@ function CourseLessonsPage({ courseId }: { courseId: string }) {
   const remote = useRemoteData(loader);
   const [selectedLink, setSelectedLink] = useState("");
 
-  return <RemoteContent remote={remote}>{(data) => {
+  return <RemoteContent remote={remote} skeleton="form">{(data) => {
     if (!data.course) return <EmptyPanel title="Curso não encontrado">O curso não existe ou não está visível.</EmptyPanel>;
     const subjects = new Map(data.subjects.map((subject) => [subject.id, subject]));
     const links = new Map(data.links.map((link) => [link.id, link]));
@@ -1574,7 +1617,7 @@ function AdminProfilePage() {
     }), "Seu perfil foi atualizado e recarregado do Supabase.");
   }
 
-  return <RemoteContent remote={remote}>{(data) => data.profile ? <Section title="Dados da conta" description="Nome, telefone e fuso são mantidos no perfil; o e-mail vem do Supabase Auth.">
+  return <RemoteContent remote={remote} skeleton="form">{(data) => data.profile ? <Section title="Dados da conta" description="Nome, telefone e fuso são mantidos no perfil; o e-mail vem do Supabase Auth.">
     <form className={styles.formGrid} onSubmit={save} key={data.profile.updated_at}>
       <Field label="Nome"><input className="be-input" name="nome" minLength={2} defaultValue={data.profile.nome} required autoComplete="name" /></Field>
       <Field label="E-mail"><input className="be-input" value={data.email} readOnly disabled /></Field>

@@ -3,12 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ResolvedRoute } from "@/lib/routes/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import { PhoneField } from "@/components/form/PhoneField";
+import {
+  InlineLoadingIndicator,
+  LoadingSkeleton,
+  type SkeletonVariant,
+} from "@/components/states/LoadingSkeleton";
 
 import styles from "./ProfessorDomainPage.module.css";
 
@@ -191,6 +196,7 @@ type ResourceState<T> = {
   data: T | null;
   error: string;
   loading: boolean;
+  refreshing: boolean;
 };
 
 const dayNames = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
@@ -256,31 +262,54 @@ async function callRpc<T>(
 }
 
 function useResource<T>(loader: () => Promise<T>) {
-  const [revision, setRevision] = useState(0);
-  const [state, setState] = useState<ResourceState<T>>({ data: null, error: "", loading: true });
+  const requestId = useRef(0);
+  const [state, setState] = useState<ResourceState<T>>({
+    data: null,
+    error: "",
+    loading: true,
+    refreshing: false,
+  });
+
+  const load = useCallback(async (preserveData: boolean) => {
+    const currentRequest = ++requestId.current;
+    setState((current) => {
+      const canPreserve = preserveData && current.data !== null;
+      return {
+        data: canPreserve ? current.data : null,
+        error: "",
+        loading: !canPreserve,
+        refreshing: canPreserve,
+      };
+    });
+
+    try {
+      const data = await loader();
+      if (currentRequest === requestId.current) {
+        setState({ data, error: "", loading: false, refreshing: false });
+      }
+    } catch (reason) {
+      if (currentRequest === requestId.current) {
+        setState((current) => ({
+          data: preserveData ? current.data : null,
+          error: errorMessage(reason),
+          loading: false,
+          refreshing: false,
+        }));
+      }
+    }
+  }, [loader]);
 
   useEffect(() => {
-    let active = true;
     // A mudança do contexto (por exemplo, a semana) não deve exibir dados antigos.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState((current) => ({ ...current, error: "", loading: true }));
-    void loader().then(
-      (data) => {
-        if (active) setState({ data, error: "", loading: false });
-      },
-      (reason: unknown) => {
-        if (active) setState({ data: null, error: errorMessage(reason), loading: false });
-      },
-    );
+    void load(false);
     return () => {
-      active = false;
+      requestId.current += 1;
     };
-  }, [loader, revision]);
+  }, [load]);
 
   const reload = useCallback(() => {
-    setState((current) => ({ ...current, error: "", loading: true }));
-    setRevision((current) => current + 1);
-  }, []);
+    void load(true);
+  }, [load]);
 
   return { ...state, reload };
 }
@@ -346,14 +375,16 @@ function ResourceGate<T>({
   empty,
   isEmpty,
   resource,
+  skeleton = "list",
 }: {
   children: (data: T) => ReactNode;
   empty?: { description: string; title: string; action?: ReactNode };
   isEmpty?: (data: T) => boolean;
   resource: ReturnType<typeof useResource<T>>;
+  skeleton?: SkeletonVariant;
 }) {
-  if (resource.loading) return <StatePanel kind="loading" title="Carregando dados" description="Consultando o Supabase com as permissões da sua sessão." />;
-  if (resource.error) {
+  if (resource.loading) return <LoadingSkeleton label="Carregando dados" variant={skeleton} />;
+  if (resource.error && resource.data === null) {
     return (
       <StatePanel
         kind="error"
@@ -364,8 +395,15 @@ function ResourceGate<T>({
     );
   }
   if (resource.data === null) return <StatePanel kind="empty" title="Registro não encontrado" description="O recurso não existe ou não está disponível para o seu vínculo atual." />;
-  if (empty && isEmpty?.(resource.data)) return <StatePanel title={empty.title} description={empty.description} action={empty.action} />;
-  return <>{children(resource.data)}</>;
+  return (
+    <>
+      {resource.refreshing ? <InlineLoadingIndicator /> : null}
+      {resource.error ? <Feedback error={`Não foi possível atualizar os dados. ${resource.error}`} success="" /> : null}
+      {empty && isEmpty?.(resource.data)
+        ? <StatePanel title={empty.title} description={empty.description} action={empty.action} />
+        : children(resource.data)}
+    </>
+  );
 }
 
 function formText(data: FormData, name: string) {
@@ -515,7 +553,7 @@ function ProfessorProfilePage() {
   }
 
   return (
-    <ResourceGate resource={resource}>
+    <ResourceGate resource={resource} skeleton="form">
       {(record) => (
         <section className={`be-card ${styles.formCard}`}>
           <SectionTitle title="Dados do professor" description="Nome, telefone e fuso usados pela sua conta." />
@@ -741,7 +779,7 @@ function StudentSummaryPage({ studentId }: { studentId: string }) {
   const resource = useResource(load);
 
   return (
-    <ResourceGate resource={resource}>
+    <ResourceGate resource={resource} skeleton="dashboard">
       {(data) => {
         const accessStatus = data.access?.status_efetivo ?? data.access?.status ?? "sem_acesso";
         const pending = data.goals.filter((item) => ["pendente", "em_andamento"].includes(item.status)).length;
@@ -812,7 +850,7 @@ function StudentAccessPage({ studentId }: { studentId: string }) {
   }
 
   return (
-    <ResourceGate resource={resource}>
+    <ResourceGate resource={resource} skeleton="form">
       {(data) => {
         const status = data.access?.status_efetivo ?? data.access?.status ?? "sem_acesso";
         return (
@@ -956,6 +994,7 @@ function NewPlanningPage({ studentId }: { studentId: string }) {
   return (
     <ResourceGate
       resource={resource}
+      skeleton="form"
       isEmpty={(data) => data.courses.length === 0}
       empty={{ title: "Nenhum curso ativo", description: "Um administrador precisa cadastrar e ativar um curso antes da criação do planejamento." }}
     >
@@ -1052,7 +1091,7 @@ function PlanningSummaryPage({ planningId, studentId }: { planningId: string; st
   }
 
   return (
-    <ResourceGate resource={resource}>
+    <ResourceGate resource={resource} skeleton="dashboard">
       {(data) => (
         <div className={styles.stack}>
           <section className={`be-card ${styles.personCard}`}><div><span className="be-section-label">Planejamento de {data.profile.nome}</span><h2>{data.planning.nome}</h2><p>{data.planning.curso_codigo_snapshot} · {data.planning.curso_nome_snapshot}</p></div><span className={badgeClass(data.planning.status)}>{data.planning.status}</span></section>
@@ -1242,7 +1281,7 @@ function PlanningNotebooksPage({ planningId, studentId }: { planningId: string; 
   }
 
   return (
-    <ResourceGate resource={resource}>
+    <ResourceGate resource={resource} skeleton="form">
       {(data) => (
         <div className={styles.stack}>
           <section className={`be-card ${styles.formCard}`}>
@@ -1614,6 +1653,7 @@ function GenerateGoalsPage({ planningId, routePath, studentId }: { planningId: s
   return (
     <ResourceGate
       resource={resource}
+      skeleton="form"
       isEmpty={(data) => data.disciplines.length === 0}
       empty={{ title: "Nenhuma disciplina ativa", description: "Ative e configure ao menos uma disciplina antes de gerar metas." }}
     >
