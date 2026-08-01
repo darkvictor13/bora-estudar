@@ -51,28 +51,33 @@ export function AppearanceControls() {
     getServerSnapshot,
   );
   const [theme, profile] = snapshot.split(":") as [Theme, Profile];
+  const isDark = theme === "dark";
 
   return (
     <div className={styles.controls} aria-label="Aparência da interface">
-      <div className={styles.group} role="group" aria-label="Tema">
-        <span className={styles.label}>Tema</span>
-        <button
-          className={styles.option}
-          type="button"
-          aria-pressed={theme === "light"}
-          onClick={() => updateAppearance("light", profile)}
-        >
-          Claro
-        </button>
-        <button
-          className={styles.option}
-          type="button"
-          aria-pressed={theme === "dark"}
-          onClick={() => updateAppearance("dark", profile)}
-        >
-          Escuro
-        </button>
-      </div>
+      <button
+        className={styles.switch}
+        type="button"
+        role="switch"
+        aria-checked={isDark}
+        aria-label="Tema escuro"
+        title={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+        data-current-theme={theme}
+        onClick={() => updateAppearance(isDark ? "light" : "dark", profile)}
+      >
+        <span className={`${styles.icon} ${styles.sun}`} aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="3.5" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
+          </svg>
+        </span>
+        <span className={`${styles.icon} ${styles.moon}`} aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M20.2 15.5A8.5 8.5 0 0 1 8.5 3.8 8.5 8.5 0 1 0 20.2 15.5Z" />
+          </svg>
+        </span>
+        <span className={styles.thumb} aria-hidden="true" />
+      </button>
     </div>
   );
 }
