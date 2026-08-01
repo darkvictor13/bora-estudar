@@ -1,0 +1,539 @@
+.stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.metric {
+  display: grid;
+  min-height: 118px;
+  align-content: space-between;
+  gap: var(--space-3);
+}
+
+.metric strong {
+  color: var(--color-text);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.sectionTitle h2,
+.personCard h2,
+.itemCard h3,
+.formCard h3,
+.goalCard h3,
+.dayHeading h2 {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.25;
+}
+
+.sectionTitle h2,
+.personCard h2,
+.dayHeading h2 {
+  font-size: var(--font-size-xl);
+}
+
+.sectionTitle p,
+.personCard p,
+.itemCard p,
+.formCard p,
+.goalCard p,
+.summaryLine p,
+.generationIntro p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+.formCard,
+.itemCard,
+.goalCard {
+  min-width: 0;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.compactForm {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.inlineForm {
+  display: grid;
+  align-items: end;
+  grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr) auto;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.field,
+.compactField {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-medium);
+}
+
+.field textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.compactField {
+  width: min(190px, 100%);
+}
+
+.check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1.45;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 2px 0 0;
+}
+
+.readonlyField {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.readonlyField span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.fullWidth,
+.feedback {
+  grid-column: 1 / -1;
+}
+
+.actions,
+.toolbarActions,
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.actions {
+  justify-content: flex-end;
+}
+
+.feedback:empty {
+  display: none;
+}
+
+.error,
+.success {
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--weight-medium);
+}
+
+.error {
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.success {
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.state {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.stateSymbol {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xl);
+}
+
+.state[data-kind="error"] .stateSymbol {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.state h2 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-lg);
+}
+
+.state p {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(170px, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.itemCard,
+.goalCard {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.itemHeader,
+.personCard,
+.summaryLine,
+.generationIntro,
+.dayHeading,
+.toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.itemHeader {
+  margin-bottom: var(--space-4);
+}
+
+.personCard {
+  align-items: center;
+}
+
+.summaryLine,
+.generationIntro {
+  align-items: center;
+}
+
+.toolbar {
+  align-items: end;
+}
+
+.toolbar .sectionTitle {
+  margin-bottom: 0;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: 0;
+  margin: 0 0 var(--space-4);
+}
+
+.details div,
+.ruleMetrics div {
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.details dt,
+.ruleMetrics dt {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.details dd,
+.ruleMetrics dd {
+  overflow-wrap: anywhere;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--weight-semibold);
+}
+
+.hint {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.dangerZone {
+  border-color: color-mix(in srgb, var(--color-danger) 38%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger-soft) 35%, var(--color-surface));
+}
+
+.dangerZone .sectionTitle h2 {
+  color: var(--color-danger);
+}
+
+.disciplineName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 50%;
+}
+
+.destructiveDetails,
+.editor,
+.materials {
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.destructiveDetails summary,
+.editor summary,
+.materials summary {
+  width: fit-content;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  font-weight: var(--weight-medium);
+}
+
+.destructiveDetails summary {
+  color: var(--color-danger);
+}
+
+.materials ul {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  margin: var(--space-3) 0 0;
+  list-style: none;
+}
+
+.materials li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.materials a {
+  color: var(--color-primary);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.restorePanel {
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+}
+
+.list,
+.goalDays {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dayHeading {
+  align-items: center;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.goalCard {
+  background: var(--color-surface-muted);
+}
+
+.weekPicker {
+  display: inline-flex;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.weekPicker .compactField {
+  width: 96px;
+}
+
+.ruleCard {
+  min-width: 0;
+  margin: 0;
+}
+
+.ruleCard > legend {
+  max-width: calc(100% - var(--space-4));
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.ruleCard > * + * {
+  margin-top: var(--space-3);
+}
+
+.ruleMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+}
+
+.dayOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.dayOptions legend {
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-medium);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inlineForm {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inlineForm > button {
+    width: fit-content;
+  }
+}
+
+@media (max-width: 720px) {
+  .cardGrid,
+  .filters,
+  .form,
+  .inlineForm {
+    grid-template-columns: 1fr;
+  }
+
+  .fullWidth,
+  .feedback {
+    grid-column: auto;
+  }
+
+  .toolbar,
+  .personCard,
+  .summaryLine,
+  .generationIntro {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbarActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .weekPicker {
+    width: 100%;
+  }
+
+  .weekPicker .compactField {
+    width: auto;
+    flex: 1;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .actions > :global(.be-button) {
+    flex: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .metrics,
+  .details,
+  .ruleMetrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metric {
+    min-height: 96px;
+  }
+
+  .itemHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .badges {
+    align-items: flex-start;
+  }
+}

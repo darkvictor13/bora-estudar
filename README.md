@@ -33,6 +33,13 @@ Na primeira execução, a CLI pode levar alguns minutos para baixar as imagens d
 Docker e preparar o banco. As migrations em `supabase/migrations/` são aplicadas
 automaticamente ao criar o ambiente local.
 
+Quando o ambiente já existir, aplique apenas as migrations pendentes, sem apagar
+os dados, com:
+
+```bash
+npx supabase migration up --local
+```
+
 Consulte as URLs e credenciais geradas para o ambiente local com:
 
 ```bash
@@ -111,10 +118,9 @@ professor e administração. As verificações otimistas de navegação leem o c
 HTTP-only `be-session`, assinado com HMAC SHA-256. Sem uma `SESSION_SECRET`
 válida, o frontend trata toda requisição como não autenticada.
 
-A autenticação pública usa `@supabase/supabase-js` para login com e-mail e
-senha, Google OAuth, cadastro de aluno e recuperação de senha. Depois de validar
-o token no Supabase, `POST /api/auth/session` carrega o perfil, o estado do
-acesso acadêmico e, para professor, os IDs de alunos com vínculo ativo antes de
-emitir o cookie de navegação. Esses dados servem para a experiência de navegação
-e não substituem RLS, autorização no banco nem a revalidação dos vínculos antes
-de operações ou leituras protegidas.
+A autenticação pública e a renovação de sessão usam `@supabase/ssr` sobre o SDK
+oficial do Supabase, com cookies compartilhados entre navegador, proxy e Server
+Components. Depois de validar o usuário no Supabase, `POST /api/auth/session`
+carrega o perfil ativo e emite o cookie de navegação. Esse cookie serve apenas
+para navegação otimista: cada área revalida identidade e papel no servidor, e o
+banco continua sendo a fonte definitiva por RLS e RPCs transacionais.

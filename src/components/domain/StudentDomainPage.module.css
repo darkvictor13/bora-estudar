@@ -1,0 +1,338 @@
+.workspace,
+.stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.panel {
+  min-width: 0;
+}
+
+.panel h2,
+.panel h3,
+.panel p {
+  margin-top: 0;
+}
+
+.panel > h2 {
+  margin-bottom: var(--space-4);
+}
+
+.panelHeader {
+  margin-bottom: var(--space-4);
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.panelHeader p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.metrics,
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.metrics .panel {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.metrics small,
+.disciplineTitle small,
+.itemMain small,
+.dayColumn > small {
+  color: var(--color-text-muted);
+}
+
+.cardGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cardList,
+.dayColumn {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.itemCard {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.itemMain {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.itemMain strong,
+.itemMain small {
+  overflow-wrap: anywhere;
+}
+
+.itemEyebrow {
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.toolbar,
+.formActions,
+.rowActions,
+.inlineForm,
+.detailHeader,
+.disciplineTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.toolbar {
+  justify-content: space-between;
+}
+
+.rowActions {
+  flex-wrap: wrap;
+}
+
+.detailHeader {
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.detailHeader h2 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-2xl);
+}
+
+.details,
+.compactDetails {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.compactDetails {
+  grid-template-columns: 1fr;
+  margin: var(--space-4) 0;
+}
+
+.details div,
+.compactDetails div {
+  display: grid;
+  gap: 2px;
+}
+
+.details dt,
+.compactDetails dt {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.details dd,
+.compactDetails dd {
+  margin: 0;
+  font-weight: var(--weight-medium);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.spanTwo,
+.formActions {
+  grid-column: 1 / -1;
+}
+
+.formActions {
+  flex-wrap: wrap;
+}
+
+.inlineForm {
+  align-items: end;
+}
+
+.inlineForm label {
+  flex: 1;
+}
+
+.dayGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(180px, 1fr));
+  overflow-x: auto;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+}
+
+.dayColumn {
+  align-content: start;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.dayColumn h3 {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.dayColumn .itemCard {
+  display: grid;
+  align-items: start;
+}
+
+.disciplineTitle {
+  align-items: flex-start;
+}
+
+.disciplineTitle > span:first-child {
+  width: 4px;
+  height: 38px;
+  flex: 0 0 4px;
+  border-radius: var(--radius-pill);
+}
+
+.disciplineTitle > div {
+  display: grid;
+  flex: 1;
+}
+
+.feedback {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.feedback[data-tone="success"] {
+  border-color: var(--color-success-soft);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.feedback[data-tone="warning"] {
+  border-color: var(--color-warning-soft);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.feedback[data-tone="danger"] {
+  border-color: var(--color-danger-soft);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-muted);
+}
+
+.empty > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+}
+
+.empty strong {
+  color: var(--color-text);
+}
+
+.empty p {
+  margin: var(--space-1) 0 0;
+}
+
+.skeleton {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.skeleton span {
+  display: block;
+  height: 120px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(100deg, var(--color-surface) 20%, var(--color-surface-muted) 45%, var(--color-surface) 70%);
+  background-size: 300% 100%;
+  animation: pulse 1.2s infinite linear;
+}
+
+@keyframes pulse {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+@media (max-width: 1023px) {
+  .metrics,
+  .cardGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .metrics,
+  .cardGrid,
+  .details,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .spanTwo,
+  .formActions {
+    grid-column: auto;
+  }
+
+  .toolbar,
+  .itemCard,
+  .inlineForm,
+  .detailHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar strong {
+    order: -1;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton span { animation: none; }
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
+import { AdminDomainPage } from "@/components/domain/AdminDomainPage";
 import { RoutePage } from "@/components/pages/RoutePage";
 import { standardBreadcrumbs } from "@/lib/routes/navigation";
 import { adminArea, resolveRoute } from "@/lib/routes/registry";
@@ -21,5 +22,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function AdminPage({ params }: PageProps) {
   const route = await getRoute(params);
   if (!route) notFound();
-  return <RoutePage route={route} breadcrumbs={standardBreadcrumbs("Administração", "/admin/inicio", route)} />;
+  return (
+    <RoutePage route={route} breadcrumbs={standardBreadcrumbs("Administração", "/admin/inicio", route)}>
+      <AdminDomainPage route={route} />
+    </RoutePage>
+  );
 }

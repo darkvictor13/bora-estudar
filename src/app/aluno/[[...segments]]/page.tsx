@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
+import { StudentDomainPage } from "@/components/domain/StudentDomainPage";
 import { RoutePage } from "@/components/pages/RoutePage";
 import { requireStudentAcademicAccess } from "@/lib/auth/guards";
 import { standardBreadcrumbs } from "@/lib/routes/navigation";
@@ -23,5 +24,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function StudentPage({ params }: PageProps) {
   const route = await getRoute(params);
   if (!route) notFound();
-  return <RoutePage route={route} breadcrumbs={standardBreadcrumbs("Aluno", "/aluno/inicio", route)} />;
+  return (
+    <RoutePage route={route} breadcrumbs={standardBreadcrumbs("Aluno", "/aluno/inicio", route)}>
+      {route.pattern === "desempenho" ? undefined : <StudentDomainPage route={route} />}
+    </RoutePage>
+  );
 }

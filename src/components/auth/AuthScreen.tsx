@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { roleForPath } from "@/lib/auth/policies";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 import styles from "./AuthScreen.module.css";
@@ -74,16 +75,23 @@ export function AuthScreen({ initialView = "welcome", nextPath }: AuthScreenProp
       body: JSON.stringify({ accessToken }),
     });
     const result = (await response.json().catch(() => null)) as
-      | { error?: string; home?: string }
+      | { error?: string; home?: string; role?: "aluno" | "professor" | "admin" }
       | null;
 
     if (!response.ok || !result?.home) {
       syncingToken.current = null;
+      if (response.status === 403) {
+        await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
+        await fetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
+      }
       throw new Error(result?.error ?? "Não foi possível concluir o acesso.");
     }
 
+    const nextRole = nextPath ? roleForPath(nextPath.split("?")[0]) : null;
     const destination =
-      nextPath?.startsWith("/") && !nextPath.startsWith("//")
+      nextPath?.startsWith("/") &&
+      !nextPath.startsWith("//") &&
+      (!nextRole || nextRole === result.role)
         ? nextPath
         : result.home;
     router.replace(destination);

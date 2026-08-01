@@ -5,11 +5,12 @@ import type { NavigationItem, ResolvedRoute } from "@/lib/routes/types";
 
 type RoutePageProps = {
   breadcrumbs?: BreadcrumbItem[];
+  children?: React.ReactNode;
   contextNavigation?: { items: NavigationItem[]; label: string };
   route: ResolvedRoute;
 };
 
-export function RoutePage({ breadcrumbs = [], contextNavigation, route }: RoutePageProps) {
+export function RoutePage({ breadcrumbs = [], children, contextNavigation, route }: RoutePageProps) {
   return (
     <div className="route-page be-enter">
       <Breadcrumbs items={breadcrumbs} />
@@ -21,11 +22,13 @@ export function RoutePage({ breadcrumbs = [], contextNavigation, route }: RouteP
       {contextNavigation ? (
         <ContextNavigation items={contextNavigation.items} label={contextNavigation.label} />
       ) : null}
-      <RouteState
-        kind="empty"
-        title={route.emptyTitle}
-        description={route.emptyDescription}
-      />
+      {children ?? (
+        <RouteState
+          kind="empty"
+          title={route.emptyTitle}
+          description={route.emptyDescription}
+        />
+      )}
     </div>
   );
 }

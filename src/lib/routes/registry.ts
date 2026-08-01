@@ -30,12 +30,18 @@ export const studentArea: AppArea = {
     route("planejamento", "Planejamento", "Consulta à configuração congelada do planejamento ativo."),
     route("reforcos", "Reforços", "Sugestões de reforço e reforços já agendados."),
     route("revisoes", "Revisões", "Revisões pendentes e concluídas."),
-    route("desempenho", "Desempenho", "Aproveitamento, questões, tempo de estudo e sequência."),
+    route("desempenho", "Desempenho", "Aproveitamento, questões, tempo de estudo e sequência.", "Planejado para a próxima etapa", "Os indicadores de desempenho serão implementados separadamente."),
     route("acesso", "Acesso", "Situação e validade do acesso acadêmico.", "Situação não carregada", "A integração exibirá aqui se o acesso está pendente, ativo, bloqueado, expirado ou cancelado."),
     route("lista-de-espera", "Lista de espera", "Gerenciamento do registro do aluno na lista de espera."),
     route("perfil", "Perfil", "Dados pessoais e fuso horário da conta."),
   ],
 };
+
+export function studentNavigationForAcademicAccess(isActive: boolean) {
+  return isActive
+    ? studentArea.navigation.filter((item) => item.href !== "/aluno/lista-de-espera")
+    : studentArea.navigation;
+}
 
 export const professorArea: AppArea = {
   role: "professor",
@@ -52,18 +58,18 @@ export const professorArea: AppArea = {
     route("perfil", "Perfil", "Dados pessoais e preferências do professor."),
     route("alunos/:alunoId/resumo", "Resumo do aluno", "Visão consolidada do aluno selecionado."),
     route("alunos/:alunoId/acesso", "Acesso do aluno", "Situação e validade do acesso acadêmico do aluno."),
-    route("alunos/:alunoId/desempenho", "Desempenho do aluno", "Aproveitamento, questões, tempo e sequência do aluno."),
+    route("alunos/:alunoId/desempenho", "Desempenho do aluno", "Aproveitamento, questões, tempo e sequência do aluno.", "Planejado para a próxima etapa", "Os indicadores de desempenho serão implementados separadamente."),
     route("alunos/:alunoId/planejamentos", "Planejamentos", "Histórico e situação dos planejamentos do aluno."),
-    route("alunos/:alunoId/planejamentos/novo", "Novo planejamento", "Estrutura inicial para criação de um planejamento.", "Formulário ainda não implementado", "A criação funcional será adicionada junto às integrações de negócio."),
+    route("alunos/:alunoId/planejamentos/novo", "Novo planejamento", "Criação de um planejamento com cópia protegida do catálogo acadêmico."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/resumo", "Resumo do planejamento", "Visão geral da configuração e execução do planejamento."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/disciplinas", "Disciplinas do planejamento", "Configurações de disciplinas copiadas para o planejamento."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/cadernos", "Cadernos do planejamento", "Cadernos próprios e copiados para o planejamento."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/aulas", "Aulas do planejamento", "Aulas configuradas para o planejamento."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/metas", "Metas do planejamento", "Agenda de metas do planejamento selecionado."),
-    route("alunos/:alunoId/planejamentos/:planejamentoId/metas/gerar", "Gerar metas", "Estrutura para a futura geração transacional de metas.", "Geração ainda não implementada", "Nenhuma meta será criada até a integração com a RPC de negócio."),
+    route("alunos/:alunoId/planejamentos/:planejamentoId/metas/gerar", "Gerar metas", "Distribuição e substituição transacional das metas da semana."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/reforcos", "Reforços do planejamento", "Reforços sugeridos e agendados no planejamento."),
     route("alunos/:alunoId/planejamentos/:planejamentoId/revisoes", "Revisões do planejamento", "Configuração e acompanhamento das revisões."),
-    route("alunos/:alunoId/planejamentos/:planejamentoId/desempenho", "Desempenho do planejamento", "Indicadores acadêmicos do planejamento selecionado."),
+    route("alunos/:alunoId/planejamentos/:planejamentoId/desempenho", "Desempenho do planejamento", "Indicadores acadêmicos do planejamento selecionado.", "Planejado para a próxima etapa", "Os indicadores de desempenho serão implementados separadamente."),
   ],
 };
 
@@ -85,7 +91,7 @@ export const adminArea: AppArea = {
     route("vinculos/:vinculoId", "Detalhes do vínculo", "Situação e histórico do vínculo selecionado."),
     route("acessos", "Acessos", "Acompanhamento das liberações de acesso acadêmico."),
     route("catalogo/cursos", "Cursos", "Cursos do catálogo acadêmico global."),
-    route("catalogo/cursos/novo", "Novo curso", "Estrutura inicial para cadastro de curso.", "Formulário ainda não implementado"),
+    route("catalogo/cursos/novo", "Novo curso", "Cadastro completo de um curso do catálogo acadêmico."),
     route("catalogo/cursos/:cursoId/resumo", "Resumo do curso", "Configuração geral do curso selecionado."),
     route("catalogo/cursos/:cursoId/disciplinas", "Disciplinas do curso", "Disciplinas vinculadas ao curso do catálogo."),
     route("catalogo/cursos/:cursoId/cadernos", "Cadernos do curso", "Cadernos globais configurados para o curso."),

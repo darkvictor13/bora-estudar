@@ -43,13 +43,19 @@ export async function POST(request: Request) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("tipo")
+    .select("tipo,ativo,deleted_at")
     .eq("id", userData.user.id)
     .single();
   const role = profile?.tipo;
 
-  if (profileError || !isRole(role)) {
-    return Response.json({ error: "Perfil de acesso não encontrado." }, { status: 403 });
+  if (profileError || !isRole(role) || !profile.ativo || profile.deleted_at) {
+    const response = Response.json(
+      { error: "Seu perfil está inativo ou não possui acesso à plataforma." },
+      { status: 403 },
+    );
+    const cookieStore = await cookies();
+    cookieStore.delete(SESSION_COOKIE);
+    return response;
   }
 
   const expiresAt = Math.min(

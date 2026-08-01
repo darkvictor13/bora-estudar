@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { adminArea, professorArea, resolveRoute, studentArea } from "./registry.ts";
+import { adminArea, professorArea, resolveRoute, studentArea, studentNavigationForAcademicAccess } from "./registry.ts";
 import { canStudentAccessPath, professorStudentIdForPath, roleForPath, safeReturnPath } from "../auth/policies.ts";
 
 test("declara todas as rotas solicitadas por área", () => {
@@ -37,6 +37,13 @@ test("aluno sem acesso mantém somente as rotas permitidas", () => {
   assert.equal(canStudentAccessPath("/aluno/lista-de-espera", "pendente"), true);
   assert.equal(canStudentAccessPath("/aluno/metas", "bloqueado"), false);
   assert.equal(canStudentAccessPath("/aluno/metas", "ativo"), true);
+});
+
+test("oculta a lista de espera da navegação do aluno com acesso ativo", () => {
+  const waitlistPath = "/aluno/lista-de-espera";
+
+  assert.equal(studentNavigationForAcademicAccess(true).some((item) => item.href === waitlistPath), false);
+  assert.equal(studentNavigationForAcademicAccess(false).some((item) => item.href === waitlistPath), true);
 });
 
 test("preserva somente destinos de retorno locais", () => {
