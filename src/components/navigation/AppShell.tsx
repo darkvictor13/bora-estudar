@@ -7,8 +7,13 @@ import { useEffect } from "react";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { AppearanceControls } from "@/components/theme/AppearanceControls";
-import type { NavigationItem } from "@/lib/routes/types";
 import type { UserRole } from "@/lib/auth/session";
+import {
+  isNavigationItemActive,
+  professorNavigationSections,
+} from "@/lib/routes/navigation";
+import { professorArea, resolveRoute } from "@/lib/routes/registry";
+import type { NavigationItem } from "@/lib/routes/types";
 
 type AppShellProps = {
   areaLabel: string;
@@ -19,6 +24,12 @@ type AppShellProps = {
 
 export function AppShell({ areaLabel, children, navigation, role }: AppShellProps) {
   const pathname = usePathname();
+  const professorRoute = role === "professor"
+    ? resolveRoute(professorArea, pathname.split("/").filter(Boolean).slice(1))
+    : null;
+  const contextualSections = professorRoute
+    ? professorNavigationSections(professorRoute)
+    : [];
 
   useEffect(() => {
     document.documentElement.dataset.profile = role;
@@ -39,16 +50,36 @@ export function AppShell({ areaLabel, children, navigation, role }: AppShellProp
 
       <div className="app-frame">
         <nav className="app-navigation" aria-label={`Navegação — ${areaLabel}`}>
-          {navigation.map((item) => {
-            const active = item.exact
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}>
+          <div className="app-navigation__primary">
+            {navigation.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isNavigationItemActive(pathname, item) ? "page" : undefined}
+              >
                 {item.label}
               </Link>
-            );
-          })}
+            ))}
+          </div>
+          {contextualSections.map((section) => (
+            <div
+              className="app-navigation__section"
+              key={section.label}
+              role="group"
+              aria-label={section.label}
+            >
+              <span className="app-navigation__section-label">{section.label}</span>
+              {section.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isNavigationItemActive(pathname, item) ? "page" : undefined}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          ))}
           <LogoutButton />
         </nav>
         <main className="app-content">{children}</main>

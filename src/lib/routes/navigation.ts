@@ -1,5 +1,5 @@
 import type { BreadcrumbItem } from "@/components/navigation/Breadcrumbs";
-import type { NavigationItem, ResolvedRoute } from "./types";
+import type { NavigationItem, NavigationSection, ResolvedRoute } from "./types";
 
 function compactId(id: string) {
   return id.length > 12 ? `${id.slice(0, 8)}…` : id;
@@ -33,23 +33,59 @@ export function professorBreadcrumbs(route: ResolvedRoute): BreadcrumbItem[] {
   return items;
 }
 
-export function professorContextNavigation(route: ResolvedRoute): NavigationItem[] | null {
-  const studentId = route.params.alunoId;
-  if (!studentId) return null;
+function professorStudentNavigation(studentId: string): NavigationItem[] {
   const studentBase = `/professor/alunos/${studentId}`;
+
+  return [
+    ["resumo", "Resumo"],
+    ["acesso", "Acesso"],
+    ["planejamentos", "Planejamentos"],
+    ["planejamentos/novo", "Novo planejamento"],
+  ].map(([path, label]) => ({ href: `${studentBase}/${path}`, label, exact: true }));
+}
+
+function professorPlanningNavigation(studentId: string, planningId: string): NavigationItem[] {
+  const planningBase = `/professor/alunos/${studentId}/planejamentos/${planningId}`;
+
+  return [
+    ["resumo", "Resumo"],
+    ["disciplinas", "Disciplinas"],
+    ["cadernos", "Cadernos"],
+    ["aulas", "Aulas"],
+    ["metas", "Metas"],
+    ["metas/gerar", "Gerar metas"],
+    ["reforcos", "Reforços"],
+    ["revisoes", "Revisões"],
+  ].map(([path, label]) => ({ href: `${planningBase}/${path}`, label, exact: true }));
+}
+
+export function professorNavigationSections(route: ResolvedRoute): NavigationSection[] {
+  const studentId = route.params.alunoId;
+  if (!studentId) return [];
+
+  const sections: NavigationSection[] = [{
+    label: "Aluno selecionado",
+    items: professorStudentNavigation(studentId),
+  }];
   const planningId = route.params.planejamentoId;
 
-  if (!planningId) {
-    return [
-      ["resumo", "Resumo"], ["acesso", "Acesso"],
-      ["planejamentos", "Planejamentos"], ["desempenho", "Desempenho"],
-    ].map(([path, label]) => ({ href: `${studentBase}/${path}`, label }));
+  if (planningId) {
+    sections.push({
+      label: "Planejamento selecionado",
+      items: professorPlanningNavigation(studentId, planningId),
+    });
   }
 
-  const planningBase = `${studentBase}/planejamentos/${planningId}`;
-  return [
-    ["resumo", "Resumo"], ["disciplinas", "Disciplinas"], ["cadernos", "Cadernos"],
-    ["aulas", "Aulas"], ["metas", "Metas"], ["reforcos", "Reforços"],
-    ["revisoes", "Revisões"], ["desempenho", "Desempenho"],
-  ].map(([path, label]) => ({ href: `${planningBase}/${path}`, label }));
+  return sections;
+}
+
+export function professorContextNavigation(route: ResolvedRoute): NavigationItem[] | null {
+  const sections = professorNavigationSections(route);
+  return sections.at(-1)?.items ?? null;
+}
+
+export function isNavigationItemActive(pathname: string, item: NavigationItem) {
+  return item.exact
+    ? pathname === item.href
+    : pathname === item.href || pathname.startsWith(`${item.href}/`);
 }

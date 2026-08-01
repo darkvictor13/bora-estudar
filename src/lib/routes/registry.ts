@@ -47,9 +47,10 @@ export const professorArea: AppArea = {
   role: "professor",
   label: "Área do professor",
   navigation: [
-    { href: "/professor/alunos", label: "Alunos" },
-    { href: "/professor/lista-de-espera", label: "Lista de espera" },
-    { href: "/professor/perfil", label: "Perfil" },
+    { href: "/professor/inicio", label: "Início", exact: true },
+    { href: "/professor/alunos", label: "Alunos", exact: true },
+    { href: "/professor/lista-de-espera", label: "Lista de espera", exact: true },
+    { href: "/professor/perfil", label: "Perfil", exact: true },
   ],
   routes: [
     route("inicio", "Início", "Visão geral do acompanhamento dos alunos."),

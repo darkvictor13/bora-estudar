@@ -14,6 +14,11 @@ export type NavigationItem = {
   exact?: boolean;
 };
 
+export type NavigationSection = {
+  label: string;
+  items: NavigationItem[];
+};
+
 export type ResolvedRoute = RouteDefinition & {
   pathname: string;
   params: Record<string, string>;

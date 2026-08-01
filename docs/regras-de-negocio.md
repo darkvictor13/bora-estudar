@@ -681,6 +681,12 @@ Revisão pode estar:
 
 Revisão concluída deve possuir data/hora de conclusão. Ao desfazer, essa data deve ser removida.
 
+### RN-REV-008 — Criação manual pelo professor
+
+Professor vinculado ou administrador pode criar uma revisão pendente para o aluno.
+
+A revisão manual deve informar duas aulas distintas, ativas e da mesma disciplina no mesmo planejamento, além da etapa e da data prevista. O aluno deve ser derivado do planejamento pelo banco, e planejamentos arquivados não podem receber novas revisões.
+
 ## 15. Lista de espera
 
 ### RN-LIS-001 — Registro único
@@ -742,7 +748,7 @@ Professor pode, somente para alunos vinculados:
 - configurar disciplinas e cadernos;
 - gerar e substituir metas;
 - agendar reforços;
-- configurar revisões;
+- criar e configurar revisões;
 - acompanhar lista de espera.
 
 ### RN-PER-003 — Administrador
@@ -818,6 +824,7 @@ O frontend deve preferir as seguintes funções do banco:
 | Ignorar sugestão de reforço | `ignorar_reforco` |
 | Registrar estudo extra | `registrar_estudo_extra` |
 | Substituir/replanejar semana | `substituir_metas_semana` |
+| Criar revisão | `criar_revisao` |
 | Concluir/desfazer revisão | `concluir_revisao` |
 
 ## 19. Critérios gerais de integridade
@@ -830,4 +837,3 @@ O frontend deve preferir as seguintes funções do banco:
 6. RLS deve permanecer habilitada em todas as tabelas expostas pela API.
 7. Operações de domínio devem falhar por inteiro quando uma etapa dependente falhar.
 8. O banco é a fonte definitiva para acesso, meta percentual, estado e permissões.
-

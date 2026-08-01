@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { adminArea, professorArea, resolveRoute, studentArea, studentNavigationForAcademicAccess } from "./registry.ts";
+import { isNavigationItemActive, professorNavigationSections } from "./navigation.ts";
 import { canStudentAccessPath, professorStudentIdForPath, roleForPath, safeReturnPath } from "../auth/policies.ts";
 
 test("declara todas as rotas solicitadas por área", () => {
@@ -17,6 +18,40 @@ test("resolve parâmetros de uma rota profunda do professor", () => {
 
   assert.equal(route?.pattern, "alunos/:alunoId/planejamentos/:planejamentoId/metas/gerar");
   assert.deepEqual(route?.params, { alunoId: "aluno-123", planejamentoId: "plano-456" });
+});
+
+test("expõe início e todos os fluxos funcionais no menu do professor", () => {
+  assert.deepEqual(
+    professorArea.navigation.map((item) => item.label),
+    ["Início", "Alunos", "Lista de espera", "Perfil"],
+  );
+
+  const route = resolveRoute(professorArea, [
+    "alunos", "aluno-123", "planejamentos", "plano-456", "resumo",
+  ]);
+  assert.ok(route);
+
+  const sections = professorNavigationSections(route);
+  assert.deepEqual(sections.map((section) => section.label), [
+    "Aluno selecionado",
+    "Planejamento selecionado",
+  ]);
+  assert.deepEqual(sections[0]?.items.map((item) => item.label), [
+    "Resumo", "Acesso", "Planejamentos", "Novo planejamento",
+  ]);
+  assert.deepEqual(sections[1]?.items.map((item) => item.label), [
+    "Resumo", "Disciplinas", "Cadernos", "Aulas", "Metas", "Gerar metas", "Reforços", "Revisões",
+  ]);
+  assert.equal(sections.flatMap((section) => section.items).some((item) => item.label === "Desempenho"), false);
+});
+
+test("destaca somente a rota contextual exata quando há ações aninhadas", () => {
+  const metas = { href: "/professor/alunos/a/planejamentos/p/metas", label: "Metas", exact: true };
+  const gerar = { href: "/professor/alunos/a/planejamentos/p/metas/gerar", label: "Gerar metas", exact: true };
+  const pathname = "/professor/alunos/a/planejamentos/p/metas/gerar";
+
+  assert.equal(isNavigationItemActive(pathname, metas), false);
+  assert.equal(isNavigationItemActive(pathname, gerar), true);
 });
 
 test("não transforma caminhos desconhecidos em páginas válidas", () => {

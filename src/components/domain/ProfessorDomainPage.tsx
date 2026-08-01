@@ -1806,6 +1806,7 @@ function PlanningReinforcementsPage({ planningId, studentId }: { planningId: str
 }
 
 function PlanningReviewsPage({ planningId, studentId }: { planningId: string; studentId: string }) {
+  const [reviewDisciplineId, setReviewDisciplineId] = useState("");
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     const planning = await loadPlanning(studentId, planningId);
@@ -1821,7 +1822,7 @@ function PlanningReviewsPage({ planningId, studentId }: { planningId: string; st
     const disciplineIds = disciplines.map((item) => item.id);
     const [configurationsResult, lessonsResult] = await Promise.all([
       supabase.from("configuracoes_revisao").select("id, planejamento_disciplina_id, primeira_revisao_intervalo, segunda_revisao_intervalo, ativo").in("planejamento_disciplina_id", disciplineIds),
-      supabase.from("planejamento_aulas").select("id, planejamento_disciplina_id, nome, ordem, link_tec, total_questoes, materiais_snapshot, ativo").in("planejamento_disciplina_id", disciplineIds),
+      supabase.from("planejamento_aulas").select("id, planejamento_disciplina_id, nome, ordem, link_tec, total_questoes, materiais_snapshot, ativo").in("planejamento_disciplina_id", disciplineIds).order("ordem"),
     ]);
     if (configurationsResult.error) throw configurationsResult.error;
     if (lessonsResult.error) throw lessonsResult.error;
@@ -1843,6 +1844,18 @@ function PlanningReviewsPage({ planningId, studentId }: { planningId: string; st
   const resource = useResource(load);
   const mutation = useMutationFeedback();
 
+  async function createReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const saved = await mutation.run("create-review", () => callRpc<Review>("criar_revisao", {
+      p_etapa: formText(data, "stage"),
+      p_planejamento_aula_origem_id: formText(data, "originLesson"),
+      p_planejamento_aula_revisada_id: formText(data, "reviewedLesson"),
+      p_prevista_em: formText(data, "scheduledDate"),
+    }, "A migration criar_revisao ainda não foi aplicada ao Supabase."), "Revisão criada e disponibilizada para o aluno.");
+    if (saved) resource.reload();
+  }
+
   async function saveConfiguration(event: FormEvent<HTMLFormElement>, disciplineId: string) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -1861,8 +1874,34 @@ function PlanningReviewsPage({ planningId, studentId }: { planningId: string; st
       isEmpty={(data) => data.disciplines.length === 0}
       empty={{ title: "Nenhuma disciplina", description: "Não há disciplinas disponíveis para configurar revisões." }}
     >
-      {(data) => (
+      {(data) => {
+        const eligibleDisciplines = data.disciplines.filter((discipline) => (
+          discipline.ativo
+          && data.lessons.filter((lesson) => lesson.ativo && lesson.planejamento_disciplina_id === discipline.id).length >= 2
+        ));
+        const selectedDisciplineId = eligibleDisciplines.some((discipline) => discipline.id === reviewDisciplineId)
+          ? reviewDisciplineId
+          : (eligibleDisciplines[0]?.id ?? "");
+        const reviewLessons = data.lessons.filter((lesson) => (
+          lesson.ativo && lesson.planejamento_disciplina_id === selectedDisciplineId
+        ));
+
+        return (
         <div className={styles.stack}>
+          <section className="be-card">
+            <SectionTitle title="Criar revisão" description="Atribua uma revisão específica usando duas aulas distintas da mesma disciplina. O aluno é identificado pelo planejamento e a revisão começa pendente." />
+            {eligibleDisciplines.length ? (
+              <form className={styles.form} key={`create-review-${selectedDisciplineId}`} onSubmit={createReview}>
+                <label className={styles.field} htmlFor="review-discipline"><span>Disciplina</span><select className="be-input" id="review-discipline" value={selectedDisciplineId} onChange={(event) => setReviewDisciplineId(event.target.value)}>{eligibleDisciplines.map((discipline) => <option key={discipline.id} value={discipline.id}>{discipline.disciplina_nome_snapshot}</option>)}</select></label>
+                <label className={styles.field} htmlFor="review-origin-lesson"><span>Aula de origem</span><select className="be-input" id="review-origin-lesson" name="originLesson" defaultValue={reviewLessons[0]?.id} required>{reviewLessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.ordem}. {lesson.nome}</option>)}</select></label>
+                <label className={styles.field} htmlFor="review-reviewed-lesson"><span>Aula a revisar</span><select className="be-input" id="review-reviewed-lesson" name="reviewedLesson" defaultValue={reviewLessons[1]?.id} required>{reviewLessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.ordem}. {lesson.nome}</option>)}</select></label>
+                <label className={styles.field} htmlFor="review-stage"><span>Etapa</span><select className="be-input" id="review-stage" name="stage" defaultValue="primeira"><option value="primeira">Primeira revisão</option><option value="segunda">Segunda revisão</option></select></label>
+                <label className={styles.field} htmlFor="review-scheduled-date"><span>Data prevista</span><input className="be-input" id="review-scheduled-date" name="scheduledDate" type="date" required /></label>
+                <div className={`${styles.actions} ${styles.fullWidth}`}><button className="be-button be-button--primary" type="submit" disabled={mutation.pending !== null || data.planning.status === "arquivado"}>{mutation.pending === "create-review" ? "Criando..." : "Criar revisão"}</button></div>
+              </form>
+            ) : <StatePanel title="Aulas insuficientes" description="Cadastre ao menos duas aulas ativas na mesma disciplina para criar uma revisão." />}
+            {data.planning.status === "arquivado" ? <p className={styles.hint}>Este planejamento está arquivado e aceita somente consulta ao histórico.</p> : null}
+          </section>
           <section className="be-card"><SectionTitle title="Configuração por disciplina" description="Intervalos aceitam de 0 a 60 aulas; zero desativa a respectiva etapa." /></section>
           <Feedback error={mutation.error} success={mutation.success} />
           <div className={styles.cardGrid}>
@@ -1888,7 +1927,8 @@ function PlanningReviewsPage({ planningId, studentId }: { planningId: string; st
             ) : <StatePanel title="Nenhuma revisão" description="As revisões criadas conforme o progresso do aluno aparecerão aqui." />}
           </section>
         </div>
-      )}
+        );
+      }}
     </ResourceGate>
   );
 }
