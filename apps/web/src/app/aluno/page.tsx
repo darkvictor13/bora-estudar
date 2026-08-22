@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { QuizResultHandler } from "@/components/student/QuizResultHandler";
+import { StartQuizButton } from "@/components/student/StartQuizButton";
+import { CancelSessionForm, RegisterTimeForm } from "@/components/student/QuizSessionPanel";
 import { requireStudentAccess } from "@/lib/auth/session";
 import {
   getActiveStudyPlan,
@@ -71,17 +74,35 @@ export default async function StudentOverviewPage({
         description={`${plan.name}${plan.target_exam ? ` · ${plan.target_exam}` : ""}`}
       />
 
+      <QuizResultHandler />
+
       {openSession && (
-        <Alert kind={openSession.status === "awaiting_time" ? "warning" : "info"}>
+        <Card
+          title={`Bateria ${openSession.session_number}`}
+          sub={
+            openSession.status === "awaiting_time"
+              ? "Respondida. Falta registrar o tempo para concluir a meta."
+              : "Em andamento. Continue pela extensão, no TEC."
+          }
+        >
           {openSession.status === "awaiting_time" ? (
-            <>
-              A bateria {openSession.session_number} já foi respondida. Falta registrar o tempo para
-              concluir a meta.
-            </>
+            <RegisterTimeForm quizSessionId={openSession.id} />
           ) : (
-            <>Bateria {openSession.session_number} em andamento. Continue pela extensão no TEC.</>
+            <div className="stack-sm">
+              <p className="muted">
+                Abra o TEC com a extensão instalada para continuar de onde parou. Se preferir
+                recomeçar depois, cancele — a bateria cancelada não conta no desempenho nem como
+                questão vista.
+              </p>
+              <div className="row">
+                {openSession.goal_id && (
+                  <StartQuizButton goalId={openSession.goal_id} label="Continuar no TEC" />
+                )}
+                <CancelSessionForm quizSessionId={openSession.id} />
+              </div>
+            </div>
           )}
-        </Alert>
+        </Card>
       )}
 
       <div className="stack">
@@ -123,6 +144,7 @@ export default async function StudentOverviewPage({
                             <th className="num">Previsto</th>
                             <th className="num">Resultado</th>
                             <th>Situação</th>
+                            <th />
                           </tr>
                         </thead>
                         <tbody>
@@ -165,6 +187,11 @@ export default async function StudentOverviewPage({
                                   <Badge tone={goalStatusTone(goal.status)}>
                                     {GOAL_STATUS_LABEL[goal.status]}
                                   </Badge>
+                                </td>
+                                <td>
+                                  {goal.type === "question_block" &&
+                                    goal.status === "pending" &&
+                                    !openSession && <StartQuizButton goalId={goal.id} />}
                                 </td>
                               </tr>
                             );

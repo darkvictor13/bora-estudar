@@ -100,6 +100,25 @@ As duas ordenações em maiúsculas são deliberadas. Invertê-las reintroduz as
 duas perdas silenciosas de resultado que existiam na versão anterior: limpar a
 hash antes de confirmar a gravação, e navegar antes de a sessão chegar ao disco.
 
+`npm run test:e2e` percorre essa cadeia inteira sem navegador, contra o
+Supabase local: 21 checagens que vão da abertura da sessão até a meta concluída,
+incluindo a retentativa com o mesmo `requestId` e a prova de que a segunda
+bateria do bloco não repete nenhuma questão da primeira.
+
+### Onde mora o acoplamento com o TEC
+
+Todo o conhecimento do HTML de terceiro está em
+`apps/extension/src/content/tec-page.ts`: os seletores da questão e do
+resultado, a navegação e a observação da página. Quando o TEC mudar o layout —
+e vai mudar — só esse arquivo é tocado. O motor de seleção
+(`content/engine.ts`) é função pura e tem testes próprios.
+
+Uma sutileza que parece bug e não é: ao abrir uma questão que o aluno já
+resolveu antes, fora desta bateria, o TEC mostra o resultado de imediato. O
+content script guarda esse id na abertura e ignora o resultado até o primeiro
+clique num controle de resposta — sem isso, um acerto antigo entraria como se
+tivesse acabado de acontecer.
+
 ## Banco
 
 O contrato está em `supabase/migrations`. Resumo do que a arquitetura assume:
@@ -162,5 +181,8 @@ O controle de acesso mora em três camadas:
 - **`data_collection_permissions` no manifesto.** O `web-ext lint` avisa que a
   chave será obrigatória. Declarar o que a extensão coleta é decisão de
   política, não técnica, e precisa ser resolvida antes de publicar na AMO.
-- **Motor de seleção de questões.** `pickQuestions` hoje só ordena por menos
-  vistas. Erros recentes, espaçamento e correlação de tópico faltam.
+- **Correlação de tópico na seleção.** `pickQuestions` já prioriza inéditas,
+  depois mais erradas, depois vistas há mais tempo. Falta agrupar por tópico
+  quando o aluno erra muito na mesma matéria.
+- **Reforços e extras na extensão.** O ledger e as RPCs aceitam as três fases;
+  o content script hoje só conduz a fase `main`.

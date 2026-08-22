@@ -21,6 +21,7 @@
     "db:reset": "supabase db reset",
     "db:test": "bash supabase/tests/run.sh",
     "db:types": "npm run generate --workspace @bora/database",
+    "test:e2e": "node scripts/roundtrip.mjs",
     "ext:build": "npm run build --workspace @bora/extension",
     "ext:watch": "npm run watch --workspace @bora/extension"
   },

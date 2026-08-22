@@ -1,0 +1,65 @@
+"use client";
+
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
+
+import { Alert } from "@/components/ui";
+import { cancelQuizSession, registerQuizTime } from "@/lib/data/quiz-actions";
+
+function Submit({ label, pendingLabel, variant = "primary" }: {
+  label: string;
+  pendingLabel: string;
+  variant?: "primary" | "danger";
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" className={`btn btn--${variant} btn--sm`} disabled={pending}>
+      {pending ? pendingLabel : label}
+    </button>
+  );
+}
+
+/** Bateria já respondida: falta o tempo para a meta concluir. */
+export function RegisterTimeForm({ quizSessionId }: { quizSessionId: string }) {
+  const [state, formAction] = useActionState(registerQuizTime, {});
+
+  return (
+    <form action={formAction}>
+      {state.error && <Alert kind="error">{state.error}</Alert>}
+      {state.success && <Alert kind="success">{state.success}</Alert>}
+      <input type="hidden" name="quizSessionId" value={quizSessionId} />
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <div className="field" style={{ minWidth: 200, marginBottom: 0 }}>
+          <label className="field__label" htmlFor="minutes">
+            Tempo gasto
+          </label>
+          <input
+            id="minutes"
+            name="minutes"
+            type="number"
+            min={1}
+            max={1440}
+            placeholder="80"
+            required
+          />
+          <span className="field__hint">Em minutos.</span>
+        </div>
+        <Submit label="Registrar tempo e concluir" pendingLabel="Registrando…" />
+      </div>
+    </form>
+  );
+}
+
+/** Sessão aberta que o aluno quer descartar sem passar pela extensão. */
+export function CancelSessionForm({ quizSessionId }: { quizSessionId: string }) {
+  const [state, formAction] = useActionState(cancelQuizSession, {});
+
+  return (
+    <form action={formAction}>
+      {state.error && <Alert kind="error">{state.error}</Alert>}
+      {state.success && <Alert kind="success">{state.success}</Alert>}
+      <input type="hidden" name="quizSessionId" value={quizSessionId} />
+      <Submit label="Cancelar bateria" pendingLabel="Cancelando…" variant="danger" />
+    </form>
+  );
+}
