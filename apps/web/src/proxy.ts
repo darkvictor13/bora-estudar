@@ -13,20 +13,20 @@ import { env } from "@/lib/env";
  * precisa acontecer aqui, antes da renderização.
  */
 export async function proxy(request: NextRequest) {
-  let resposta = NextResponse.next({ request });
+  let response = NextResponse.next({ request });
 
   const supabase = createServerClient(env.supabaseUrl, env.supabasePublishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesParaGravar) {
-        for (const { name, value } of cookiesParaGravar) {
+      setAll(cookiesToWrite) {
+        for (const { name, value } of cookiesToWrite) {
           request.cookies.set(name, value);
         }
-        resposta = NextResponse.next({ request });
-        for (const { name, value, options } of cookiesParaGravar) {
-          resposta.cookies.set(name, value, options);
+        response = NextResponse.next({ request });
+        for (const { name, value, options } of cookiesToWrite) {
+          response.cookies.set(name, value, options);
         }
       },
     },
@@ -35,7 +35,7 @@ export async function proxy(request: NextRequest) {
   // Não remova: é esta chamada que dispara a renovação do token.
   await supabase.auth.getUser();
 
-  return resposta;
+  return response;
 }
 
 export const config = {

@@ -1,8 +1,8 @@
 import { context, build } from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
 
-const observar = process.argv.includes("--watch");
-const raiz = new URL("./", import.meta.url).pathname;
+const watchMode = process.argv.includes("--watch");
+const root = new URL("./", import.meta.url).pathname;
 
 /**
  * Cada alvo vira um bundle independente e autocontido.
@@ -11,41 +11,41 @@ const raiz = new URL("./", import.meta.url).pathname;
  * script clássico na página. Por isso `format: "iife"` e o código de
  * @bora/protocol embutido no bundle, em vez de resolvido pelo navegador.
  */
-const alvos = [
-  { entrada: "src/content/index.ts", saida: "dist/content.js" },
-  { entrada: "src/popup/index.ts", saida: "dist/popup.js" },
+const targets = [
+  { entry: "src/content/index.ts", output: "dist/content.js" },
+  { entry: "src/popup/index.ts", output: "dist/popup.js" },
 ];
 
-const opcoesComuns = {
+const sharedOptions = {
   bundle: true,
   format: "iife",
   target: ["chrome114", "firefox115"],
   platform: "browser",
-  sourcemap: observar ? "inline" : false,
-  minify: !observar,
+  sourcemap: watchMode ? "inline" : false,
+  minify: !watchMode,
   logLevel: "info",
 };
 
-async function copiarEstaticos() {
-  await cp(`${raiz}static`, `${raiz}dist`, { recursive: true });
+async function copyStaticFiles() {
+  await cp(`${root}static`, `${root}dist`, { recursive: true });
 }
 
-await rm(`${raiz}dist`, { recursive: true, force: true });
-await mkdir(`${raiz}dist`, { recursive: true });
-await copiarEstaticos();
+await rm(`${root}dist`, { recursive: true, force: true });
+await mkdir(`${root}dist`, { recursive: true });
+await copyStaticFiles();
 
-if (observar) {
-  const contextos = await Promise.all(
-    alvos.map((alvo) =>
-      context({ ...opcoesComuns, entryPoints: [alvo.entrada], outfile: alvo.saida }),
+if (watchMode) {
+  const contexts = await Promise.all(
+    targets.map((target) =>
+      context({ ...sharedOptions, entryPoints: [target.entry], outfile: target.output }),
     ),
   );
-  await Promise.all(contextos.map((c) => c.watch()));
+  await Promise.all(contexts.map((ctx) => ctx.watch()));
   console.log("[extensão] observando alterações. Ctrl+C para sair.");
 } else {
   await Promise.all(
-    alvos.map((alvo) =>
-      build({ ...opcoesComuns, entryPoints: [alvo.entrada], outfile: alvo.saida }),
+    targets.map((target) =>
+      build({ ...sharedOptions, entryPoints: [target.entry], outfile: target.output }),
     ),
   );
   console.log("[extensão] build concluído em dist/");

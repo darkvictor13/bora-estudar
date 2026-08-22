@@ -6,14 +6,14 @@ import {
   type HashKey,
 } from "./envelope.ts";
 import type {
-  BateriaInicio,
-  BateriaInicioEnvelope,
-  BateriaResultado,
-  BateriaResultadoEnvelope,
-  FaseQuestao,
-  QuestaoVista,
-  RespostaQuestao,
-  ResultadoQuestao,
+  QuestionAnswer,
+  QuestionOutcome,
+  QuestionPhase,
+  QuizResult,
+  QuizResultEnvelope,
+  QuizStart,
+  QuizStartEnvelope,
+  SeenQuestion,
 } from "./messages.ts";
 
 // ---------------------------------------------------------------------------
@@ -22,23 +22,23 @@ import type {
 // Usa apenas APIs presentes em navegador e em Node >= 18, para que o mesmo
 // código rode no content script, no Next.js e nos testes.
 
-function paraBase64Url(texto: string): string {
-  const bytes = new TextEncoder().encode(texto);
-  let binario = "";
-  for (const byte of bytes) binario += String.fromCharCode(byte);
-  return btoa(binario).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function toBase64Url(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function deBase64Url(codificado: string): string {
-  const base64 = codificado.replace(/-/g, "+").replace(/_/g, "/");
-  const preenchido = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-  let binario: string;
+function fromBase64Url(encoded: string): string {
+  const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  let binary: string;
   try {
-    binario = atob(preenchido);
+    binary = atob(padded);
   } catch {
-    throw new ProtocolError("fragmento não é base64url válido", "base64_invalido");
+    throw new ProtocolError("fragmento não é base64url válido", "invalid_base64");
   }
-  const bytes = Uint8Array.from(binario, (c) => c.charCodeAt(0));
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 
@@ -46,118 +46,121 @@ function deBase64Url(codificado: string): string {
 // Validadores
 // ---------------------------------------------------------------------------
 
-function invalido(campo: string): never {
-  throw new ProtocolError(`campo inválido no payload: ${campo}`, "corpo_invalido");
+function invalid(field: string): never {
+  throw new ProtocolError(`campo inválido no payload: ${field}`, "invalid_body");
 }
 
-const ehObjeto = (v: unknown): v is Record<string, unknown> =>
+const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-function texto(v: unknown, campo: string): string {
-  if (typeof v !== "string" || v.length === 0) invalido(campo);
+function readString(v: unknown, field: string): string {
+  if (typeof v !== "string" || v.length === 0) invalid(field);
   return v;
 }
 
-function textoOuNulo(v: unknown, campo: string): string | null {
+function readNullableString(v: unknown, field: string): string | null {
   if (v === null || v === undefined) return null;
-  if (typeof v !== "string") invalido(campo);
+  if (typeof v !== "string") invalid(field);
   return v.length > 0 ? v : null;
 }
 
-function inteiro(v: unknown, campo: string, { min = 0 } = {}): number {
-  if (typeof v !== "number" || !Number.isInteger(v) || v < min) invalido(campo);
+function readInteger(v: unknown, field: string, { min = 0 } = {}): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < min) invalid(field);
   return v;
 }
 
-function inteiroOuNulo(v: unknown, campo: string): number | null {
+function readNullableInteger(v: unknown, field: string): number | null {
   if (v === null || v === undefined) return null;
-  return inteiro(v, campo, { min: 1 });
+  return readInteger(v, field, { min: 1 });
 }
 
-function booleano(v: unknown, campo: string): boolean {
-  if (typeof v !== "boolean") invalido(campo);
+function readBoolean(v: unknown, field: string): boolean {
+  if (typeof v !== "boolean") invalid(field);
   return v;
 }
 
-function lista(v: unknown, campo: string): readonly unknown[] {
-  if (!Array.isArray(v)) invalido(campo);
+function readArray(v: unknown, field: string): readonly unknown[] {
+  if (!Array.isArray(v)) invalid(field);
   return v;
 }
 
-function dataIso(v: unknown, campo: string): string {
-  const s = texto(v, campo);
-  if (Number.isNaN(Date.parse(s))) invalido(campo);
+function readIsoDate(v: unknown, field: string): string {
+  const s = readString(v, field);
+  if (Number.isNaN(Date.parse(s))) invalid(field);
   return s;
 }
 
-const FASES: readonly FaseQuestao[] = ["principal", "reforco", "extra"];
-const RESULTADOS: readonly ResultadoQuestao[] = ["acertou", "errou"];
+const PHASES: readonly QuestionPhase[] = ["main", "reinforcement", "extra"];
+const OUTCOMES: readonly QuestionOutcome[] = ["correct", "incorrect"];
 
-function umDe<T extends string>(v: unknown, opcoes: readonly T[], campo: string): T {
-  const s = texto(v, campo);
-  if (!opcoes.includes(s as T)) invalido(campo);
+function readOneOf<T extends string>(v: unknown, options: readonly T[], field: string): T {
+  const s = readString(v, field);
+  if (!options.includes(s as T)) invalid(field);
   return s as T;
 }
 
-function lerQuestaoVista(v: unknown, i: number): QuestaoVista {
-  if (!ehObjeto(v)) invalido(`historico[${i}]`);
+function readSeenQuestion(v: unknown, i: number): SeenQuestion {
+  if (!isObject(v)) invalid(`history[${i}]`);
   return {
-    questaoId: inteiro(v["questaoId"], `historico[${i}].questaoId`, { min: 1 }),
-    vezesVista: inteiro(v["vezesVista"], `historico[${i}].vezesVista`, { min: 1 }),
-    acertos: inteiro(v["acertos"], `historico[${i}].acertos`),
-    erros: inteiro(v["erros"], `historico[${i}].erros`),
-    ultimaVez: dataIso(v["ultimaVez"], `historico[${i}].ultimaVez`),
+    questionId: readInteger(v["questionId"], `history[${i}].questionId`, { min: 1 }),
+    timesSeen: readInteger(v["timesSeen"], `history[${i}].timesSeen`, { min: 1 }),
+    correctAnswers: readInteger(v["correctAnswers"], `history[${i}].correctAnswers`),
+    incorrectAnswers: readInteger(v["incorrectAnswers"], `history[${i}].incorrectAnswers`),
+    lastSeenAt: readIsoDate(v["lastSeenAt"], `history[${i}].lastSeenAt`),
   };
 }
 
-function lerResposta(v: unknown, i: number): RespostaQuestao {
-  if (!ehObjeto(v)) invalido(`respostas[${i}]`);
-  const fase = umDe(v["fase"], FASES, `respostas[${i}].fase`);
-  const origemQuestaoId = inteiroOuNulo(v["origemQuestaoId"], `respostas[${i}].origemQuestaoId`);
+function readAnswer(v: unknown, i: number): QuestionAnswer {
+  if (!isObject(v)) invalid(`answers[${i}]`);
+  const phase = readOneOf(v["phase"], PHASES, `answers[${i}].phase`);
+  const sourceQuestionId = readNullableInteger(
+    v["sourceQuestionId"],
+    `answers[${i}].sourceQuestionId`,
+  );
 
   // O banco tem o mesmo CHECK. Falhar aqui dá um erro legível na origem, em vez
-  // de um 23514 opaco depois de a bateria inteira ter sido respondida.
-  if ((fase === "reforco") !== (origemQuestaoId !== null)) {
-    invalido(`respostas[${i}].origemQuestaoId (obrigatório se e só se fase="reforco")`);
+  // de um 23514 opaco depois de a sessão inteira ter sido respondida.
+  if ((phase === "reinforcement") !== (sourceQuestionId !== null)) {
+    invalid(`answers[${i}].sourceQuestionId (obrigatório se e só se phase="reinforcement")`);
   }
 
   return {
-    questaoId: inteiro(v["questaoId"], `respostas[${i}].questaoId`, { min: 1 }),
-    ordemExecucao: inteiro(v["ordemExecucao"], `respostas[${i}].ordemExecucao`, { min: 1 }),
-    rodada: inteiro(v["rodada"], `respostas[${i}].rodada`),
-    fase,
-    resultado: umDe(v["resultado"], RESULTADOS, `respostas[${i}].resultado`),
-    topico: textoOuNulo(v["topico"], `respostas[${i}].topico`),
-    origemQuestaoId,
-    respondidaEm: dataIso(v["respondidaEm"], `respostas[${i}].respondidaEm`),
+    questionId: readInteger(v["questionId"], `answers[${i}].questionId`, { min: 1 }),
+    executionOrder: readInteger(v["executionOrder"], `answers[${i}].executionOrder`, { min: 1 }),
+    round: readInteger(v["round"], `answers[${i}].round`),
+    phase,
+    outcome: readOneOf(v["outcome"], OUTCOMES, `answers[${i}].outcome`),
+    topic: readNullableString(v["topic"], `answers[${i}].topic`),
+    sourceQuestionId,
+    answeredAt: readIsoDate(v["answeredAt"], `answers[${i}].answeredAt`),
   };
 }
 
-function lerInicio(v: unknown): BateriaInicio {
-  if (!ehObjeto(v)) invalido("corpo");
+function readQuizStart(v: unknown): QuizStart {
+  if (!isObject(v)) invalid("body");
   return {
-    urlRetorno: texto(v["urlRetorno"], "urlRetorno"),
-    bateriaId: texto(v["bateriaId"], "bateriaId"),
-    metaId: texto(v["metaId"], "metaId"),
-    planejamentoId: texto(v["planejamentoId"], "planejamentoId"),
-    blocoId: texto(v["blocoId"], "blocoId"),
-    numeroBateria: inteiro(v["numeroBateria"], "numeroBateria", { min: 1 }),
-    principaisAlvo: inteiro(v["principaisAlvo"], "principaisAlvo", { min: 1 }),
-    questoesDisponiveis: lista(v["questoesDisponiveis"], "questoesDisponiveis").map((q, i) =>
-      inteiro(q, `questoesDisponiveis[${i}]`, { min: 1 }),
+    returnUrl: readString(v["returnUrl"], "returnUrl"),
+    quizSessionId: readString(v["quizSessionId"], "quizSessionId"),
+    goalId: readString(v["goalId"], "goalId"),
+    studyPlanId: readString(v["studyPlanId"], "studyPlanId"),
+    blockId: readString(v["blockId"], "blockId"),
+    sessionNumber: readInteger(v["sessionNumber"], "sessionNumber", { min: 1 }),
+    mainTarget: readInteger(v["mainTarget"], "mainTarget", { min: 1 }),
+    availableQuestions: readArray(v["availableQuestions"], "availableQuestions").map((q, i) =>
+      readInteger(q, `availableQuestions[${i}]`, { min: 1 }),
     ),
-    historico: lista(v["historico"], "historico").map(lerQuestaoVista),
-    historicoCompleto: booleano(v["historicoCompleto"], "historicoCompleto"),
+    history: readArray(v["history"], "history").map(readSeenQuestion),
+    historyComplete: readBoolean(v["historyComplete"], "historyComplete"),
   };
 }
 
-function lerResultado(v: unknown): BateriaResultado {
-  if (!ehObjeto(v)) invalido("corpo");
+function readQuizResult(v: unknown): QuizResult {
+  if (!isObject(v)) invalid("body");
   return {
-    bateriaId: texto(v["bateriaId"], "bateriaId"),
-    requestId: texto(v["requestId"], "requestId"),
-    cancelar: booleano(v["cancelar"], "cancelar"),
-    respostas: lista(v["respostas"], "respostas").map(lerResposta),
+    quizSessionId: readString(v["quizSessionId"], "quizSessionId"),
+    requestId: readString(v["requestId"], "requestId"),
+    cancel: readBoolean(v["cancel"], "cancel"),
+    answers: readArray(v["answers"], "answers").map(readAnswer),
   };
 }
 
@@ -165,77 +168,74 @@ function lerResultado(v: unknown): BateriaResultado {
 // API pública
 // ---------------------------------------------------------------------------
 
-function empacotar<K extends string, B>(tipo: K, corpo: B): Envelope<K, B> {
-  return { protocolo: PROTOCOL_VERSION, tipo, corpo };
+function wrap<K extends string, B>(kind: K, body: B): Envelope<K, B> {
+  return { protocol: PROTOCOL_VERSION, kind, body };
 }
 
-/** Monta a URL que leva o aluno ao TEC com a bateria carregada. */
-export function montarUrlInicio(baseUrl: string, corpo: BateriaInicio): string {
-  const envelope = empacotar("bateria.inicio", corpo);
-  return `${baseUrl}#${HASH_KEYS.start}=${paraBase64Url(JSON.stringify(envelope))}`;
+/** Monta a URL que leva o aluno ao TEC com a sessão carregada. */
+export function buildStartUrl(baseUrl: string, body: QuizStart): string {
+  const envelope = wrap("quiz.start", body);
+  return `${baseUrl}#${HASH_KEYS.start}=${toBase64Url(JSON.stringify(envelope))}`;
 }
 
 /** Monta a URL que devolve o resultado ao site. */
-export function montarUrlResultado(corpo: BateriaResultado, urlRetorno: string): string {
-  const envelope = empacotar("bateria.resultado", corpo);
-  const separador = urlRetorno.includes("#") ? "&" : "#";
-  return `${urlRetorno}${separador}${HASH_KEYS.result}=${paraBase64Url(JSON.stringify(envelope))}`;
+export function buildResultUrl(body: QuizResult, returnUrl: string): string {
+  const envelope = wrap("quiz.result", body);
+  const separator = returnUrl.includes("#") ? "&" : "#";
+  return `${returnUrl}${separator}${HASH_KEYS.result}=${toBase64Url(JSON.stringify(envelope))}`;
 }
 
-function extrairFragmento(hash: string, chave: HashKey): string {
-  const bruto = hash.startsWith("#") ? hash.slice(1) : hash;
-  for (const parte of bruto.split("&")) {
-    const separador = parte.indexOf("=");
-    if (separador > 0 && parte.slice(0, separador) === chave) {
-      return decodeURIComponent(parte.slice(separador + 1));
+function extractFragment(hash: string, key: HashKey): string {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  for (const part of raw.split("&")) {
+    const separator = part.indexOf("=");
+    if (separator > 0 && part.slice(0, separator) === key) {
+      return decodeURIComponent(part.slice(separator + 1));
     }
   }
-  throw new ProtocolError(`fragmento ${chave} ausente na URL`, "fragmento_ausente");
+  throw new ProtocolError(`fragmento ${key} ausente na URL`, "missing_fragment");
 }
 
-function abrir<K extends string>(hash: string, chave: HashKey, tipoEsperado: K): unknown {
-  const codificado = extrairFragmento(hash, chave);
-  let cru: unknown;
+function open<K extends string>(hash: string, key: HashKey, expectedKind: K): unknown {
+  const encoded = extractFragment(hash, key);
+  let raw: unknown;
   try {
-    cru = JSON.parse(deBase64Url(codificado));
-  } catch (erro) {
-    if (erro instanceof ProtocolError) throw erro;
-    throw new ProtocolError("fragmento não contém JSON válido", "json_invalido");
+    raw = JSON.parse(fromBase64Url(encoded));
+  } catch (error) {
+    if (error instanceof ProtocolError) throw error;
+    throw new ProtocolError("fragmento não contém JSON válido", "invalid_json");
   }
-  if (!ehObjeto(cru)) throw new ProtocolError("envelope não é um objeto", "json_invalido");
+  if (!isObject(raw)) throw new ProtocolError("envelope não é um objeto", "invalid_json");
 
-  if (cru["protocolo"] !== PROTOCOL_VERSION) {
+  if (raw["protocol"] !== PROTOCOL_VERSION) {
     throw new ProtocolError(
-      `protocolo ${String(cru["protocolo"])} incompatível; esperado ${PROTOCOL_VERSION}`,
-      "versao_incompativel",
+      `protocolo ${String(raw["protocol"])} incompatível; esperado ${PROTOCOL_VERSION}`,
+      "incompatible_version",
     );
   }
-  if (cru["tipo"] !== tipoEsperado) {
+  if (raw["kind"] !== expectedKind) {
     throw new ProtocolError(
-      `envelope do tipo ${String(cru["tipo"])}; esperado ${tipoEsperado}`,
-      "tipo_inesperado",
+      `envelope do tipo ${String(raw["kind"])}; esperado ${expectedKind}`,
+      "unexpected_kind",
     );
   }
-  return cru["corpo"];
+  return raw["body"];
 }
 
 /** Lê o payload de início a partir de `location.hash`. Lança `ProtocolError`. */
-export function lerInicioDaHash(hash: string): BateriaInicioEnvelope {
-  return empacotar("bateria.inicio", lerInicio(abrir(hash, HASH_KEYS.start, "bateria.inicio")));
+export function parseStartHash(hash: string): QuizStartEnvelope {
+  return wrap("quiz.start", readQuizStart(open(hash, HASH_KEYS.start, "quiz.start")));
 }
 
 /** Lê o resultado a partir de `location.hash`. Lança `ProtocolError`. */
-export function lerResultadoDaHash(hash: string): BateriaResultadoEnvelope {
-  return empacotar(
-    "bateria.resultado",
-    lerResultado(abrir(hash, HASH_KEYS.result, "bateria.resultado")),
-  );
+export function parseResultHash(hash: string): QuizResultEnvelope {
+  return wrap("quiz.result", readQuizResult(open(hash, HASH_KEYS.result, "quiz.result")));
 }
 
 /** `true` se a hash carrega um payload deste protocolo, sem validar o corpo. */
-export function hashContemPayload(hash: string, chave: HashKey): boolean {
+export function hashHasPayload(hash: string, key: HashKey): boolean {
   try {
-    extrairFragmento(hash, chave);
+    extractFragment(hash, key);
     return true;
   } catch {
     return false;

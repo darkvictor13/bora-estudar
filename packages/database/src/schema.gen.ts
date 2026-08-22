@@ -9,1431 +9,1431 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      aluno_preferencias: {
+      audit_log: {
         Row: {
-          aluno_id: string
-          atualizado_em: string
-          ciclo_config: Json
-          revisao_config: Json
-          tema: string
-        }
-        Insert: {
-          aluno_id: string
-          atualizado_em?: string
-          ciclo_config?: Json
-          revisao_config?: Json
-          tema?: string
-        }
-        Update: {
-          aluno_id?: string
-          atualizado_em?: string
-          ciclo_config?: Json
-          revisao_config?: Json
-          tema?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "aluno_preferencias_aluno_id_fkey"
-            columns: ["aluno_id"]
-            isOneToOne: true
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      assinaturas: {
-        Row: {
-          aluno_id: string
-          atualizado_em: string
-          criado_em: string
-          cupom_id: string | null
-          id: string
-          plano: string
-          status: Database["public"]["Enums"]["status_acesso"]
-          vigencia: unknown
-        }
-        Insert: {
-          aluno_id: string
-          atualizado_em?: string
-          criado_em?: string
-          cupom_id?: string | null
-          id?: string
-          plano?: string
-          status?: Database["public"]["Enums"]["status_acesso"]
-          vigencia?: unknown
-        }
-        Update: {
-          aluno_id?: string
-          atualizado_em?: string
-          criado_em?: string
-          cupom_id?: string | null
-          id?: string
-          plano?: string
-          status?: Database["public"]["Enums"]["status_acesso"]
-          vigencia?: unknown
-        }
-        Relationships: [
-          {
-            foreignKeyName: "assinaturas_aluno_id_fkey"
-            columns: ["aluno_id"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "assinaturas_cupom_id_fkey"
-            columns: ["cupom_id"]
-            isOneToOne: false
-            referencedRelation: "cupons"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      auditoria: {
-        Row: {
-          acao: string
-          ator_id: string | null
+          action: string
+          actor_id: string | null
           id: number
-          motivo: string | null
-          ocorrido_em: string
-          registro_id: string
-          tabela: string
-          valor_anterior: Json | null
-          valor_novo: Json | null
+          new_value: Json | null
+          occurred_at: string
+          old_value: Json | null
+          reason: string | null
+          record_id: string
+          table_name: string
         }
         Insert: {
-          acao: string
-          ator_id?: string | null
+          action: string
+          actor_id?: string | null
           id?: never
-          motivo?: string | null
-          ocorrido_em?: string
-          registro_id: string
-          tabela: string
-          valor_anterior?: Json | null
-          valor_novo?: Json | null
+          new_value?: Json | null
+          occurred_at?: string
+          old_value?: Json | null
+          reason?: string | null
+          record_id: string
+          table_name: string
         }
         Update: {
-          acao?: string
-          ator_id?: string | null
+          action?: string
+          actor_id?: string | null
           id?: never
-          motivo?: string | null
-          ocorrido_em?: string
-          registro_id?: string
-          tabela?: string
-          valor_anterior?: Json | null
-          valor_novo?: Json | null
+          new_value?: Json | null
+          occurred_at?: string
+          old_value?: Json | null
+          reason?: string | null
+          record_id?: string
+          table_name?: string
         }
         Relationships: []
       }
-      bateria_questoes: {
+      catalog_blocks: {
         Row: {
-          bateria_id: string
-          fase: Database["public"]["Enums"]["fase_questao"]
+          active: boolean
+          block_key: string
+          catalog_key: string
+          created_at: string
           id: string
-          ordem_execucao: number
-          origem_questao_id: number | null
-          questao_id: number
-          registrado_em: string
-          respondida_em: string
-          resultado: Database["public"]["Enums"]["resultado_questao"]
-          rodada: number
-          topico: string | null
+          name: string
+          number: number
+          question_count: number
+          subject_key: string
+          subject_name: string
+          updated_at: string
         }
         Insert: {
-          bateria_id: string
-          fase: Database["public"]["Enums"]["fase_questao"]
+          active?: boolean
+          block_key: string
+          catalog_key: string
+          created_at?: string
           id?: string
-          ordem_execucao: number
-          origem_questao_id?: number | null
-          questao_id: number
-          registrado_em?: string
-          respondida_em: string
-          resultado: Database["public"]["Enums"]["resultado_questao"]
-          rodada?: number
-          topico?: string | null
+          name: string
+          number: number
+          question_count?: number
+          subject_key: string
+          subject_name: string
+          updated_at?: string
         }
         Update: {
-          bateria_id?: string
-          fase?: Database["public"]["Enums"]["fase_questao"]
+          active?: boolean
+          block_key?: string
+          catalog_key?: string
+          created_at?: string
           id?: string
-          ordem_execucao?: number
-          origem_questao_id?: number | null
-          questao_id?: number
-          registrado_em?: string
-          respondida_em?: string
-          resultado?: Database["public"]["Enums"]["resultado_questao"]
-          rodada?: number
-          topico?: string | null
+          name?: string
+          number?: number
+          question_count?: number
+          subject_key?: string
+          subject_name?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "bateria_questoes_bateria_id_fkey"
-            columns: ["bateria_id"]
+            foreignKeyName: "catalog_blocks_catalog_key_fkey"
+            columns: ["catalog_key"]
             isOneToOne: false
-            referencedRelation: "baterias"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bateria_questoes_bateria_id_fkey"
-            columns: ["bateria_id"]
-            isOneToOne: false
-            referencedRelation: "vw_bateria_desempenho"
-            referencedColumns: ["bateria_id"]
+            referencedRelation: "catalogs"
+            referencedColumns: ["key"]
           },
         ]
       }
-      baterias: {
+      catalog_questions: {
         Row: {
-          aluno_id: string
-          anulada_em: string | null
-          anulada_por: string | null
-          atualizado_em: string
-          bloco_id: string
-          cancelada_em: string | null
-          concluida_em: string | null
-          finalizacao_id: string | null
-          finalizada_em: string | null
-          id: string
-          iniciada_em: string
-          meta_id: string | null
-          motivo_anulacao: string | null
-          numero_bateria: number | null
-          origem: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id: string
-          principais_alvo: number
-          professor_id: string
-          sequencia_execucao: number
-          status: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos: number | null
+          block_id: string
+          position: number
+          question_id: number
+          topic: string
         }
         Insert: {
-          aluno_id: string
-          anulada_em?: string | null
-          anulada_por?: string | null
-          atualizado_em?: string
-          bloco_id: string
-          cancelada_em?: string | null
-          concluida_em?: string | null
-          finalizacao_id?: string | null
-          finalizada_em?: string | null
-          id?: string
-          iniciada_em?: string
-          meta_id?: string | null
-          motivo_anulacao?: string | null
-          numero_bateria?: number | null
-          origem?: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id: string
-          principais_alvo?: number
-          professor_id: string
-          sequencia_execucao: number
-          status?: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos?: number | null
+          block_id: string
+          position: number
+          question_id: number
+          topic: string
         }
         Update: {
-          aluno_id?: string
-          anulada_em?: string | null
-          anulada_por?: string | null
-          atualizado_em?: string
-          bloco_id?: string
-          cancelada_em?: string | null
-          concluida_em?: string | null
-          finalizacao_id?: string | null
-          finalizada_em?: string | null
-          id?: string
-          iniciada_em?: string
-          meta_id?: string | null
-          motivo_anulacao?: string | null
-          numero_bateria?: number | null
-          origem?: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id?: string
-          principais_alvo?: number
-          professor_id?: string
-          sequencia_execucao?: number
-          status?: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos?: number | null
+          block_id?: string
+          position?: number
+          question_id?: number
+          topic?: string
         }
         Relationships: [
           {
-            foreignKeyName: "bateria_bloco_fk"
-            columns: ["bloco_id", "planejamento_id", "aluno_id"]
+            foreignKeyName: "catalog_questions_block_id_fkey"
+            columns: ["block_id"]
             isOneToOne: false
-            referencedRelation: "planejamento_blocos"
-            referencedColumns: ["id", "planejamento_id", "aluno_id"]
-          },
-          {
-            foreignKeyName: "bateria_contexto_fk"
-            columns: ["planejamento_id", "aluno_id", "professor_id"]
-            isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id", "aluno_id", "professor_id"]
-          },
-          {
-            foreignKeyName: "baterias_anulada_por_fkey"
-            columns: ["anulada_por"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baterias_meta_id_fkey"
-            columns: ["meta_id"]
-            isOneToOne: false
-            referencedRelation: "metas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baterias_meta_id_fkey"
-            columns: ["meta_id"]
-            isOneToOne: false
-            referencedRelation: "vw_meta_desempenho"
-            referencedColumns: ["meta_id"]
-          },
-        ]
-      }
-      catalogo_blocos: {
-        Row: {
-          ativo: boolean
-          atualizado_em: string
-          bloco_chave: string
-          catalogo_chave: string
-          criado_em: string
-          disciplina_chave: string
-          disciplina_nome: string
-          id: string
-          nome: string
-          numero: number
-          questoes_qtd: number
-        }
-        Insert: {
-          ativo?: boolean
-          atualizado_em?: string
-          bloco_chave: string
-          catalogo_chave: string
-          criado_em?: string
-          disciplina_chave: string
-          disciplina_nome: string
-          id?: string
-          nome: string
-          numero: number
-          questoes_qtd?: number
-        }
-        Update: {
-          ativo?: boolean
-          atualizado_em?: string
-          bloco_chave?: string
-          catalogo_chave?: string
-          criado_em?: string
-          disciplina_chave?: string
-          disciplina_nome?: string
-          id?: string
-          nome?: string
-          numero?: number
-          questoes_qtd?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "catalogo_blocos_catalogo_chave_fkey"
-            columns: ["catalogo_chave"]
-            isOneToOne: false
-            referencedRelation: "catalogos"
-            referencedColumns: ["chave"]
-          },
-        ]
-      }
-      catalogo_questoes: {
-        Row: {
-          bloco_id: string
-          posicao: number
-          questao_id: number
-          topico: string
-        }
-        Insert: {
-          bloco_id: string
-          posicao: number
-          questao_id: number
-          topico: string
-        }
-        Update: {
-          bloco_id?: string
-          posicao?: number
-          questao_id?: number
-          topico?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "catalogo_questoes_bloco_id_fkey"
-            columns: ["bloco_id"]
-            isOneToOne: false
-            referencedRelation: "catalogo_blocos"
+            referencedRelation: "catalog_blocks"
             referencedColumns: ["id"]
           },
         ]
       }
-      catalogos: {
+      catalogs: {
         Row: {
-          ativo: boolean
-          chave: string
-          criado_em: string
-          nome: string
+          active: boolean
+          created_at: string
+          key: string
+          name: string
         }
         Insert: {
-          ativo?: boolean
-          chave: string
-          criado_em?: string
-          nome: string
+          active?: boolean
+          created_at?: string
+          key: string
+          name: string
         }
         Update: {
-          ativo?: boolean
-          chave?: string
-          criado_em?: string
-          nome?: string
+          active?: boolean
+          created_at?: string
+          key?: string
+          name?: string
         }
         Relationships: []
       }
-      ciclos_revisao: {
+      coupons: {
         Row: {
-          aluno_id: string
-          bloco_id: string
-          concluido_em: string
-          cutoff: string
+          active: boolean
+          code: string
+          created_at: string
+          current_uses: number
           id: string
-          reforco_id: string | null
+          max_uses: number | null
+          months: number
+          valid_until: string | null
         }
         Insert: {
-          aluno_id: string
-          bloco_id: string
-          concluido_em?: string
-          cutoff: string
+          active?: boolean
+          code: string
+          created_at?: string
+          current_uses?: number
           id?: string
-          reforco_id?: string | null
+          max_uses?: number | null
+          months: number
+          valid_until?: string | null
         }
         Update: {
-          aluno_id?: string
-          bloco_id?: string
-          concluido_em?: string
+          active?: boolean
+          code?: string
+          created_at?: string
+          current_uses?: number
+          id?: string
+          max_uses?: number | null
+          months?: number
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          batch_id: string | null
+          block_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          day_order: number
+          deleted_at: string | null
+          external_link: string | null
+          extra_activity: string | null
+          id: string
+          planned_minutes: number | null
+          reinforcement_skipped: boolean
+          source_goal_id: string | null
+          source_week: number | null
+          status: Database["public"]["Enums"]["goal_status"]
+          student_id: string
+          student_note: string | null
+          study_plan_id: string
+          teacher_id: string
+          teacher_note: string | null
+          title: string
+          type: Database["public"]["Enums"]["goal_type"]
+          updated_at: string
+          week_number: number
+          weekday: number
+        }
+        Insert: {
+          batch_id?: string | null
+          block_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          day_order: number
+          deleted_at?: string | null
+          external_link?: string | null
+          extra_activity?: string | null
+          id?: string
+          planned_minutes?: number | null
+          reinforcement_skipped?: boolean
+          source_goal_id?: string | null
+          source_week?: number | null
+          status?: Database["public"]["Enums"]["goal_status"]
+          student_id: string
+          student_note?: string | null
+          study_plan_id: string
+          teacher_id: string
+          teacher_note?: string | null
+          title: string
+          type: Database["public"]["Enums"]["goal_type"]
+          updated_at?: string
+          week_number: number
+          weekday: number
+        }
+        Update: {
+          batch_id?: string | null
+          block_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          day_order?: number
+          deleted_at?: string | null
+          external_link?: string | null
+          extra_activity?: string | null
+          id?: string
+          planned_minutes?: number | null
+          reinforcement_skipped?: boolean
+          source_goal_id?: string | null
+          source_week?: number | null
+          status?: Database["public"]["Enums"]["goal_status"]
+          student_id?: string
+          student_note?: string | null
+          study_plan_id?: string
+          teacher_id?: string
+          teacher_note?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["goal_type"]
+          updated_at?: string
+          week_number?: number
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+          {
+            foreignKeyName: "goal_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "goals_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goals_source_goal_id_fkey"
+            columns: ["source_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goals_source_goal_id_fkey"
+            columns: ["source_goal_id"]
+            isOneToOne: false
+            referencedRelation: "vw_goal_performance"
+            referencedColumns: ["goal_id"]
+          },
+        ]
+      }
+      operations: {
+        Row: {
+          actor_id: string
+          created_at: string
+          operation: string
+          payload_hash: string
+          request_id: string
+          result: Json | null
+          target_id: string | null
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          operation: string
+          payload_hash: string
+          request_id: string
+          result?: Json | null
+          target_id?: string | null
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          operation?: string
+          payload_hash?: string
+          request_id?: string
+          result?: Json | null
+          target_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operations_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          contact_email: string | null
+          created_at: string
+          id: string
+          name: string
+          phone: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          created_at?: string
+          id: string
+          name: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      quiz_session_questions: {
+        Row: {
+          answered_at: string
+          execution_order: number
+          id: string
+          outcome: Database["public"]["Enums"]["question_outcome"]
+          phase: Database["public"]["Enums"]["question_phase"]
+          question_id: number
+          quiz_session_id: string
+          recorded_at: string
+          round: number
+          source_question_id: number | null
+          topic: string | null
+        }
+        Insert: {
+          answered_at: string
+          execution_order: number
+          id?: string
+          outcome: Database["public"]["Enums"]["question_outcome"]
+          phase: Database["public"]["Enums"]["question_phase"]
+          question_id: number
+          quiz_session_id: string
+          recorded_at?: string
+          round?: number
+          source_question_id?: number | null
+          topic?: string | null
+        }
+        Update: {
+          answered_at?: string
+          execution_order?: number
+          id?: string
+          outcome?: Database["public"]["Enums"]["question_outcome"]
+          phase?: Database["public"]["Enums"]["question_phase"]
+          question_id?: number
+          quiz_session_id?: string
+          recorded_at?: string
+          round?: number
+          source_question_id?: number | null
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "vw_quiz_session_performance"
+            referencedColumns: ["quiz_session_id"]
+          },
+        ]
+      }
+      quiz_sessions: {
+        Row: {
+          block_id: string
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_id: string | null
+          duration_minutes: number | null
+          execution_sequence: number
+          finished_at: string | null
+          goal_id: string | null
+          id: string
+          main_target: number
+          origin: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["quiz_session_status"]
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          block_id: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          completion_id?: string | null
+          duration_minutes?: number | null
+          execution_sequence: number
+          finished_at?: string | null
+          goal_id?: string | null
+          id?: string
+          main_target?: number
+          origin?: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number?: number | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["quiz_session_status"]
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          block_id?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          completion_id?: string | null
+          duration_minutes?: number | null
+          execution_sequence?: number
+          finished_at?: string | null
+          goal_id?: string | null
+          id?: string
+          main_target?: number
+          origin?: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number?: number | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["quiz_session_status"]
+          student_id?: string
+          study_plan_id?: string
+          teacher_id?: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+          {
+            foreignKeyName: "quiz_session_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "vw_goal_performance"
+            referencedColumns: ["goal_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_voided_by_fkey"
+            columns: ["voided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reinforcement_questions: {
+        Row: {
+          outcome: Database["public"]["Enums"]["question_outcome"]
+          phase: Database["public"]["Enums"]["question_phase"]
+          question_id: number
+          reinforcement_id: string
+          topic: string | null
+        }
+        Insert: {
+          outcome: Database["public"]["Enums"]["question_outcome"]
+          phase: Database["public"]["Enums"]["question_phase"]
+          question_id: number
+          reinforcement_id: string
+          topic?: string | null
+        }
+        Update: {
+          outcome?: Database["public"]["Enums"]["question_outcome"]
+          phase?: Database["public"]["Enums"]["question_phase"]
+          question_id?: number
+          reinforcement_id?: string
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reinforcement_questions_reinforcement_id_fkey"
+            columns: ["reinforcement_id"]
+            isOneToOne: false
+            referencedRelation: "reinforcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reinforcement_sessions: {
+        Row: {
+          quiz_session_id: string
+          reinforcement_id: string
+        }
+        Insert: {
+          quiz_session_id: string
+          reinforcement_id: string
+        }
+        Update: {
+          quiz_session_id?: string
+          reinforcement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reinforcement_sessions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: true
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reinforcement_sessions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: true
+            referencedRelation: "vw_quiz_session_performance"
+            referencedColumns: ["quiz_session_id"]
+          },
+          {
+            foreignKeyName: "reinforcement_sessions_reinforcement_id_fkey"
+            columns: ["reinforcement_id"]
+            isOneToOne: false
+            referencedRelation: "reinforcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reinforcements: {
+        Row: {
+          block_id: string
+          completed_at: string
+          created_at: string
+          cutoff: string
+          id: string
+          request_id: string
+          source_score: number
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+        }
+        Insert: {
+          block_id: string
+          completed_at?: string
+          created_at?: string
+          cutoff: string
+          id?: string
+          request_id: string
+          source_score: number
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+        }
+        Update: {
+          block_id?: string
+          completed_at?: string
+          created_at?: string
           cutoff?: string
           id?: string
-          reforco_id?: string | null
+          request_id?: string
+          source_score?: number
+          student_id?: string
+          study_plan_id?: string
+          teacher_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "ciclos_revisao_aluno_id_fkey"
-            columns: ["aluno_id"]
+            foreignKeyName: "reinforcement_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
             isOneToOne: false
-            referencedRelation: "perfis"
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+          {
+            foreignKeyName: "reinforcement_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
+          },
+        ]
+      }
+      review_cycles: {
+        Row: {
+          block_id: string
+          completed_at: string
+          cutoff: string
+          id: string
+          reinforcement_id: string | null
+          student_id: string
+        }
+        Insert: {
+          block_id: string
+          completed_at?: string
+          cutoff: string
+          id?: string
+          reinforcement_id?: string | null
+          student_id: string
+        }
+        Update: {
+          block_id?: string
+          completed_at?: string
+          cutoff?: string
+          id?: string
+          reinforcement_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_cycles_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ciclos_revisao_bloco_id_fkey"
-            columns: ["bloco_id"]
+            foreignKeyName: "review_cycles_reinforcement_id_fkey"
+            columns: ["reinforcement_id"]
             isOneToOne: false
-            referencedRelation: "planejamento_blocos"
+            referencedRelation: "reinforcements"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "ciclos_revisao_reforco_id_fkey"
-            columns: ["reforco_id"]
+            foreignKeyName: "review_cycles_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: false
-            referencedRelation: "reforcos"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
-      cupons: {
+      student_preferences: {
         Row: {
-          ativo: boolean
-          codigo: string
-          criado_em: string
-          id: string
-          meses: number
-          usos_atuais: number
-          usos_maximos: number | null
-          valido_ate: string | null
+          cycle_config: Json
+          review_config: Json
+          student_id: string
+          theme: string
+          updated_at: string
         }
         Insert: {
-          ativo?: boolean
-          codigo: string
-          criado_em?: string
-          id?: string
-          meses: number
-          usos_atuais?: number
-          usos_maximos?: number | null
-          valido_ate?: string | null
+          cycle_config?: Json
+          review_config?: Json
+          student_id: string
+          theme?: string
+          updated_at?: string
         }
         Update: {
-          ativo?: boolean
-          codigo?: string
-          criado_em?: string
-          id?: string
-          meses?: number
-          usos_atuais?: number
-          usos_maximos?: number | null
-          valido_ate?: string | null
+          cycle_config?: Json
+          review_config?: Json
+          student_id?: string
+          theme?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "student_preferences_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      lista_espera: {
+      student_teacher_links: {
         Row: {
-          aluno_id: string
-          area_interesse: string | null
-          atualizado_em: string
-          concurso_foco: string | null
-          criado_em: string
-          data_nascimento: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          started_at: string
+          student_id: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          student_id: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          student_id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_teacher_links_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_teacher_links_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_plan_batches: {
+        Row: {
+          applied_at: string
+          applied_by: string
+          goal_count: number
+          id: string
+          mode: Database["public"]["Enums"]["batch_mode"]
+          study_plan_id: string
+          week_number: number
+        }
+        Insert: {
+          applied_at?: string
+          applied_by: string
+          goal_count: number
+          id: string
+          mode: Database["public"]["Enums"]["batch_mode"]
+          study_plan_id: string
+          week_number: number
+        }
+        Update: {
+          applied_at?: string
+          applied_by?: string
+          goal_count?: number
+          id?: string
+          mode?: Database["public"]["Enums"]["batch_mode"]
+          study_plan_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_plan_batches_applied_by_fkey"
+            columns: ["applied_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_plan_batches_study_plan_id_fkey"
+            columns: ["study_plan_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_plan_blocks: {
+        Row: {
+          active: boolean
+          block_order: number
+          catalog_block_id: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          link: string | null
+          name: string
+          question_count: number
+          student_id: string
+          study_plan_id: string
+          subject_color: string
+          subject_name: string
+          subject_order: number
+          subject_target: number
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          block_order: number
+          catalog_block_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          link?: string | null
+          name: string
+          question_count?: number
+          student_id: string
+          study_plan_id: string
+          subject_color?: string
+          subject_name: string
+          subject_order: number
+          subject_target?: number
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          block_order?: number
+          catalog_block_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          link?: string | null
+          name?: string
+          question_count?: number
+          student_id?: string
+          study_plan_id?: string
+          subject_color?: string
+          subject_name?: string
+          subject_order?: number
+          subject_target?: number
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_plan_block_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "study_plan_blocks_catalog_block_id_fkey"
+            columns: ["catalog_block_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_plans: {
+        Row: {
+          area: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          name: string
+          stage: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["study_plan_status"]
+          student_id: string
+          study_model: string | null
+          target_exam: string | null
+          teacher_id: string
+          updated_at: string
+          weekly_goals: number
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          name: string
+          stage?: string | null
+          start_date?: string
+          status?: Database["public"]["Enums"]["study_plan_status"]
+          student_id: string
+          study_model?: string | null
+          target_exam?: string | null
+          teacher_id: string
+          updated_at?: string
+          weekly_goals?: number
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          stage?: string | null
+          start_date?: string
+          status?: Database["public"]["Enums"]["study_plan_status"]
+          student_id?: string
+          study_model?: string | null
+          target_exam?: string | null
+          teacher_id?: string
+          updated_at?: string
+          weekly_goals?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_plans_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_plans_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          coupon_id: string | null
+          created_at: string
+          id: string
+          plan: string
+          status: Database["public"]["Enums"]["access_status"]
+          student_id: string
+          updated_at: string
+          validity: unknown
+        }
+        Insert: {
+          coupon_id?: string | null
+          created_at?: string
+          id?: string
+          plan?: string
+          status?: Database["public"]["Enums"]["access_status"]
+          student_id: string
+          updated_at?: string
+          validity?: unknown
+        }
+        Update: {
+          coupon_id?: string | null
+          created_at?: string
+          id?: string
+          plan?: string
+          status?: Database["public"]["Enums"]["access_status"]
+          student_id?: string
+          updated_at?: string
+          validity?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waitlist: {
+        Row: {
+          birth_date: string | null
+          created_at: string
           email: string
-          fuso_horario: string | null
-          nome: string
-          professor_id: string | null
+          focus_exam: string | null
+          interest_area: string | null
+          name: string
           status: string
+          student_id: string
+          teacher_id: string | null
+          timezone: string | null
+          updated_at: string
           whatsapp: string | null
         }
         Insert: {
-          aluno_id: string
-          area_interesse?: string | null
-          atualizado_em?: string
-          concurso_foco?: string | null
-          criado_em?: string
-          data_nascimento?: string | null
+          birth_date?: string | null
+          created_at?: string
           email: string
-          fuso_horario?: string | null
-          nome: string
-          professor_id?: string | null
+          focus_exam?: string | null
+          interest_area?: string | null
+          name: string
           status?: string
+          student_id: string
+          teacher_id?: string | null
+          timezone?: string | null
+          updated_at?: string
           whatsapp?: string | null
         }
         Update: {
-          aluno_id?: string
-          area_interesse?: string | null
-          atualizado_em?: string
-          concurso_foco?: string | null
-          criado_em?: string
-          data_nascimento?: string | null
+          birth_date?: string | null
+          created_at?: string
           email?: string
-          fuso_horario?: string | null
-          nome?: string
-          professor_id?: string | null
+          focus_exam?: string | null
+          interest_area?: string | null
+          name?: string
           status?: string
+          student_id?: string
+          teacher_id?: string | null
+          timezone?: string | null
+          updated_at?: string
           whatsapp?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "lista_espera_aluno_id_fkey"
-            columns: ["aluno_id"]
+            foreignKeyName: "waitlist_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: true
-            referencedRelation: "perfis"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "lista_espera_professor_id_fkey"
-            columns: ["professor_id"]
+            foreignKeyName: "waitlist_teacher_id_fkey"
+            columns: ["teacher_id"]
             isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      lotes_planejamento: {
-        Row: {
-          aplicado_em: string
-          aplicado_por: string
-          id: string
-          metas_qtd: number
-          modo: Database["public"]["Enums"]["modo_lote"]
-          planejamento_id: string
-          semana_numero: number
-        }
-        Insert: {
-          aplicado_em?: string
-          aplicado_por: string
-          id: string
-          metas_qtd: number
-          modo: Database["public"]["Enums"]["modo_lote"]
-          planejamento_id: string
-          semana_numero: number
-        }
-        Update: {
-          aplicado_em?: string
-          aplicado_por?: string
-          id?: string
-          metas_qtd?: number
-          modo?: Database["public"]["Enums"]["modo_lote"]
-          planejamento_id?: string
-          semana_numero?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lotes_planejamento_aplicado_por_fkey"
-            columns: ["aplicado_por"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "lotes_planejamento_planejamento_id_fkey"
-            columns: ["planejamento_id"]
-            isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      metas: {
-        Row: {
-          aluno_id: string
-          atividade_extra: string | null
-          atualizado_em: string
-          bloco_id: string | null
-          concluida_em: string | null
-          criado_em: string
-          criado_por: string
-          dia_semana: number
-          excluido_em: string | null
-          id: string
-          link_externo: string | null
-          lote_id: string | null
-          meta_origem_id: string | null
-          observacao_aluno: string | null
-          observacao_professor: string | null
-          ordem_dia: number
-          origem_semana: number | null
-          planejamento_id: string
-          professor_id: string
-          reforco_ignorado: boolean
-          semana_numero: number
-          status: Database["public"]["Enums"]["status_meta"]
-          tempo_previsto_min: number | null
-          tipo: Database["public"]["Enums"]["tipo_meta"]
-          titulo: string
-        }
-        Insert: {
-          aluno_id: string
-          atividade_extra?: string | null
-          atualizado_em?: string
-          bloco_id?: string | null
-          concluida_em?: string | null
-          criado_em?: string
-          criado_por: string
-          dia_semana: number
-          excluido_em?: string | null
-          id?: string
-          link_externo?: string | null
-          lote_id?: string | null
-          meta_origem_id?: string | null
-          observacao_aluno?: string | null
-          observacao_professor?: string | null
-          ordem_dia: number
-          origem_semana?: number | null
-          planejamento_id: string
-          professor_id: string
-          reforco_ignorado?: boolean
-          semana_numero: number
-          status?: Database["public"]["Enums"]["status_meta"]
-          tempo_previsto_min?: number | null
-          tipo: Database["public"]["Enums"]["tipo_meta"]
-          titulo: string
-        }
-        Update: {
-          aluno_id?: string
-          atividade_extra?: string | null
-          atualizado_em?: string
-          bloco_id?: string | null
-          concluida_em?: string | null
-          criado_em?: string
-          criado_por?: string
-          dia_semana?: number
-          excluido_em?: string | null
-          id?: string
-          link_externo?: string | null
-          lote_id?: string | null
-          meta_origem_id?: string | null
-          observacao_aluno?: string | null
-          observacao_professor?: string | null
-          ordem_dia?: number
-          origem_semana?: number | null
-          planejamento_id?: string
-          professor_id?: string
-          reforco_ignorado?: boolean
-          semana_numero?: number
-          status?: Database["public"]["Enums"]["status_meta"]
-          tempo_previsto_min?: number | null
-          tipo?: Database["public"]["Enums"]["tipo_meta"]
-          titulo?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "meta_bloco_fk"
-            columns: ["bloco_id", "planejamento_id", "aluno_id"]
-            isOneToOne: false
-            referencedRelation: "planejamento_blocos"
-            referencedColumns: ["id", "planejamento_id", "aluno_id"]
-          },
-          {
-            foreignKeyName: "meta_contexto_fk"
-            columns: ["planejamento_id", "aluno_id", "professor_id"]
-            isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id", "aluno_id", "professor_id"]
-          },
-          {
-            foreignKeyName: "metas_criado_por_fkey"
-            columns: ["criado_por"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "metas_lote_id_fkey"
-            columns: ["lote_id"]
-            isOneToOne: false
-            referencedRelation: "lotes_planejamento"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "metas_meta_origem_id_fkey"
-            columns: ["meta_origem_id"]
-            isOneToOne: false
-            referencedRelation: "metas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "metas_meta_origem_id_fkey"
-            columns: ["meta_origem_id"]
-            isOneToOne: false
-            referencedRelation: "vw_meta_desempenho"
-            referencedColumns: ["meta_id"]
-          },
-        ]
-      }
-      operacoes: {
-        Row: {
-          alvo_id: string | null
-          ator_id: string
-          criado_em: string
-          operacao: string
-          payload_hash: string
-          request_id: string
-          resultado: Json | null
-        }
-        Insert: {
-          alvo_id?: string | null
-          ator_id: string
-          criado_em?: string
-          operacao: string
-          payload_hash: string
-          request_id: string
-          resultado?: Json | null
-        }
-        Update: {
-          alvo_id?: string | null
-          ator_id?: string
-          criado_em?: string
-          operacao?: string
-          payload_hash?: string
-          request_id?: string
-          resultado?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "operacoes_ator_id_fkey"
-            columns: ["ator_id"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      perfis: {
-        Row: {
-          atualizado_em: string
-          criado_em: string
-          email_contato: string | null
-          id: string
-          nome: string
-          papel: Database["public"]["Enums"]["papel_usuario"]
-          telefone: string | null
-        }
-        Insert: {
-          atualizado_em?: string
-          criado_em?: string
-          email_contato?: string | null
-          id: string
-          nome: string
-          papel?: Database["public"]["Enums"]["papel_usuario"]
-          telefone?: string | null
-        }
-        Update: {
-          atualizado_em?: string
-          criado_em?: string
-          email_contato?: string | null
-          id?: string
-          nome?: string
-          papel?: Database["public"]["Enums"]["papel_usuario"]
-          telefone?: string | null
-        }
-        Relationships: []
-      }
-      planejamento_blocos: {
-        Row: {
-          aluno_id: string
-          ativo: boolean
-          atualizado_em: string
-          catalogo_bloco_id: string | null
-          criado_em: string
-          disciplina_cor: string
-          disciplina_meta: number
-          disciplina_nome: string
-          excluido_em: string | null
-          id: string
-          link: string | null
-          nome: string
-          ordem_bloco: number
-          ordem_disciplina: number
-          planejamento_id: string
-          professor_id: string
-          questoes_qtd: number
-        }
-        Insert: {
-          aluno_id: string
-          ativo?: boolean
-          atualizado_em?: string
-          catalogo_bloco_id?: string | null
-          criado_em?: string
-          disciplina_cor?: string
-          disciplina_meta?: number
-          disciplina_nome: string
-          excluido_em?: string | null
-          id?: string
-          link?: string | null
-          nome: string
-          ordem_bloco: number
-          ordem_disciplina: number
-          planejamento_id: string
-          professor_id: string
-          questoes_qtd?: number
-        }
-        Update: {
-          aluno_id?: string
-          ativo?: boolean
-          atualizado_em?: string
-          catalogo_bloco_id?: string | null
-          criado_em?: string
-          disciplina_cor?: string
-          disciplina_meta?: number
-          disciplina_nome?: string
-          excluido_em?: string | null
-          id?: string
-          link?: string | null
-          nome?: string
-          ordem_bloco?: number
-          ordem_disciplina?: number
-          planejamento_id?: string
-          professor_id?: string
-          questoes_qtd?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "planejamento_bloco_contexto_fk"
-            columns: ["planejamento_id", "aluno_id", "professor_id"]
-            isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id", "aluno_id", "professor_id"]
-          },
-          {
-            foreignKeyName: "planejamento_blocos_catalogo_bloco_id_fkey"
-            columns: ["catalogo_bloco_id"]
-            isOneToOne: false
-            referencedRelation: "catalogo_blocos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      planejamentos: {
-        Row: {
-          aluno_id: string
-          area: string | null
-          atualizado_em: string
-          concurso_alvo: string | null
-          criado_em: string
-          data_inicio: string
-          excluido_em: string | null
-          fase: string | null
-          id: string
-          metas_semanais: number
-          modelo_estudo: string | null
-          nome: string
-          professor_id: string
-          status: Database["public"]["Enums"]["status_planejamento"]
-        }
-        Insert: {
-          aluno_id: string
-          area?: string | null
-          atualizado_em?: string
-          concurso_alvo?: string | null
-          criado_em?: string
-          data_inicio?: string
-          excluido_em?: string | null
-          fase?: string | null
-          id?: string
-          metas_semanais?: number
-          modelo_estudo?: string | null
-          nome: string
-          professor_id: string
-          status?: Database["public"]["Enums"]["status_planejamento"]
-        }
-        Update: {
-          aluno_id?: string
-          area?: string | null
-          atualizado_em?: string
-          concurso_alvo?: string | null
-          criado_em?: string
-          data_inicio?: string
-          excluido_em?: string | null
-          fase?: string | null
-          id?: string
-          metas_semanais?: number
-          modelo_estudo?: string | null
-          nome?: string
-          professor_id?: string
-          status?: Database["public"]["Enums"]["status_planejamento"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "planejamentos_aluno_id_fkey"
-            columns: ["aluno_id"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planejamentos_professor_id_fkey"
-            columns: ["professor_id"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reforco_baterias: {
-        Row: {
-          bateria_id: string
-          reforco_id: string
-        }
-        Insert: {
-          bateria_id: string
-          reforco_id: string
-        }
-        Update: {
-          bateria_id?: string
-          reforco_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reforco_baterias_bateria_id_fkey"
-            columns: ["bateria_id"]
-            isOneToOne: true
-            referencedRelation: "baterias"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reforco_baterias_bateria_id_fkey"
-            columns: ["bateria_id"]
-            isOneToOne: true
-            referencedRelation: "vw_bateria_desempenho"
-            referencedColumns: ["bateria_id"]
-          },
-          {
-            foreignKeyName: "reforco_baterias_reforco_id_fkey"
-            columns: ["reforco_id"]
-            isOneToOne: false
-            referencedRelation: "reforcos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reforco_questoes: {
-        Row: {
-          fase: Database["public"]["Enums"]["fase_questao"]
-          questao_id: number
-          reforco_id: string
-          resultado: Database["public"]["Enums"]["resultado_questao"]
-          topico: string | null
-        }
-        Insert: {
-          fase: Database["public"]["Enums"]["fase_questao"]
-          questao_id: number
-          reforco_id: string
-          resultado: Database["public"]["Enums"]["resultado_questao"]
-          topico?: string | null
-        }
-        Update: {
-          fase?: Database["public"]["Enums"]["fase_questao"]
-          questao_id?: number
-          reforco_id?: string
-          resultado?: Database["public"]["Enums"]["resultado_questao"]
-          topico?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reforco_questoes_reforco_id_fkey"
-            columns: ["reforco_id"]
-            isOneToOne: false
-            referencedRelation: "reforcos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reforcos: {
-        Row: {
-          aluno_id: string
-          bloco_id: string
-          concluido_em: string
-          criado_em: string
-          cutoff: string
-          desempenho_origem: number
-          id: string
-          planejamento_id: string
-          professor_id: string
-          request_id: string
-        }
-        Insert: {
-          aluno_id: string
-          bloco_id: string
-          concluido_em?: string
-          criado_em?: string
-          cutoff: string
-          desempenho_origem: number
-          id?: string
-          planejamento_id: string
-          professor_id: string
-          request_id: string
-        }
-        Update: {
-          aluno_id?: string
-          bloco_id?: string
-          concluido_em?: string
-          criado_em?: string
-          cutoff?: string
-          desempenho_origem?: number
-          id?: string
-          planejamento_id?: string
-          professor_id?: string
-          request_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reforco_bloco_fk"
-            columns: ["bloco_id", "planejamento_id", "aluno_id"]
-            isOneToOne: false
-            referencedRelation: "planejamento_blocos"
-            referencedColumns: ["id", "planejamento_id", "aluno_id"]
-          },
-          {
-            foreignKeyName: "reforco_contexto_fk"
-            columns: ["planejamento_id", "aluno_id", "professor_id"]
-            isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id", "aluno_id", "professor_id"]
-          },
-        ]
-      }
-      vinculos_aluno_professor: {
-        Row: {
-          aluno_id: string
-          criado_em: string
-          encerrado_em: string | null
-          id: string
-          iniciado_em: string
-          professor_id: string
-        }
-        Insert: {
-          aluno_id: string
-          criado_em?: string
-          encerrado_em?: string | null
-          id?: string
-          iniciado_em?: string
-          professor_id: string
-        }
-        Update: {
-          aluno_id?: string
-          criado_em?: string
-          encerrado_em?: string | null
-          id?: string
-          iniciado_em?: string
-          professor_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "vinculos_aluno_professor_aluno_id_fkey"
-            columns: ["aluno_id"]
-            isOneToOne: false
-            referencedRelation: "perfis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vinculos_aluno_professor_professor_id_fkey"
-            columns: ["professor_id"]
-            isOneToOne: false
-            referencedRelation: "perfis"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
     }
     Views: {
-      vw_bateria_desempenho: {
+      vw_block_performance: {
         Row: {
-          aluno_id: string | null
-          bateria_id: string | null
-          bloco_id: string | null
-          extras_acertos: number | null
-          extras_qtd: number | null
-          meta_id: string | null
-          planejamento_id: string | null
-          principais_acertos: number | null
-          principais_alvo: number | null
-          principais_erros: number | null
-          principais_qtd: number | null
-          professor_id: string | null
-          reforcos_acertos: number | null
-          reforcos_qtd: number | null
-          status: Database["public"]["Enums"]["status_bateria"] | null
-          tempo_minutos: number | null
+          block_id: string | null
+          main_correct: number | null
+          main_count: number | null
+          score_pct: number | null
+          session_count: number | null
+          student_id: string | null
+          study_plan_id: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "bateria_bloco_fk"
-            columns: ["bloco_id", "planejamento_id", "aluno_id"]
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
             isOneToOne: false
-            referencedRelation: "planejamento_blocos"
-            referencedColumns: ["id", "planejamento_id", "aluno_id"]
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+        ]
+      }
+      vw_goal_performance: {
+        Row: {
+          correct_answers: number | null
+          goal_id: string | null
+          minutes_spent: number | null
+          questions_answered: number | null
+          status: Database["public"]["Enums"]["goal_status"] | null
+          student_id: string | null
+          study_plan_id: string | null
+          teacher_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
+          },
+        ]
+      }
+      vw_quiz_session_performance: {
+        Row: {
+          block_id: string | null
+          duration_minutes: number | null
+          extra_correct: number | null
+          extra_count: number | null
+          goal_id: string | null
+          main_correct: number | null
+          main_count: number | null
+          main_incorrect: number | null
+          main_target: number | null
+          quiz_session_id: string | null
+          reinforcement_correct: number | null
+          reinforcement_count: number | null
+          status: Database["public"]["Enums"]["quiz_session_status"] | null
+          student_id: string | null
+          study_plan_id: string | null
+          teacher_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
           },
           {
-            foreignKeyName: "bateria_contexto_fk"
-            columns: ["planejamento_id", "aluno_id", "professor_id"]
+            foreignKeyName: "quiz_session_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
             isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id", "aluno_id", "professor_id"]
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
           },
           {
-            foreignKeyName: "baterias_meta_id_fkey"
-            columns: ["meta_id"]
+            foreignKeyName: "quiz_sessions_goal_id_fkey"
+            columns: ["goal_id"]
             isOneToOne: false
-            referencedRelation: "metas"
+            referencedRelation: "goals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "baterias_meta_id_fkey"
-            columns: ["meta_id"]
+            foreignKeyName: "quiz_sessions_goal_id_fkey"
+            columns: ["goal_id"]
             isOneToOne: false
-            referencedRelation: "vw_meta_desempenho"
-            referencedColumns: ["meta_id"]
+            referencedRelation: "vw_goal_performance"
+            referencedColumns: ["goal_id"]
           },
         ]
       }
-      vw_bloco_desempenho: {
+      vw_seen_questions: {
         Row: {
-          aluno_id: string | null
-          baterias_qtd: number | null
-          bloco_id: string | null
-          desempenho_pct: number | null
-          planejamento_id: string | null
-          principais_acertos: number | null
-          principais_qtd: number | null
+          block_id: string | null
+          correct_answers: number | null
+          incorrect_answers: number | null
+          last_seen_at: string | null
+          question_id: number | null
+          student_id: string | null
+          study_plan_id: string | null
+          times_seen: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "bateria_bloco_fk"
-            columns: ["bloco_id", "planejamento_id", "aluno_id"]
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
             isOneToOne: false
-            referencedRelation: "planejamento_blocos"
-            referencedColumns: ["id", "planejamento_id", "aluno_id"]
-          },
-        ]
-      }
-      vw_meta_desempenho: {
-        Row: {
-          acertos: number | null
-          aluno_id: string | null
-          meta_id: string | null
-          planejamento_id: string | null
-          professor_id: string | null
-          questoes_feitas: number | null
-          status: Database["public"]["Enums"]["status_meta"] | null
-          tempo_gasto_min: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "meta_contexto_fk"
-            columns: ["planejamento_id", "aluno_id", "professor_id"]
-            isOneToOne: false
-            referencedRelation: "planejamentos"
-            referencedColumns: ["id", "aluno_id", "professor_id"]
-          },
-        ]
-      }
-      vw_questoes_vistas: {
-        Row: {
-          acertos: number | null
-          aluno_id: string | null
-          bloco_id: string | null
-          erros: number | null
-          planejamento_id: string | null
-          questao_id: number | null
-          ultima_vez: string | null
-          vezes_vista: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bateria_bloco_fk"
-            columns: ["bloco_id", "planejamento_id", "aluno_id"]
-            isOneToOne: false
-            referencedRelation: "planejamento_blocos"
-            referencedColumns: ["id", "planejamento_id", "aluno_id"]
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
           },
         ]
       }
     }
     Functions: {
-      anular_bateria: {
-        Args: { p_bateria_id: string; p_motivo?: string; p_request_id: string }
+      activate_study_plan: {
+        Args: { p_study_plan_id: string }
         Returns: {
-          aluno_id: string
-          anulada_em: string | null
-          anulada_por: string | null
-          atualizado_em: string
-          bloco_id: string
-          cancelada_em: string | null
-          concluida_em: string | null
-          finalizacao_id: string | null
-          finalizada_em: string | null
+          area: string | null
+          created_at: string
+          deleted_at: string | null
           id: string
-          iniciada_em: string
-          meta_id: string | null
-          motivo_anulacao: string | null
-          numero_bateria: number | null
-          origem: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id: string
-          principais_alvo: number
-          professor_id: string
-          sequencia_execucao: number
-          status: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos: number | null
+          name: string
+          stage: string | null
+          start_date: string
+          status: Database["public"]["Enums"]["study_plan_status"]
+          student_id: string
+          study_model: string | null
+          target_exam: string | null
+          teacher_id: string
+          updated_at: string
+          weekly_goals: number
         }
         SetofOptions: {
           from: "*"
-          to: "baterias"
+          to: "study_plans"
           isOneToOne: true
           isSetofReturn: false
         }
       }
-      aplicar_lote_planejamento: {
+      apply_study_plan_batch: {
         Args: {
-          p_lote_id: string
-          p_metas: Json
-          p_modo: Database["public"]["Enums"]["modo_lote"]
-          p_planejamento_id: string
-          p_semana: number
+          p_batch_id: string
+          p_goals: Json
+          p_mode: Database["public"]["Enums"]["batch_mode"]
+          p_study_plan_id: string
+          p_week: number
         }
         Returns: Json
       }
-      ativar_planejamento: {
-        Args: { p_planejamento_id: string }
-        Returns: {
-          aluno_id: string
-          area: string | null
-          atualizado_em: string
-          concurso_alvo: string | null
-          criado_em: string
-          data_inicio: string
-          excluido_em: string | null
-          fase: string | null
-          id: string
-          metas_semanais: number
-          modelo_estudo: string | null
-          nome: string
-          professor_id: string
-          status: Database["public"]["Enums"]["status_planejamento"]
-        }
-        SetofOptions: {
-          from: "*"
-          to: "planejamentos"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      eh_professor: { Args: never; Returns: boolean }
-      eh_professor_de: { Args: { p_aluno_id: string }; Returns: boolean }
-      finalizar_bateria: {
-        Args: {
-          p_bateria_id: string
-          p_cancelar?: boolean
-          p_request_id: string
-          p_resultados: Json
-        }
-        Returns: {
-          aluno_id: string
-          anulada_em: string | null
-          anulada_por: string | null
-          atualizado_em: string
-          bloco_id: string
-          cancelada_em: string | null
-          concluida_em: string | null
-          finalizacao_id: string | null
-          finalizada_em: string | null
-          id: string
-          iniciada_em: string
-          meta_id: string | null
-          motivo_anulacao: string | null
-          numero_bateria: number | null
-          origem: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id: string
-          principais_alvo: number
-          professor_id: string
-          sequencia_execucao: number
-          status: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "baterias"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      iniciar_bateria: {
-        Args: {
-          p_bloco_id: string
-          p_meta_id: string
-          p_planejamento_id: string
-        }
-        Returns: {
-          aluno_id: string
-          anulada_em: string | null
-          anulada_por: string | null
-          atualizado_em: string
-          bloco_id: string
-          cancelada_em: string | null
-          concluida_em: string | null
-          finalizacao_id: string | null
-          finalizada_em: string | null
-          id: string
-          iniciada_em: string
-          meta_id: string | null
-          motivo_anulacao: string | null
-          numero_bateria: number | null
-          origem: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id: string
-          principais_alvo: number
-          professor_id: string
-          sequencia_execucao: number
-          status: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "baterias"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      pode_ver_contexto: {
-        Args: { p_aluno_id: string; p_professor_id: string }
+      can_view_context: {
+        Args: { p_professor_id: string; p_student_id: string }
         Returns: boolean
       }
-      registrar_reforco: {
+      finish_quiz_session: {
         Args: {
-          p_baterias: string[]
-          p_bloco_id: string
-          p_planejamento_id: string
+          p_cancel?: boolean
+          p_outcomes: Json
+          p_quiz_session_id: string
           p_request_id: string
-          p_resultados: Json
         }
         Returns: {
-          aluno_id: string
-          bloco_id: string
-          concluido_em: string
-          criado_em: string
+          block_id: string
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_id: string | null
+          duration_minutes: number | null
+          execution_sequence: number
+          finished_at: string | null
+          goal_id: string | null
+          id: string
+          main_target: number
+          origin: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["quiz_session_status"]
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quiz_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      is_teacher: { Args: never; Returns: boolean }
+      is_teacher_of: { Args: { p_student_id: string }; Returns: boolean }
+      record_quiz_session_time: {
+        Args: {
+          p_duration_minutes: number
+          p_quiz_session_id: string
+          p_request_id: string
+        }
+        Returns: {
+          block_id: string
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_id: string | null
+          duration_minutes: number | null
+          execution_sequence: number
+          finished_at: string | null
+          goal_id: string | null
+          id: string
+          main_target: number
+          origin: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["quiz_session_status"]
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quiz_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_reinforcement: {
+        Args: {
+          p_block_id: string
+          p_outcomes: Json
+          p_quiz_session_ids: string[]
+          p_request_id: string
+          p_study_plan_id: string
+        }
+        Returns: {
+          block_id: string
+          completed_at: string
+          created_at: string
           cutoff: string
-          desempenho_origem: number
           id: string
-          planejamento_id: string
-          professor_id: string
           request_id: string
+          source_score: number
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
         }
         SetofOptions: {
           from: "*"
-          to: "reforcos"
+          to: "reinforcements"
           isOneToOne: true
           isSetofReturn: false
         }
       }
-      registrar_tempo_bateria: {
-        Args: {
-          p_bateria_id: string
-          p_request_id: string
-          p_tempo_minutos: number
-        }
-        Returns: {
-          aluno_id: string
-          anulada_em: string | null
-          anulada_por: string | null
-          atualizado_em: string
-          bloco_id: string
-          cancelada_em: string | null
-          concluida_em: string | null
-          finalizacao_id: string | null
-          finalizada_em: string | null
-          id: string
-          iniciada_em: string
-          meta_id: string | null
-          motivo_anulacao: string | null
-          numero_bateria: number | null
-          origem: Database["public"]["Enums"]["origem_bateria"]
-          planejamento_id: string
-          principais_alvo: number
-          professor_id: string
-          sequencia_execucao: number
-          status: Database["public"]["Enums"]["status_bateria"]
-          tempo_minutos: number | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "baterias"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      reservar_operacao: {
+      reserve_operation: {
         Args: {
           p_alvo_id: string
-          p_operacao: string
+          p_operation: string
           p_payload: string
           p_request_id: string
         }
         Returns: Record<string, unknown>
       }
+      start_quiz_session: {
+        Args: { p_block_id: string; p_goal_id: string; p_study_plan_id: string }
+        Returns: {
+          block_id: string
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_id: string | null
+          duration_minutes: number | null
+          execution_sequence: number
+          finished_at: string | null
+          goal_id: string | null
+          id: string
+          main_target: number
+          origin: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["quiz_session_status"]
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quiz_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      void_quiz_session: {
+        Args: {
+          p_quiz_session_id: string
+          p_reason?: string
+          p_request_id: string
+        }
+        Returns: {
+          block_id: string
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_id: string | null
+          duration_minutes: number | null
+          execution_sequence: number
+          finished_at: string | null
+          goal_id: string | null
+          id: string
+          main_target: number
+          origin: Database["public"]["Enums"]["quiz_session_origin"]
+          session_number: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["quiz_session_status"]
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quiz_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
-      fase_questao: "principal" | "reforco" | "extra"
-      modo_lote: "acrescentar" | "substituir" | "replanejar"
-      origem_bateria: "meta" | "caderno_erros"
-      papel_usuario: "aluno" | "professor" | "admin"
-      resultado_questao: "acertou" | "errou"
-      status_acesso: "pendente" | "ativo" | "suspenso" | "expirado"
-      status_bateria:
-        | "em_andamento"
-        | "aguardando_tempo"
-        | "concluida"
-        | "cancelada"
-        | "anulada"
-      status_meta:
-        | "pendente"
-        | "em_andamento"
-        | "concluida"
-        | "pulada"
-        | "cancelada"
-      status_planejamento: "rascunho" | "ativo" | "pausado" | "arquivado"
-      tipo_meta: "teoria" | "bloco_questoes" | "reforco" | "estudo_extra"
+      access_status: "pending" | "active" | "suspended" | "expired"
+      batch_mode: "append" | "replace" | "replan"
+      goal_status:
+        | "pending"
+        | "in_progress"
+        | "completed"
+        | "skipped"
+        | "cancelled"
+      goal_type: "theory" | "question_block" | "reinforcement" | "extra_study"
+      question_outcome: "correct" | "incorrect"
+      question_phase: "main" | "reinforcement" | "extra"
+      quiz_session_origin: "goal" | "error_notebook"
+      quiz_session_status:
+        | "in_progress"
+        | "awaiting_time"
+        | "completed"
+        | "cancelled"
+        | "voided"
+      study_plan_status: "draft" | "active" | "paused" | "archived"
+      user_role: "student" | "teacher" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1561,28 +1561,28 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      fase_questao: ["principal", "reforco", "extra"],
-      modo_lote: ["acrescentar", "substituir", "replanejar"],
-      origem_bateria: ["meta", "caderno_erros"],
-      papel_usuario: ["aluno", "professor", "admin"],
-      resultado_questao: ["acertou", "errou"],
-      status_acesso: ["pendente", "ativo", "suspenso", "expirado"],
-      status_bateria: [
-        "em_andamento",
-        "aguardando_tempo",
-        "concluida",
-        "cancelada",
-        "anulada",
+      access_status: ["pending", "active", "suspended", "expired"],
+      batch_mode: ["append", "replace", "replan"],
+      goal_status: [
+        "pending",
+        "in_progress",
+        "completed",
+        "skipped",
+        "cancelled",
       ],
-      status_meta: [
-        "pendente",
-        "em_andamento",
-        "concluida",
-        "pulada",
-        "cancelada",
+      goal_type: ["theory", "question_block", "reinforcement", "extra_study"],
+      question_outcome: ["correct", "incorrect"],
+      question_phase: ["main", "reinforcement", "extra"],
+      quiz_session_origin: ["goal", "error_notebook"],
+      quiz_session_status: [
+        "in_progress",
+        "awaiting_time",
+        "completed",
+        "cancelled",
+        "voided",
       ],
-      status_planejamento: ["rascunho", "ativo", "pausado", "arquivado"],
-      tipo_meta: ["teoria", "bloco_questoes", "reforco", "estudo_extra"],
+      study_plan_status: ["draft", "active", "paused", "archived"],
+      user_role: ["student", "teacher", "admin"],
     },
   },
 } as const

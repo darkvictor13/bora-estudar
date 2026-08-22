@@ -5,79 +5,79 @@ import { type Envelope } from "./envelope.ts";
 // ---------------------------------------------------------------------------
 
 /**
- * Uma questão que o aluno já respondeu neste bloco, em baterias concluídas.
+ * Uma questão que o aluno já respondeu neste bloco, em sessões concluídas.
  * A extensão usa isto para não repetir questão já vista.
  */
-export interface QuestaoVista {
-  readonly questaoId: number;
-  readonly vezesVista: number;
-  readonly acertos: number;
-  readonly erros: number;
+export interface SeenQuestion {
+  readonly questionId: number;
+  readonly timesSeen: number;
+  readonly correctAnswers: number;
+  readonly incorrectAnswers: number;
   /** ISO 8601. */
-  readonly ultimaVez: string;
+  readonly lastSeenAt: string;
 }
 
-export interface BateriaInicio {
+export interface QuizStart {
   /** Para onde a extensão devolve o resultado. Origem exata, sem fragmento. */
-  readonly urlRetorno: string;
-  readonly bateriaId: string;
-  readonly metaId: string;
-  readonly planejamentoId: string;
-  readonly blocoId: string;
-  readonly numeroBateria: number;
-  /** Quantas questões principais a bateria persegue. */
-  readonly principaisAlvo: number;
+  readonly returnUrl: string;
+  readonly quizSessionId: string;
+  readonly goalId: string;
+  readonly studyPlanId: string;
+  readonly blockId: string;
+  readonly sessionNumber: number;
+  /** Quantas questões principais a sessão persegue. */
+  readonly mainTarget: number;
   /** Questões do bloco, na ordem do catálogo. */
-  readonly questoesDisponiveis: readonly number[];
-  readonly historico: readonly QuestaoVista[];
+  readonly availableQuestions: readonly number[];
+  readonly history: readonly SeenQuestion[];
   /**
    * `false` quando o site não conseguiu carregar o histórico inteiro.
    *
    * A extensão DEVE degradar visivelmente neste caso, avisando o aluno de que
    * pode haver repetição. A versão anterior marcava o histórico como
    * autoritativo mesmo truncado, e o motor passava a repetir questões em
-   * silêncio depois de ~30 baterias no mesmo bloco.
+   * silêncio depois de ~30 sessões no mesmo bloco.
    */
-  readonly historicoCompleto: boolean;
+  readonly historyComplete: boolean;
 }
 
-export type BateriaInicioEnvelope = Envelope<"bateria.inicio", BateriaInicio>;
+export type QuizStartEnvelope = Envelope<"quiz.start", QuizStart>;
 
 // ---------------------------------------------------------------------------
 // Extensão → site
 // ---------------------------------------------------------------------------
 
-export type FaseQuestao = "principal" | "reforco" | "extra";
-export type ResultadoQuestao = "acertou" | "errou";
+export type QuestionPhase = "main" | "reinforcement" | "extra";
+export type QuestionOutcome = "correct" | "incorrect";
 
-export interface RespostaQuestao {
-  readonly questaoId: number;
-  readonly ordemExecucao: number;
-  readonly rodada: number;
-  readonly fase: FaseQuestao;
-  readonly resultado: ResultadoQuestao;
-  readonly topico: string | null;
-  /** Obrigatório quando `fase` é "reforco". */
-  readonly origemQuestaoId: number | null;
+export interface QuestionAnswer {
+  readonly questionId: number;
+  readonly executionOrder: number;
+  readonly round: number;
+  readonly phase: QuestionPhase;
+  readonly outcome: QuestionOutcome;
+  readonly topic: string | null;
+  /** Obrigatório quando `phase` é "reinforcement". */
+  readonly sourceQuestionId: number | null;
   /** ISO 8601. */
-  readonly respondidaEm: string;
+  readonly answeredAt: string;
 }
 
-export interface BateriaResultado {
-  readonly bateriaId: string;
+export interface QuizResult {
+  readonly quizSessionId: string;
   /**
-   * Chave de idempotência. Gerada UMA vez, quando a bateria é finalizada, e
-   * persistida junto da sessão antes de qualquer navegação.
+   * Chave de idempotência. Gerada UMA vez, quando a sessão é finalizada, e
+   * persistida junto do estado antes de qualquer navegação.
    *
    * Toda retentativa reenvia este mesmo valor. Regerá-lo no ponto de uso
    * transforma a proteção do servidor em decoração: cada retry chega ao banco
    * como operação nova.
    */
   readonly requestId: string;
-  readonly cancelar: boolean;
-  readonly respostas: readonly RespostaQuestao[];
+  readonly cancel: boolean;
+  readonly answers: readonly QuestionAnswer[];
 }
 
-export type BateriaResultadoEnvelope = Envelope<"bateria.resultado", BateriaResultado>;
+export type QuizResultEnvelope = Envelope<"quiz.result", QuizResult>;
 
-export type QualquerEnvelope = BateriaInicioEnvelope | BateriaResultadoEnvelope;
+export type AnyEnvelope = QuizStartEnvelope | QuizResultEnvelope;

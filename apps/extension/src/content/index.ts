@@ -1,66 +1,61 @@
 import {
   HASH_KEYS,
   ProtocolError,
-  hashContemPayload,
-  lerInicioDaHash,
-  montarUrlResultado,
-  type BateriaResultado,
+  buildResultUrl,
+  hashHasPayload,
+  parseStartHash,
+  type QuizResult,
+  type QuizStart,
 } from "@bora/protocol";
 
-import { gravarSessao, lerSessao, limparSessao, type SessaoBateria } from "../shared/sessao.ts";
+import { readSession, writeSession, clearSession, type QuizSessionState } from "../shared/session.ts";
 
-const ID_PAINEL = "bora-painel";
+const PANEL_ID = "bora-panel";
 
 // ---------------------------------------------------------------------------
 // Importação do payload de início
 // ---------------------------------------------------------------------------
 
-async function importarInicioDaUrl(): Promise<SessaoBateria | null> {
-  if (!hashContemPayload(location.hash, HASH_KEYS.start)) return null;
+async function importStartFromUrl(): Promise<QuizSessionState | null> {
+  if (!hashHasPayload(location.hash, HASH_KEYS.start)) return null;
 
-  const { corpo } = lerInicioDaHash(location.hash);
+  const { body } = parseStartHash(location.hash);
 
-  const sessao: SessaoBateria = {
-    inicio: corpo,
-    fila: selecionarQuestoes(corpo),
-    respostas: {},
+  const session: QuizSessionState = {
+    start: body,
+    queue: pickQuestions(body),
+    answers: {},
     requestId: null,
-    iniciadaEm: new Date().toISOString(),
-    finalizadaEm: null,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
   };
 
   // Persistir ANTES de limpar a hash. Se a ordem se inverter e a gravação
   // falhar, o payload some da URL e não há de onde recuperá-lo.
-  await gravarSessao(sessao);
+  await writeSession(session);
   history.replaceState(null, "", location.pathname + location.search);
 
-  return sessao;
+  return session;
 }
 
 /**
- * Escolhe as questões da bateria.
+ * Escolhe as questões da sessão.
  *
  * Placeholder: hoje só prioriza as nunca vistas e completa com as menos vistas.
  * O motor de seleção real (erros recentes, espaçamento, correlação de tópico)
  * ainda será implementado.
  */
-function selecionarQuestoes(inicio: SessaoBateria["inicio"]): number[] {
-  const vistas = new Map(inicio.historico.map((h) => [h.questaoId, h]));
-  const ordenadas = [...inicio.questoesDisponiveis].sort((a, b) => {
-    const va = vistas.get(a)?.vezesVista ?? 0;
-    const vb = vistas.get(b)?.vezesVista ?? 0;
-    return va - vb;
-  });
-  return ordenadas.slice(0, inicio.principaisAlvo);
+function pickQuestions(start: QuizStart): number[] {
+  const seen = new Map(start.history.map((h) => [h.questionId, h]));
+  const sorted = [...start.availableQuestions].sort(
+    (a, b) => (seen.get(a)?.timesSeen ?? 0) - (seen.get(b)?.timesSeen ?? 0),
+  );
+  return sorted.slice(0, start.mainTarget);
 }
 
 // ---------------------------------------------------------------------------
 // Envio do resultado
 // ---------------------------------------------------------------------------
-
-function uuid(): string {
-  return crypto.randomUUID();
-}
 
 /**
  * Devolve o resultado ao site.
@@ -68,90 +63,90 @@ function uuid(): string {
  * O `await` antes de navegar não é opcional: `location.assign` derruba o
  * content script, e um `storage.set` pendente se perde junto com o requestId.
  */
-export async function enviarResultado(sessao: SessaoBateria, cancelar = false): Promise<void> {
-  const comId: SessaoBateria = {
-    ...sessao,
-    requestId: sessao.requestId ?? uuid(),
-    finalizadaEm: sessao.finalizadaEm ?? new Date().toISOString(),
+export async function sendResult(session: QuizSessionState, cancel = false): Promise<void> {
+  const withId: QuizSessionState = {
+    ...session,
+    requestId: session.requestId ?? crypto.randomUUID(),
+    finishedAt: session.finishedAt ?? new Date().toISOString(),
   };
-  await gravarSessao(comId);
+  await writeSession(withId);
 
-  const corpo: BateriaResultado = {
-    bateriaId: comId.inicio.bateriaId,
-    requestId: comId.requestId!,
-    cancelar,
-    respostas: Object.values(comId.respostas),
+  const body: QuizResult = {
+    quizSessionId: withId.start.quizSessionId,
+    requestId: withId.requestId!,
+    cancel,
+    answers: Object.values(withId.answers),
   };
 
-  location.assign(montarUrlResultado(corpo, comId.inicio.urlRetorno));
+  location.assign(buildResultUrl(body, withId.start.returnUrl));
 }
 
 // ---------------------------------------------------------------------------
 // Painel
 // ---------------------------------------------------------------------------
 
-function montarPainel(): HTMLElement {
-  const existente = document.getElementById(ID_PAINEL);
-  if (existente) return existente;
+function mountPanel(): HTMLElement {
+  const existing = document.getElementById(PANEL_ID);
+  if (existing) return existing;
 
-  const painel = document.createElement("aside");
-  painel.id = ID_PAINEL;
-  painel.style.cssText = [
+  const panel = document.createElement("aside");
+  panel.id = PANEL_ID;
+  panel.style.cssText = [
     "position:fixed", "right:16px", "bottom:16px", "z-index:2147483647",
     "width:280px", "padding:14px 16px", "border-radius:12px",
     "background:#0f172a", "color:#f8fafc", "font:14px/1.5 system-ui,sans-serif",
     "box-shadow:0 8px 24px rgba(0,0,0,.35)",
   ].join(";");
-  document.body.appendChild(painel);
-  return painel;
+  document.body.appendChild(panel);
+  return panel;
 }
 
-function escrever(painel: HTMLElement, titulo: string, linhas: string[]): void {
-  painel.replaceChildren();
+function writePanel(panel: HTMLElement, title: string, lines: string[]): void {
+  panel.replaceChildren();
 
-  const h = document.createElement("strong");
-  h.textContent = titulo;
-  h.style.display = "block";
-  h.style.marginBottom = "6px";
-  painel.appendChild(h);
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  heading.style.display = "block";
+  heading.style.marginBottom = "6px";
+  panel.appendChild(heading);
 
-  for (const linha of linhas) {
-    const p = document.createElement("div");
-    p.textContent = linha;
-    p.style.opacity = "0.85";
-    painel.appendChild(p);
+  for (const line of lines) {
+    const row = document.createElement("div");
+    row.textContent = line;
+    row.style.opacity = "0.85";
+    panel.appendChild(row);
   }
 }
 
-async function iniciar(): Promise<void> {
-  let sessao: SessaoBateria | null;
+async function boot(): Promise<void> {
+  let session: QuizSessionState | null;
   try {
-    sessao = (await importarInicioDaUrl()) ?? (await lerSessao());
-  } catch (erro) {
-    if (erro instanceof ProtocolError) {
-      escrever(montarPainel(), "Bora Estudar", [
-        erro.codigo === "versao_incompativel"
-          ? "Atualize a extensão: o site enviou uma bateria em formato mais novo."
-          : `Não foi possível ler a bateria (${erro.codigo}).`,
+    session = (await importStartFromUrl()) ?? (await readSession());
+  } catch (error) {
+    if (error instanceof ProtocolError) {
+      writePanel(mountPanel(), "Bora Estudar", [
+        error.code === "incompatible_version"
+          ? "Atualize a extensão: o site enviou uma sessão em formato mais novo."
+          : `Não foi possível ler a sessão (${error.code}).`,
       ]);
       return;
     }
-    throw erro;
+    throw error;
   }
 
-  if (!sessao) return;
+  if (!session) return;
 
-  const respondidas = Object.keys(sessao.respostas).length;
-  const avisos = sessao.inicio.historicoCompleto
+  const answered = Object.keys(session.answers).length;
+  const warnings = session.start.historyComplete
     ? []
     : ["Histórico incompleto: pode haver repetição de questão."];
 
-  escrever(montarPainel(), `Bateria ${sessao.inicio.numeroBateria}`, [
-    `${respondidas} de ${sessao.fila.length} respondidas`,
-    ...avisos,
+  writePanel(mountPanel(), `Sessão ${session.start.sessionNumber}`, [
+    `${answered} de ${session.queue.length} respondidas`,
+    ...warnings,
   ]);
 }
 
-void iniciar();
+void boot();
 
-export { limparSessao };
+export { clearSession };

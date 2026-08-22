@@ -14,6 +14,9 @@ a extensão de navegador e o banco.
 A arquitetura e as razões por trás de cada limite estão em
 [`docs/arquitetura.md`](docs/arquitetura.md).
 
+Identificadores em inglês, no código e no banco. Comentários, mensagens e
+texto de interface em português.
+
 ## Começando
 
 Requisitos: Node 22+ (`.nvmrc` fixa a 24), Docker em execução e o
@@ -43,6 +46,7 @@ Credenciais públicas, exclusivas do ambiente local.
 | `npm run dev` | Sobe o site |
 | `npm run check` | `typecheck` + `lint` + `test` em todos os pacotes |
 | `npm run db:reset` | Recria o banco: migrations + seed |
+| `npm run db:test` | Recria o banco e roda as 49 checagens de invariante |
 | `npm run db:types` | Regenera `packages/database` a partir do schema local |
 | `npm run ext:build` | Compila a extensão em `apps/extension/dist` |
 | `npm run ext:watch` | Recompila a extensão a cada alteração |

@@ -6,21 +6,21 @@
  * manda o time procurar no lugar errado.
  */
 
-function obrigatoria(nome: string, valor: string | undefined): string {
-  if (!valor || valor.trim() === "") {
+function required(name: string, value: string | undefined): string {
+  if (!value || value.trim() === "") {
     throw new Error(
-      `Variável de ambiente ausente: ${nome}. Copie .env.example para .env.local ` +
+      `Variável de ambiente ausente: ${name}. Copie .env.example para .env.local ` +
         `e preencha com a saída de \`supabase status\`.`,
     );
   }
-  return valor;
+  return value;
 }
 
 // Referenciadas pelo nome completo, e não por índice: o Next só substitui
 // process.env.NEXT_PUBLIC_* no bundle do cliente quando o acesso é literal.
 export const env = {
-  supabaseUrl: obrigatoria("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
-  supabasePublishableKey: obrigatoria(
+  supabaseUrl: required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
+  supabasePublishableKey: required(
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   ),

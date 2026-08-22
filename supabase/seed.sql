@@ -33,21 +33,21 @@ values
    'authenticated','authenticated','admin@boraestudar.local',
    extensions.crypt('BoraEstudar#2026!', extensions.gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}'::jsonb,
-   '{"papel":"admin","nome":"Administradora Teste","email_verified":true}'::jsonb,
+   '{"role":"admin","name":"Administradora Teste","email_verified":true}'::jsonb,
    now(), now(), '', '', '', ''),
 
   ('00000000-0000-0000-0000-000000000000','d65a965f-0ccb-4a12-ac7b-858519d9df00',
    'authenticated','authenticated','professor@boraestudar.local',
    extensions.crypt('BoraEstudar#2026!', extensions.gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}'::jsonb,
-   '{"papel":"professor","nome":"Professor Teste","email_verified":true}'::jsonb,
+   '{"role":"teacher","name":"Professor Teste","email_verified":true}'::jsonb,
    now(), now(), '', '', '', ''),
 
   ('00000000-0000-0000-0000-000000000000','a1000000-0000-4000-8000-000000000001',
    'authenticated','authenticated','aluno@boraestudar.local',
    extensions.crypt('BoraEstudar#2026!', extensions.gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}'::jsonb,
-   '{"papel":"aluno","nome":"Aluno Teste","email_verified":true}'::jsonb,
+   '{"role":"student","name":"Aluno Teste","email_verified":true}'::jsonb,
    now(), now(), '', '', '', '')
 on conflict (id) do update set
   email              = excluded.email,
@@ -80,40 +80,40 @@ on conflict (provider_id, provider) do update set
   last_sign_in_at = excluded.last_sign_in_at,
   updated_at      = now();
 
--- O gatilho tg_criar_perfil_novo_usuario já criou os perfis a partir do
+-- O gatilho tg_create_profile_for_new_user já criou os profiles a partir do
 -- raw_user_meta_data. O upsert abaixo garante o estado final mesmo quando o
 -- seed roda sobre uma base que já tinha os usuários (o gatilho é AFTER INSERT
 -- e não dispara no ON CONFLICT DO UPDATE acima).
-insert into public.perfis (id, papel, nome, email_contato)
+insert into public.profiles (id, role, name, contact_email)
 values
   ('ad000000-0000-4000-8000-000000000001','admin',    'Administradora Teste','admin@boraestudar.local'),
-  ('d65a965f-0ccb-4a12-ac7b-858519d9df00','professor','Professor Teste',     'professor@boraestudar.local'),
-  ('a1000000-0000-4000-8000-000000000001','aluno',    'Aluno Teste',         'aluno@boraestudar.local')
+  ('d65a965f-0ccb-4a12-ac7b-858519d9df00','teacher','Professor Teste',     'professor@boraestudar.local'),
+  ('a1000000-0000-4000-8000-000000000001','student',    'Aluno Teste',         'aluno@boraestudar.local')
 on conflict (id) do update set
-  papel         = excluded.papel,
-  nome          = excluded.nome,
-  email_contato = excluded.email_contato;
+  role         = excluded.role,
+  name          = excluded.name,
+  contact_email = excluded.contact_email;
 
 
 -- -----------------------------------------------------------------------------
 -- 2. Vínculo e acesso
 -- -----------------------------------------------------------------------------
 
-insert into public.vinculos_aluno_professor (aluno_id, professor_id)
+insert into public.student_teacher_links (student_id, teacher_id)
 select 'a1000000-0000-4000-8000-000000000001','d65a965f-0ccb-4a12-ac7b-858519d9df00'
 where not exists (
-  select 1 from public.vinculos_aluno_professor
-   where aluno_id = 'a1000000-0000-4000-8000-000000000001' and encerrado_em is null
+  select 1 from public.student_teacher_links
+   where student_id = 'a1000000-0000-4000-8000-000000000001' and ended_at is null
 );
 
 -- Acesso acadêmico vigente e sem expiração, para o aluno local nunca esbarrar
 -- em bloqueio durante o desenvolvimento.
-insert into public.assinaturas (aluno_id, status, plano, vigencia)
-select 'a1000000-0000-4000-8000-000000000001','ativo','desenvolvimento-local',
+insert into public.subscriptions (student_id, status, plan, validity)
+select 'a1000000-0000-4000-8000-000000000001','active','desenvolvimento-local',
        daterange(current_date, null, '[)')
 where not exists (
-  select 1 from public.assinaturas
-   where aluno_id = 'a1000000-0000-4000-8000-000000000001' and status = 'ativo'
+  select 1 from public.subscriptions
+   where student_id = 'a1000000-0000-4000-8000-000000000001' and status = 'active'
 );
 
 
@@ -123,50 +123,50 @@ where not exists (
 -- Dois blocos de 30 questões, com tópicos rotativos. É o mínimo para rodar
 -- baterias de 15 principais e ainda sobrar questão inédita para a seguinte.
 
-insert into public.catalogos (chave, nome)
+insert into public.catalogs (key, name)
 values ('pcpr26','PCPR 2026 — Investigador')
-on conflict (chave) do nothing;
+on conflict (key) do nothing;
 
-insert into public.catalogo_blocos
-  (id, catalogo_chave, bloco_chave, numero, nome, disciplina_chave, disciplina_nome, questoes_qtd)
+insert into public.catalog_blocks
+  (id, catalog_key, block_key, number, name, subject_key, subject_name, question_count)
 values
   ('cb000000-0000-4000-8000-000000000001','pcpr26','pcpr26_forenses_01',1,
    'Bloco 1 — Introdução às Ciências Forenses','forenses','Ciências Forenses',30),
   ('cb000000-0000-4000-8000-000000000002','pcpr26','pcpr26_penal_01',1,
    'Bloco 1 — Teoria Geral do Crime','penal','Direito Penal',30)
-on conflict (catalogo_chave, bloco_chave) do nothing;
+on conflict (catalog_key, block_key) do nothing;
 
-insert into public.catalogo_questoes (bloco_id, questao_id, topico, posicao)
+insert into public.catalog_questions (block_id, question_id, topic, position)
 select 'cb000000-0000-4000-8000-000000000001', 100000 + g,
        (array['Local de crime','Cadeia de custódia','Perícia papiloscópica'])[1 + (g % 3)], g
 from generate_series(1,30) g
-on conflict (bloco_id, questao_id) do nothing;
+on conflict (block_id, question_id) do nothing;
 
-insert into public.catalogo_questoes (bloco_id, questao_id, topico, posicao)
+insert into public.catalog_questions (block_id, question_id, topic, position)
 select 'cb000000-0000-4000-8000-000000000002', 200000 + g,
        (array['Tipicidade','Ilicitude','Culpabilidade'])[1 + (g % 3)], g
 from generate_series(1,30) g
-on conflict (bloco_id, questao_id) do nothing;
+on conflict (block_id, question_id) do nothing;
 
 
 -- -----------------------------------------------------------------------------
 -- 4. Planejamento ativo
 -- -----------------------------------------------------------------------------
 
-insert into public.planejamentos
-  (id, aluno_id, professor_id, nome, area, concurso_alvo, fase, modelo_estudo,
-   metas_semanais, data_inicio, status)
+insert into public.study_plans
+  (id, student_id, teacher_id, name, area, target_exam, stage, study_model,
+   weekly_goals, start_date, status)
 values
   ('aaaa0000-0000-4000-8000-000000000001',
    'a1000000-0000-4000-8000-000000000001','d65a965f-0ccb-4a12-ac7b-858519d9df00',
    'Plano PCPR 2026','Policial','PCPR — Investigador','Pré-edital',
-   'Avanço progressivo', 24, current_date, 'ativo')
+   'Avanço progressivo', 24, current_date, 'active')
 on conflict (id) do nothing;
 
-insert into public.planejamento_blocos
-  (id, planejamento_id, aluno_id, professor_id, catalogo_bloco_id,
-   disciplina_nome, disciplina_cor, disciplina_meta, nome, questoes_qtd,
-   ordem_disciplina, ordem_bloco)
+insert into public.study_plan_blocks
+  (id, study_plan_id, student_id, teacher_id, catalog_block_id,
+   subject_name, subject_color, subject_target, name, question_count,
+   subject_order, block_order)
 values
   ('bbbb0000-0000-4000-8000-000000000001','aaaa0000-0000-4000-8000-000000000001',
    'a1000000-0000-4000-8000-000000000001','d65a965f-0ccb-4a12-ac7b-858519d9df00',
@@ -182,7 +182,7 @@ on conflict (id) do nothing;
 -- -----------------------------------------------------------------------------
 -- 5. Metas da semana 1, criadas pela RPC real
 -- -----------------------------------------------------------------------------
--- Impersonar o professor e chamar aplicar_lote_planejamento faz o seed passar
+-- Impersonar o professor e chamar apply_study_plan_batch faz o seed passar
 -- pelas mesmas validações da aplicação. Se uma regra de negócio regredir, o
 -- `supabase db reset` falha aqui em vez de produzir dado inválido em silêncio.
 
@@ -190,28 +190,28 @@ do $$
 begin
   perform set_config('request.jwt.claim.sub','d65a965f-0ccb-4a12-ac7b-858519d9df00', true);
 
-  if not exists (select 1 from public.lotes_planejamento
+  if not exists (select 1 from public.study_plan_batches
                   where id = 'cccc0000-0000-4000-8000-000000000001') then
-    perform public.aplicar_lote_planejamento(
+    perform public.apply_study_plan_batch(
       'cccc0000-0000-4000-8000-000000000001'::uuid,
       'aaaa0000-0000-4000-8000-000000000001'::uuid,
       1::smallint,
-      'acrescentar'::public.modo_lote,
+      'append'::public.batch_mode,
       jsonb_build_array(
-        jsonb_build_object('dia_semana',1,'posicao',1,'tipo','teoria',
-          'titulo','Teoria — Local de crime','tempo_previsto_min',60,
-          'observacao_professor','Leitura do capítulo 1 antes da bateria.'),
-        jsonb_build_object('dia_semana',1,'posicao',2,'tipo','bloco_questoes',
-          'bloco_id','bbbb0000-0000-4000-8000-000000000001',
-          'titulo','Bateria — Introdução às Ciências Forenses','tempo_previsto_min',90),
-        jsonb_build_object('dia_semana',3,'posicao',1,'tipo','teoria',
-          'titulo','Teoria — Teoria Geral do Crime','tempo_previsto_min',60),
-        jsonb_build_object('dia_semana',3,'posicao',2,'tipo','bloco_questoes',
-          'bloco_id','bbbb0000-0000-4000-8000-000000000002',
-          'titulo','Bateria — Teoria Geral do Crime','tempo_previsto_min',90),
-        jsonb_build_object('dia_semana',5,'posicao',1,'tipo','estudo_extra',
-          'titulo','Revisão livre da semana','atividade_extra','revisao',
-          'tempo_previsto_min',45)
+        jsonb_build_object('weekday',1,'position',1,'type','theory',
+          'title','Teoria — Local de crime','planned_minutes',60,
+          'teacher_note','Leitura do capítulo 1 antes da bateria.'),
+        jsonb_build_object('weekday',1,'position',2,'type','question_block',
+          'block_id','bbbb0000-0000-4000-8000-000000000001',
+          'title','Bateria — Introdução às Ciências Forenses','planned_minutes',90),
+        jsonb_build_object('weekday',3,'position',1,'type','theory',
+          'title','Teoria — Teoria Geral do Crime','planned_minutes',60),
+        jsonb_build_object('weekday',3,'position',2,'type','question_block',
+          'block_id','bbbb0000-0000-4000-8000-000000000002',
+          'title','Bateria — Teoria Geral do Crime','planned_minutes',90),
+        jsonb_build_object('weekday',5,'position',1,'type','extra_study',
+          'title','Revisão livre da semana','extra_activity','revisao',
+          'planned_minutes',45)
       )
     );
   end if;
@@ -227,13 +227,13 @@ $$;
 
 do $$
 declare
-  v_perfis integer; v_metas integer; v_questoes integer;
+  v_profiles integer; v_goals integer; v_questions integer;
 begin
-  select count(*) into v_perfis   from public.perfis;
-  select count(*) into v_metas    from public.metas where excluido_em is null;
-  select count(*) into v_questoes from public.catalogo_questoes;
-  raise notice 'Seed local: % perfis, % metas na semana 1, % questoes de catalogo.',
-    v_perfis, v_metas, v_questoes;
+  select count(*) into v_profiles   from public.profiles;
+  select count(*) into v_goals    from public.goals where deleted_at is null;
+  select count(*) into v_questions from public.catalog_questions;
+  raise notice 'Seed local: % profiles, % goals na semana 1, % questoes de catalogo.',
+    v_profiles, v_goals, v_questions;
   raise notice 'Login: aluno@boraestudar.local / professor@boraestudar.local / admin@boraestudar.local';
   raise notice 'Senha: BoraEstudar#2026!';
 end;

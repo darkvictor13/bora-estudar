@@ -2,17 +2,23 @@ import type { Database } from "./schema.gen.ts";
 
 type Public = Database["public"];
 
-/** Linha de uma tabela: `Linha<"metas">`. */
-export type Linha<T extends keyof Public["Tables"]> = Public["Tables"][T]["Row"];
+/** Linha de uma tabela: `Row<"goals">`. */
+export type Row<T extends keyof Public["Tables"]> = Public["Tables"][T]["Row"];
 
-/** Linha de uma view: `LinhaView<"vw_meta_desempenho">`. */
-export type LinhaView<T extends keyof Public["Views"]> = Public["Views"][T]["Row"];
+/** Payload de inserção: `Insert<"goals">`. */
+export type Insert<T extends keyof Public["Tables"]> = Public["Tables"][T]["Insert"];
 
-/** Argumentos de uma RPC: `ArgsRpc<"iniciar_bateria">`. */
-export type ArgsRpc<T extends keyof Public["Functions"]> = Public["Functions"][T]["Args"];
+/** Payload de atualização: `Update<"goals">`. */
+export type Update<T extends keyof Public["Tables"]> = Public["Tables"][T]["Update"];
 
-/** Retorno de uma RPC: `RetornoRpc<"iniciar_bateria">`. */
-export type RetornoRpc<T extends keyof Public["Functions"]> = Public["Functions"][T]["Returns"];
+/** Linha de uma view: `ViewRow<"vw_goal_performance">`. */
+export type ViewRow<T extends keyof Public["Views"]> = Public["Views"][T]["Row"];
 
-/** Valor de um enum do banco: `Enum<"status_bateria">`. */
+/** Argumentos de uma RPC: `RpcArgs<"start_quiz_session">`. */
+export type RpcArgs<T extends keyof Public["Functions"]> = Public["Functions"][T]["Args"];
+
+/** Retorno de uma RPC: `RpcReturns<"start_quiz_session">`. */
+export type RpcReturns<T extends keyof Public["Functions"]> = Public["Functions"][T]["Returns"];
+
+/** Valor de um enum do banco: `Enum<"quiz_session_status">`. */
 export type Enum<T extends keyof Public["Enums"]> = Public["Enums"][T];

@@ -1,4 +1,4 @@
-import { criarClienteServidor } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
  * Página de diagnóstico da arquitetura.
@@ -8,12 +8,12 @@ import { criarClienteServidor } from "@/lib/supabase/server";
  * autenticado) responde vazio ou nega. Será substituída pela landing real.
  */
 export default async function Home() {
-  const supabase = await criarClienteServidor();
+  const supabase = await createServerSupabaseClient();
 
   // Sem `head: true`: uma resposta sem corpo faz o supabase-js montar um erro
   // com code e message vazios, e o diagnóstico não diria nada.
-  const [{ data: blocos, error: erroBlocos }, { data: { user } }] = await Promise.all([
-    supabase.from("catalogo_blocos").select("id,nome"),
+  const [{ data: blocks, error: blocksError }, { data: { user } }] = await Promise.all([
+    supabase.from("catalog_blocks").select("id,name"),
     supabase.auth.getUser(),
   ]);
 
@@ -30,9 +30,9 @@ export default async function Home() {
         <li>
           Catálogo:{" "}
           <strong>
-            {erroBlocos
-              ? `sem acesso — ${erroBlocos.code}: ${erroBlocos.message}`
-              : `${blocos?.length ?? 0} bloco(s) visíveis`}
+            {blocksError
+              ? `sem acesso — ${blocksError.code}: ${blocksError.message}`
+              : `${blocks?.length ?? 0} bloco(s) visíveis`}
           </strong>
         </li>
       </ul>

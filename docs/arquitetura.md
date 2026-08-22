@@ -17,12 +17,20 @@ bora-estudar/
 ├── supabase/
 │   ├── config.toml
 │   ├── migrations/          # Schema versionado
-│   └── seed.sql             # Usuários e dados de desenvolvimento
+│   ├── seed.sql             # Usuários e dados de desenvolvimento
+│   └── tests/               # 49 checagens de invariantes (npm run db:test)
 └── docs/
 ```
 
 Workspaces do npm. Sem Turborepo, Lerna ou pnpm: quatro pacotes não justificam
 uma camada extra de orquestração, e `npm run <script> --workspaces` resolve.
+
+## Idioma
+
+Identificadores em inglês — no TypeScript e também no banco: tabelas, colunas,
+enums, valores de enum e funções. Comentários, mensagens de erro, texto de
+interface e descrições de teste em português, porque é o idioma do time e do
+usuário final.
 
 ## Por que os limites estão onde estão
 
@@ -40,7 +48,7 @@ chegava faltando. Aqui existe **uma** definição, importada pelos dois, com:
   rejeitado com mensagem acionável em vez de falhar em cascata;
 - validação de runtime na fronteira, porque `JSON.parse` devolve `any` e um
   tipo do TypeScript não sobrevive à serialização;
-- `historicoCompleto: boolean`, para o site poder admitir que não conseguiu
+- `historyComplete: boolean`, para o site poder admitir que não conseguiu
   carregar o histórico inteiro. A versão anterior marcava o histórico como
   autoritativo mesmo truncado, e o motor passava a repetir questões em silêncio.
 
@@ -68,11 +76,11 @@ Por isso `@bora/extension` depende de `@bora/protocol`, mas não de
 ```
   aluno clica em "iniciar"
         │
-  web ──┤ RPC iniciar_bateria  ──────────────► supabase
-        │ ◄── bateria (id, numero, alvo)
+  web ──┤ RPC start_quiz_session ──────────────► supabase
+        │ ◄── quiz_session (id, session_number, main_target)
         │
-        │ monta BateriaInicio + histórico (view vw_questoes_vistas)
-        │ redireciona para tecconcursos.com.br/#boraBateriaInicio=<base64url>
+        │ monta QuizStart + histórico (view vw_seen_questions)
+        │ redireciona para tecconcursos.com.br/#boraQuizStart=<base64url>
         ▼
   extensão lê a hash, PERSISTE a sessão, e só então limpa a hash
         │
@@ -80,12 +88,12 @@ Por isso `@bora/extension` depende de `@bora/protocol`, mas não de
         │
         │ ao finalizar: gera requestId UMA vez, AGUARDA a gravação,
         │ e só então navega
-        │ redireciona para <urlRetorno>#boraBateriaResultado=<base64url>
+        │ redireciona para <returnUrl>#boraQuizResult=<base64url>
         ▼
-  web lê a hash ──► RPC finalizar_bateria (idempotente por requestId)
+  web lê a hash ──► RPC finish_quiz_session (idempotente por requestId)
         │           e só limpa a hash DEPOIS da confirmação
         ▼
-  aluno registra o tempo ──► RPC registrar_tempo_bateria ──► meta concluída
+  aluno registra o tempo ──► RPC record_quiz_session_time ──► goal concluída
 ```
 
 As duas ordenações em maiúsculas são deliberadas. Invertê-las reintroduz as
@@ -96,12 +104,18 @@ hash antes de confirmar a gravação, e navegar antes de a sessão chegar ao dis
 
 O contrato está em `supabase/migrations`. Resumo do que a arquitetura assume:
 
-- `bateria_questoes` é um ledger append-only e a única fonte de desempenho;
-  todo agregado vem de view, nunca de contador mantido à mão;
+- `quiz_session_questions` é um ledger append-only e a única fonte de
+  desempenho; todo agregado vem de view, nunca de contador mantido à mão;
 - o cliente **lê** tabelas e views (filtradas por RLS) e **escreve** apenas por
   RPC — as tabelas transacionais não têm grant de INSERT/UPDATE/DELETE;
 - toda RPC mutante é idempotente por `request_id` com hash de payload;
-- nada é apagado fisicamente: `excluido_em` mais a tabela `auditoria`.
+- nada é apagado fisicamente: `deleted_at` mais a tabela `audit_log`.
+
+`npm run db:test` recria a base e roda 49 checagens de invariante: fluxo
+completo com replay em cada RPC, isolamento de RLS entre dois alunos de
+professores diferentes, e o ciclo de reforço. Cada checagem que testa um estado
+proibido usa `raise exception` se o banco aceitar — então a suíte falha quando
+uma constraint desaparece, não só quando o código quebra.
 
 `supabase/seed.sql` cria as metas chamando as RPCs reais, com o professor
 impersonado. Se uma regra de negócio regredir, `supabase db reset` falha em vez
@@ -113,12 +127,12 @@ de gravar dado inválido.
   anterior usava catch-all por papel (`/aluno/[[...segments]]`), que centraliza
   o controle de acesso mas custa legibilidade e code splitting.
 - **Admin não enxerga dado de domínio.** A RLS usa
-  `pode_ver_contexto(aluno_id, professor_id)`, que não reconhece o papel admin.
+  `can_view_context(student_id, teacher_id)`, que não reconhece o papel admin.
 - **Faltam RPCs de escrita para planejamento.** Como o INSERT direto está
   revogado, hoje o professor não consegue criar planejamento nem bloco pela
   aplicação; só o seed consegue, porque roda como superusuário.
 - **`data_collection_permissions` no manifesto.** O `web-ext lint` avisa que a
   chave será obrigatória. Declarar o que a extensão coleta é decisão de
   política, não técnica, e precisa ser resolvida antes de publicar na AMO.
-- **Motor de seleção de questões.** `selecionarQuestoes` hoje só ordena por
-  menos vistas. Erros recentes, espaçamento e correlação de tópico faltam.
+- **Motor de seleção de questões.** `pickQuestions` hoje só ordena por menos
+  vistas. Erros recentes, espaçamento e correlação de tópico faltam.

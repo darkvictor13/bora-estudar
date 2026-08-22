@@ -9,37 +9,37 @@ export const PROTOCOL_VERSION = 1 as const;
 
 /** Chaves do fragmento da URL usadas em cada direção. */
 export const HASH_KEYS = {
-  /** Site → extensão: inicia uma bateria. */
-  start: "boraBateriaInicio",
+  /** Site → extensão: inicia uma sessão de questões. */
+  start: "boraQuizStart",
   /** Extensão → site: devolve o resultado. */
-  result: "boraBateriaResultado",
+  result: "boraQuizResult",
 } as const;
 
 export type HashKey = (typeof HASH_KEYS)[keyof typeof HASH_KEYS];
 
 export interface Envelope<TKind extends string, TBody> {
-  readonly protocolo: typeof PROTOCOL_VERSION;
-  readonly tipo: TKind;
-  readonly corpo: TBody;
+  readonly protocol: typeof PROTOCOL_VERSION;
+  readonly kind: TKind;
+  readonly body: TBody;
 }
 
-export type CodigoErroProtocolo =
-  | "fragmento_ausente"
-  | "base64_invalido"
-  | "json_invalido"
-  | "versao_incompativel"
-  | "tipo_inesperado"
-  | "corpo_invalido";
+export type ProtocolErrorCode =
+  | "missing_fragment"
+  | "invalid_base64"
+  | "invalid_json"
+  | "incompatible_version"
+  | "unexpected_kind"
+  | "invalid_body";
 
 export class ProtocolError extends Error {
   // Campo declarado e atribuído no corpo, e não como parameter property: o
   // modo strip-only do Node (`node --test arquivo.ts`) só remove tipos, não
   // gera código, então parameter property quebra a execução sem build.
-  readonly codigo: CodigoErroProtocolo;
+  readonly code: ProtocolErrorCode;
 
-  constructor(message: string, codigo: CodigoErroProtocolo) {
+  constructor(message: string, code: ProtocolErrorCode) {
     super(message);
     this.name = "ProtocolError";
-    this.codigo = codigo;
+    this.code = code;
   }
 }

@@ -9,7 +9,7 @@ import { env } from "@/lib/env";
  *
  * `cookies()` é assíncrono a partir do Next 16, então esta função também é.
  */
-export async function criarClienteServidor() {
+export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(env.supabaseUrl, env.supabasePublishableKey, {
@@ -17,9 +17,9 @@ export async function criarClienteServidor() {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesParaGravar) {
+      setAll(cookiesToWrite) {
         try {
-          for (const { name, value, options } of cookiesParaGravar) {
+          for (const { name, value, options } of cookiesToWrite) {
             cookieStore.set(name, value, options);
           }
         } catch {
@@ -37,8 +37,8 @@ export async function criarClienteServidor() {
  * Usa `getUser()`, que valida o token no servidor de auth. `getSession()` lê o
  * cookie sem validar e não serve para decisão de acesso.
  */
-export async function obterUsuario() {
-  const supabase = await criarClienteServidor();
+export async function getCurrentUser() {
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
