@@ -34,7 +34,7 @@ end $$;
 select '01 sessoes concluidas no bloco' item, count(*)::text valor
   from public.quiz_sessions where status='completed';
 
-select '02 desempenho do ciclo' item, score_pct::text||'%' valor
+select '02 desempenho do ciclo' item, official_score_pct::text||'%' valor
   from public.vw_block_performance;
 
 -- Erros únicos que o reforço PRECISA cobrir (6 por bateria x 3 = 18).

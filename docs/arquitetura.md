@@ -111,11 +111,27 @@ O contrato está em `supabase/migrations`. Resumo do que a arquitetura assume:
 - toda RPC mutante é idempotente por `request_id` com hash de payload;
 - nada é apagado fisicamente: `deleted_at` mais a tabela `audit_log`.
 
-`npm run db:test` recria a base e roda 49 checagens de invariante: fluxo
+### Duas medidas de desempenho
+
+O produto distingue, desde a v93, duas coisas que costumam ser confundidas:
+
+- **desempenho oficial** — acertos sobre questões `main`. É a nota da meta e o
+  critério de ordenação dos blocos;
+- **aproveitamento total** — acertos sobre `main` + `extra` + `reinforcement`.
+
+As duas saem do mesmo ledger, por `vw_block_performance`. O caderno de erros
+(`vw_block_errors`) reúne as três fases, cada questão rotulada com a fase da
+ocorrência mais recente.
+
+O reforço automático a cada três sessões continua avaliando **somente** as
+principais — `record_reinforcement` soma `main_count`/`main_correct` e exige
+revisão apenas dos erros de `phase = 'main'`.
+
+`npm run db:test` recria a base e roda 59 checagens de invariante: fluxo
 completo com replay em cada RPC, isolamento de RLS entre dois alunos de
-professores diferentes, e o ciclo de reforço. Cada checagem que testa um estado
-proibido usa `raise exception` se o banco aceitar — então a suíte falha quando
-uma constraint desaparece, não só quando o código quebra.
+professores diferentes, o ciclo de reforço, e o recorte por fase. Cada checagem
+que testa um estado proibido usa `raise exception` se o banco aceitar — então a
+suíte falha quando uma constraint desaparece, não só quando o código quebra.
 
 `supabase/seed.sql` cria as metas chamando as RPCs reais, com o professor
 impersonado. Se uma regra de negócio regredir, `supabase db reset` falha em vez

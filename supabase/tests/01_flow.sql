@@ -136,7 +136,7 @@ from public.vw_goal_performance where questions_answered > 0;
 
 select '17 questoes vistas (distintas)' item, count(*)::text valor from public.vw_seen_questions;
 
-select '18 desempenho do bloco' item, score_pct::text||'%' valor from public.vw_block_performance;
+select '18 desempenho do bloco' item, official_score_pct::text||'%' valor from public.vw_block_performance;
 
 -- ---------- ANULAÇÃO PELO PROFESSOR ----------
 select set_config('request.jwt.claim.sub','11111111-1111-1111-1111-111111111111',false);

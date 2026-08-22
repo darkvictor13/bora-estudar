@@ -46,7 +46,7 @@ Credenciais públicas, exclusivas do ambiente local.
 | `npm run dev` | Sobe o site |
 | `npm run check` | `typecheck` + `lint` + `test` em todos os pacotes |
 | `npm run db:reset` | Recria o banco: migrations + seed |
-| `npm run db:test` | Recria o banco e roda as 49 checagens de invariante |
+| `npm run db:test` | Recria o banco e roda as 59 checagens de invariante |
 | `npm run db:types` | Regenera `packages/database` a partir do schema local |
 | `npm run ext:build` | Compila a extensão em `apps/extension/dist` |
 | `npm run ext:watch` | Recompila a extensão a cada alteração |

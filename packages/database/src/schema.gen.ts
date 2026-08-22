@@ -1080,15 +1080,50 @@ export type Database = {
       }
     }
     Views: {
+      vw_block_errors: {
+        Row: {
+          block_id: string | null
+          error_count: number | null
+          extra_errors: number | null
+          last_error_at: string | null
+          last_error_phase: Database["public"]["Enums"]["question_phase"] | null
+          main_errors: number | null
+          question_id: number | null
+          reinforcement_errors: number | null
+          student_id: string | null
+          study_plan_id: string | null
+          topic: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+        ]
+      }
       vw_block_performance: {
         Row: {
           block_id: string | null
+          extra_correct: number | null
+          extra_count: number | null
+          extra_incorrect: number | null
           main_correct: number | null
           main_count: number | null
-          score_pct: number | null
+          main_incorrect: number | null
+          official_score_pct: number | null
+          reinforcement_correct: number | null
+          reinforcement_count: number | null
+          reinforcement_incorrect: number | null
           session_count: number | null
           student_id: string | null
           study_plan_id: string | null
+          total_correct: number | null
+          total_count: number | null
+          total_incorrect: number | null
+          total_score_pct: number | null
         }
         Relationships: [
           {
@@ -1127,6 +1162,7 @@ export type Database = {
           duration_minutes: number | null
           extra_correct: number | null
           extra_count: number | null
+          extra_incorrect: number | null
           goal_id: string | null
           main_correct: number | null
           main_count: number | null
@@ -1135,10 +1171,14 @@ export type Database = {
           quiz_session_id: string | null
           reinforcement_correct: number | null
           reinforcement_count: number | null
+          reinforcement_incorrect: number | null
           status: Database["public"]["Enums"]["quiz_session_status"] | null
           student_id: string | null
           study_plan_id: string | null
           teacher_id: string | null
+          total_correct: number | null
+          total_count: number | null
+          total_incorrect: number | null
         }
         Relationships: [
           {
