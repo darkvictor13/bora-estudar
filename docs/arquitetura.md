@@ -137,11 +137,25 @@ suíte falha quando uma constraint desaparece, não só quando o código quebra.
 impersonado. Se uma regra de negócio regredir, `supabase db reset` falha em vez
 de gravar dado inválido.
 
+## Roteamento
+
+Rotas explícitas, um arquivo por tela. A versão anterior usava catch-all por
+papel (`/aluno/[[...segments]]`), que centralizava o controle de acesso mas
+fazia qualquer tela puxar o bundle de todas as outras.
+
+O controle de acesso mora em três camadas:
+
+1. `src/proxy.ts` renova a sessão antes de qualquer renderização;
+2. o layout de cada área chama `requireRole`, que redireciona para a home do
+   papel real quando o papel não bate;
+3. as telas de estudo do aluno chamam `requireStudentAccess`, que exige
+   assinatura ativa. Conta e lista de espera ficam de fora dessa exigência —
+   quem ainda aguarda liberação precisa conseguir se cadastrar.
+
+`src/lib/routes.ts` é a única fonte dos caminhos; nada monta URL na mão.
+
 ## Decisões pendentes
 
-- **Roteamento do `apps/web`.** Ainda não há rotas de aluno/professor. A versão
-  anterior usava catch-all por papel (`/aluno/[[...segments]]`), que centraliza
-  o controle de acesso mas custa legibilidade e code splitting.
 - **Admin não enxerga dado de domínio.** A RLS usa
   `can_view_context(student_id, teacher_id)`, que não reconhece o papel admin.
 - **Faltam RPCs de escrita para planejamento.** Como o INSERT direto está
