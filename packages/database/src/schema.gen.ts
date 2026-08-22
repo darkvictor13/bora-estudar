@@ -1377,10 +1377,10 @@ export type Database = {
       }
       reserve_operation: {
         Args: {
-          p_alvo_id: string
           p_operation: string
           p_payload: string
           p_request_id: string
+          p_target_id: string
         }
         Returns: Record<string, unknown>
       }

@@ -1079,7 +1079,7 @@ create policy audit_log_read on public.audit_log for select to authenticated
 create or replace function public.reserve_operation(
   p_request_id uuid,
   p_operation   text,
-  p_alvo_id    uuid,
+  p_target_id    uuid,
   p_payload    text,
   out reserved boolean,
   out previous  jsonb
@@ -1097,7 +1097,7 @@ begin
   end if;
 
   insert into public.operations (request_id, operation, actor_id, target_id, payload_hash)
-  values (p_request_id, p_operation, auth.uid(), p_alvo_id, v_hash)
+  values (p_request_id, p_operation, auth.uid(), p_target_id, v_hash)
   on conflict (request_id) do nothing;
 
   if found then
