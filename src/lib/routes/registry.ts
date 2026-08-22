@@ -93,6 +93,7 @@ export const adminArea: AppArea = {
     route("acessos", "Acessos", "Acompanhamento das liberações de acesso acadêmico."),
     route("catalogo/cursos", "Cursos", "Cursos do catálogo acadêmico global."),
     route("catalogo/cursos/novo", "Novo curso", "Cadastro completo de um curso do catálogo acadêmico."),
+    route("catalogo/cursos/importar", "Importar curso", "Importação de curso, disciplinas e cadernos por arquivo CSV."),
     route("catalogo/cursos/:cursoId/resumo", "Resumo do curso", "Configuração geral do curso selecionado."),
     route("catalogo/cursos/:cursoId/disciplinas", "Disciplinas do curso", "Disciplinas vinculadas ao curso do catálogo."),
     route("catalogo/cursos/:cursoId/cadernos", "Cadernos do curso", "Cadernos globais configurados para o curso."),

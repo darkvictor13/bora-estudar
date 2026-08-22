@@ -7,6 +7,7 @@ import type { ResolvedRoute } from "@/lib/routes/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { fetchAllRowsInBatches } from "@/lib/supabase/pagination";
 import { disciplineColors } from "@/theme/tokens";
+import { AdminCourseImportRoute } from "./AdminCourseImportRoute";
 import {
   CoursePhase,
   StudyModel,
@@ -101,7 +102,7 @@ function CoursesPage() {
         || (visibility === "excluidos" && Boolean(course.deleted_at));
       return matchesTerm && matchesVisibility;
     });
-    return <Section title="Catálogo de cursos" description={`${filtered.length} curso(s) encontrado(s).`} actions={<Link className="be-button be-button--primary" href="/admin/catalogo/cursos/novo">Novo curso</Link>}>
+    return <Section title="Catálogo de cursos" description={`${filtered.length} curso(s) encontrado(s).`} actions={<><Link className="be-button" href="/admin/catalogo/cursos/importar">Importar CSV</Link><Link className="be-button be-button--primary" href="/admin/catalogo/cursos/novo">Novo curso</Link></>}>
       <div className={styles.filters} role="search">
         <Field label="Buscar"><input className="be-input" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Código, nome, área ou concurso" /></Field>
         <Field label="Situação"><select className="be-input" value={visibility} onChange={(event) => setVisibility(event.target.value as typeof visibility)}><option value="todos">Todos</option><option value="ativos">Ativos</option><option value="inativos">Inativos</option><option value="excluidos">Excluídos</option></select></Field>
@@ -538,6 +539,7 @@ function CourseLessonsPage({ courseId }: { courseId: string }) {
 export function AdminCatalogRoutes({ route }: { route: ResolvedRoute }) {
   if (route.pathname === "catalogo/cursos") return <CoursesPage />;
   if (route.pathname === "catalogo/cursos/novo") return <NewCoursePage />;
+  if (route.pathname === "catalogo/cursos/importar") return <AdminCourseImportRoute />;
   if (route.params.cursoId && route.pathname.endsWith("/resumo")) return <CourseSummaryPage key={route.params.cursoId} courseId={route.params.cursoId} />;
   if (route.params.cursoId && route.pathname.endsWith("/disciplinas")) return <CourseSubjectsPage key={route.params.cursoId} courseId={route.params.cursoId} />;
   if (route.params.cursoId && route.pathname.endsWith("/cadernos")) return <CourseNotebooksPage key={route.params.cursoId} courseId={route.params.cursoId} />;

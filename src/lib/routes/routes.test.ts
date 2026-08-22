@@ -8,7 +8,11 @@ import { canStudentAccessPath, professorStudentIdForPath, roleForPath, safeRetur
 test("declara todas as rotas solicitadas por área", () => {
   assert.equal(studentArea.routes.length, 14);
   assert.equal(professorArea.routes.length, 18);
-  assert.equal(adminArea.routes.length, 17);
+  assert.equal(adminArea.routes.length, 18);
+  assert.equal(
+    resolveRoute(adminArea, ["catalogo", "cursos", "importar"])?.pattern,
+    "catalogo/cursos/importar",
+  );
 });
 
 test("resolve parâmetros de uma rota profunda do professor", () => {

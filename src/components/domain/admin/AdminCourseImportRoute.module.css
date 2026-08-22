@@ -1,0 +1,236 @@
+.dropzone {
+  display: grid;
+  min-height: 148px;
+  place-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color var(--duration-base), background-color var(--duration-base);
+}
+
+.dropzone:hover,
+.dropzone:focus-within {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.dropzone input {
+  width: min(100%, 360px);
+  margin: var(--space-2) auto 0;
+}
+
+.dropzoneTitle {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.summary > div {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.summary strong {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-lg);
+}
+
+.summary span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.disciplineCreator {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.creatorBlock {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.creatorBlock h3 {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.inlineFields {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.inlineFields > :first-child,
+.inlineFields > :nth-child(2) {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.groupChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.groupChip {
+  display: grid;
+  position: relative;
+  min-width: 180px;
+  gap: 1px;
+  padding: var(--space-2) 38px var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.groupChip span {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.groupChip small {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+}
+
+.groupChip button {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.groupChip button:hover {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.rangeEditor {
+  display: grid;
+  align-items: end;
+  grid-template-columns: 130px 130px minmax(220px, 1fr) auto;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.previewTable {
+  max-height: 620px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.previewTable table {
+  min-width: 820px;
+}
+
+.previewTable thead {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--color-surface);
+}
+
+.previewTable tr[data-unassigned="true"] {
+  background: var(--color-warning-soft);
+}
+
+.previewTable td:first-child {
+  width: 72px;
+  font-family: var(--font-mono);
+  color: var(--color-text-subtle);
+}
+
+.previewTable td:nth-child(2) {
+  min-width: 360px;
+}
+
+.previewTable td:nth-child(3) {
+  width: 110px;
+  font-family: var(--font-mono);
+}
+
+.previewTable td:last-child {
+  width: 280px;
+}
+
+.previewTable td strong,
+.previewTable td small {
+  display: block;
+}
+
+.previewTable td small {
+  margin-top: 3px;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+}
+
+.confirmRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.confirmRow p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 900px) {
+  .summary,
+  .disciplineCreator {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rangeEditor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .summary,
+  .disciplineCreator,
+  .rangeEditor {
+    grid-template-columns: 1fr;
+  }
+
+  .inlineFields,
+  .confirmRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

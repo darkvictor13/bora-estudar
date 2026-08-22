@@ -503,10 +503,20 @@ export function Field({ children, label }: { children: ReactNode; label: string 
   return <label className={styles.field}><span>{label}</span>{children}</label>;
 }
 
-export function SubmitButton({ busy, children = "Salvar" }: { busy: boolean; children?: ReactNode }) {
+export function SubmitButton({
+  busy,
+  busyLabel = "Salvando…",
+  children = "Salvar",
+  disabled = false,
+}: {
+  busy: boolean;
+  busyLabel?: ReactNode;
+  children?: ReactNode;
+  disabled?: boolean;
+}) {
   return (
-    <button className="be-button be-button--primary" type="submit" disabled={busy} aria-busy={busy}>
-      {busy ? <><ButtonSpinner />Salvando…</> : children}
+    <button className="be-button be-button--primary" type="submit" disabled={busy || disabled} aria-busy={busy}>
+      {busy ? <><ButtonSpinner />{busyLabel}</> : children}
     </button>
   );
 }
