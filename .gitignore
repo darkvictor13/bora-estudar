@@ -19,6 +19,9 @@ next-env.d.ts
 # Testes e cobertura
 coverage/
 
+# Artefatos de empacotamento da extensão
+web-ext-artifacts/
+
 # Sistema operacional
 .DS_Store
 Thumbs.db
