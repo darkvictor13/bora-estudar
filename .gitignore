@@ -1,0 +1,34 @@
+# Dependências
+node_modules/
+.pnp
+.pnp.*
+
+# Build
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Ambiente — nunca versionar credenciais
+.env
+.env.local
+.env.*.local
+
+# Testes e cobertura
+coverage/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
