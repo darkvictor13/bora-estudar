@@ -934,6 +934,11 @@ returns boolean language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('teacher','admin'));
 $$;
 
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin');
+$$;
+
 create or replace function public.is_teacher_of(p_student_id uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
@@ -1057,6 +1062,78 @@ create policy review_cycles_own on public.review_cycles for select to authentica
 
 -- Preferências: única tabela em que o client escreve direto. É estado de UI,
 -- não dado de domínio, e a chave primária já é o próprio dono.
+-- ---------------------------------------------------------------------------
+-- Escrita do professor nas tabelas de PLANEJAMENTO
+-- ---------------------------------------------------------------------------
+-- O professor monta o planejamento pela aplicação, sem uma RPC por campo. As
+-- tabelas de EXECUÇÃO continuam fechadas: quiz_sessions, quiz_session_questions,
+-- reinforcements, review_cycles, operations e audit_log só mudam por RPC, onde
+-- ficam a máquina de estados, a idempotência e a imutabilidade do ledger.
+--
+-- Três defesas fazem essa abertura ser segura:
+--
+--   1. WITH CHECK amarra toda linha gravada ao professor autenticado E a um
+--      aluno com vínculo vigente. Sem isso, escrever seria escalonar acesso.
+--   2. O GRANT de UPDATE é por COLUNA. As colunas de contexto (student_id,
+--      teacher_id, study_plan_id) ficam de fora, então nem com SQL na mão o
+--      professor move uma linha para outro dono.
+--   3. DELETE não é concedido em lugar nenhum. Remover é UPDATE em deleted_at,
+--      o que preserva o histórico e a trilha em audit_log.
+
+drop policy if exists study_plans_teacher_insert on public.study_plans;
+create policy study_plans_teacher_insert on public.study_plans for insert to authenticated
+  with check (teacher_id = auth.uid() and public.is_teacher_of(student_id));
+
+drop policy if exists study_plans_teacher_update on public.study_plans;
+create policy study_plans_teacher_update on public.study_plans for update to authenticated
+  using (teacher_id = auth.uid())
+  with check (teacher_id = auth.uid());
+
+drop policy if exists study_plan_blocks_teacher_insert on public.study_plan_blocks;
+create policy study_plan_blocks_teacher_insert on public.study_plan_blocks for insert to authenticated
+  with check (teacher_id = auth.uid() and public.is_teacher_of(student_id));
+
+drop policy if exists study_plan_blocks_teacher_update on public.study_plan_blocks;
+create policy study_plan_blocks_teacher_update on public.study_plan_blocks for update to authenticated
+  using (teacher_id = auth.uid())
+  with check (teacher_id = auth.uid());
+
+-- Metas avulsas: editar título, observação e tempo, ou marcar como excluída.
+-- A criação em lote continua em apply_study_plan_batch, que gera day_order
+-- somando o maior sobrevivente do dia. Um INSERT manual que colida na posição
+-- é recusado pelo índice goal_position_uidx — falha alto, não corrompe.
+drop policy if exists goals_teacher_insert on public.goals;
+create policy goals_teacher_insert on public.goals for insert to authenticated
+  with check (teacher_id = auth.uid() and public.is_teacher_of(student_id));
+
+drop policy if exists goals_teacher_update on public.goals;
+create policy goals_teacher_update on public.goals for update to authenticated
+  using (teacher_id = auth.uid())
+  with check (teacher_id = auth.uid());
+
+-- Liberar e bloquear o acesso do aluno.
+drop policy if exists subscriptions_teacher_insert on public.subscriptions;
+create policy subscriptions_teacher_insert on public.subscriptions for insert to authenticated
+  with check (public.is_teacher_of(student_id));
+
+drop policy if exists subscriptions_teacher_update on public.subscriptions;
+create policy subscriptions_teacher_update on public.subscriptions for update to authenticated
+  using (public.is_teacher_of(student_id))
+  with check (public.is_teacher_of(student_id));
+
+-- Catálogo é infraestrutura compartilhada entre todos os alunos: só admin.
+drop policy if exists catalogs_admin_write on public.catalogs;
+create policy catalogs_admin_write on public.catalogs for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists catalog_blocks_admin_write on public.catalog_blocks;
+create policy catalog_blocks_admin_write on public.catalog_blocks for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists catalog_questions_admin_write on public.catalog_questions;
+create policy catalog_questions_admin_write on public.catalog_questions for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
 drop policy if exists preferences_own on public.student_preferences;
 create policy preferences_own on public.student_preferences for all to authenticated
   using (student_id = auth.uid()) with check (student_id = auth.uid());
@@ -1727,8 +1804,19 @@ $$;
 -- =============================================================================
 -- 8. GRANTS
 -- =============================================================================
--- O client autenticado só LÊ tabelas (filtrado por RLS) e EXECUTA RPCs.
--- Escrita direta existe apenas em student_preferences, que é estado de UI.
+-- O client autenticado LÊ tabelas (filtrado por RLS), EXECUTA RPCs e — no caso
+-- do professor — escreve nas tabelas de PLANEJAMENTO.
+--
+-- A fronteira é entre planejar e executar:
+--
+--   planejamento  study_plans, study_plan_blocks, goals, subscriptions
+--                 → escrita direta, restrita por RLS e por coluna
+--   execução      quiz_sessions, quiz_session_questions, reinforcements,
+--                 review_cycles, operations, audit_log
+--                 → só por RPC, onde estão a máquina de estados, a
+--                   idempotência por request_id e o ledger append-only
+--
+-- DELETE não é concedido em tabela nenhuma: remover é UPDATE em deleted_at.
 
 revoke all on all tables    in schema public from anon, authenticated;
 revoke all on all functions in schema public from anon, authenticated;
@@ -1746,9 +1834,39 @@ grant select on
   public.vw_seen_questions, public.vw_block_performance, public.vw_block_errors
 to authenticated;
 
-grant select, insert, update on public.profiles          to authenticated;
-grant select, insert, update on public.waitlist    to authenticated;
-grant select, insert, update on public.student_preferences to authenticated;
+grant select, insert, update on public.profiles             to authenticated;
+grant select, insert, update on public.waitlist             to authenticated;
+grant select, insert, update on public.student_preferences  to authenticated;
+
+-- Planejamento: INSERT inteiro, UPDATE só nas colunas de conteúdo.
+-- Omitir student_id, teacher_id e study_plan_id do GRANT é o que impede mover
+-- uma linha para outro dono; a RLS sozinha deixaria, desde que o destino
+-- também fosse do mesmo professor.
+grant insert on public.study_plans to authenticated;
+grant update (
+  name, area, target_exam, stage, study_model, weekly_goals,
+  start_date, status, deleted_at
+) on public.study_plans to authenticated;
+
+grant insert on public.study_plan_blocks to authenticated;
+grant update (
+  catalog_block_id, subject_name, subject_color, subject_target,
+  name, link, question_count, subject_order, block_order, active, deleted_at
+) on public.study_plan_blocks to authenticated;
+
+grant insert on public.goals to authenticated;
+grant update (
+  title, teacher_note, external_link, planned_minutes,
+  type, block_id, week_number, weekday, day_order,
+  reinforcement_skipped, extra_activity, deleted_at
+) on public.goals to authenticated;
+
+grant insert on public.subscriptions to authenticated;
+grant update (status, plan, validity, coupon_id) on public.subscriptions to authenticated;
+
+-- Catálogo: a RLS restringe a admin; o grant é o mesmo para todos.
+grant insert, update on public.catalogs, public.catalog_blocks, public.catalog_questions
+to authenticated;
 
 grant execute on function
   public.activate_study_plan(uuid),
@@ -1760,6 +1878,7 @@ grant execute on function
   public.record_reinforcement(uuid, uuid, uuid[], uuid, jsonb),
   public.is_teacher(),
   public.is_teacher_of(uuid),
+  public.is_admin(),
   public.can_view_context(uuid, uuid)
 to authenticated;
 

@@ -49,10 +49,38 @@ npm run ext:build     # compila a extensão em apps/extension/dist
 
 ## Banco
 
-**O cliente lê tabelas e views; escreve só por RPC.** As tabelas transacionais
-não têm grant de `INSERT`/`UPDATE`/`DELETE` para `authenticated`. Se uma tela
-precisa gravar algo e não existe RPC, a resposta é criar a RPC — não afrouxar o
-grant.
+**A fronteira da escrita é entre planejar e executar.**
+
+| | Quem escreve | Como |
+|---|---|---|
+| `study_plans`, `study_plan_blocks`, `goals`, `subscriptions` | professor | direto, com RLS |
+| `profiles`, `waitlist`, `student_preferences` | o próprio dono | direto, com RLS |
+| `catalogs`, `catalog_blocks`, `catalog_questions` | admin | direto, com RLS |
+| `quiz_sessions`, `quiz_session_questions`, `reinforcements`, `review_cycles` | ninguém | só RPC |
+| `operations`, `audit_log`, `student_teacher_links` | ninguém | só RPC ou service_role |
+
+Escrita de execução continua fechada porque é onde moram a máquina de estados,
+a idempotência por `request_id` e o ledger append-only — coisas que uma tela
+não tem como respeitar sozinha. Se uma tela precisa mexer em execução e não
+existe RPC, crie a RPC; não afrouxe o grant.
+
+Três defesas sustentam a escrita direta, e as três precisam continuar valendo
+em qualquer tabela nova:
+
+1. **`WITH CHECK` em todo INSERT e UPDATE**, amarrando a linha ao professor
+   autenticado E a um aluno com vínculo vigente (`is_teacher_of`).
+2. **`GRANT UPDATE` por coluna.** As colunas de contexto — `student_id`,
+   `teacher_id`, `study_plan_id` — ficam de fora do grant. A RLS sozinha
+   deixaria mover uma linha entre dois alunos do mesmo professor; o grant por
+   coluna não deixa.
+3. **`DELETE` não é concedido em lugar nenhum.** Remover é `UPDATE` em
+   `deleted_at`.
+
+**Cuidado ao testar RLS: `UPDATE` e `DELETE` filtram em silêncio.** A linha não
+fica visível para a operação e o comando afeta zero linhas, sem erro. Só o
+`WITH CHECK`, no INSERT e no UPDATE, levanta `42501`. Um teste que espere
+exceção num UPDATE bloqueado passa por engano no dia em que a policy sumir —
+conte linhas com `get diagnostics ... row_count`.
 
 **`quiz_session_questions` é o ledger e a única fonte de desempenho.** É
 append-only, protegido por trigger. Todo número agregado vem de view. Nunca

@@ -106,8 +106,9 @@ O contrato está em `supabase/migrations`. Resumo do que a arquitetura assume:
 
 - `quiz_session_questions` é um ledger append-only e a única fonte de
   desempenho; todo agregado vem de view, nunca de contador mantido à mão;
-- o cliente **lê** tabelas e views (filtradas por RLS) e **escreve** apenas por
-  RPC — as tabelas transacionais não têm grant de INSERT/UPDATE/DELETE;
+- a escrita se divide entre planejar e executar: o professor grava direto em
+  `study_plans`, `study_plan_blocks`, `goals` e `subscriptions`, restrito por
+  RLS e por grant de coluna; as tabelas de execução só mudam por RPC;
 - toda RPC mutante é idempotente por `request_id` com hash de payload;
 - nada é apagado fisicamente: `deleted_at` mais a tabela `audit_log`.
 
@@ -158,9 +159,6 @@ O controle de acesso mora em três camadas:
 
 - **Admin não enxerga dado de domínio.** A RLS usa
   `can_view_context(student_id, teacher_id)`, que não reconhece o papel admin.
-- **Faltam RPCs de escrita para planejamento.** Como o INSERT direto está
-  revogado, hoje o professor não consegue criar planejamento nem bloco pela
-  aplicação; só o seed consegue, porque roda como superusuário.
 - **`data_collection_permissions` no manifesto.** O `web-ext lint` avisa que a
   chave será obrigatória. Declarar o que a extensão coleta é decisão de
   política, não técnica, e precisa ser resolvida antes de publicar na AMO.

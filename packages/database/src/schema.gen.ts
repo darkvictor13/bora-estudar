@@ -1310,6 +1310,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      is_admin: { Args: never; Returns: boolean }
       is_teacher: { Args: never; Returns: boolean }
       is_teacher_of: { Args: { p_student_id: string }; Returns: boolean }
       record_quiz_session_time: {

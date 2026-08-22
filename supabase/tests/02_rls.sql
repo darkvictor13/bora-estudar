@@ -37,13 +37,28 @@ select 'N prof1 ve goals (2)'          item, count(*)::text valor from public.go
 select 'O prof1 ve profiles (2: ele+aluno)' item, count(*)::text valor from public.profiles;
 
 -- Escrita direta nas tabelas transacionais deve ser negada mesmo para o dono.
-do $$ begin
+-- O professor PODE criar meta avulsa no planejamento dele: a escrita de
+-- planejamento foi aberta. O que continua fechado é a execução.
+do $$
+declare v_antes integer; v_depois integer;
+begin
+  select count(*) into v_antes from public.goals;
   insert into public.goals (study_plan_id,student_id,teacher_id,week_number,weekday,day_order,type,title,created_by)
   values ((select id from public.study_plans limit 1),'22222222-2222-2222-2222-222222222222',
-          '11111111-1111-1111-1111-111111111111',1,1,99,'theory','hack','11111111-1111-1111-1111-111111111111');
-  raise exception 'FALHOU: INSERT direto em goals foi aceito';
+          '11111111-1111-1111-1111-111111111111',1,1,99,'theory','meta avulsa','11111111-1111-1111-1111-111111111111');
+  select count(*) into v_depois from public.goals;
+  if v_depois <> v_antes + 1 then raise exception 'FALHOU: professor nao criou a meta'; end if;
+  raise notice 'P OK  professor cria meta avulsa no proprio planejamento';
+end $$;
+
+-- Mas não para aluno de outro professor.
+do $$ begin
+  insert into public.goals (study_plan_id,student_id,teacher_id,week_number,weekday,day_order,type,title,created_by)
+  values ((select id from public.study_plans limit 1),'44444444-4444-4444-4444-444444444444',
+          '11111111-1111-1111-1111-111111111111',1,1,98,'theory','invasao','11111111-1111-1111-1111-111111111111');
+  raise exception 'FALHOU: criou meta para aluno de outro professor';
 exception when insufficient_privilege then
-  raise notice 'P OK  INSERT direto em goals negado (so via RPC)';
+  raise notice 'P2 OK  meta para aluno sem vinculo negada';
 end $$;
 
 do $$ begin
