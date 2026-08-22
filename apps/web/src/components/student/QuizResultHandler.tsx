@@ -32,8 +32,13 @@ export function QuizResultHandler() {
     if (!hashHasPayload(location.hash, HASH_KEYS.result)) return;
     handled.current = true;
 
-    let cancelled = false;
-
+    // Sem trava de cancelamento aqui, e é deliberado. O ciclo do React em
+    // desenvolvimento é montar → limpar → montar: a limpeza cancelaria a
+    // ÚNICA execução em andamento, e a segunda montagem sairia na trava acima
+    // sem começar outra. Ninguém escreveria o estado, ninguém limparia a hash,
+    // e a tela ficaria em "Gravando…" para sempre — com o resultado já no
+    // banco. Um setState em componente desmontado não custa nada no React 19;
+    // engolir a confirmação de uma bateria respondida custa uma hora de estudo.
     (async () => {
       let result;
       try {
@@ -43,13 +48,12 @@ export function QuizResultHandler() {
           error instanceof ProtocolError && error.code === "incompatible_version"
             ? "Atualize a extensão: ela devolveu o resultado num formato que este site ainda não entende."
             : "O resultado voltou da extensão em formato inválido. Reenvie pelo popup da extensão.";
-        if (!cancelled) setStatus({ kind: "failed", message });
+        setStatus({ kind: "failed", message });
         return;
       }
 
       setStatus({ kind: "sending" });
       const response = await submitQuizResult(result);
-      if (cancelled) return;
 
       if (response.error) {
         // A hash CONTINUA na URL. Ela é a única cópia do resultado neste
@@ -67,10 +71,6 @@ export function QuizResultHandler() {
       setStatus({ kind: "done", message: response.success ?? "Resultado gravado." });
       router.refresh();
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [router]);
 
   if (status.kind === "idle") return null;

@@ -61,11 +61,28 @@ export async function requireSession(): Promise<SessionContext> {
   return session;
 }
 
+/**
+ * Papéis que atendem a uma exigência.
+ *
+ * Admin conta como professor, espelhando `is_teacher()` no banco, que é
+ * `role in ('teacher','admin')`. Sem isso o admin entra num loop: a home dele
+ * é a área do professor, e o layout dessa área o mandava de volta para a
+ * própria home. A RLS continua valendo — `can_view_context` não reconhece
+ * admin, então ele vê a área vazia em vez de dado de aluno.
+ */
+function satisfies(actual: UserRole, required: UserRole): boolean {
+  return actual === required || (required === "teacher" && actual === "admin");
+}
+
 /** Exige um papel específico. Manda para a home do papel real se não bater. */
 export async function requireRole(role: UserRole): Promise<SessionContext> {
   const session = await requireSession();
-  if (session.role !== role) redirect(homeForRole(session.role));
-  return session;
+  if (satisfies(session.role, role)) return session;
+
+  // Nunca redirecione para a rota que acabou de recusar a pessoa: é assim que
+  // nasce um loop, e o navegador só mostra uma página em branco.
+  const home = homeForRole(session.role);
+  redirect(home === homeForRole(role) ? ROUTES.signIn : home);
 }
 
 /**

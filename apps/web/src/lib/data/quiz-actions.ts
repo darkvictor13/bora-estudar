@@ -1,16 +1,56 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { buildStartUrl, type QuizResult, type QuizStart } from "@bora/protocol";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireStudentAccess } from "@/lib/auth/session";
 import { getBlockQuestions, getQuestionHistory } from "@/lib/data/quiz";
+import { parseDuration } from "@/lib/domain/goals";
 import { ROUTES } from "@/lib/routes";
 import type { FormState } from "@/lib/auth/actions";
 
 const TEC_QUESTIONS_URL = "https://www.tecconcursos.com.br/questoes";
+
+/**
+ * Traduz o erro que sobe do banco.
+ *
+ * `raise exception` é escrito para quem lê log: minúsculo, sem acento e com o
+ * vocabulário do schema. Sem esta camada o aluno lia "ja existe uma bateria
+ * aberta neste planejamento" na tela. Mesmo espírito do `translateAuthError`.
+ */
+function translateQuizError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("ja existe uma bateria aberta")) {
+    return "Você já tem uma bateria aberta. Termine ou cancele antes de começar outra.";
+  }
+  if (m.includes("ja utilizado com outro payload")) {
+    return "Este envio já foi usado com outro resultado. Atualize a página para ver o estado atual da bateria.";
+  }
+  if (m.includes("bateria ja finalizada")) {
+    return "Esta bateria já foi finalizada. Atualize a página para ver o estado atual.";
+  }
+  if (m.includes("bateria nao esta aguardando tempo")) {
+    return "Esta bateria não está aguardando o tempo. Atualize a página para ver o estado atual.";
+  }
+  if (m.includes("bateria nao encontrada")) return "Bateria não encontrada.";
+  if (m.includes("planejamento nao esta active")) {
+    return "Seu planejamento não está ativo. Fale com seu professor.";
+  }
+  if (m.includes("meta nao e uma meta de questoes pendente")) {
+    return "Esta meta não está pendente. Atualize a página para ver o estado atual.";
+  }
+  if (m.includes("bloco invalido ou indisponivel")) {
+    return "Este bloco não está disponível no seu planejamento.";
+  }
+  if (m.includes("somente o aluno")) return "Esta bateria não é sua.";
+  if (m.includes("entre 1 e") && m.includes("questoes principais")) {
+    return "A bateria precisa ter pelo menos uma questão principal respondida.";
+  }
+  return message;
+}
 
 export interface StartResult {
   readonly error?: string;
@@ -35,7 +75,7 @@ export async function startQuizSession(goalId: string, returnUrl: string): Promi
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (goalError) return { error: goalError.message };
+  if (goalError) return { error: translateQuizError(goalError.message) };
   if (!goal) return { error: "Meta não encontrada." };
   if (goal.type !== "question_block" || !goal.block_id) {
     return { error: "Esta meta não é uma bateria de questões." };
@@ -46,7 +86,7 @@ export async function startQuizSession(goalId: string, returnUrl: string): Promi
     p_block_id: goal.block_id,
     p_goal_id: goal.id,
   });
-  if (rpcError) return { error: rpcError.message };
+  if (rpcError) return { error: translateQuizError(rpcError.message) };
 
   const opened = Array.isArray(session) ? session[0] : session;
   if (!opened) return { error: "A abertura da sessão não retornou nada." };
@@ -112,7 +152,7 @@ export async function submitQuizResult(result: QuizResult): Promise<FormState> {
     p_cancel: result.cancel,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: translateQuizError(error.message) };
 
   revalidatePath(ROUTES.student.overview);
   revalidatePath(ROUTES.student.statistics);
@@ -127,11 +167,14 @@ export async function registerQuizTime(_prev: FormState, data: FormData): Promis
   await requireStudentAccess();
 
   const quizSessionId = String(data.get("quizSessionId") ?? "");
-  const minutes = Number(data.get("minutes"));
+  // parseDuration entende "80" e "1:20" — que é o que a mensagem de erro
+  // sempre prometeu. Antes daqui passava um Number() cru, e "1:20" virava NaN.
+  const minutes = parseDuration(String(data.get("minutes") ?? ""));
   if (!quizSessionId) return { error: "Sessão não identificada." };
-  if (!Number.isInteger(minutes) || minutes <= 0) {
+  if (minutes === null || minutes <= 0) {
     return { error: "Informe o tempo em minutos ou no formato hora:minuto. Ex.: 80 ou 1:20." };
   }
+  if (minutes > 1440) return { error: "O tempo de uma bateria não passa de 24 horas." };
 
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc("record_quiz_session_time", {
@@ -142,11 +185,16 @@ export async function registerQuizTime(_prev: FormState, data: FormData): Promis
     p_duration_minutes: minutes,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: translateQuizError(error.message) };
 
   revalidatePath(ROUTES.student.overview);
   revalidatePath(ROUTES.student.statistics);
-  return { success: "Tempo registrado. Meta concluída." };
+  // A confirmação NÃO pode voltar como estado desta action: revalidatePath
+  // re-renderiza a página, o cartão da bateria some — que é o efeito desejado —
+  // e leva junto o formulário dono do useActionState. A mensagem ficaria sem
+  // onde ser renderizada. Quem sobrevive à revalidação é a página, então é ela
+  // que anuncia o resultado.
+  redirect(`${ROUTES.student.overview}?feito=tempo`);
 }
 
 /** Cancela a sessão aberta sem passar pela extensão. */
@@ -164,8 +212,9 @@ export async function cancelQuizSession(_prev: FormState, data: FormData): Promi
     p_cancel: true,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: translateQuizError(error.message) };
 
   revalidatePath(ROUTES.student.overview);
-  return { success: "Bateria cancelada. Você pode refazê-la depois." };
+  // Mesmo motivo do registro de tempo: o formulário some com a revalidação.
+  redirect(`${ROUTES.student.overview}?feito=cancelada`);
 }

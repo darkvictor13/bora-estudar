@@ -83,8 +83,10 @@ export async function requestPasswordReset(
 
   const supabase = await createServerSupabaseClient();
   const origin = text(data, "origin") || "http://localhost:3000";
+  // Aponta para o Route Handler, não direto para a tela: o GoTrue devolve um
+  // código PKCE que precisa virar sessão, e só um Route Handler grava cookie.
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}${ROUTES.resetPassword}`,
+    redirectTo: `${origin}${ROUTES.authCallback}?next=${encodeURIComponent(ROUTES.resetPassword)}`,
   });
   if (error) return { error: translateAuthError(error.message) };
 

@@ -15,10 +15,14 @@ export interface PanelState {
   readonly progress?: Progress;
   readonly historyComplete?: boolean;
   readonly currentIsInQueue?: boolean;
+  /** Bateria já entregue ao site: só reenvio deliberado ou descarte. */
+  readonly delivered?: boolean;
   readonly onGoToPending?: (() => void) | null;
   readonly onFinish?: (() => void) | null;
   readonly onFinishEarly?: (() => void) | null;
   readonly onCancel?: (() => void) | null;
+  readonly onResend?: (() => void) | null;
+  readonly onDiscard?: (() => void) | null;
 }
 
 function mount(): HTMLElement {
@@ -96,6 +100,17 @@ export function renderPanel(state: PanelState): void {
     if (progress.answered > 0) {
       panel.appendChild(line(`${progress.correct} acertos · ${progress.incorrect} erros`, true));
     }
+  }
+
+  if (state.delivered) {
+    const nota = line(
+      "Já enviada ao site. Se o resultado não apareceu no painel do aluno, reenvie.",
+    );
+    nota.style.cssText = "margin-top:6px;font-size:13px;opacity:.75";
+    panel.appendChild(nota);
+    if (state.onResend) panel.appendChild(button("Reenviar ao site", state.onResend, true));
+    if (state.onDiscard) panel.appendChild(button("Descartar bateria", state.onDiscard));
+    return;
   }
 
   if (state.historyComplete === false) {

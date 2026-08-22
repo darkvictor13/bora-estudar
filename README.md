@@ -12,7 +12,9 @@ a extensão de navegador e o banco.
 | `supabase` | Migrations e seed |
 
 A arquitetura e as razões por trás de cada limite estão em
-[`docs/arquitetura.md`](docs/arquitetura.md).
+[`docs/arquitetura.md`](docs/arquitetura.md). Os fluxos da aplicação, no
+formato que um teste ponta a ponta precisa, estão em
+[`docs/fluxos-e2e.md`](docs/fluxos-e2e.md).
 
 Identificadores em inglês, no código e no banco. Comentários, mensagens e
 texto de interface em português.

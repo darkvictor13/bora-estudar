@@ -32,7 +32,20 @@ export async function getMyStudents(teacherId: string) {
       .is("deleted_at", null),
   ]);
 
-  const subscriptionByStudent = new Map((subscriptions ?? []).map((s) => [s.student_id, s]));
+  // Um aluno tem histórico de assinaturas: a que renovou fica ao lado das
+  // antigas. Montar o Map direto guardava a última linha que o PostgREST
+  // devolveu, não a vigente, e um aluno que renovou aparecia como "Expirado"
+  // para o professor enquanto entrava no sistema normalmente. O aluno lê a
+  // dele com `status = 'active'`; aqui precisa ser o mesmo critério.
+  type Subscription = NonNullable<typeof subscriptions>[number];
+  const subscriptionByStudent = new Map<string, Subscription>();
+  for (const subscription of subscriptions ?? []) {
+    const current = subscriptionByStudent.get(subscription.student_id);
+    if (!current || (current.status !== "active" && subscription.status === "active")) {
+      subscriptionByStudent.set(subscription.student_id, subscription);
+    }
+  }
+
   const planByStudent = new Map((plans ?? []).map((p) => [p.student_id, p]));
 
   return (profiles ?? []).map((profile) => ({

@@ -48,14 +48,24 @@ export function Sidebar({
           <p className="sidebar__title">{group.title}</p>
           {group.items.map((item) => {
             const disabled = item.enabled === false;
+
+            // Sem destino, e não um <Link> com aria-disabled: o Link continua
+            // navegando no clique, o servidor redireciona de volta, e a pessoa
+            // dá a volta inteira para não sair do lugar.
+            if (disabled) {
+              return (
+                <span key={item.href} className="sidebar__link" aria-disabled="true">
+                  {item.label}
+                </span>
+              );
+            }
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className="sidebar__link"
                 aria-current={item.href === currentHref ? "page" : undefined}
-                aria-disabled={disabled || undefined}
-                tabIndex={disabled ? -1 : undefined}
               >
                 {item.label}
               </Link>

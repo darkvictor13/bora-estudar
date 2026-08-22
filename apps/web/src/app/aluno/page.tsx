@@ -26,10 +26,23 @@ import { ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Visão geral · Bora Estudar" };
 
+/**
+ * Confirmações que chegam por query string.
+ *
+ * As actions de bateria terminam em `redirect` porque o `revalidatePath` delas
+ * desmonta o formulário que mostraria a mensagem — o cartão da sessão aberta
+ * some junto com o resultado da action. Quem sobrevive à revalidação é esta
+ * página, então é ela que anuncia.
+ */
+const DONE_MESSAGE: Record<string, string> = {
+  tempo: "Tempo registrado. Meta concluída.",
+  cancelada: "Bateria cancelada. Ela não conta no desempenho nem como questão vista.",
+};
+
 export default async function StudentOverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ semana?: string }>;
+  searchParams: Promise<{ semana?: string; feito?: string }>;
 }) {
   await requireStudentAccess();
 
@@ -49,6 +62,7 @@ export default async function StudentOverviewPage({
   const params = await searchParams;
   const requested = Number(params.semana);
   const week = weeks.includes(requested) ? requested : (weeks[0] ?? 1);
+  const doneMessage = params.feito ? DONE_MESSAGE[params.feito] : null;
 
   const [goals, performance, openSession, blocks] = await Promise.all([
     getWeekGoals(plan.id, week),
@@ -75,6 +89,8 @@ export default async function StudentOverviewPage({
       />
 
       <QuizResultHandler />
+
+      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
 
       {openSession && (
         <Card

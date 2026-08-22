@@ -28,8 +28,17 @@ export default async function StudentAccountPage() {
           <Field label="Nome completo" name="name" defaultValue={profile?.name ?? ""} required minLength={3} />
           <Field label="WhatsApp" name="phone" defaultValue={profile?.phone ?? ""} placeholder="(00) 00000-0000" />
           <div className="field">
-            <span className="field__label">E-mail de acesso</span>
-            <input value={profile?.contact_email ?? session.user.email ?? ""} readOnly disabled />
+            {/* <label for> de verdade: um <span> solto não é anunciado por
+                leitor de tela como rótulo do campo. */}
+            <label className="field__label" htmlFor="field-contactEmail">
+              E-mail de acesso
+            </label>
+            <input
+              id="field-contactEmail"
+              value={profile?.contact_email ?? session.user.email ?? ""}
+              readOnly
+              disabled
+            />
             <span className="field__hint">Para trocar o e-mail, fale com o professor.</span>
           </div>
         </AuthForm>

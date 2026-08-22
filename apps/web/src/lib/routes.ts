@@ -15,6 +15,14 @@ export const ROUTES = {
   signUp: "/cadastro",
   forgotPassword: "/recuperar-senha",
   resetPassword: "/redefinir-senha",
+  /**
+   * Troca o código do link de e-mail por uma sessão.
+   *
+   * Precisa ser Route Handler: só ele pode gravar cookie. Um Server Component
+   * não consegue, então a sessão de recuperação nunca chegaria a existir e a
+   * tela de nova senha diria "link expirou" para todo mundo.
+   */
+  authCallback: "/confirmar",
 
   // Aluno
   student: {

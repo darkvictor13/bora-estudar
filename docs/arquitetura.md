@@ -22,6 +22,10 @@ bora-estudar/
 └── docs/
 ```
 
+`docs/fluxos-e2e.md` cataloga os fluxos exercitáveis de ponta a ponta, no
+formato que um teste e2e precisa. `docs/bugs-encontrados.md` registra a
+varredura de QA que produziu esse catálogo.
+
 Workspaces do npm. Sem Turborepo, Lerna ou pnpm: quatro pacotes não justificam
 uma camada extra de orquestração, e `npm run <script> --workspaces` resolve.
 
@@ -178,6 +182,11 @@ O controle de acesso mora em três camadas:
 
 - **Admin não enxerga dado de domínio.** A RLS usa
   `can_view_context(student_id, teacher_id)`, que não reconhece o papel admin.
+  Por ora `requireRole("teacher")` aceita admin — espelhando o `is_teacher()`
+  do banco, que é `role in ('teacher','admin')` — e ele cai na área do
+  professor, vazia. Antes disso o admin não conseguia entrar: a home dele era
+  a área do professor, e essa área o devolvia para a própria home. Uma área de
+  administração de verdade ainda precisa ser desenhada.
 - **`data_collection_permissions` no manifesto.** O `web-ext lint` avisa que a
   chave será obrigatória. Declarar o que a extensão coleta é decisão de
   política, não técnica, e precisa ser resolvida antes de publicar na AMO.

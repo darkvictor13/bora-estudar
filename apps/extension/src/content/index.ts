@@ -106,6 +106,32 @@ async function sendResult(session: QuizSessionState, cancel = false): Promise<vo
 // Ciclo de vida
 // ---------------------------------------------------------------------------
 
+/**
+ * Painel de uma bateria que já foi entregue ao site.
+ *
+ * A sessão NÃO é apagada ao enviar: ela continua sendo a única cópia do
+ * resultado se a gravação tiver falhado, e apagá-la sozinha reintroduziria a
+ * perda silenciosa que a ordenação "persistir antes de limpar" existe para
+ * evitar. O que muda é a oferta: sem "Finalizar e enviar", que reenviava o
+ * mesmo requestId em cima de uma sessão já em outro estado e jogava o aluno de
+ * volta ao site com o resultado de uma bateria encerrada.
+ */
+async function paintDelivered(session: QuizSessionState): Promise<void> {
+  renderPanel({
+    sessionNumber: session.start.sessionNumber,
+    progress: progressOf(session.queue, session.answers),
+    delivered: true,
+    onResend: () => void sendResult(session),
+    onDiscard: () => {
+      if (!confirm("Descartar esta bateria da extensão?\n\nUse só depois de confirmar que o resultado apareceu no painel do aluno.")) return;
+      void (async () => {
+        await clearSession();
+        renderPanel({ error: "Bateria descartada. Inicie outra pelo painel do aluno." });
+      })();
+    },
+  });
+}
+
 async function paint(session: QuizSessionState): Promise<void> {
   const progress = progressOf(session.queue, session.answers);
   const pending = nextUnanswered(session.queue, session.answers);
@@ -158,6 +184,14 @@ async function boot(): Promise<void> {
   }
 
   if (!session) return;
+
+  // Bateria já entregue: mostra o painel de reenvio e para por aqui. Sem isto,
+  // reabrir o TEC ressuscitava a bateria antiga com "Finalizar e enviar".
+  if (session.requestId) {
+    await paintDelivered(session);
+    return;
+  }
+
   await paint(session);
 
   const first = nextUnanswered(session.queue, session.answers);

@@ -33,16 +33,21 @@ export function RegisterTimeForm({ quizSessionId }: { quizSessionId: string }) {
           <label className="field__label" htmlFor="minutes">
             Tempo gasto
           </label>
+          {/*
+            Texto, não número: type="number" impede digitar ":" e tornava
+            impossível o formato "1:20" que a validação sempre prometeu aceitar.
+            inputMode mantém o teclado numérico no celular.
+          */}
           <input
             id="minutes"
             name="minutes"
-            type="number"
-            min={1}
-            max={1440}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
             placeholder="80"
             required
           />
-          <span className="field__hint">Em minutos.</span>
+          <span className="field__hint">Em minutos (80) ou hora:minuto (1:20).</span>
         </div>
         <Submit label="Registrar tempo e concluir" pendingLabel="Registrando…" />
       </div>
