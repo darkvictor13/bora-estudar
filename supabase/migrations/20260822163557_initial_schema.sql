@@ -672,82 +672,151 @@ create index if not exists audit_log_record_idx
 create or replace view public.vw_quiz_session_performance
 with (security_invoker = true) as
 select
-  b.id              as quiz_session_id,
-  b.student_id,
-  b.teacher_id,
-  b.study_plan_id,
-  b.block_id,
-  b.goal_id,
-  b.status,
-  b.main_target,
-  b.duration_minutes,
-  count(*) filter (where q.phase = 'main')                                as main_count,
-  count(*) filter (where q.phase = 'main' and q.outcome = 'correct')    as main_correct,
-  count(*) filter (where q.phase = 'main' and q.outcome = 'incorrect')      as main_incorrect,
-  count(*) filter (where q.phase = 'reinforcement')                                  as reinforcement_count,
-  count(*) filter (where q.phase = 'reinforcement'   and q.outcome = 'correct')    as reinforcement_correct,
+  s.id               as quiz_session_id,
+  s.student_id,
+  s.teacher_id,
+  s.study_plan_id,
+  s.block_id,
+  s.goal_id,
+  s.status,
+  s.main_target,
+  s.duration_minutes,
+
+  count(*) filter (where q.phase = 'main')                                     as main_count,
+  count(*) filter (where q.phase = 'main'          and q.outcome = 'correct')   as main_correct,
+  count(*) filter (where q.phase = 'main'          and q.outcome = 'incorrect') as main_incorrect,
+
+  count(*) filter (where q.phase = 'reinforcement')                            as reinforcement_count,
+  count(*) filter (where q.phase = 'reinforcement' and q.outcome = 'correct')   as reinforcement_correct,
+  count(*) filter (where q.phase = 'reinforcement' and q.outcome = 'incorrect') as reinforcement_incorrect,
+
   count(*) filter (where q.phase = 'extra')                                    as extra_count,
-  count(*) filter (where q.phase = 'extra'     and q.outcome = 'correct')    as extra_correct
-from public.quiz_sessions b
-left join public.quiz_session_questions q on q.quiz_session_id = b.id
-group by b.id;
+  count(*) filter (where q.phase = 'extra'         and q.outcome = 'correct')   as extra_correct,
+  count(*) filter (where q.phase = 'extra'         and q.outcome = 'incorrect') as extra_incorrect,
+
+  count(q.id)                                                                  as total_count,
+  count(*) filter (where q.outcome = 'correct')                                as total_correct,
+  count(*) filter (where q.outcome = 'incorrect')                              as total_incorrect
+from public.quiz_sessions s
+left join public.quiz_session_questions q on q.quiz_session_id = s.id
+group by s.id;
+
+comment on view public.vw_quiz_session_performance is
+  'Desempenho de uma sessão, por fase. main_* é a nota oficial; total_* inclui extras e reforços.';
 
 
+-- A nota da meta sai SÓ das principais. Extras e reforços praticados durante a
+-- sessão contam para o aproveitamento total, nunca para a nota.
 create or replace view public.vw_goal_performance
 with (security_invoker = true) as
 select
-  m.id            as goal_id,
-  m.student_id,
-  m.teacher_id,
-  m.study_plan_id,
-  m.status,
-  coalesce(sum(d.main_count), 0)     as questions_answered,
+  g.id            as goal_id,
+  g.student_id,
+  g.teacher_id,
+  g.study_plan_id,
+  g.status,
+  coalesce(sum(d.main_count), 0)   as questions_answered,
   coalesce(sum(d.main_correct), 0) as correct_answers,
-  sum(b.duration_minutes)                   as minutes_spent
-from public.goals m
-left join public.quiz_sessions b
-       on b.goal_id = m.id and b.status = 'completed'
+  sum(s.duration_minutes)          as minutes_spent
+from public.goals g
+left join public.quiz_sessions s
+       on s.goal_id = g.id and s.status = 'completed'
 left join public.vw_quiz_session_performance d
-       on d.quiz_session_id = b.id
-where m.deleted_at is null
-group by m.id;
+       on d.quiz_session_id = s.id
+where g.deleted_at is null
+group by g.id;
 
 
--- Substitui o SELECT que trazia dezenas de milhares de linhas de
--- questoes_resultados para agregar em JavaScript sob o teto de linhas do
--- PostgREST. Aqui volta uma linha por questão distinta — algumas centenas.
+-- Substitui o SELECT que trazia dezenas de milhares de linhas do ledger para
+-- agregar em JavaScript sob o teto de linhas do PostgREST. Aqui volta uma linha
+-- por questão distinta — algumas centenas.
+--
+-- Todas as fases contam como "vista": uma questão respondida como extra não
+-- deve reaparecer como inédita na sessão seguinte.
 create or replace view public.vw_seen_questions
 with (security_invoker = true) as
 select
-  b.student_id,
-  b.study_plan_id,
-  b.block_id,
+  s.student_id,
+  s.study_plan_id,
+  s.block_id,
   q.question_id,
   count(*)                                              as times_seen,
-  count(*) filter (where q.outcome = 'correct')       as correct_answers,
-  count(*) filter (where q.outcome = 'incorrect')         as incorrect_answers,
-  max(q.answered_at)                                  as last_seen_at
+  count(*) filter (where q.outcome = 'correct')         as correct_answers,
+  count(*) filter (where q.outcome = 'incorrect')       as incorrect_answers,
+  max(q.answered_at)                                    as last_seen_at
 from public.quiz_session_questions q
-join public.quiz_sessions b on b.id = q.quiz_session_id
-where b.status = 'completed'
-group by b.student_id, b.study_plan_id, b.block_id, q.question_id;
+join public.quiz_sessions s on s.id = q.quiz_session_id
+where s.status = 'completed'
+group by s.student_id, s.study_plan_id, s.block_id, q.question_id;
 
 
+-- Alimenta a tabela "Blocos x desempenho", que mostra as duas medidas lado a
+-- lado: a nota oficial e o que o aluno de fato praticou no bloco.
 create or replace view public.vw_block_performance
 with (security_invoker = true) as
 select
   d.student_id,
   d.study_plan_id,
   d.block_id,
-  count(*)                                     as session_count,
-  sum(d.main_count)                        as main_count,
-  sum(d.main_correct)                    as main_correct,
+  count(*)                        as session_count,
+
+  sum(d.main_count)               as main_count,
+  sum(d.main_correct)             as main_correct,
+  sum(d.main_incorrect)           as main_incorrect,
+
+  sum(d.extra_count)              as extra_count,
+  sum(d.extra_correct)            as extra_correct,
+  sum(d.extra_incorrect)          as extra_incorrect,
+
+  sum(d.reinforcement_count)      as reinforcement_count,
+  sum(d.reinforcement_correct)    as reinforcement_correct,
+  sum(d.reinforcement_incorrect)  as reinforcement_incorrect,
+
+  sum(d.total_count)              as total_count,
+  sum(d.total_correct)            as total_correct,
+  sum(d.total_incorrect)          as total_incorrect,
+
+  -- Nota oficial: só principais. É por ela que os blocos são ordenados.
   case when sum(d.main_count) > 0
        then round(100.0 * sum(d.main_correct) / sum(d.main_count))::smallint
-       else null end                           as score_pct
+  end                             as official_score_pct,
+
+  -- Aproveitamento total: tudo que o aluno resolveu no bloco.
+  case when sum(d.total_count) > 0
+       then round(100.0 * sum(d.total_correct) / sum(d.total_count))::smallint
+  end                             as total_score_pct
 from public.vw_quiz_session_performance d
 where d.status = 'completed'
 group by d.student_id, d.study_plan_id, d.block_id;
+
+comment on view public.vw_block_performance is
+  'Composição e desempenho de um bloco. official_score_pct usa só principais; total_score_pct inclui extras e reforços.';
+
+
+-- Caderno de erros: uma linha por questão distinta errada no bloco, somando as
+-- três fases, com a fase da ocorrência mais recente para a UI rotular.
+create or replace view public.vw_block_errors
+with (security_invoker = true) as
+select
+  s.student_id,
+  s.study_plan_id,
+  s.block_id,
+  q.question_id,
+  max(q.topic)                                                as topic,
+  count(*)                                                    as error_count,
+  count(*) filter (where q.phase = 'main')                    as main_errors,
+  count(*) filter (where q.phase = 'extra')                   as extra_errors,
+  count(*) filter (where q.phase = 'reinforcement')           as reinforcement_errors,
+  max(q.answered_at)                                          as last_error_at,
+  (array_agg(q.phase order by q.answered_at desc))[1]         as last_error_phase
+from public.quiz_session_questions q
+join public.quiz_sessions s on s.id = q.quiz_session_id
+where s.status = 'completed'
+  and q.outcome = 'incorrect'
+group by s.student_id, s.study_plan_id, s.block_id, q.question_id;
+
+comment on view public.vw_block_errors is
+  'Questões erradas por bloco, somando as três fases. Uma linha por questão distinta.';
 
 
 -- =============================================================================
@@ -1674,7 +1743,7 @@ grant select on
   public.reinforcements, public.reinforcement_sessions, public.reinforcement_questions,
   public.review_cycles, public.operations, public.audit_log,
   public.vw_quiz_session_performance, public.vw_goal_performance,
-  public.vw_seen_questions, public.vw_block_performance
+  public.vw_seen_questions, public.vw_block_performance, public.vw_block_errors
 to authenticated;
 
 grant select, insert, update on public.profiles          to authenticated;
