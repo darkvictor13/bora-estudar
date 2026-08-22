@@ -19,6 +19,12 @@ next-env.d.ts
 # Testes e cobertura
 coverage/
 
+# Artefatos do Playwright — vídeo, trace e screenshot de cada execução
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+apps/e2e/blob-report/
+apps/e2e/.playwright-cache/
+
 # Artefatos de empacotamento da extensão
 web-ext-artifacts/
 
@@ -35,3 +41,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 yarn-error.log*
+
+# Runbook de staging — instruções locais, com referência a domínio e projeto
+docs/ambiente-staging.md

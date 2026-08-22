@@ -7,6 +7,7 @@ a extensão de navegador e o banco.
 |---|---|
 | `apps/web` | Next.js 16 — painéis de aluno e professor |
 | `apps/extension` | Extensão MV3 — conduz a bateria no TEC Concursos |
+| `apps/e2e` | Suíte Playwright — site e extensão, num navegador de verdade |
 | `packages/protocol` | Contrato site ↔ extensão |
 | `packages/database` | Tipos gerados do schema Supabase |
 | `supabase` | Migrations e seed |
@@ -49,13 +50,62 @@ Credenciais públicas, exclusivas do ambiente local.
 | `npm run check` | `typecheck` + `lint` + `test` em todos os pacotes |
 | `npm run db:reset` | Recria o banco: migrations + seed |
 | `npm run db:test` | Recria o banco e roda as checagens de invariante |
-| `npm run test:e2e` | Volta completa do fluxo da extensão, contra o Supabase local |
+| `npm run test:e2e` | Volta completa do fluxo da extensão, sem navegador |
+| `npm run e2e` | Suíte Playwright completa, no modo mais rápido |
+| `npm run e2e:video` | A mesma suíte, gravando um `.webm` por teste |
 | `npm run db:types` | Regenera `packages/database` a partir do schema local |
 | `npm run ext:build` | Compila a extensão em `apps/extension/dist` |
 | `npm run ext:watch` | Recompila a extensão a cada alteração |
 
 Rode `npm run db:types` depois de **toda** migration; o arquivo gerado é
 versionado.
+
+## Testes ponta a ponta
+
+`apps/e2e` exercita o produto num Chromium de verdade: as telas de aluno e
+professor, a volta completa da bateria e a extensão instalada. Cobre o que
+`npm run check`, `npm run db:test` e `npm run test:e2e` não alcançam — a
+camada de interface e de fluxo, onde viviam todos os bugs de
+[`docs/bugs-encontrados.md`](docs/bugs-encontrados.md).
+
+```bash
+npm run db:start          # exige Docker
+npm run dev               # opcional: se já estiver no ar, a suíte reaproveita
+npm run e2e               # ~45 s, 142 testes
+npm run e2e:video         # a mesma suíte, com vídeo
+```
+
+Os dois comandos rodam **a mesma suíte**; muda só o que se guarda:
+
+| | `e2e` | `e2e:video` |
+|---|---|---|
+| Vídeo, trace, screenshot | nenhum | `.webm` por teste, trace, screenshot na falha |
+| Workers | núcleos − 2 | metade disso |
+| Para que serve | rodar antes de commitar | ver o que aconteceu, e mostrar para alguém |
+
+O vídeo sai em `apps/e2e/test-results/<teste>/video.webm`, e o caminho de cada
+arquivo é listado no fim da execução.
+
+### Como a suíte se isola
+
+Nenhum teste usa o aluno do seed. Cada um cria o **próprio** par
+professor/aluno, com planejamento, blocos e metas — daí não haver `db:reset`
+entre testes, e daí a suíte poder rodar tudo em paralelo. O que fica
+compartilhado é só o catálogo de questões, que é leitura, e o `global-setup`
+garante que exista.
+
+Duas consequências práticas:
+
+- **O login não passa pelo formulário**, exceto nos testes que o testam. O
+  `@supabase/ssr` é usado como o site o usa, mas com armazenamento em memória,
+  e os cookies resultantes vão para o navegador.
+- **Sobra dado no banco local.** É intencional: cada teste só consulta o
+  próprio cenário, e limpar exigiria desligar o gatilho append-only do ledger.
+  `npm run db:reset` continua sendo o botão de faxina.
+
+Nenhuma requisição sai para `tecconcursos.com.br`: o domínio é interceptado e
+respondido por uma página sintética — automaticamente, em todo teste, para que
+um teste novo não escape disso por esquecimento.
 
 ## Carregando a extensão
 

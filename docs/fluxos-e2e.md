@@ -418,17 +418,45 @@ e `05_teacher_writes.sql`.
 
 ---
 
-## 6. O que já é coberto sem navegador
+## 6. Onde cada fluxo é coberto
 
 | Comando | Cobertura |
 |---|---|
 | `npm run db:test` | 59 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
+| `npm run e2e` | 142 testes num Chromium de verdade — este catálogo, implementado |
 
-O que **não** é coberto por nenhum deles, e por isso precisa de e2e com
-navegador: tudo em §1, §2, §4, os passos de UI de §3 (F-BAT-01/02/05/09/10/12/
-13/14) e §5 pelo lado das telas.
+O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
+é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
+É o que `apps/e2e` cobre:
+
+| Arquivo | Fluxos | Testes |
+|---|---|---|
+| `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
+| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 | 36 |
+| `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
+| `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09 | 29 |
+| `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
+
+Fica de fora, de propósito, o que já é provado sem navegador: F-BAT-04
+(determinismo de `pickQuestions`, em `engine.test.ts`) e o lado RPC do §5
+(`supabase/tests/02_rls.sql` e `05_teacher_writes.sql`). Testar de novo custaria
+tempo de execução sem cobrir nada novo.
+
+### As três armadilhas, resolvidas
+
+As armadilhas do harness descritas mais acima não voltaram a ser problema de
+quem escreve teste — cada uma virou uma peça da suíte:
+
+| Armadilha | Onde mora a solução |
+|---|---|
+| `button[type=submit]` casa o "Sair" | `support/ui.ts`, e todo clique escopado em `.content` |
+| Voltar do TEC é navegação de documento | `returnToSite()`, em `fixtures/quiz.ts` |
+| O fragmento não chega ao servidor | `readStartPayload()`, que lê a URL do frame |
+| `tec-page.ts` aponta para o TEC de verdade | `fixtures/tec.ts`, interceptando **automaticamente** em todo teste |
+| `db:reset` é a única forma de isolar | `createScenario()`, que dá a cada teste um par professor/aluno próprio |
 
 ---
 

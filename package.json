@@ -22,6 +22,8 @@
     "db:test": "bash supabase/tests/run.sh",
     "db:types": "npm run generate --workspace @bora/database",
     "test:e2e": "node scripts/roundtrip.mjs",
+    "e2e": "npm run e2e --workspace @bora/e2e",
+    "e2e:video": "npm run e2e:video --workspace @bora/e2e",
     "ext:build": "npm run build --workspace @bora/extension",
     "ext:watch": "npm run watch --workspace @bora/extension"
   },

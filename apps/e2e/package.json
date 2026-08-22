@@ -1,0 +1,21 @@
+{
+  "name": "@bora/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test --project=fast",
+    "e2e:video": "playwright test --project=video",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bora/protocol": "*",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.110.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0"
+  }
+}

@@ -43,6 +43,9 @@ npm run db:test       # recria o banco e roda as suítes de invariante
 npm run db:reset      # recria o banco: migration + seed
 npm run db:types      # regenera packages/database a partir do schema local
 npm run ext:build     # compila a extensão em apps/extension/dist
+
+npm run e2e           # suíte Playwright, modo rápido
+npm run e2e:video     # a mesma suíte, gravando .webm por teste
 ```
 
 ---
@@ -211,6 +214,34 @@ duas vezes ao renomear valor de enum.
   anteriores deixaram.
 - Testes de TypeScript ficam ao lado do código, em `*.test.ts`, e rodam pelo
   runner nativo do Node.
+
+### Ponta a ponta, com navegador
+
+`apps/e2e` roda a suíte Playwright contra o site e contra a extensão
+instalada. O catálogo de fluxos que ela implementa é
+[`docs/fluxos-e2e.md`](docs/fluxos-e2e.md); cada `describe` cita o código do
+fluxo (`F-AUTH-04`, `F-BAT-09`, …) e, quando o teste existe por causa de um
+defeito conhecido, o número do bug.
+
+- **Cada teste cria o próprio par professor/aluno.** `createScenario()` gera
+  usuário, vínculo, assinatura, planejamento, blocos e metas com UUID novo.
+  Não use o aluno do seed, e não presuma base limpa: é o que permite a suíte
+  rodar em paralelo sem `db:reset` entre testes.
+- **Pré-condição vai pelas RPCs reais**, nunca por INSERT no ledger. É o que
+  `fixtures/battery.ts` faz — se uma regra de negócio regredir, a
+  pré-condição falha em vez de fabricar dado impossível.
+- **`button[type=submit]` também casa o "Sair" da sidebar.** Escope todo
+  clique de formulário em `.content`.
+- **Voltar do TEC é navegação de documento.** Um `goto` para a mesma URL
+  trocando só o fragmento é *same-document*: o React não remonta e
+  `QuizResultHandler` nunca roda. Use `returnToSite()`, que passa por
+  `about:blank`.
+- **O fragmento não chega ao servidor.** Leia a URL do frame depois da
+  navegação; interceptar a request do TEC dá a URL sem `#`.
+- **O domínio do TEC é interceptado automaticamente**, em todo teste. Nenhuma
+  requisição pode sair para o site de terceiro.
+- **Extensão exige `channel: "chromium"`.** No headless antigo ela não carrega
+  e o teste falha dizendo que o painel não existe.
 
 ---
 
