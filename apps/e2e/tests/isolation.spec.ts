@@ -76,12 +76,20 @@ test.describe("F-ISO-01 · leitura", () => {
     await expect(page.locator(".empty")).toContainText("Nenhum aluno vinculado.");
   });
 
-  test("a ficha do aluno 1 dá 404 para o professor 2", async ({ page, signIn, scenario }) => {
+  // Sem status 404: a SPA não devolve um. Ver a nota em teacher.spec.ts,
+  // F-PROF-03. A verificação aqui é a que interessa ao isolamento — a tela
+  // recusa E o nome do aluno alheio não aparece no HTML.
+  test("a ficha do aluno 1 não é encontrada pelo professor 2", async ({
+    page,
+    signIn,
+    scenario,
+  }) => {
     const outro = await createScenario({ withPlan: false });
     await signIn(outro.teacher);
 
-    const response = await page.goto(studentPageOf(scenario.student.id));
-    expect(response?.status()).toBe(404);
+    await page.goto(studentPageOf(scenario.student.id));
+    await expect(page.getByRole("heading", { name: "Não encontrado", level: 1 })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText(scenario.student.name);
   });
 });
 

@@ -36,7 +36,7 @@ contexto. Já aconteceu duas vezes:
 ```bash
 npm install
 npm run db:start      # Supabase local (exige Docker)
-npm run dev           # site em http://localhost:3000
+npm run dev           # site em http://localhost:3000 (Vite)
 
 npm run check         # typecheck + lint + testes de todos os pacotes
 npm run db:test       # recria o banco e roda as suítes de invariante
@@ -177,15 +177,43 @@ aluno e não pode ser recriado.
 
 ## Armadilhas já verificadas nas ferramentas
 
-**Next.js 16** — leia `node_modules/next/dist/docs/` antes de escrever código
-Next. A versão tem breaking changes em relação ao conhecimento de modelo, e o
-próprio framework avisa isso em `apps/web/AGENTS.md`. Já confirmados:
+**React Router 8** — leia `node_modules/react-router/docs/` antes de escrever
+rota. O pacote traz a documentação dele, e a versão é posterior ao conhecimento
+de modelo. Já confirmados:
 
-- `middleware.ts` virou `proxy.ts`, e a função exportada precisa chamar `proxy`;
-- o runtime do `proxy` é sempre `nodejs`, `edge` não é suportado;
-- `cookies()`, `headers()`, `params` e `searchParams` são assíncronos — o modo
-  síncrono foi removido;
-- `LayoutProps` e `PageProps` vêm de `next typegen`, que roda no `typecheck`.
+- o site usa o **modo data**: `createBrowserRouter` mais `RouterProvider`, que
+  vem de `react-router/dom` e não de `react-router`;
+- a propriedade da rota é `Component` (maiúscula) e o limite de erro é
+  `ErrorBoundary`, não `element`/`errorElement`;
+- `useFormAction` JÁ É um export do react-router. O hook desta base chama-se
+  `useFormActionState` — nomear o seu de `useFormAction` compila e importa o
+  errado;
+- `redirect()` devolve uma Response e precisa ser **lançada** de dentro do
+  loader. Um `return` vira o valor de retorno da função e o loader segue em
+  frente;
+- `useNavigate` e o `revalidate` de `useRevalidator` são estáveis dentro de uma
+  rota de dados (memoizados no router, que é criado fora do React). Podem
+  entrar em lista de dependências de efeito sem provocar laço — e guardá-los em
+  ref escrito durante o render é o que o React Compiler recusa.
+
+**O `redirect` do router descarta o fragmento.** Um redirecionamento HTTP
+preserva o `#` por conta do navegador; este monta a URL nova só com o caminho.
+`requireSession` concatena `location.hash` de propósito: quem volta do TEC com
+a sessão expirada chega em `/aluno#boraQuizResult=…`, e esse fragmento é a
+única cópia do resultado. Ver a primeira das três ordenações acima.
+
+**Vite só injeta variável de ambiente com prefixo `VITE_`,** e só quando o
+acesso é literal: `import.meta.env.VITE_X`. Indexar por variável compila para
+`undefined` em produção, sem aviso.
+
+**`@vitejs/plugin-react` 6 transforma com oxc, não com Babel.** O React
+Compiler entra por `react({ compiler: true })` e exige `oxc-transform-react`
+instalado — não é `babel-plugin-react-compiler`.
+
+**O preset flat do `eslint-plugin-react-hooks` vive em `configs.flat`.** O
+homônimo no topo do pacote ainda é eslintrc, com `plugins` como array de
+string, e o ESLint 9 recusa com uma mensagem que não diz qual config está
+errada.
 
 **Node roda TypeScript em modo strip-only.** Só remove tipos, não gera código.
 Nada de parameter property (`constructor(readonly x: T)`), `enum` ou
@@ -242,6 +270,22 @@ defeito conhecido, o número do bug.
   requisição pode sair para o site de terceiro.
 - **Extensão exige `channel: "chromium"`.** No headless antigo ela não carrega
   e o teste falha dizendo que o painel não existe.
+- **`locator().all()` não espera por nada.** Devolve o que casa naquele
+  instante. O site é uma SPA: o conteúdo só existe depois de os loaders da rota
+  resolverem, o que é DEPOIS do evento `load` que o `goto` aguarda. Sem uma
+  asserção que espere antes, `.all()` volta vazia, o laço não roda, e o teste
+  falha acusando outra coisa — foi assim que dois testes de validação de
+  formulário passaram a relatar "falta a mensagem de erro" quando na verdade o
+  lote tinha sido criado.
+- **Não existe status 404.** O servidor devolve o mesmo `index.html` para
+  qualquer caminho. Teste de recurso inexistente ou alheio verifica a TELA e a
+  ausência do dado no HTML, não `response.status()`.
+- **`npm run db:test` antes de `npm run e2e` quebra o `global-setup`.** As
+  suítes de invariante inserem blocos de catálogo reusando `catalog_key` e
+  `block_key` do seed com ids diferentes; o `on conflict do nothing` do setup
+  então pula a inserção e as questões batem em violação de FK. O comentário do
+  `global-setup` afirma imunidade à ordem e não tem. Rode `npm run db:reset`
+  entre os dois.
 
 ---
 

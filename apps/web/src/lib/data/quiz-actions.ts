@@ -1,11 +1,6 @@
-"use server";
-
-import { randomUUID } from "node:crypto";
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { buildStartUrl, type QuizResult, type QuizStart } from "@bora/protocol";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 import { requireStudentAccess } from "@/lib/auth/session";
 import { getBlockQuestions, getQuestionHistory } from "@/lib/data/quiz";
 import { parseDuration } from "@/lib/domain/goals";
@@ -66,7 +61,6 @@ export interface StartResult {
  */
 export async function startQuizSession(goalId: string, returnUrl: string): Promise<StartResult> {
   await requireStudentAccess();
-  const supabase = await createServerSupabaseClient();
 
   const { data: goal, error: goalError } = await supabase
     .from("goals")
@@ -121,7 +115,6 @@ export async function startQuizSession(goalId: string, returnUrl: string): Promi
     historyComplete: history.complete,
   };
 
-  revalidatePath(ROUTES.student.overview);
   return { url: buildStartUrl(TEC_QUESTIONS_URL, payload) };
 }
 
@@ -134,7 +127,6 @@ export async function startQuizSession(goalId: string, returnUrl: string): Promi
  */
 export async function submitQuizResult(result: QuizResult): Promise<FormState> {
   await requireStudentAccess();
-  const supabase = await createServerSupabaseClient();
 
   const { error } = await supabase.rpc("finish_quiz_session", {
     p_quiz_session_id: result.quizSessionId,
@@ -154,8 +146,6 @@ export async function submitQuizResult(result: QuizResult): Promise<FormState> {
 
   if (error) return { error: translateQuizError(error.message) };
 
-  revalidatePath(ROUTES.student.overview);
-  revalidatePath(ROUTES.student.statistics);
   return {
     success: result.cancel
       ? "Bateria cancelada. Ela não conta no desempenho nem como questão vista."
@@ -176,25 +166,22 @@ export async function registerQuizTime(_prev: FormState, data: FormData): Promis
   }
   if (minutes > 1440) return { error: "O tempo de uma bateria não passa de 24 horas." };
 
-  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc("record_quiz_session_time", {
     p_quiz_session_id: quizSessionId,
     // Gerado aqui, uma vez por submissão. Um duplo clique reenvia o mesmo
     // formulário, mas o React desabilita o botão enquanto a action roda.
-    p_request_id: randomUUID(),
+    p_request_id: crypto.randomUUID(),
     p_duration_minutes: minutes,
   });
 
   if (error) return { error: translateQuizError(error.message) };
 
-  revalidatePath(ROUTES.student.overview);
-  revalidatePath(ROUTES.student.statistics);
-  // A confirmação NÃO pode voltar como estado desta action: revalidatePath
-  // re-renderiza a página, o cartão da bateria some — que é o efeito desejado —
-  // e leva junto o formulário dono do useActionState. A mensagem ficaria sem
-  // onde ser renderizada. Quem sobrevive à revalidação é a página, então é ela
-  // que anuncia o resultado.
-  redirect(`${ROUTES.student.overview}?feito=tempo`);
+  // A confirmação NÃO pode voltar como `success` desta action: a revalidação
+  // re-renderiza a tela, o cartão da bateria some — que é o efeito desejado — e
+  // leva junto o formulário dono do useActionState. A mensagem ficaria sem onde
+  // ser renderizada. Quem sobrevive é a página de destino, então é ela que
+  // anuncia, lendo `?feito=` da URL.
+  return { redirectTo: `${ROUTES.student.overview}?feito=tempo` };
 }
 
 /** Cancela a sessão aberta sem passar pela extensão. */
@@ -204,17 +191,15 @@ export async function cancelQuizSession(_prev: FormState, data: FormData): Promi
   const quizSessionId = String(data.get("quizSessionId") ?? "");
   if (!quizSessionId) return { error: "Sessão não identificada." };
 
-  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.rpc("finish_quiz_session", {
     p_quiz_session_id: quizSessionId,
-    p_request_id: randomUUID(),
+    p_request_id: crypto.randomUUID(),
     p_outcomes: [],
     p_cancel: true,
   });
 
   if (error) return { error: translateQuizError(error.message) };
 
-  revalidatePath(ROUTES.student.overview);
   // Mesmo motivo do registro de tempo: o formulário some com a revalidação.
-  redirect(`${ROUTES.student.overview}?feito=cancelada`);
+  return { redirectTo: `${ROUTES.student.overview}?feito=cancelada` };
 }

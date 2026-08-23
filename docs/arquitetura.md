@@ -9,7 +9,7 @@ compartilham contratos que, quando versionados separadamente, derivam.
 ```
 bora-estudar/
 ├── apps/
-│   ├── web/                 # Next.js 16 (App Router) — painéis de aluno e professor
+│   ├── web/                 # SPA React + Vite — painéis de aluno e professor
 │   └── extension/           # Extensão MV3 — conduz a bateria no TEC Concursos
 ├── packages/
 │   ├── protocol/            # Contrato site ↔ extensão (a única definição)
@@ -161,22 +161,81 @@ suíte falha quando uma constraint desaparece, não só quando o código quebra.
 impersonado. Se uma regra de negócio regredir, `supabase db reset` falha em vez
 de gravar dado inválido.
 
-## Roteamento
+## O site é uma SPA, e por que isso é possível
 
-Rotas explícitas, um arquivo por tela. A versão anterior usava catch-all por
-papel (`/aluno/[[...segments]]`), que centralizava o controle de acesso mas
-fazia qualquer tela puxar o bundle de todas as outras.
+`apps/web` é React servido por Vite: arquivo estático, sem servidor de
+aplicação. Isso não é uma escolha de conveniência — é uma consequência de onde
+a fronteira de segurança está.
 
-O controle de acesso mora em três camadas:
+Nada no site guarda segredo. Toda leitura passa por RLS, toda escrita de
+execução passa por RPC, e o bundle carrega apenas a publishable key, que é
+pública por definição. Não existe caminho em que o front decida o que a pessoa
+pode ver: quem decide é o banco. Retirar a camada de servidor não afrouxou
+nenhuma verificação porque nenhuma verificação morava nela.
 
-1. `src/proxy.ts` renova a sessão antes de qualquer renderização;
-2. o layout de cada área chama `requireRole`, que redireciona para a home do
-   papel real quando o papel não bate;
-3. as telas de estudo do aluno chamam `requireStudentAccess`, que exige
+O que a camada de servidor de fato fazia era atender ao framework. Dois
+arquivos existiam só por isso, e o comentário de ambos dizia a razão em voz
+alta — "só Route Handler grava cookie", "Server Component não consegue gravar
+cookie". No navegador, gravar cookie é o comportamento normal do cliente do
+Supabase, então os dois desapareceram.
+
+O que se perdeu, explicitamente: não há mais HTML renderizado no servidor, e a
+primeira pintura espera a cascata de sessão (validar token, ler perfil, ler
+assinatura). Como toda tela é painel autenticado e não existe superfície de
+marketing, nenhuma delas dependia de SEO nem de primeira pintura instantânea.
+Também não há mais status HTTP 404: o servidor devolve o mesmo `index.html` para
+qualquer caminho, e "este aluno não é seu" é uma decisão que depende de
+autenticação e RLS — coisas que só acontecem depois de a página carregar.
+
+### Roteamento
+
+A árvore de rotas está em `src/router.tsx`, explícita numa estrutura de dados.
+Cada tela é um arquivo em `src/routes/`, e o dado de cada uma vem de um `loader`
+— que é o corpo do componente assíncrono de antes, movido para fora da
+renderização, sem mudar uma consulta.
+
+Duas coisas que o framework fazia e agora são explícitas:
+
+- **título da aba** — declarado no `handle` da rota e aplicado por um efeito
+  único em `RootLayout`, no lugar de `export const metadata` em 19 arquivos;
+- **redirecionar e revalidar depois de uma action** — a action devolve
+  `redirectTo` ou `success`, e `useFormActionState` executa. É o par
+  `redirect()` + `revalidatePath()` de antes, num lugar só.
+
+Os formulários não mudaram de forma: `useActionState` e `useFormStatus` são
+React 19, não do framework, e aceitam função async comum.
+
+O controle de acesso mora em duas camadas:
+
+1. o `loader` do layout de cada área chama `requireRole`, que redireciona para a
+   home do papel real quando o papel não bate;
+2. o `loader` de cada tela de estudo chama `requireStudentAccess`, que exige
    assinatura ativa. Conta e lista de espera ficam de fora dessa exigência —
    quem ainda aguarda liberação precisa conseguir se cadastrar.
 
-`src/lib/routes.ts` é a única fonte dos caminhos; nada monta URL na mão.
+A renovação do token deixou de precisar de camada própria: o cliente do
+Supabase no navegador renova sozinho, o que dispensa o `proxy.ts` que rodava
+antes de cada renderização.
+
+Vale repetir o que isso NÃO é: essas duas camadas são conveniência de
+navegação, não segurança. Quem recusa acesso a dado é a RLS. Uma guarda de
+rota no cliente pode ser burlada por qualquer pessoa com um console aberto, e
+continua não rendendo uma linha de outro aluno.
+
+`src/lib/routes.ts` é a única fonte dos caminhos; nada monta URL na mão — nem a
+sidebar, nem os redirecionamentos, nem a árvore de rotas.
+
+### A sessão é consultada uma vez por navegação
+
+`getSessionContext()` memoiza a consulta **em voo**, e só ela. O React Router
+dispara os loaders de todas as rotas casadas em paralelo, então o layout da
+área e a página pedem o contexto no mesmo instante; sem a memoização seriam
+duas idas ao servidor de auth e quatro consultas por navegação.
+
+A memoização é liberada quando a consulta termina, de propósito: guardar o
+contexto entre navegações deixaria `hasAccess` velho, e o aluno cujo acesso o
+professor acabou de liberar continuaria empurrado para a lista de espera até
+recarregar a página.
 
 ## Decisões pendentes
 

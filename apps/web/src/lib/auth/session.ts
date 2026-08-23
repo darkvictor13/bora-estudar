@@ -1,7 +1,7 @@
-import { redirect } from "next/navigation";
+import { redirect } from "react-router";
 import type { User } from "@supabase/supabase-js";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 import { ROUTES, homeForRole } from "@/lib/routes";
 import type { Enum } from "@bora/database";
 
@@ -16,15 +16,9 @@ export interface SessionContext {
   readonly hasAccess: boolean;
 }
 
-/**
- * Contexto da sessão, ou `null` se não houver ninguém autenticado.
- *
- * Uma única ida ao banco resolve perfil e acesso. Chamada em todo layout de
- * área protegida; o Next deduplica dentro do mesmo render.
- */
-export async function getSessionContext(): Promise<SessionContext | null> {
-  const supabase = await createServerSupabaseClient();
-
+async function load(): Promise<SessionContext | null> {
+  // `getUser()` valida o token no servidor de auth. `getSession()` lê o cookie
+  // sem validar e não serve para decisão de acesso.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -54,10 +48,51 @@ export async function getSessionContext(): Promise<SessionContext | null> {
   return { user, profileId: profile.id, name: profile.name, role: profile.role, hasAccess };
 }
 
-/** Exige sessão. Redireciona para o login se não houver. */
+let inFlight: Promise<SessionContext | null> | null = null;
+
+/**
+ * Contexto da sessão, ou `null` se não houver ninguém autenticado.
+ *
+ * Memoiza a consulta EM VOO, e só ela. O React Router dispara os loaders de
+ * todas as rotas casadas em paralelo, então o layout da área e a página
+ * pedem o contexto no mesmo instante; sem isso seriam duas idas ao servidor de
+ * auth e quatro consultas por navegação.
+ *
+ * A memoização é liberada quando a consulta termina, de propósito. Guardar o
+ * contexto entre navegações deixaria `hasAccess` velho: o professor libera o
+ * acesso e o aluno continuaria empurrado para a lista de espera até recarregar
+ * a página. Cada navegação volta a perguntar — que é o que o Next fazia.
+ */
+export function getSessionContext(): Promise<SessionContext | null> {
+  if (!inFlight) {
+    const pending = load();
+    inFlight = pending;
+    void pending.finally(() => {
+      if (inFlight === pending) inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
+/**
+ * Exige sessão. Redireciona para o login se não houver.
+ *
+ * O `redirect` do React Router devolve uma Response, e quem a LANÇA de dentro
+ * de um loader entrega o controle ao router. Por isso `throw` e não `return`:
+ * um `return` aqui viraria o valor de retorno desta função, e o loader
+ * seguiria em frente com uma sessão inexistente.
+ *
+ * O FRAGMENTO VAI JUNTO, e isso não é detalhe. Quem volta do TEC chega em
+ * `/aluno#boraQuizResult=…`, e esse fragmento é a única cópia do resultado da
+ * bateria neste navegador — a primeira das três ordenações do CLAUDE.md. Um
+ * redirecionamento HTTP preserva o fragmento por conta do navegador; o
+ * `redirect` do router monta a URL nova só com o caminho e o joga fora. Sem
+ * esta concatenação, uma sessão expirada na volta do TEC apagaria uma hora de
+ * estudo já respondida, sem deixar de onde recuperar.
+ */
 export async function requireSession(): Promise<SessionContext> {
   const session = await getSessionContext();
-  if (!session) redirect(ROUTES.signIn);
+  if (!session) throw redirect(`${ROUTES.signIn}${location.hash}`);
   return session;
 }
 
@@ -82,18 +117,31 @@ export async function requireRole(role: UserRole): Promise<SessionContext> {
   // Nunca redirecione para a rota que acabou de recusar a pessoa: é assim que
   // nasce um loop, e o navegador só mostra uma página em branco.
   const home = homeForRole(session.role);
-  redirect(home === homeForRole(role) ? ROUTES.signIn : home);
+  throw redirect(home === homeForRole(role) ? ROUTES.signIn : home);
 }
 
 /**
  * Exige aluno COM acesso liberado.
  *
- * Usada no topo de cada tela de estudo. Não fica no layout porque o layout
- * precisa continuar renderizando a sidebar e as duas telas livres — dados e
- * lista de espera — para quem ainda aguarda liberação.
+ * Usada no loader de cada tela de estudo. Não fica no loader do layout porque
+ * o layout precisa continuar renderizando a sidebar e as duas telas livres —
+ * dados e lista de espera — para quem ainda aguarda liberação.
  */
 export async function requireStudentAccess(): Promise<SessionContext> {
   const session = await requireRole("student");
-  if (!session.hasAccess) redirect(ROUTES.student.waitlist);
+  if (!session.hasAccess) throw redirect(ROUTES.student.waitlist);
   return session;
+}
+
+/**
+ * Descarta a consulta em voo.
+ *
+ * Chamada por toda action que muda a identidade — entrar, sair, criar conta,
+ * trocar senha, editar o perfil. Sem isso existe uma janela real de corrida: se
+ * um loader tinha pedido o contexto ANTES do login terminar, a promessa em voo
+ * ainda devolve `null`, e quem acabou de entrar seria mandado de volta para a
+ * tela de login.
+ */
+export function invalidateSession(): void {
+  inFlight = null;
 }

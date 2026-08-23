@@ -1,9 +1,7 @@
-"use client";
-
-import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Alert } from "@/components/ui";
+import { useFormActionState } from "@/lib/forms/useFormActionState";
 import { generateWeek } from "@/lib/data/teacher-actions";
 import { WEEKDAY_NAMES } from "@/lib/domain/goals";
 
@@ -31,7 +29,7 @@ export function GenerateWeekForm({
   blocks: readonly BlockOption[];
   nextWeek: number;
 }) {
-  const [state, formAction] = useActionState(generateWeek, {});
+  const [state, formAction] = useFormActionState(generateWeek);
 
   return (
     <form action={formAction}>

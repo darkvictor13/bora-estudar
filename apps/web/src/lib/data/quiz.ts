@@ -1,6 +1,6 @@
 import type { SeenQuestion } from "@bora/protocol";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 
 const PAGE_SIZE = 1000;
 /** Teto de segurança: 50 páginas cobrem 50 mil questões distintas por bloco. */
@@ -30,7 +30,6 @@ export async function getQuestionHistory(
   studyPlanId: string,
   blockId: string,
 ): Promise<QuestionHistory> {
-  const supabase = await createServerSupabaseClient();
   const items: SeenQuestion[] = [];
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -68,7 +67,6 @@ export async function getQuestionHistory(
  * Também paginada: um bloco do catálogo passa de mil questões com facilidade.
  */
 export async function getBlockQuestions(catalogBlockId: string): Promise<number[]> {
-  const supabase = await createServerSupabaseClient();
   const ids: number[] = [];
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -90,7 +88,6 @@ export async function getBlockQuestions(catalogBlockId: string): Promise<number[
 }
 
 export async function getQuizSession(quizSessionId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("quiz_sessions")
     .select("id,goal_id,block_id,study_plan_id,session_number,main_target,status,started_at,finished_at")

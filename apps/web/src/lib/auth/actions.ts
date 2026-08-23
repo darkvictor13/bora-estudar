@@ -1,15 +1,20 @@
-"use server";
-
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getSessionContext } from "@/lib/auth/session";
+import { supabase } from "@/lib/supabase/client";
+import { getSessionContext, invalidateSession } from "@/lib/auth/session";
 import { ROUTES, homeForRole } from "@/lib/routes";
 
 export interface FormState {
   readonly error?: string;
   readonly success?: string;
+  /**
+   * Para onde ir quando a operação conclui.
+   *
+   * No Next estas actions terminavam em `redirect()`, que só existe do lado do
+   * servidor. Aqui a action é uma função comum do cliente e não tem como
+   * navegar sozinha: ela DEVOLVE o destino, e `useFormActionState` navega. A
+   * alternativa — chamar `useNavigate` dentro da action — não existe, porque
+   * hook não roda fora de componente.
+   */
+  readonly redirectTo?: string;
 }
 
 const EMPTY: FormState = {};
@@ -42,13 +47,12 @@ export async function signIn(_prev: FormState = EMPTY, data: FormData): Promise<
   const password = String(data.get("password") ?? "");
   if (!email || !password) return { error: "Informe e-mail e senha." };
 
-  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: translateAuthError(error.message) };
 
+  invalidateSession();
   const session = await getSessionContext();
-  revalidatePath("/", "layout");
-  redirect(session ? homeForRole(session.role) : ROUTES.student.overview);
+  return { redirectTo: session ? homeForRole(session.role) : ROUTES.student.overview };
 }
 
 export async function signUp(_prev: FormState = EMPTY, data: FormData): Promise<FormState> {
@@ -60,7 +64,6 @@ export async function signUp(_prev: FormState = EMPTY, data: FormData): Promise<
   if (!email) return { error: "Informe seu e-mail." };
   if (password.length < 6) return { error: "A senha precisa ter pelo menos 6 caracteres." };
 
-  const supabase = await createServerSupabaseClient();
   // O papel vai no metadata: tg_create_profile_for_new_user lê `role` de lá.
   // Cadastro público só cria aluno; professor e admin são criados por dentro.
   const { error } = await supabase.auth.signUp({
@@ -70,8 +73,8 @@ export async function signUp(_prev: FormState = EMPTY, data: FormData): Promise<
   });
   if (error) return { error: translateAuthError(error.message) };
 
-  revalidatePath("/", "layout");
-  redirect(ROUTES.student.waitlist);
+  invalidateSession();
+  return { redirectTo: ROUTES.student.waitlist };
 }
 
 export async function requestPasswordReset(
@@ -81,12 +84,11 @@ export async function requestPasswordReset(
   const email = text(data, "email");
   if (!email) return { error: "Informe seu e-mail." };
 
-  const supabase = await createServerSupabaseClient();
-  const origin = text(data, "origin") || "http://localhost:3000";
-  // Aponta para o Route Handler, não direto para a tela: o GoTrue devolve um
-  // código PKCE que precisa virar sessão, e só um Route Handler grava cookie.
+  // A origem sai de `location`, e não mais de um campo escondido alimentado
+  // pelo cabeçalho Host: no navegador ela é a origem de verdade — local,
+  // preview ou produção — sem depender de proxy nenhum contar a verdade.
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}${ROUTES.authCallback}?next=${encodeURIComponent(ROUTES.resetPassword)}`,
+    redirectTo: `${location.origin}${ROUTES.authCallback}?next=${encodeURIComponent(ROUTES.resetPassword)}`,
   });
   if (error) return { error: translateAuthError(error.message) };
 
@@ -105,18 +107,16 @@ export async function updatePassword(
   if (password.length < 6) return { error: "A senha precisa ter pelo menos 6 caracteres." };
   if (password !== confirmation) return { error: "As senhas não conferem." };
 
-  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: translateAuthError(error.message) };
 
+  invalidateSession();
   const session = await getSessionContext();
-  revalidatePath("/", "layout");
-  redirect(session ? homeForRole(session.role) : ROUTES.signIn);
+  return { redirectTo: session ? homeForRole(session.role) : ROUTES.signIn };
 }
 
-export async function signOut(): Promise<never> {
-  const supabase = await createServerSupabaseClient();
+/** Encerra a sessão. Quem navega depois é `useSignOut`. */
+export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
-  revalidatePath("/", "layout");
-  redirect(ROUTES.signIn);
+  invalidateSession();
 }

@@ -1,11 +1,5 @@
-"use server";
-
-import { createHash } from "node:crypto";
-import { revalidatePath } from "next/cache";
-
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 import { requireRole } from "@/lib/auth/session";
-import { ROUTES } from "@/lib/routes";
 import type { FormState } from "@/lib/auth/actions";
 import type { Enum } from "@bora/database";
 import { buildWeek } from "@/lib/domain/week-planner";
@@ -24,14 +18,30 @@ import { buildWeek } from "@/lib/domain/week-planner";
  * — outro dia, outro bloco, outro modo — continua sendo um lote novo.
  *
  * Formatado como UUID v8 (versão 8, variante RFC 4122) porque a coluna é uuid.
+ *
+ * Assíncrona porque no navegador o SHA-256 é `crypto.subtle.digest`, que
+ * devolve promessa: o `createHash` síncrono do `node:crypto` não existe aqui. A
+ * Web Crypto exige contexto seguro, condição que localhost e https satisfazem.
  */
-function batchIdFor(parts: readonly (string | number | boolean)[]): string {
-  const hex = createHash("sha256").update(parts.join("\u0000")).digest("hex").slice(0, 32);
-  const bytes = [...hex];
-  bytes[12] = "8"; // versão
-  bytes[16] = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16); // variante
-  const v = bytes.join("");
-  return `${v.slice(0, 8)}-${v.slice(8, 12)}-${v.slice(12, 16)}-${v.slice(16, 20)}-${v.slice(20)}`;
+async function batchIdFor(parts: readonly (string | number | boolean)[]): Promise<string> {
+  const bytes = new TextEncoder().encode(parts.join("\u0000"));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+
+  const chars = [...hex];
+  chars[12] = "8"; // versão
+  chars[16] = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16); // variante
+  const value = chars.join("");
+  return [
+    value.slice(0, 8),
+    value.slice(8, 12),
+    value.slice(12, 16),
+    value.slice(16, 20),
+    value.slice(20),
+  ].join("-");
 }
 
 export async function generateWeek(_prev: FormState, data: FormData): Promise<FormState> {
@@ -50,7 +60,6 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
   if (!weekdays.length) return { error: "Escolha pelo menos um dia de estudo." };
   if (!blockIds.length) return { error: "Escolha pelo menos um bloco." };
 
-  const supabase = await createServerSupabaseClient();
   const { data: blocks, error: blocksError } = await supabase
     .from("study_plan_blocks")
     .select("id,name,subject_name")
@@ -69,7 +78,7 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
   // Os blocos entram pela ordem que o banco devolveu, não pela ordem em que
   // vieram do formulário: é essa ordem que decide em que dia cada bloco cai,
   // então é ela que define o lote.
-  const batchId = batchIdFor([
+  const batchId = await batchIdFor([
     studyPlanId,
     week,
     mode,
@@ -91,11 +100,11 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
 
   const outcome = result as { goals_inserted?: number; replay?: boolean } | null;
   const inserted = outcome?.goals_inserted ?? 0;
-  revalidatePath(ROUTES.teacher.goals);
-  revalidatePath(ROUTES.teacher.students);
 
   // O formulário do professor não some com a revalidação — ele não depende de
-  // nenhum dado que mudou —, então a mensagem pode voltar como estado da action.
+  // nenhum dado que mudou —, então a mensagem pode voltar como estado da
+  // action. Ver `success` em `useFormActionState`: é ele que revalida os
+  // loaders da tela, no lugar do `revalidatePath` que estava aqui.
   return {
     success: outcome?.replay
       ? `Este lote já tinha sido aplicado: as ${inserted} meta(s) da semana ${week} continuam como estavam.`

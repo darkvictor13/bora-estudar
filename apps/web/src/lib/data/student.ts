@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 
 /**
  * Consultas de leitura do aluno.
@@ -14,7 +14,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  */
 
 export async function getActiveStudyPlan() {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("study_plans")
     .select("id,name,area,target_exam,stage,study_model,weekly_goals,start_date")
@@ -25,7 +24,6 @@ export async function getActiveStudyPlan() {
 }
 
 export async function getWeekGoals(studyPlanId: string, week: number) {
-  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("goals")
     // Sem embed de study_plan_blocks: a FK é composta, e o supabase-js não
@@ -46,7 +44,6 @@ export async function getWeekGoals(studyPlanId: string, week: number) {
 
 /** Semanas que têm alguma meta, para o seletor. */
 export async function getPlanWeeks(studyPlanId: string): Promise<number[]> {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("goals")
     .select("week_number")
@@ -58,7 +55,6 @@ export async function getPlanWeeks(studyPlanId: string): Promise<number[]> {
 
 /** Sessão aberta do planejamento, se houver. Só pode existir uma. */
 export async function getOpenQuizSession(studyPlanId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("quiz_sessions")
     .select("id,goal_id,block_id,session_number,main_target,status,started_at")
@@ -69,7 +65,6 @@ export async function getOpenQuizSession(studyPlanId: string) {
 }
 
 export async function getGoalPerformance(studyPlanId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("vw_goal_performance")
     .select("goal_id,questions_answered,correct_answers,minutes_spent")
@@ -78,7 +73,6 @@ export async function getGoalPerformance(studyPlanId: string) {
 }
 
 export async function getBlockPerformance(studyPlanId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("vw_block_performance")
     .select(
@@ -89,7 +83,6 @@ export async function getBlockPerformance(studyPlanId: string) {
 }
 
 export async function getStudyPlanBlocks(studyPlanId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("study_plan_blocks")
     .select("id,name,subject_name,subject_color,subject_target,question_count,link,active")
@@ -101,7 +94,6 @@ export async function getStudyPlanBlocks(studyPlanId: string) {
 }
 
 export async function getBlockErrors(studyPlanId: string, blockId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("vw_block_errors")
     .select(
@@ -115,7 +107,6 @@ export async function getBlockErrors(studyPlanId: string, blockId: string) {
 
 export async function getReviewCycles(blockIds: readonly string[]) {
   if (!blockIds.length) return [];
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("review_cycles")
     .select("id,block_id,cutoff,completed_at,reinforcement_id")
@@ -125,7 +116,6 @@ export async function getReviewCycles(blockIds: readonly string[]) {
 }
 
 export async function getWaitlistEntry() {
-  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("waitlist")
     .select("student_id,name,email,whatsapp,interest_area,focus_exam,timezone,birth_date,status")

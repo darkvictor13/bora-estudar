@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRevalidator } from "react-router";
 import { HASH_KEYS, ProtocolError, hashHasPayload, parseResultHash } from "@bora/protocol";
 
 import { Alert } from "@/components/ui";
@@ -16,11 +14,13 @@ type Status =
 /**
  * Recebe o resultado que a extensão devolve no fragmento da URL.
  *
- * Precisa ser componente de cliente: o fragmento nunca é enviado ao servidor,
- * então nenhum Server Component consegue lê-lo.
+ * O fragmento nunca é enviado ao servidor, então só código de navegador o
+ * enxerga. Numa SPA isso deixa de ser uma restrição — não existe mais Server
+ * Component de quem se defender —, mas o componente continua existindo porque
+ * o trabalho é o mesmo: ler a hash, gravar, e só então limpá-la.
  */
 export function QuizResultHandler() {
-  const router = useRouter();
+  const { revalidate } = useRevalidator();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   // Em desenvolvimento o React monta duas vezes; sem a trava o resultado seria
   // enviado em duplicata. O servidor é idempotente, mas evitar a segunda ida
@@ -69,9 +69,12 @@ export function QuizResultHandler() {
       // Só agora, com a gravação confirmada.
       history.replaceState(null, "", location.pathname + location.search);
       setStatus({ kind: "done", message: response.success ?? "Resultado gravado." });
-      router.refresh();
+      // Era `router.refresh()`. Numa SPA o equivalente é revalidar os loaders:
+      // é o que faz a meta aparecer concluída e o cartão da bateria mudar de
+      // estado sem recarregar a página.
+      void revalidate();
     })();
-  }, [router]);
+  }, [revalidate]);
 
   if (status.kind === "idle") return null;
   if (status.kind === "sending") return <Alert kind="info">Gravando o resultado da bateria…</Alert>;

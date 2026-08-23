@@ -1,7 +1,4 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router";
 
 export interface NavItem {
   readonly href: string;
@@ -24,9 +21,9 @@ export function Sidebar({
   groups: readonly NavGroup[];
   userName: string;
   roleLabel: string;
-  signOutAction: () => Promise<never>;
+  signOutAction: () => Promise<void>;
 }) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   // Casa a rota mais específica: sem isso "/aluno" ficaria marcada como atual
   // em todas as subpáginas.
@@ -50,7 +47,7 @@ export function Sidebar({
             const disabled = item.enabled === false;
 
             // Sem destino, e não um <Link> com aria-disabled: o Link continua
-            // navegando no clique, o servidor redireciona de volta, e a pessoa
+            // navegando no clique, o loader redireciona de volta, e a pessoa
             // dá a volta inteira para não sair do lugar.
             if (disabled) {
               return (
@@ -63,7 +60,7 @@ export function Sidebar({
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                to={item.href}
                 className="sidebar__link"
                 aria-current={item.href === currentHref ? "page" : undefined}
               >
@@ -79,6 +76,12 @@ export function Sidebar({
           {userName}
           <span>{roleLabel}</span>
         </div>
+        {/*
+          Continua um <form> com botão de submit, e não um <button onClick>: a
+          suíte e2e conta com isso ("button[type=submit] também casa o Sair da
+          sidebar", em CLAUDE.md), e o React 19 aceita função async comum como
+          `action` — não é nada específico de Server Action.
+        */}
         <form action={signOutAction}>
           <button type="submit" className="btn btn--ghost btn--block btn--sm" style={{ color: "#cbd5e1" }}>
             Sair

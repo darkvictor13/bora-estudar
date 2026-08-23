@@ -1,10 +1,5 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
-
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 import { requireRole } from "@/lib/auth/session";
-import { ROUTES } from "@/lib/routes";
 import type { FormState } from "@/lib/auth/actions";
 
 function text(data: FormData, field: string): string {
@@ -16,7 +11,6 @@ export async function updateProfile(_prev: FormState, data: FormData): Promise<F
   const name = text(data, "name");
   if (name.length < 3) return { error: "Informe seu nome completo." };
 
-  const supabase = await createServerSupabaseClient();
   const { error } = await supabase
     .from("profiles")
     .update({ name, phone: text(data, "phone") || null })
@@ -24,8 +18,10 @@ export async function updateProfile(_prev: FormState, data: FormData): Promise<F
 
   if (error) return { error: `Não foi possível salvar: ${error.message}` };
 
-  revalidatePath(ROUTES.student.account);
-  revalidatePath("/", "layout");
+  // A revalidação que `useFormActionState` dispara ao ver `success` re-roda os
+  // loaders de TODAS as rotas casadas, incluindo o do layout — que é quem
+  // alimenta o nome na sidebar. É o equivalente exato do
+  // `revalidatePath("/", "layout")` que estava aqui.
   return { success: "Dados atualizados." };
 }
 
@@ -39,7 +35,6 @@ export async function saveWaitlistEntry(_prev: FormState, data: FormData): Promi
     return { error: "Informe WhatsApp, área de interesse e concurso em foco." };
   }
 
-  const supabase = await createServerSupabaseClient();
   const birthDate = text(data, "birthDate");
 
   const { error } = await supabase.from("waitlist").upsert(
@@ -58,6 +53,5 @@ export async function saveWaitlistEntry(_prev: FormState, data: FormData): Promi
 
   if (error) return { error: `Não foi possível salvar: ${error.message}` };
 
-  revalidatePath(ROUTES.student.waitlist);
   return { success: "Cadastro salvo. Você está na lista de espera." };
 }

@@ -88,25 +88,43 @@ test.describe("F-PROF-03 · ficha do aluno", () => {
     await expect(cardByTitle(teacherPage, "Semanas planejadas")).toContainText("semanas 1");
   });
 
+  /**
+   * Sem status 404, porque a SPA não tem como devolver um.
+   *
+   * O servidor entrega o mesmo index.html para qualquer caminho — é o que
+   * permite o roteamento no cliente — e não teria como decidir de outra forma:
+   * saber se ESTE professor pode ver ESTE aluno depende de autenticação e da
+   * RLS, que só acontecem depois de a página carregar. Antes, com o
+   * `notFound()` do Next, o 404 vinha do servidor.
+   *
+   * O que a asserção verifica passa a ser o que de fato importa, e é mais
+   * forte que o código de status: a tela de "não encontrado" aparece E o nome
+   * do aluno alheio não vaza para o HTML.
+   */
   for (const [label, id] of [
     ["id inexistente", "a1000000-0000-4000-8000-000000009999"],
     ["id malformado", "nao-e-um-uuid"],
   ] as const) {
-    test(`${label} dá 404`, async ({ teacherPage }) => {
-      const response = await teacherPage.goto(studentPageOf(id));
-      expect(response?.status()).toBe(404);
+    test(`${label} não encontra o aluno`, async ({ teacherPage }) => {
+      await teacherPage.goto(studentPageOf(id));
+      await expect(
+        teacherPage.getByRole("heading", { name: "Não encontrado", level: 1 }),
+      ).toBeVisible();
     });
   }
 
-  test("aluno de outro professor dá 404", async ({ teacherPage, scenario }) => {
+  test("aluno de outro professor não é encontrado", async ({ teacherPage, scenario }) => {
     // Um segundo par, criado à parte: o professor deste cenário não tem
     // vínculo nenhum com o aluno de lá. É a mesma regra do §5, vista pela
     // tela em vez de pela RLS.
     const outro = await createScenario({ withGoals: false });
     expect(outro.student.id).not.toBe(scenario.student.id);
 
-    const response = await teacherPage.goto(studentPageOf(outro.student.id));
-    expect(response?.status()).toBe(404);
+    await teacherPage.goto(studentPageOf(outro.student.id));
+    await expect(
+      teacherPage.getByRole("heading", { name: "Não encontrado", level: 1 }),
+    ).toBeVisible();
+    await expect(teacherPage.locator("body")).not.toContainText(outro.student.name);
   });
 });
 
@@ -170,6 +188,12 @@ test.describe("F-PROF-04/05/06 · gerar metas da semana", () => {
 
   test("sem dia escolhido é recusado", async ({ teacherPage }) => {
     await teacherPage.goto("/professor/metas");
+    // `.all()` NÃO espera por nada: devolve o que casa naquele instante. Numa
+    // SPA o formulário só existe depois de os loaders da rota resolverem, o
+    // que é depois do evento `load` que o `goto` aguarda — sem esta espera a
+    // lista voltava vazia, nada era desmarcado, e o teste falhava dizendo que
+    // faltou a mensagem de erro quando na verdade o lote foi criado.
+    await expect(teacherPage.locator("input[name=weekdays]").first()).toBeVisible();
     // Desmarca por posição, não pelo seletor `:checked`: a lista `:checked`
     // encurta a cada clique e os índices já obtidos deixam de casar.
     for (const day of await teacherPage.locator("input[name=weekdays]").all()) {
@@ -184,6 +208,8 @@ test.describe("F-PROF-04/05/06 · gerar metas da semana", () => {
 
   test("sem bloco escolhido é recusado", async ({ teacherPage }) => {
     await teacherPage.goto("/professor/metas");
+    // Mesma razão do teste acima: `.all()` não espera.
+    await expect(teacherPage.locator("input[name=blocks]").first()).toBeVisible();
     for (const block of await teacherPage.locator("input[name=blocks]").all()) {
       await block.uncheck();
     }

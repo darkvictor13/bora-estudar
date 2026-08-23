@@ -11,6 +11,12 @@ Nenhuma requisição foi feita ao tecconcursos.com.br: a extensão foi testada
 contra uma página sintética servida localmente, com o domínio do TEC
 interceptado.
 
+> **Registro histórico.** Esta varredura foi feita quando o site rodava em
+> Next.js, então o diagnóstico de alguns itens cita `revalidatePath`, Server
+> Action e Route Handler — coisas que não existem mais. O defeito e a correção
+> continuam válidos; o mecanismo mudou de nome. Ver a seção "O site é uma SPA"
+> em [`arquitetura.md`](arquitetura.md).
+
 ## Placar
 
 | Área | Verificações | Resultado |

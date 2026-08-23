@@ -20,7 +20,7 @@ import type {
 // base64url — mesma implementação nas duas pontas
 // ---------------------------------------------------------------------------
 // Usa apenas APIs presentes em navegador e em Node >= 18, para que o mesmo
-// código rode no content script, no Next.js e nos testes.
+// código rode no content script, no site e nos testes.
 
 function toBase64Url(text: string): string {
   const bytes = new TextEncoder().encode(text);

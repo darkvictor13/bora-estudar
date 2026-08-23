@@ -5,7 +5,7 @@ a extensão de navegador e o banco.
 
 | Pacote | O que é |
 |---|---|
-| `apps/web` | Next.js 16 — painéis de aluno e professor |
+| `apps/web` | SPA em React + Vite — painéis de aluno e professor |
 | `apps/extension` | Extensão MV3 — conduz a bateria no TEC Concursos |
 | `apps/e2e` | Suíte Playwright — site e extensão, num navegador de verdade |
 | `packages/protocol` | Contrato site ↔ extensão |

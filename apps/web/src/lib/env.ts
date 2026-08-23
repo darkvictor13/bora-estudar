@@ -16,12 +16,13 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
-// Referenciadas pelo nome completo, e não por índice: o Next só substitui
-// process.env.NEXT_PUBLIC_* no bundle do cliente quando o acesso é literal.
+// Referenciadas pelo nome completo, e não por índice: o Vite faz substituição
+// estática de `import.meta.env.VITE_*` no bundle, e só reconhece o acesso
+// literal. `import.meta.env[nome]` compila para undefined em produção.
 export const env = {
-  supabaseUrl: required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
+  supabaseUrl: required("VITE_SUPABASE_URL", import.meta.env.VITE_SUPABASE_URL),
   supabasePublishableKey: required(
-    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   ),
 } as const;

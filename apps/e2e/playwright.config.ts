@@ -17,7 +17,7 @@ import { BASE_URL } from "./support/app.ts";
 /**
  * Um worker por núcleo, menos dois.
  *
- * Os dois reservados são para o servidor do Next e para o Postgres, que
+ * Os dois reservados são para o servidor do Vite e para o Postgres, que
  * disputam a mesma máquina. Deixar o Playwright usar todos os núcleos deixa a
  * suíte mais LENTA: as requisições passam a esperar o servidor que ficou sem
  * CPU, e o timeout das ações começa a estourar por contenção.
@@ -37,8 +37,11 @@ export default defineConfig({
   forbidOnly: !!process.env["CI"],
   retries: process.env["CI"] ? 1 : 0,
 
-  // A folga é para a primeira visita a cada rota: o `next dev` compila sob
-  // demanda, e a primeira renderização de uma tela custa alguns segundos.
+  // A folga é para a primeira visita a cada rota. Com o Vite a transformação
+  // sob demanda é bem mais barata que a compilação do `next dev`, mas o custo
+  // não é zero: sem servidor de aplicação, a primeira tela ainda espera a
+  // cascata de sessão da SPA (validar token, ler perfil, ler assinatura) antes
+  // de o loader da página começar.
   timeout: 45_000,
   expect: { timeout: 10_000 },
 
@@ -88,15 +91,19 @@ export default defineConfig({
   /**
    * Reaproveita um `npm run dev` que já esteja no ar.
    *
-   * É o caminho mais rápido no dia a dia: o servidor já compilou as rotas, e a
-   * suíte não paga a primeira compilação de nada. Sem servidor no ar, sobe um —
-   * na porta que a `E2E_BASE_URL` pedir, e não na 3000 fixa, senão apontar a
-   * suíte para outra porta subiria um servidor que ninguém iria consultar.
+   * É o caminho mais rápido no dia a dia: o servidor já transformou os módulos,
+   * e a suíte não paga isso de novo. Sem servidor no ar, sobe um — na porta que
+   * a `E2E_BASE_URL` pedir, e não na 3000 fixa, senão apontar a suíte para
+   * outra porta subiria um servidor que ninguém iria consultar.
    *
-   * O Next 16 recusa um SEGUNDO `next dev` para o mesmo diretório, em qualquer
-   * porta ("Another next dev server is already running"). Então mudar a
-   * `E2E_BASE_URL` de porta só funciona se não houver `npm run dev` no ar; com
-   * um servidor rodando, aponte a suíte para a porta dele.
+   * Ao contrário do `next dev`, que recusava um segundo servidor para o mesmo
+   * diretório em QUALQUER porta, o Vite aceita quantos quiser — um por porta.
+   * Apontar a `E2E_BASE_URL` para outra porta agora funciona mesmo com um
+   * `npm run dev` no ar.
+   *
+   * `strictPort: true` no vite.config é o que torna isto confiável: sem ele o
+   * Vite cairia para a porta seguinte em silêncio, e a suíte ficaria esperando
+   * numa porta onde não há servidor até estourar o timeout.
    */
   webServer: {
     command: `npm run dev --workspace @bora/web -- --port ${new URL(BASE_URL).port || "3000"}`,

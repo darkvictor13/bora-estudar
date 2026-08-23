@@ -18,9 +18,11 @@ export const ROUTES = {
   /**
    * Troca o código do link de e-mail por uma sessão.
    *
-   * Precisa ser Route Handler: só ele pode gravar cookie. Um Server Component
-   * não consegue, então a sessão de recuperação nunca chegaria a existir e a
-   * tela de nova senha diria "link expirou" para todo mundo.
+   * Continua sendo uma rota própria, e não um trecho dentro de
+   * `/redefinir-senha`: quem chega do e-mail traz um código de uso único, e
+   * separar a troca da tela deixa o destino livre para ser outro no futuro
+   * (convite, confirmação de e-mail) sem duplicar a lógica. Ver
+   * `routes/AuthCallback.tsx`.
    */
   authCallback: "/confirmar",
 

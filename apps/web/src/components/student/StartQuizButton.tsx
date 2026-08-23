@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useTransition } from "react";
 
 import { startQuizSession } from "@/lib/data/quiz-actions";
@@ -11,14 +9,16 @@ export function StartQuizButton({ goalId, label = "Iniciar bateria" }: { goalId:
   function handleClick() {
     setError(null);
     startTransition(async () => {
-      // A URL de retorno é montada no cliente porque precisa ser exatamente a
-      // origem que o aluno está usando — localhost, preview ou produção.
+      // A URL de retorno é montada aqui porque precisa ser exatamente a origem
+      // que o aluno está usando — localhost, preview ou produção.
       const returnUrl = `${location.origin}${location.pathname}`;
       const result = await startQuizSession(goalId, returnUrl);
       if (result.error) {
         setError(result.error);
         return;
       }
+      // `location.assign`, e não `navigate`: o destino é outro domínio. Uma
+      // navegação de router não sai da aplicação.
       if (result.url) location.assign(result.url);
     });
   }

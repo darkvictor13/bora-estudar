@@ -22,17 +22,22 @@ export { authenticate } from "./session.ts";
 /**
  * Ruído previsível do ambiente local, que não é defeito do produto.
  *
- * O `next dev` compila sob demanda: na primeira visita a uma rota, um pedido
- * de `_next/*` pode ser abortado ou chegar antes de o bundle existir. Isso
- * aparece no console e não diz nada sobre o produto — sem estes filtros o
- * teste de "abre sem erro de console" falha ou passa conforme a rota já tenha
- * sido compilada por outro worker.
+ * O servidor de desenvolvimento transforma módulo sob demanda: na primeira
+ * visita a uma rota, um pedido pode ser abortado ou chegar antes de o módulo
+ * existir. Isso aparece no console e não diz nada sobre o produto — sem estes
+ * filtros o teste de "abre sem erro de console" falha ou passa conforme a rota
+ * já tenha sido carregada por outro worker.
+ *
+ * `/@vite/`, `/@react-refresh` e `/@fs/` são os prefixos internos do Vite, no
+ * lugar do `_next/*` de antes.
  */
 const IGNORED_CONSOLE = [
   /favicon/i,
   /Download the React DevTools/i,
-  /\[Fast Refresh\]/i,
-  /_next\//i,
+  /\[vite\]/i,
+  /@vite\//i,
+  /@react-refresh/i,
+  /@fs\//i,
   /net::ERR_ABORTED/i,
   /Failed to load resource/i,
 ];

@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabase/client";
 
 /**
  * Consultas do professor.
@@ -9,7 +9,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  */
 
 export async function getMyStudents(teacherId: string) {
-  const supabase = await createServerSupabaseClient();
 
   const { data: links } = await supabase
     .from("student_teacher_links")
@@ -56,7 +55,6 @@ export async function getMyStudents(teacherId: string) {
 }
 
 export async function getStudentSummary(teacherId: string, studentId: string) {
-  const supabase = await createServerSupabaseClient();
 
   const [{ data: profile }, { data: plans }, { data: link }] = await Promise.all([
     supabase.from("profiles").select("id,name,contact_email,phone").eq("id", studentId).maybeSingle(),
@@ -84,7 +82,6 @@ export async function getStudentSummary(teacherId: string, studentId: string) {
 }
 
 export async function getPlanProgress(studyPlanId: string) {
-  const supabase = await createServerSupabaseClient();
 
   const [{ data: goals }, { data: blocks }] = await Promise.all([
     supabase
@@ -118,7 +115,6 @@ export async function getPlanProgress(studyPlanId: string) {
 }
 
 export async function getAllTeacherPlans(teacherId: string) {
-  const supabase = await createServerSupabaseClient();
   const { data: plans } = await supabase
     .from("study_plans")
     .select("id,student_id,name,status,area,target_exam,start_date,weekly_goals")

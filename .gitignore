@@ -4,12 +4,10 @@ node_modules/
 .pnp.*
 
 # Build
-.next/
 out/
 build/
 dist/
 *.tsbuildinfo
-next-env.d.ts
 
 # Ambiente — nunca versionar credenciais
 .env

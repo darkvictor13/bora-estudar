@@ -1,10 +1,9 @@
-"use client";
-
-import { useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import type { ReactNode } from "react";
 
 import { Alert } from "@/components/ui";
+import { useFormActionState } from "@/lib/forms/useFormActionState";
 import type { FormState } from "@/lib/auth/actions";
 
 /** Campos que nunca são repostos: segredo digitado de novo é digitado de novo. */
@@ -37,7 +36,7 @@ export function AuthForm({
   // resposta for erro.
   const typed = useRef<Record<string, string>>({});
 
-  const [state, formAction] = useActionState(
+  const [state, formAction] = useFormActionState(
     async (previous: FormState, data: FormData): Promise<FormState> => {
       typed.current = {};
       for (const [name, value] of data.entries()) {
@@ -45,7 +44,6 @@ export function AuthForm({
       }
       return action(previous, data);
     },
-    {},
   );
 
   /**
@@ -55,7 +53,7 @@ export function AuthForm({
    * uma submissão nativa faria. Com campos não-controlados isso apaga tudo:
    * uma senha errada no login levava junto o e-mail, e a pessoa redigitava os
    * dois a cada tentativa. Só na falha — no sucesso o valor certo é o que o
-   * servidor acabou de renderizar, não o que estava na tela.
+   * loader acabou de trazer, não o que estava na tela.
    */
   useEffect(() => {
     if (!state.error || !formRef.current) return;

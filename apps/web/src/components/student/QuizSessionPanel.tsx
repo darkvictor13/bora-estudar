@@ -1,9 +1,7 @@
-"use client";
-
-import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Alert } from "@/components/ui";
+import { useFormActionState } from "@/lib/forms/useFormActionState";
 import { cancelQuizSession, registerQuizTime } from "@/lib/data/quiz-actions";
 
 function Submit({ label, pendingLabel, variant = "primary" }: {
@@ -21,7 +19,7 @@ function Submit({ label, pendingLabel, variant = "primary" }: {
 
 /** Bateria já respondida: falta o tempo para a meta concluir. */
 export function RegisterTimeForm({ quizSessionId }: { quizSessionId: string }) {
-  const [state, formAction] = useActionState(registerQuizTime, {});
+  const [state, formAction] = useFormActionState(registerQuizTime);
 
   return (
     <form action={formAction}>
@@ -57,7 +55,7 @@ export function RegisterTimeForm({ quizSessionId }: { quizSessionId: string }) {
 
 /** Sessão aberta que o aluno quer descartar sem passar pela extensão. */
 export function CancelSessionForm({ quizSessionId }: { quizSessionId: string }) {
-  const [state, formAction] = useActionState(cancelQuizSession, {});
+  const [state, formAction] = useFormActionState(cancelQuizSession);
 
   return (
     <form action={formAction}>
