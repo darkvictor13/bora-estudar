@@ -1,0 +1,52 @@
+# Invariantes do schema e drift dos tipos gerados.
+#
+# Separado do `ci.yml` por causa do custo: sobe o stack do Supabase em Docker,
+# e só faz sentido quando o schema mudou.
+name: Banco
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "packages/database/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  invariantes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Subir o Supabase local
+        run: npx supabase start
+
+      # As suítes usam `raise exception` quando o banco ACEITA um estado
+      # proibido. É o que as faz falhar no dia em que uma constraint some, e
+      # não só quando o código quebra.
+      - name: Suítes de invariante
+        run: npm run db:test
+
+      # Drift dos tipos versionados. A checagem é contra o banco LOCAL de
+      # propósito: o gerador `--linked` emite um bloco __InternalSupabase que o
+      # `--local` não emite, e um diff contra a nuvem acusaria diferença todo
+      # dia.
+      #
+      # O `db:reset` antes do `db:types` não é decoração: `db:test` deixa a
+      # base truncada e suja, e é a mesma armadilha de ordem que o CLAUDE.md
+      # descreve entre `db:test` e `e2e`.
+      - name: Regenerar os tipos
+        run: npm run db:reset && npm run db:types
+
+      - name: O arquivo gerado precisa estar commitado
+        run: git diff --exit-code packages/database/

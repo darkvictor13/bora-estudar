@@ -124,15 +124,37 @@ composta garante que a cópia nunca diverge do pai.
 
 ### Migrations
 
-- Enquanto **nada estiver implantado**, o schema é uma migration única. Edite-a
-  no lugar e rode `npm run db:reset`.
-- **Depois do primeiro deploy**, migration nova sempre. Nunca reescreva um
-  arquivo já aplicado em qualquer ambiente.
+**O schema já está implantado.** `20260822163557_initial_schema.sql` foi
+aplicado em staging em 23/08/2026 e está **congelado**: migration nova sempre,
+nunca reescreva um arquivo já aplicado em qualquer ambiente. A regra anterior —
+editar a migration única no lugar enquanto nada estivesse no ar — deixou de
+valer.
+
 - Rode `npm run db:types` depois de **toda** alteração de schema. O arquivo
   gerado é versionado: o CI precisa dele sem subir um Supabase, e o diff mostra
   o impacto na superfície de tipos.
 - Toda view precisa de `with (security_invoker = true)`. Sem isso ela roda com
   privilégio do dono e vaza dados entre alunos.
+- **Função nova precisa de `revoke execute ... from public`.** O default do
+  Postgres concede `EXECUTE` a `PUBLIC`, que não é `anon` nem `authenticated`:
+  revogar dos dois papéis não tira nada, porque o privilégio vem do grantee
+  vazio que ambos herdam. Foi assim que `reserve_operation` ficou chamável por
+  qualquer autenticado apesar do `revoke` e do comentário dizendo o contrário —
+  BUG-14. Depois do revoke, conceda nominalmente só às funções que são API.
+- **Toda função precisa de `set search_path = ''`**, inclusive as de gatilho.
+  Duas escaparam disso na migration inicial, e uma delas era a que sustenta o
+  ledger append-only.
+
+**`gen types --linked` e `--local` não produzem arquivos idênticos, e isso não
+é drift.** O gerador contra a nuvem emite um bloco `__InternalSupabase` com
+`PostgrestVersion` que o local não emite. Fora dele os dois são iguais. Não
+regenere o arquivo versionado a partir do remoto: `npm run db:types` é
+`--local`, gere localmente e commite. Contra a nuvem, use o diff só para
+conferir:
+
+```bash
+supabase gen types typescript --linked --schema public | diff - packages/database/src/schema.gen.ts
+```
 
 ---
 
@@ -286,6 +308,46 @@ defeito conhecido, o número do bug.
   então pula a inserção e as questões batem em violação de FK. O comentário do
   `global-setup` afirma imunidade à ordem e não tem. Rode `npm run db:reset`
   entre os dois.
+
+---
+
+## Deploy
+
+**`main` publica staging a cada commit. Produção é disparo manual.**
+
+| Ambiente | Gatilho | Workflow |
+|---|---|---|
+| staging | push em `main` | `.github/workflows/deploy-staging.yml` |
+| produção | `workflow_dispatch` | `.github/workflows/deploy-producao.yml` |
+
+O plano inteiro, com o porquê de cada decisão, está em
+[`docs/deploy-staging.md`](docs/deploy-staging.md).
+
+**Toda migration precisa ser compatível com o bundle que já está no ar.** Em
+staging o banco sobe minutos antes do site; entre um commit e o deploy manual
+de produção podem passar dias e dezenas de commits. Coluna nova nasce
+`nullable` ou com default; RPC nova não substitui a antiga no mesmo commit. É o
+raciocínio do `PROTOCOL_VERSION` entre site e extensão, aplicado ao par
+site/banco.
+
+**Banco antes de site, e essa ordem não pode inverter** — o bundle novo é quem
+chama a RPC nova. Ela tem um custo conhecido: se o job `site` falhar, o banco
+já mudou e o bundle antigo continua no ar. É a regra de compatibilidade acima
+que segura o estrago.
+
+**O gate de qualidade é um workflow reusável só.** `ci.yml` é chamado pelos dois
+deploys por `workflow_call`; não copie os steps dele para outro arquivo. Gate
+copiado deriva, e um gate que derivou em silêncio deixa staging publicar o que
+o `npm run check` reprova.
+
+**Produção só publica commit que já esteve na `main`.** O job `resolver` valida
+com `git merge-base --is-ancestor` antes de qualquer coisa acontecer. A
+deployment branch rule do Environment não cobre isso sozinha: ela valida o ref
+de onde o dispatch saiu, não o SHA que o input pede.
+
+**`scripts/fumaca.sh <site> <supabase>` roda à mão.** É o mesmo script que o CI
+usa depois de publicar, e vale contra qualquer ambiente. Ele verifica conteúdo,
+nunca status de erro — não existe 404 neste servidor.
 
 ---
 

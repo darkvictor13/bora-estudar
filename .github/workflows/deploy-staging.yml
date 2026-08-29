@@ -1,0 +1,116 @@
+# Staging acompanha a `main` sem intervenção: todo commit publica.
+#
+# A ordem banco → site é a regra que não pode inverter — o bundle novo é quem
+# chama a RPC nova. Ela tem um custo conhecido: se o job `site` falhar, o banco
+# já mudou e o bundle antigo continua no ar. É por isso que toda migration
+# precisa ser compatível com o bundle que já está publicado.
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+  # Para republicar sem commit novo — refazer um deploy que falhou na fumaça,
+  # por exemplo.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  # Cancelar um deploy no meio de um `db push` deixa o banco num estado que
+  # ninguém sabe descrever. Enfileira em vez de cancelar.
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    uses: ./.github/workflows/ci.yml
+
+  banco:
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar
+        run: npm ci
+
+      # O link usa o pooler por padrão (`--skip-pooler` é que o desliga), e é
+      # isso que faz o push funcionar de um runner sem IPv6.
+      - name: Vincular ao projeto
+        env:
+          PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+        run: npx supabase link --project-ref "$PROJECT_ID"
+
+      # O dry-run vai para o log: é o registro do que a execução seguinte fez.
+      - name: O que vai ser aplicado
+        run: npx supabase db push --linked --dry-run
+
+      # `--yes` é obrigatório: sem ele o comando espera prompt e o job pendura
+      # até o timeout. NUNCA `--include-seed` — o seed.sql tem senha em texto
+      # claro e escreve direto em auth.users.
+      - name: Aplicar as migrations
+        run: npx supabase db push --linked --yes
+
+      - name: Estado final das migrations
+        run: npx supabase migration list --linked
+
+  site:
+    needs: banco
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar
+        run: npm ci
+
+      # Build por workspace: o `npm run build` da raiz compila a extensão
+      # junto, que não tem nada a ver com este deploy.
+      #
+      # As VITE_* precisam existir AQUI, no ambiente do build: o Vite faz
+      # substituição estática e a chave é assada no bundle. Configuradas como
+      # variável do Worker ficariam corretas no painel e inúteis no produto.
+      - name: Compilar o site
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build --workspace @bora/web
+
+      - name: Publicar no Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config apps/web/wrangler.jsonc --env staging
+
+  fumaca:
+    needs: site
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+
+      # Verifica CONTEÚDO, nunca status de erro: o fallback de SPA devolve 200
+      # para qualquer caminho, então um monitor que espere 404 reporta 200 para
+      # sempre.
+      - name: Fumaça
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          API_URL: ${{ vars.VITE_SUPABASE_URL }}
+        run: scripts/fumaca.sh "$SITE_URL" "$API_URL"
