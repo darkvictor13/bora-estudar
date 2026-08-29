@@ -3,11 +3,17 @@ import { Outlet, useLoaderData } from "react-router";
 import { Sidebar, type NavGroup } from "@/components/Sidebar";
 import { useSignOut } from "@/lib/auth/useSignOut";
 import { requireRole } from "@/lib/auth/session";
+import { adoptTheme } from "@/lib/theme";
 import { ROUTES } from "@/lib/routes";
 
 export async function teacherLayoutLoader() {
   const session = await requireRole("teacher");
-  return { name: session.name };
+
+  // Reconcilia a cópia do aparelho com o que a conta diz, no LOADER e não num
+  // efeito: efeito roda depois da pintura, e é a pintura que não pode piscar.
+  adoptTheme(session.profileId, session.theme);
+
+  return { profileId: session.profileId, theme: session.theme, name: session.name };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherLayoutLoader>>;
@@ -40,6 +46,8 @@ export function TeacherLayout() {
       <Sidebar
         groups={groups}
         userName={session.name}
+        profileId={session.profileId}
+        theme={session.theme}
         roleLabel="Professor"
         signOutAction={signOut}
       />

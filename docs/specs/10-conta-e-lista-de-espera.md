@@ -44,7 +44,7 @@ não podem depender de planejamento, de meta nem de bateria.
 
 | Id | Regra |
 |---|---|
-| R-CTA-13 | `student_preferences` tem grant de `select, insert, update` para `authenticated` e guarda `theme`, `cycle_config` e `review_config`. **Nenhuma tela a lê ou escreve hoje.** |
+| R-CTA-13 | `student_preferences` tem grant de `select, insert, update` para `authenticated` e guarda `cycle_config` e `review_config`. **Nenhuma tela a lê ou escreve hoje.** A coluna `theme` saiu daqui em 29/08/2026: preferência de interface é da conta, não do aluno, e mora em `user_preferences` — ver [11](11-tema-claro-escuro.md). |
 | R-CTA-14 | `cycle_config` e `review_config` são `jsonb` de propósito: preferência de interface, sem relacionamento e sem necessidade de agregação. O critério não é "jsonb é ruim", é se o conteúdo tem estrutura relacional que precisa de integridade ou consulta. |
 
 ---
@@ -110,7 +110,8 @@ na Lista de espera.
   acontece pelo fluxo de recuperação — ver [01](01-autenticacao.md).
 - **Excluir a conta.**
 - **Foto de perfil.**
-- **Tema claro/escuro.** `student_preferences.theme` existe e nada o usa; o site
-  tem um tema só.
+- **Tema claro/escuro.** Deixou de ser fora de escopo: está em
+  [11](11-tema-claro-escuro.md), implementado. A preferência é da conta e vale
+  para os três papéis, então não mora nas preferências do aluno.
 - **Preferências de ciclo e de revisão.** As duas colunas `jsonb` estão
   reservadas para quando a revisão espaçada existir — ver [09](09-reforco-e-revisoes.md).

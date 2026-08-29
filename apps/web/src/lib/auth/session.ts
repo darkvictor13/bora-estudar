@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase/client";
 import { ROUTES, homeForRole } from "@/lib/routes";
+import { DEFAULT_THEME, forgetTheme, type Theme } from "@/lib/theme";
 import type { Enum } from "@bora/database";
 
 export type UserRole = Enum<"user_role">;
@@ -14,6 +15,8 @@ export interface SessionContext {
   readonly role: UserRole;
   /** `true` quando o aluno tem assinatura ativa. Professor e admin: sempre. */
   readonly hasAccess: boolean;
+  /** Preferência de interface da conta. Sem linha em `user_preferences`, `light`. */
+  readonly theme: Theme;
 }
 
 async function load(): Promise<SessionContext | null> {
@@ -24,9 +27,14 @@ async function load(): Promise<SessionContext | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // O tema vem embutido no mesmo select, e não numa segunda consulta: a FK de
+  // `user_preferences` é a própria chave primária, então o PostgREST resolve o
+  // vínculo como um-para-um e devolve um objeto — ou `null`, para quem nunca
+  // escolheu. Uma consulta a mais aqui custaria uma ida ao servidor em CADA
+  // navegação, porque todo loader pede o contexto da sessão.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id,name,role")
+    .select("id,name,role,user_preferences(theme)")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -45,7 +53,14 @@ async function load(): Promise<SessionContext | null> {
     hasAccess = !!subscription;
   }
 
-  return { user, profileId: profile.id, name: profile.name, role: profile.role, hasAccess };
+  return {
+    user,
+    profileId: profile.id,
+    name: profile.name,
+    role: profile.role,
+    hasAccess,
+    theme: profile.user_preferences?.theme ?? DEFAULT_THEME,
+  };
 }
 
 let inFlight: Promise<SessionContext | null> | null = null;
@@ -92,7 +107,13 @@ export function getSessionContext(): Promise<SessionContext | null> {
  */
 export async function requireSession(): Promise<SessionContext> {
   const session = await getSessionContext();
-  if (!session) throw redirect(`${ROUTES.signIn}${location.hash}`);
+  if (!session) {
+    // Sem sessão o tema é claro, e a cópia local deste aparelho some junto
+    // (R-TEMA-13 e R-TEMA-14). É aqui que a sessão EXPIRADA é notada — o
+    // logout limpa por conta própria, mas quem some sozinho passa por aqui.
+    forgetTheme();
+    throw redirect(`${ROUTES.signIn}${location.hash}`);
+  }
   return session;
 }
 

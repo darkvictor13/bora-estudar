@@ -1,6 +1,6 @@
 # 11 — Tema claro e escuro
 
-**Situação:** não implementada · **Comparativo:** §12 item 14 · **Fluxos e2e:** F-TEMA-01 a F-TEMA-08
+**Situação:** implementada · **Comparativo:** §12 item 14 · **Fluxos e2e:** F-TEMA-01 a F-TEMA-08
 
 ---
 
@@ -57,7 +57,8 @@ dado. Depois de existir tela, custa migração de dado.
 
 | Id | Regra |
 |---|---|
-| R-TEMA-15 | Os dois temas cumprem **WCAG AA**: 4.5:1 para texto normal, 3:1 para texto grande e para o limite visível de campo, botão e cartão. |
+| R-TEMA-15 | Os dois temas cumprem **WCAG AA**: 4.5:1 para texto normal, 3:1 para texto grande e para o limite visível de **campo e de botão**. Cartão fica de fora: contêiner não interativo não é componente na acepção da 1.4.11, e o tema claro que já está no ar nunca cumpriu 3:1 ali — a redação anterior desta regra dizia "campo, botão e cartão" e reprovava o design existente por uma exigência que ele não precisa cumprir. Corrigida em 29/08/2026, ao implementar. |
+| R-TEMA-17 | Cumprir a regra acima **mudou o tema claro também**: a borda de campo e de botão saiu de `--ink-300` para `--ink-500`. `--ink-300` sobre branco dá 1,5:1, e o limite do controle é informação necessária para identificá-lo. O mesmo valeu para o botão da sidebar, que passou de 22% para 40% de branco. |
 | R-TEMA-16 | Os tokens de cor passam a ter **nome de papel** (`--surface`, `--text`, `--border`, …) definidos **sobre** a escala existente. O tema escuro redefine papéis, nunca a escala: `--ink-900` continua sendo o tom mais escuro nos dois temas. Sem essa camada, o tema escuro inverte `--ink-900` e o nome do token passa a mentir — e é assim que o terceiro tema, se existir um dia, nasce ilegível. |
 
 ---
@@ -101,6 +102,18 @@ carga da página
 | Banco | `user_preferences` (nova), `student_preferences` (perde `theme`), `profiles` (só leitura, para o `profile_id`) |
 | CSS | `apps/web/src/styles/globals.css` — camada de papéis sobre a escala de `:root` |
 | Extensão | nada muda |
+| Testes | `apps/e2e/tests/theme.spec.ts`, `apps/e2e/support/contrast.ts`, `supabase/tests/06_preferences.sql` |
+
+**Por que não é `upsert`.** O grant de UPDATE cobre só `theme`, e o upsert do
+PostgREST (`Prefer: resolution=merge-duplicates`) exige UPDATE na tabela
+inteira: contra o Supabase local ele devolve `42501 permission denied for table
+user_preferences` mesmo quando a linha ainda não existe. `saveTheme` faz UPDATE
+e, se nenhuma linha respondeu, INSERT.
+
+**A conta vence, inclusive contra a escolha ainda não gravada.** Trocar o tema e
+navegar no mesmo instante pode fazer o loader devolver o valor antigo e desfazer
+a escolha na tela. É `R-TEMA-11` funcionando, não defeito — a janela é o tempo
+de uma gravação, e a próxima troca grava de novo.
 
 **Consequência em outra spec.** Quando isto for implementado, a spec
 [10](10-conta-e-lista-de-espera.md) muda em dois pontos: `R-CTA-13` deixa de
@@ -119,7 +132,7 @@ claro/escuro" sai do Fora de escopo dela.
 | CA-04 | Com a gravação falhando, a tela troca, aparece o aviso de que não foi salvo na conta, e a escolha vale até a próxima carga | F-TEMA-04 |
 | CA-05 | Logout apaga a cópia local: as telas públicas ficam claras e o login de outro usuário no mesmo navegador não herda o tema anterior | F-TEMA-05 |
 | CA-06 | Os três papéis têm o controle e a preferência persistida — aluno, professor e admin | F-TEMA-06 |
-| CA-07 | Texto sobre fundo cumpre 4.5:1, e limite de componente 3:1, nos dois temas, nas telas de aluno e de professor | F-TEMA-07 |
+| CA-07 | Texto sobre fundo cumpre 4.5:1 (3:1 se grande), e o limite de campo e de botão cumpre 3:1, nos dois temas, nas telas de aluno e de professor | F-TEMA-07 |
 | CA-08 | Sem nenhuma escolha feita, e sem linha em `user_preferences`, o site abre em claro mesmo com o sistema operacional no escuro | F-TEMA-08 |
 | CA-09 | Um perfil não escreve a linha de outro: o `INSERT` levanta `42501` e o `UPDATE` afeta **zero linhas** (contadas com `row_count`, porque UPDATE filtra em silêncio) | `supabase/tests/06_preferences.sql` |
 | CA-10 | `theme` recusa qualquer valor fora de `light` e `dark` | `supabase/tests/06_preferences.sql` |

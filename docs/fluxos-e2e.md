@@ -453,10 +453,10 @@ e `05_teacher_writes.sql`.
 
 | Comando | Cobertura |
 |---|---|
-| `npm run db:test` | 59 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor |
+| `npm run db:test` | 72 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 142 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 155 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -470,6 +470,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
 | `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09 | 29 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
+| `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
 Fica de fora, de propósito, o que já é provado sem navegador: F-BAT-04
 (determinismo de `pickQuestions`, em `engine.test.ts`) e o lado RPC do §5
@@ -508,21 +509,82 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 - **Editar os próprios dados como professor.** `updateProfile` exige
   `requireRole("student")`.
 
-### Já especificados, com id reservado
 
-Estes têm spec escrita e ainda não têm tela. O id já está preso e é por ele que
-o teste nasce quando a implementação começar; ao existir, o fluxo sai daqui e
-entra na seção da área.
+---
 
-**[Spec 11 — Tema claro e escuro](specs/11-tema-claro-escuro.md)**
+## 8. Tema claro e escuro
 
-| Id | Prova |
-|---|---|
-| F-TEMA-01 | Escolher escuro aplica na hora, grava em `user_preferences`, e recarregar mantém |
-| F-TEMA-02 | A escolha aparece em contexto de navegador novo do mesmo usuário, sem cópia local |
-| F-TEMA-03 | Na segunda carga o documento já está escuro antes de o conteúdo da rota aparecer |
-| F-TEMA-04 | Com a gravação falhando, a tela troca, avisa que não salvou na conta, e vale até a próxima carga |
-| F-TEMA-05 | Logout apaga a cópia local; telas públicas em claro; o próximo usuário não herda o tema |
-| F-TEMA-06 | Aluno, professor e admin têm o controle e a preferência persistida |
-| F-TEMA-07 | Contraste AA — 4.5:1 em texto, 3:1 em limite de componente — nos dois temas |
-| F-TEMA-08 | Sem escolha e sem linha na tabela, o site abre em claro mesmo com o sistema no escuro |
+Spec: [`specs/11-tema-claro-escuro.md`](specs/11-tema-claro-escuro.md). A
+preferência é da conta e vale para os três papéis; o banco guarda em
+`user_preferences`, e os critérios de RLS, grant por coluna e enum são provados
+sem navegador em `supabase/tests/06_preferences.sql`.
+
+O controle é `.sidebar__theme button`, e é `type="button"` de propósito: o único
+submit da sidebar continua sendo o "Sair".
+
+### F-TEMA-01 — Escolher o tema
+**Pré** qualquer pessoa autenticada, sem linha em `user_preferences`.
+**Passos** clicar em "Tema escuro" na sidebar.
+**Esperado**
+- `<html data-theme="dark">` imediatamente;
+- o botão passa a dizer "Tema claro";
+- `user_preferences` ganha a linha com `theme='dark'`;
+- `localStorage` tem `bora.theme.active` = id do perfil e `bora.theme.<id>` = `dark`;
+- recarregar mantém o escuro.
+
+Voltar ao claro grava de novo, sem criar uma segunda linha.
+
+### F-TEMA-02 — A escolha é da conta
+**Cenário** contexto de navegador NOVO, sem `localStorage`, autenticado como a
+mesma pessoa. **Esperado** a tela abre escura — o único caminho possível para o
+escuro ali é a conta.
+
+### F-TEMA-03 — Sem piscada
+**Cenário** a resposta de `/rest/v1/profiles` é segurada, então nenhum loader
+resolve e nenhuma tela renderiza.
+**Esperado** `<html data-theme="dark">` **já está aplicado** e `h1` ainda não
+existe. É o script embutido de `index.html` provando que roda antes do primeiro
+paint; se o tema dependesse do loader, aqui o documento estaria claro.
+
+**Espere a gravação antes de recarregar.** A conta é a fonte da verdade: trocar
+o tema e recarregar antes de o valor subir faz o loader devolver o antigo e
+desfazer a escolha. É `R-TEMA-11` funcionando, e um teste que não aguarda a
+gravação falha de forma intermitente acusando piscada.
+
+### F-TEMA-04 — A gravação falha
+**Cenário** `/rest/v1/user_preferences` responde 500.
+**Esperado** a tela troca de cor assim mesmo; aparece "Tema aplicado neste
+aparelho. Não foi possível salvar na sua conta."; `user_preferences` continua
+sem linha.
+
+### F-TEMA-05 — Sair
+**Esperado** as duas chaves do `localStorage` somem, `/entrar` fica clara, e
+outra pessoa autenticando no mesmo navegador não herda o escuro.
+
+### F-TEMA-06 — Os três papéis
+Aluno, professor e **admin** têm o controle e a preferência persiste. O admin é
+criado com `createUser("admin", …)` e removido no fim do teste.
+
+### F-TEMA-07 — Contraste AA nos dois temas
+**Esperado** em `/aluno`, `/aluno/estatisticas`, `/aluno/revisoes`,
+`/aluno/conta`, `/professor`, `/professor/planejamentos` e
+`/professor/estatisticas`, nos dois temas: texto a 4.5:1 — 3:1 se grande — e
+limite de campo e de botão a 3:1.
+
+Os pares saem de `getComputedStyle` na página, em `support/contrast.ts`, com
+duas correções que a medição ingênua erra:
+
+- **o fundo é resolvido subindo pelos ancestrais**, compondo alfa. Quase todo
+  elemento tem `background-color: rgba(0,0,0,0)`, e comparar texto contra
+  transparente não mede nada;
+- **`opacity` é multiplicada no alfa da cor.** Ela não aparece em
+  `getComputedStyle().color`, e três rótulos da sidebar a usam — sem isso o
+  teste aprovaria um contraste que ninguém enxerga.
+
+Borda de cartão fica **fora** de propósito: contêiner não interativo não é
+componente na acepção da 1.4.11, e o tema claro nunca cumpriu 3:1 ali.
+
+### F-TEMA-08 — Sem escolha
+**Cenário** `emulateMedia({ colorScheme: "dark" })`, sem linha na tabela.
+**Esperado** a tela abre **clara**. Não existe "seguir o sistema":
+`prefers-color-scheme` não é lido em lugar nenhum do site.

@@ -4,11 +4,17 @@ import { Sidebar, type NavGroup } from "@/components/Sidebar";
 import { Alert } from "@/components/ui";
 import { useSignOut } from "@/lib/auth/useSignOut";
 import { requireRole } from "@/lib/auth/session";
+import { adoptTheme } from "@/lib/theme";
 import { ROUTES } from "@/lib/routes";
 
 export async function studentLayoutLoader() {
   const session = await requireRole("student");
-  return { name: session.name, hasAccess: session.hasAccess };
+
+  // Reconcilia a cópia do aparelho com o que a conta diz, no LOADER e não num
+  // efeito: efeito roda depois da pintura, e é a pintura que não pode piscar.
+  adoptTheme(session.profileId, session.theme);
+
+  return { profileId: session.profileId, theme: session.theme, name: session.name, hasAccess: session.hasAccess };
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentLayoutLoader>>;
@@ -39,7 +45,14 @@ export function StudentLayout() {
 
   return (
     <div className="shell">
-      <Sidebar groups={groups} userName={session.name} roleLabel="Aluno" signOutAction={signOut} />
+      <Sidebar
+        groups={groups}
+        userName={session.name}
+        profileId={session.profileId}
+        theme={session.theme}
+        roleLabel="Aluno"
+        signOutAction={signOut}
+      />
       <main className="content">
         {!session.hasAccess && (
           <Alert kind="warning">

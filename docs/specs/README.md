@@ -3,8 +3,10 @@
 Uma spec por feature. Descrevem **o que o sistema faz e por quê** — não como o
 código está organizado, que é assunto de [`../arquitetura.md`](../arquitetura.md).
 
-Estas dez primeiras foram escritas a partir do código já implantado: são o
-retrato do que existe hoje, não um plano. Servem a três coisas — dar um lugar
+As dez primeiras foram escritas a partir do código já implantado: são o
+retrato do que existe hoje, não um plano. Da 11 em diante a ordem se inverte —
+a spec vem antes do código, é commitada sozinha, e os ids de teste nascem com
+ela. Servem a três coisas — dar um lugar
 para a regra morar quando ela não cabe num comentário, permitir revisar
 comportamento sem ler SQL, e ser o molde das specs das features que faltam.
 
@@ -28,7 +30,7 @@ lá vira uma spec nova antes de virar código.
 | 08 | [Desempenho e estatísticas](08-desempenho-e-estatisticas.md) | Ledger append-only e as cinco views derivadas |
 | 09 | [Reforço e revisões](09-reforco-e-revisoes.md) | Ciclo de 3 baterias, caderno de erros, o que ainda só recomenda |
 | 10 | [Conta e lista de espera](10-conta-e-lista-de-espera.md) | Dados do aluno, inscrição, preferências |
-| 11 | [Tema claro e escuro](11-tema-claro-escuro.md) | Preferência de interface da conta, para os três papéis — **não implementada** |
+| 11 | [Tema claro e escuro](11-tema-claro-escuro.md) | Preferência de interface da conta, para os três papéis |
 
 ---
 

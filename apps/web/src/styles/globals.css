@@ -32,6 +32,105 @@
      da fonte é auto-hospedado: ver o import de @fontsource-variable em
      main.tsx. Nenhuma requisição sai para o Google. */
   --font-sans: "Geist Variable";
+
+  /* ---------------------------------------------------------------------
+     PAPÉIS
+
+     Acima está a ESCALA: `--ink-900` é o tom mais escuro do cinza, e continua
+     sendo isso nos dois temas. Aqui embaixo estão os PAPÉIS: o que é fundo de
+     cartão, o que é texto secundário, o que é borda de campo.
+
+     O tema escuro redefine SÓ ESTA SEGUNDA LISTA. Inverter a escala — fazer
+     `--ink-900` virar claro — faria o nome do token mentir, e é assim que um
+     terceiro tema nasceria ilegível (R-TEMA-16).
+     --------------------------------------------------------------------- */
+  --surface: #fff;
+  --surface-sunken: var(--ink-50);
+  --surface-raised: var(--ink-100);
+  --surface-hover: var(--ink-200);
+  --surface-sidebar: var(--ink-900);
+
+  --text: var(--ink-900);
+  --text-label: var(--ink-700);
+  --text-muted: var(--ink-500);
+
+  /* `--ink-300` não chega a 3:1 contra o branco, e limite de campo e de botão
+     é informação para identificar o controle — não é decoração. Ver R-TEMA-15
+     e o teste de contraste em F-TEMA-07. */
+  --border: var(--ink-200);
+  --border-strong: var(--ink-500);
+
+  --accent: var(--blue-600);
+  --accent-hover: var(--blue-700);
+  --accent-text: var(--blue-600);
+  --on-accent: #fff;
+
+  --sidebar-text: var(--ink-300);
+  --sidebar-text-strong: #fff;
+
+  --ok-bg: var(--green-50);
+  --ok-border: #bbf7d0;
+  --ok-text: var(--green-600);
+  --warn-bg: var(--amber-50);
+  --warn-border: #fde68a;
+  --warn-text: var(--amber-600);
+  --danger-bg: var(--red-50);
+  --danger-border: #fecaca;
+  --danger-text: var(--red-600);
+  --info-bg: var(--blue-50);
+  --info-border: #c7d7fe;
+  --info-text: var(--blue-700);
+}
+
+/* ---------------------------------------------------------------------------
+   TEMA ESCURO
+
+   Só papéis. Nenhuma linha daqui toca a escala.
+
+   Os valores foram escolhidos para cumprir WCAG AA (R-TEMA-15): 4.5:1 em texto
+   normal e 3:1 no limite de campo e de botão. Quem mexer aqui roda F-TEMA-07,
+   que mede os pares de verdade em vez de confiar no olho.
+
+   O atributo é escrito pelo script embutido de index.html antes do primeiro
+   paint, e reconciliado pelo loader do layout.
+   --------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --surface: #151d2e;
+  --surface-sunken: #0b1220;
+  --surface-raised: #1e293b;
+  --surface-hover: #26344b;
+  --surface-sidebar: #070d1a;
+
+  --text: var(--ink-100);
+  --text-label: var(--ink-300);
+  --text-muted: #9aa8bd;
+
+  --border: #26344b;
+  --border-strong: var(--ink-500);
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-text: #7ea6ff;
+  --on-accent: #fff;
+
+  --sidebar-text: #b6c2d4;
+  --sidebar-text-strong: #fff;
+
+  --ok-bg: #0f2a1b;
+  --ok-border: #1f5133;
+  --ok-text: #6ee7a8;
+  --warn-bg: #2e2410;
+  --warn-border: #6b4e1a;
+  --warn-text: #fcd34d;
+  --danger-bg: #33161a;
+  --danger-border: #7f2229;
+  --danger-text: #fca5a5;
+  --info-bg: #16233d;
+  --info-border: #2e4a7a;
+  --info-text: #9ec1ff;
+
+  /* A sombra do tema claro é preta a 6% — invisível sobre fundo escuro. */
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 12px rgb(0 0 0 / 30%);
 }
 
 * { box-sizing: border-box; }
@@ -39,8 +138,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--ink-50);
-  color: var(--ink-900);
+  background: var(--surface-sunken);
+  color: var(--text);
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.6;
@@ -51,7 +150,7 @@ h1 { font-size: 1.6rem; }
 h2 { font-size: 1.15rem; }
 h3 { font-size: 1rem; }
 p  { margin: 0; }
-a  { color: var(--blue-600); }
+a  { color: var(--accent-text); }
 
 /* --------------------------------------------------------------------------
    Botões
@@ -64,22 +163,22 @@ a  { color: var(--blue-600); }
   padding: 9px 16px;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--ink-100);
-  color: var(--ink-900);
+  background: var(--surface-raised);
+  color: var(--text);
   font: inherit;
   font-weight: 550;
   cursor: pointer;
   text-decoration: none;
   transition: background 120ms, border-color 120ms;
 }
-.btn:hover:not(:disabled) { background: var(--ink-200); }
+.btn:hover:not(:disabled) { background: var(--surface-hover); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn--primary { background: var(--blue-600); color: #fff; }
-.btn--primary:hover:not(:disabled) { background: var(--blue-700); }
-.btn--ghost { background: transparent; border-color: var(--ink-200); }
-.btn--ghost:hover:not(:disabled) { background: var(--ink-100); }
-.btn--danger { background: transparent; border-color: var(--ink-200); color: var(--red-600); }
-.btn--danger:hover:not(:disabled) { background: var(--red-50); }
+.btn--primary { background: var(--accent); color: var(--on-accent); }
+.btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn--ghost { background: transparent; border-color: var(--border-strong); }
+.btn--ghost:hover:not(:disabled) { background: var(--surface-raised); }
+.btn--danger { background: transparent; border-color: var(--border-strong); color: var(--danger-text); }
+.btn--danger:hover:not(:disabled) { background: var(--danger-bg); }
 .btn--block { width: 100%; }
 .btn--sm { padding: 6px 11px; font-size: 0.85rem; }
 
@@ -87,21 +186,21 @@ a  { color: var(--blue-600); }
    Formulários
    -------------------------------------------------------------------------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
-.field__label { font-size: 0.85rem; font-weight: 550; color: var(--ink-700); }
-.field__hint { font-size: 0.8rem; color: var(--ink-500); }
+.field__label { font-size: 0.85rem; font-weight: 550; color: var(--text-label); }
+.field__hint { font-size: 0.8rem; color: var(--text-muted); }
 .field input, .field select, .field textarea {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--ink-300);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--surface);
   font: inherit;
-  color: var(--ink-900);
+  color: var(--text);
 }
 .field input:focus, .field select:focus, .field textarea:focus {
-  outline: 2px solid var(--blue-600);
+  outline: 2px solid var(--accent);
   outline-offset: -1px;
-  border-color: var(--blue-600);
+  border-color: var(--accent);
 }
 
 /* --------------------------------------------------------------------------
@@ -114,28 +213,28 @@ a  { color: var(--blue-600); }
   font-size: 0.9rem;
   margin-bottom: 14px;
 }
-.alert--error   { background: var(--red-50);   border-color: #fecaca; color: var(--red-600); }
-.alert--success { background: var(--green-50); border-color: #bbf7d0; color: var(--green-600); }
-.alert--info    { background: var(--blue-50);  border-color: #c7d7fe; color: var(--blue-700); }
-.alert--warning { background: var(--amber-50); border-color: #fde68a; color: var(--amber-600); }
+.alert--error   { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.alert--success { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--ok-text); }
+.alert--info    { background: var(--info-bg);   border-color: var(--info-border);   color: var(--info-text); }
+.alert--warning { background: var(--warn-bg);   border-color: var(--warn-border);   color: var(--warn-text); }
 
 /* --------------------------------------------------------------------------
    Cartões e tabelas
    -------------------------------------------------------------------------- */
 .card {
-  background: #fff;
-  border: 1px solid var(--ink-200);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: 20px;
 }
 .card__header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.card__sub { font-size: 0.85rem; color: var(--ink-500); }
+.card__sub { font-size: 0.85rem; color: var(--text-muted); }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--ink-200); }
-th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-500); font-weight: 600; }
+th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; }
 tbody tr:last-child td { border-bottom: none; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -147,18 +246,18 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 600;
   border: 1px solid;
 }
-.badge--neutral { background: var(--ink-100); border-color: var(--ink-200); color: var(--ink-700); }
-.badge--green   { background: var(--green-50); border-color: #bbf7d0; color: var(--green-600); }
-.badge--amber   { background: var(--amber-50); border-color: #fde68a; color: var(--amber-600); }
-.badge--red     { background: var(--red-50);   border-color: #fecaca; color: var(--red-600); }
-.badge--blue    { background: var(--blue-50);  border-color: #c7d7fe; color: var(--blue-700); }
+.badge--neutral { background: var(--surface-raised); border-color: var(--border); color: var(--text-label); }
+.badge--green   { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--ok-text); }
+.badge--amber   { background: var(--warn-bg);   border-color: var(--warn-border);   color: var(--warn-text); }
+.badge--red     { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.badge--blue    { background: var(--info-bg);   border-color: var(--info-border);   color: var(--info-text); }
 
 .empty {
   padding: 32px 20px;
   text-align: center;
-  color: var(--ink-500);
+  color: var(--text-muted);
   font-size: 0.9rem;
-  border: 1px dashed var(--ink-300);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
 }
 
@@ -166,7 +265,7 @@ tbody tr:last-child td { border-bottom: none; }
 .stack-sm{ display: grid; gap: 8px; }
 .row     { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .spread  { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.muted   { color: var(--ink-500); font-size: 0.87rem; }
+.muted   { color: var(--text-muted); font-size: 0.87rem; }
 .grid-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 
 /* --------------------------------------------------------------------------
@@ -175,8 +274,8 @@ tbody tr:last-child td { border-bottom: none; }
 .shell { display: grid; grid-template-columns: var(--sidebar-width) 1fr; min-height: 100vh; }
 
 .sidebar {
-  background: var(--ink-900);
-  color: #fff;
+  background: var(--surface-sidebar);
+  color: var(--sidebar-text-strong);
   padding: 22px 14px;
   display: flex;
   flex-direction: column;
@@ -194,20 +293,26 @@ tbody tr:last-child td { border-bottom: none; }
   display: block;
   padding: 8px 10px;
   border-radius: 8px;
-  color: #cbd5e1;
+  color: var(--sidebar-text);
   text-decoration: none;
   font-size: 0.9rem;
 }
-.sidebar__link:hover { background: rgb(255 255 255 / 8%); color: #fff; }
-.sidebar__link[aria-current="page"] { background: var(--blue-600); color: #fff; font-weight: 550; }
+.sidebar__link:hover { background: rgb(255 255 255 / 8%); color: var(--sidebar-text-strong); }
+.sidebar__link[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 550; }
 .sidebar__link[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
 .sidebar__foot { margin-top: auto; border-top: 1px solid rgb(255 255 255 / 12%); padding-top: 14px; }
+.sidebar__theme { margin-bottom: 12px; }
+/* 40% e não menos: sobre o fundo da sidebar, 22% de branco dá 1,9:1 e o
+   limite do botão deixa de ser identificável. Medido por F-TEMA-07. */
+.sidebar__theme .btn { color: var(--sidebar-text); border-color: rgb(255 255 255 / 40%); }
+.sidebar__theme .btn:hover:not(:disabled) { background: rgb(255 255 255 / 8%); color: var(--sidebar-text-strong); }
+.sidebar__note { margin-top: 6px; font-size: 0.76rem; line-height: 1.4; color: var(--warn-text); }
 .sidebar__user { font-size: 0.85rem; padding: 0 8px 10px; }
 .sidebar__user span { display: block; opacity: 0.55; font-size: 0.76rem; }
 
 .content { padding: 28px 32px 64px; max-width: 1180px; }
 .content__header { margin-bottom: 22px; }
-.content__header p { color: var(--ink-500); font-size: 0.92rem; margin-top: 4px; }
+.content__header p { color: var(--text-muted); font-size: 0.92rem; margin-top: 4px; }
 
 /* --------------------------------------------------------------------------
    Telas públicas
@@ -219,10 +324,10 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 24px;
   background: linear-gradient(160deg, var(--ink-900) 0%, #1e293b 55%, var(--blue-700) 100%);
 }
-.auth__card { width: 100%; max-width: 420px; background: #fff; border-radius: 16px; padding: 30px; box-shadow: 0 18px 44px rgb(15 23 42 / 32%); }
+.auth__card { width: 100%; max-width: 420px; background: var(--surface); border-radius: 16px; padding: 30px; box-shadow: 0 18px 44px rgb(15 23 42 / 32%); }
 .auth__brand { font-weight: 700; font-size: 1.3rem; margin-bottom: 4px; }
-.auth__sub { color: var(--ink-500); font-size: 0.9rem; margin-bottom: 22px; }
-.auth__foot { margin-top: 18px; font-size: 0.87rem; color: var(--ink-500); display: grid; gap: 6px; }
+.auth__sub { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 22px; }
+.auth__foot { margin-top: 18px; font-size: 0.87rem; color: var(--text-muted); display: grid; gap: 6px; }
 
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; }
