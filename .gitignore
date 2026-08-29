@@ -40,5 +40,16 @@ Thumbs.db
 npm-debug.log*
 yarn-error.log*
 
-# Runbook de staging — instruções locais, com referência a domínio e projeto
+# Runbook de staging — carrega o id da organização e a publishable key
+# literal. O ref do projeto e o domínio estão versionados em
+# supabase/config.toml, então não são eles que justificam esta linha.
 docs/ambiente-staging.md
+
+# Estado local do wrangler
+.wrangler/
+
+# Valores de secret colados à mão para preencher o Environment do GitHub.
+# O PAT do Supabase é de conta inteira: vazando, dá acesso a todos os projetos
+# da organização. Apague o arquivo depois de preencher o Environment — isto
+# impede o commit, não o vazamento por backup ou sincronização de pasta.
+/secrets*

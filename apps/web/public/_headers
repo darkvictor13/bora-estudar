@@ -1,0 +1,21 @@
+# Política de cache. Precisa viver em public/ e não em dist/: o Vite copia
+# public/* para a raiz do dist a cada build, e o dist é descartável.
+#
+# Regras que casam o mesmo caminho têm os VALORES CONCATENADOS, não substituídos
+# — medido: `/assets/*` seguido de `/*` produz
+# `public, max-age=31536000, immutable, no-cache` no asset, o pior dos dois
+# mundos. Por isso a casca vem primeiro e o asset apaga o cabeçalho com `!`
+# antes de escrever o seu.
+
+# A casca da SPA é servida em TODA rota, não só em /index.html: uma regra para
+# `/index.html` não pega `/aluno/revisoes`, e nem sequer pega `/` — o
+# html_handling do Cloudflare redireciona /index.html para / com 307, e é o
+# redirect que fica com o cabeçalho.
+/*
+  Cache-Control: no-cache
+
+# Os nomes em assets/ carregam hash de conteúdo — cache eterno é seguro, e é o
+# index.html (acima, sem cache) quem aponta para o hash novo a cada deploy.
+/assets/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable

@@ -1,0 +1,73 @@
+# Gate de qualidade. Roda em PR e é chamado pelos dois workflows de deploy,
+# que dependem dele antes de tocar em banco ou site.
+#
+# Existe como workflow reusável de propósito: uma cópia deste gate por arquivo
+# de deploy derivaria, e um gate que derivou em silêncio é pior do que gate
+# nenhum — staging passaria a publicar código que o `npm run check` reprova.
+name: Verificação
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit a verificar. Vazio = o ref do chamador."
+        type: string
+        required: false
+        default: ""
+      wrangler_env:
+        description: "Ambiente do wrangler a validar no --dry-run."
+        type: string
+        required: false
+        default: staging
+
+permissions:
+  contents: read
+
+env:
+  WRANGLER_SEND_METRICS: "false"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # `npm ci` na raiz: são workspaces do npm, e instalar dentro de apps/web
+      # não resolve @bora/protocol nem @bora/database.
+      - name: Instalar
+        run: npm ci
+
+      # Antes do check, SEMPRE: o lint da extensão é `web-ext lint --source-dir
+      # dist`, que sai com código 1 quando o diretório não existe — e o
+      # .gitignore garante que não exista num clone limpo.
+      - name: Compilar a extensão
+        run: npm run ext:build
+
+      - name: Typecheck, lint e testes
+        run: npm run check
+
+      # Placeholder nas VITE_*: aqui só se quer saber se o bundle compila, e o
+      # bundle deste job nunca é publicado. A validação de env.ts é de runtime.
+      - name: Compilar o site
+        run: npm run build --workspace @bora/web
+        env:
+          VITE_SUPABASE_URL: https://exemplo.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
+
+      # Lê o dist e valida a configuração sem publicar nada. Medido: o
+      # --dry-run não exige credencial do Cloudflare, então este job roda igual
+      # numa PR vinda de fork, que não recebe secret nenhum.
+      - name: Validar a configuração do Worker
+        env:
+          WRANGLER_ENV: ${{ inputs.wrangler_env || 'staging' }}
+        run: npx wrangler deploy --config apps/web/wrangler.jsonc --env "$WRANGLER_ENV" --dry-run

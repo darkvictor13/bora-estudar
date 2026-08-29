@@ -429,3 +429,22 @@ enabled = true
 # declarative_schema_path = "./schemas"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Staging hospedado no Cloudflare Workers. O bloco só é mesclado quando o ref
+# do `config push` casa com o project_id abaixo — o resto do arquivo continua
+# descrevendo o ambiente local.
+#
+# A auth do GoTrue é allow-list de URL EXATA. Sem estes dois valores o
+# redirectTo montado no navegador (apps/web/src/lib/auth/actions.ts) é
+# descartado e o e-mail de recuperação leva para o site_url — que aqui em cima
+# ainda é localhost:3000.
+[remotes.staging]
+project_id = "gumvfizrjexbygrbceei"
+
+[remotes.staging.auth]
+site_url = "https://bora-estudar-staging.bora-estudar-saas.workers.dev"
+# O `/**` não é decoração: o link do e-mail aponta para
+# /confirmar?next=/redefinir-senha, não para a raiz.
+additional_redirect_urls = [
+  "https://bora-estudar-staging.bora-estudar-saas.workers.dev/**",
+]
