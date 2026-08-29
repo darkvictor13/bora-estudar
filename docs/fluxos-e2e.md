@@ -507,3 +507,22 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
   recomendam, não executam. O content script também só conduz a fase `main`.
 - **Editar os próprios dados como professor.** `updateProfile` exige
   `requireRole("student")`.
+
+### Já especificados, com id reservado
+
+Estes têm spec escrita e ainda não têm tela. O id já está preso e é por ele que
+o teste nasce quando a implementação começar; ao existir, o fluxo sai daqui e
+entra na seção da área.
+
+**[Spec 11 — Tema claro e escuro](specs/11-tema-claro-escuro.md)**
+
+| Id | Prova |
+|---|---|
+| F-TEMA-01 | Escolher escuro aplica na hora, grava em `user_preferences`, e recarregar mantém |
+| F-TEMA-02 | A escolha aparece em contexto de navegador novo do mesmo usuário, sem cópia local |
+| F-TEMA-03 | Na segunda carga o documento já está escuro antes de o conteúdo da rota aparecer |
+| F-TEMA-04 | Com a gravação falhando, a tela troca, avisa que não salvou na conta, e vale até a próxima carga |
+| F-TEMA-05 | Logout apaga a cópia local; telas públicas em claro; o próximo usuário não herda o tema |
+| F-TEMA-06 | Aluno, professor e admin têm o controle e a preferência persistida |
+| F-TEMA-07 | Contraste AA — 4.5:1 em texto, 3:1 em limite de componente — nos dois temas |
+| F-TEMA-08 | Sem escolha e sem linha na tabela, o site abre em claro mesmo com o sistema no escuro |

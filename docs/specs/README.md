@@ -28,6 +28,7 @@ lá vira uma spec nova antes de virar código.
 | 08 | [Desempenho e estatísticas](08-desempenho-e-estatisticas.md) | Ledger append-only e as cinco views derivadas |
 | 09 | [Reforço e revisões](09-reforco-e-revisoes.md) | Ciclo de 3 baterias, caderno de erros, o que ainda só recomenda |
 | 10 | [Conta e lista de espera](10-conta-e-lista-de-espera.md) | Dados do aluno, inscrição, preferências |
+| 11 | [Tema claro e escuro](11-tema-claro-escuro.md) | Preferência de interface da conta, para os três papéis — **não implementada** |
 
 ---
 
