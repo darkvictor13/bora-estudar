@@ -269,6 +269,84 @@ não há `<label for>`, e leitor de tela não anuncia o campo.
 
 ---
 
+### BUG-14 · ALTO · `PUBLIC` mantinha `EXECUTE` em toda função de `public`
+
+> Origem diferente do resto deste arquivo: não saiu da varredura de navegador,
+> e sim de `supabase db advisors --linked`, rodado depois do primeiro
+> `db push` — 47 `WARN`, nenhum `ERROR`. Os achados abaixo existiam
+> **igualmente no banco local**; não são artefato de staging. Por isso não
+> entram no placar das 249 verificações.
+
+A migration inicial fez `revoke all on all functions ... from anon,
+authenticated` e, na linha 1886, um revoke específico com um comentário
+afirmando o controle:
+
+```sql
+-- reserve_operation é infraestrutura interna das RPCs, não API pública.
+revoke all on function public.reserve_operation(uuid, text, uuid, text) from anon, authenticated;
+```
+
+Nenhum dos dois alcançava o privilégio real. O default do Postgres concede
+`EXECUTE` a `PUBLIC`, e `PUBLIC` não é `anon` nem `authenticated`: é o grantee
+vazio que os dois herdam. O `acl` das 16 funções ficava `=X/postgres`, e
+`has_function_privilege('authenticated', ...)` devolvia `true` para todas —
+inclusive para a que o comentário chamava de interna.
+
+Isso importa porque `operations` tem RLS de `select` apenas e **nenhum**
+`grant insert`: `reserve_operation` é o único caminho de escrita naquela
+tabela. Aberta, ela permite a um aluno autenticado gravar linhas arbitrárias,
+com `target_id` de sua escolha, e queimar um `request_id` com hash divergente —
+fazendo o `finish_quiz_session` legítimo daquele id ser recusado com `23505`.
+Não é vazamento nem escalada para o dado de outro aluno: a RLS das demais
+tabelas continua de pé. É um controle documentado que não existia, mais escrita
+sem limite numa tabela de infraestrutura.
+
+As quatro funções `tg_*` também estavam expostas, com risco prático nulo:
+função de gatilho recusa chamada fora de contexto de trigger.
+
+**Reproduzir** com a publishable key, que é o que qualquer visitante tem:
+
+```
+POST /rest/v1/rpc/reserve_operation  →  400
+23502: null value in column "actor_id" of relation "operations"
+```
+
+A chamada **passou** pelo grant e entrou no corpo da função; o que a barrou foi
+o `not null` de `operations.actor_id` contra o `auth.uid()` nulo do `anon` — a
+regra do `CLAUDE.md` sobre invariante em constraint pagando por si mesma. Para
+um usuário **autenticado** o `auth.uid()` não é nulo, e nada barra.
+
+**Segundo defeito, mesma família.** `tg_set_updated_at` e
+`tg_block_ledger_mutation` não declaravam `set search_path`; as outras 14
+declaram `= ''`. Uma delas é o gatilho que sustenta o ledger append-only, que é
+a fonte única de desempenho do sistema.
+
+**Correção** `20260829183000_harden_function_grants.sql`, migration nova — o
+schema inicial está congelado desde o push de staging.
+`revoke execute on all functions in schema public from public`, seguido do
+grant nominal às 11 funções da API pública; as cinco restantes
+(`reserve_operation` e as quatro `tg_*`) ficam sem grant para papel nenhum.
+Gatilho não precisa: o Postgres confere `EXECUTE` na criação do trigger, e a
+execução corre por conta do dono da tabela. As duas funções sem `search_path`
+foram recriadas com `= ''` — nenhuma referencia objeto de schema, e `now()` é
+built-in resolvida por `pg_catalog`.
+
+**Verificado** depois de `db reset`: `has_function_privilege` devolve `false`
+para `anon` e `authenticated` em `reserve_operation`; exatamente 11 funções
+continuam executáveis por `authenticated`; nenhuma função de `public` fica sem
+`search_path`; o gatilho do ledger segue recusando `UPDATE` e `DELETE` com
+`0A000`; `updated_at` segue avançando. `npm run db:test` passa inteiro,
+`npm run check` passa, e `npm run db:types` não produz diff.
+
+**O que ficou de fora, de propósito.** A terceira família do relatório —
+`auth_rls_initplan`, ~30 avisos — é desempenho, não segurança: policies que
+reavaliam `auth.uid()` uma vez por linha. Hoje são 31 usos, nenhum envolvido em
+subselect. A correção é mecânica (`(select auth.uid())`), mas toca 31 policies
+e merece migration própria, com medição antes e depois. Registrado aqui para
+não se perder.
+
+---
+
 ## Registrados, não corrigidos
 
 Não são defeitos: são telas que ainda não existem. Corrigir cada um seria
