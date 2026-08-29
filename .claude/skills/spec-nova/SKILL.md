@@ -216,27 +216,47 @@ git add docs/specs/NN-*.md docs/specs/README.md docs/fluxos-e2e.md
 git commit -m "Especifica <a feature>"
 ```
 
+Esse é o único commit deste fluxo e ele vai na `main`: é documentação sozinha,
+que é o que permite revisar a spec sem o código junto. A branch da
+implementação nasce **depois** dele, no Passo 9.
+
 ## Passo 9 — Encerrar apontando o caminho
 
 Este fluxo termina no commit da spec. Diga ao usuário a ordem da implementação,
 que é outro trabalho:
 
-1. migration nova — o schema inicial está **congelado**, nunca reescreva
+1. **branch nova, antes da primeira linha de código:**
+
+   ```bash
+   git switch main && git pull            # o commit da spec precisa estar aqui
+   git switch -c feature/<nome-em-kebab>  # o mesmo slug do arquivo da spec, sem o NN-
+   ```
+
+   `docs/specs/11-tema-claro-escuro.md` → `feature/tema-claro-escuro`. A
+   implementação inteira mora nessa branch — migration, RPC, protocolo, site,
+   e2e e o fechamento da spec. **Nada de implementação é commitado direto na
+   `main`:** cada commit na `main` publica staging
+   (`.github/workflows/deploy-staging.yml`), e uma feature entregue pela metade
+   lá é banco novo com um bundle que ainda não chama a RPC nova. A `main`
+   recebe o conjunto de uma vez, por merge, quando `npm run check`,
+   `npm run db:test` e a suíte e2e passarem;
+2. migration nova — o schema inicial está **congelado**, nunca reescreva
    migration já aplicada → `npm run db:types`, e commite o arquivo gerado;
-2. teste de banco falhando primeiro, pelos `CA` que mapeiam para
+3. teste de banco falhando primeiro, pelos `CA` que mapeiam para
    `supabase/tests/`;
-3. RPC, policies e grants até `npm run db:test` passar;
-4. `packages/protocol`, se a extensão entra — mudança incompatível incrementa
+4. RPC, policies e grants até `npm run db:test` passar;
+5. `packages/protocol`, se a extensão entra — mudança incompatível incrementa
    `PROTOCOL_VERSION`;
-5. site, mais a tradução das mensagens de `raise exception` para o usuário;
-6. e2e pelos `F-` reservados. **`npm run db:reset` entre `db:test` e `e2e`** —
+6. site, mais a tradução das mensagens de `raise exception` para o usuário;
+7. e2e pelos `F-` reservados. **`npm run db:reset` entre `db:test` e `e2e`** —
    na outra ordem o `global-setup` quebra.
 
 E o fechamento, no commit da implementação: `Situação` vira `implementada`, a
 coluna Cobertura recebe os ids reais, os fluxos saem do §7 e entram na seção da
 área, e a mensagem de commit cita os ids. Se a realidade contrariou a spec
 durante a implementação, a spec é corrigida no mesmo commit — nunca anotada
-para depois.
+para depois. Esse commit também é da branch: a `main` só vê a feature quando o
+conjunto inteiro passa.
 
 ---
 
@@ -253,3 +273,4 @@ para depois.
 | Colisão de id com spec antiga | Passo 5, levantamento dos prefixos |
 | Critério sem teste, descoberto no fim | Passo 7, ids reservados antes |
 | Spec entregue junto com o código, sem revisão real | Passo 8, commit isolado |
+| Feature pela metade publicada em staging a cada commit | Passo 9, branch `feature/` antes do código |
