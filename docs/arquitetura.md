@@ -75,6 +75,13 @@ RPCs, onde é verificável.
 Por isso `@bora/extension` depende de `@bora/protocol`, mas não de
 `@bora/database`.
 
+Daí decorre uma propriedade que simplifica o deploy: **a extensão é agnóstica
+de ambiente**. O `manifest.json` só pede permissão em `tecconcursos.com.br`, e
+o `returnUrl` chega dentro do payload — quem o monta é o `StartQuizButton`, a
+partir de `location.origin`. O mesmo `dist/` serve local, staging e produção,
+desde que compilado do mesmo commit. O que amarra as duas pontas não é
+configuração, é o `PROTOCOL_VERSION`.
+
 ## Fluxo de uma bateria
 
 ```
@@ -134,6 +141,29 @@ O contrato está em `supabase/migrations`. Resumo do que a arquitetura assume:
   RLS e por grant de coluna; as tabelas de execução só mudam por RPC;
 - toda RPC mutante é idempotente por `request_id` com hash de payload;
 - nada é apagado fisicamente: `deleted_at` mais a tabela `audit_log`.
+
+### Linha de base do schema
+
+Contagens conferidas por consulta ao banco, para servir de referência quando
+alguém precisar saber se algo regrediu:
+
+| | |
+|---|---|
+| Tabelas | 21, todas com RLS habilitada |
+| Policies | 33 |
+| Views | 5, todas com `security_invoker = true` |
+| `DELETE` para `anon`/`authenticated` | zero, em tabela nenhuma |
+| Funções em `public` | 16, das quais 11 com `execute` para `authenticated` |
+| Gatilho de criação de perfil | presente e ativo em `auth.users` |
+
+Atenção ao nome do último: o gatilho chama-se **`on_auth_user_created`**;
+`tg_create_profile_for_new_user` é a função que ele executa. Procurar pelo nome
+da função na lista de gatilhos não acha nada.
+
+As 11 funções com grant são as da API pública — as quatro `tg_*` e
+`reserve_operation` ficam sem grant para papel nenhum, desde a migration
+`20260829183000_harden_function_grants.sql`. Ver BUG-14 em
+[`bugs-encontrados.md`](bugs-encontrados.md) para o que isso corrigiu.
 
 ### Duas medidas de desempenho
 

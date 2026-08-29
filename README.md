@@ -15,7 +15,8 @@ a extensão de navegador e o banco.
 A arquitetura e as razões por trás de cada limite estão em
 [`docs/arquitetura.md`](docs/arquitetura.md). Os fluxos da aplicação, no
 formato que um teste ponta a ponta precisa, estão em
-[`docs/fluxos-e2e.md`](docs/fluxos-e2e.md).
+[`docs/fluxos-e2e.md`](docs/fluxos-e2e.md). O que cada feature faz e por quê,
+uma spec por feature, está em [`docs/specs/`](docs/specs/README.md).
 
 Identificadores em inglês, no código e no banco. Comentários, mensagens e
 texto de interface em português.
@@ -118,6 +119,9 @@ compactação" → selecione a pasta `apps/extension/dist`.
 
 Um único código-fonte atende os dois: `src/shared/browser.ts` resolve
 `browser.*` no Firefox e `chrome.*` no Chrome, ambos com promises.
+
+O que falta para submeter a extensão à revisão da Mozilla está em
+[`docs/publicacao-extensao.md`](docs/publicacao-extensao.md).
 
 ## Serviços locais
 

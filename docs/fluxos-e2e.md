@@ -21,6 +21,37 @@ npm run dev             # http://localhost:3000
 de `supabase/tests/` **apagam os usuários do seed** — rodar `db:test` antes de
 um e2e quebra o login.
 
+### Rodando contra um ambiente remoto
+
+A suíte aponta para onde as variáveis mandarem, e roda contra um projeto
+hospedado — com quatro ressalvas que custam meia hora cada quando descobertas
+na marra:
+
+```bash
+E2E_BASE_URL=https://<dominio> \
+E2E_SUPABASE_URL=https://<ref>.supabase.co \
+E2E_SUPABASE_KEY=sb_publishable_... \
+E2E_DATABASE_URL="postgresql://postgres:<senha>@db.<ref>.supabase.co:5432/postgres" \
+npm run e2e --workspace @bora/e2e
+```
+
+- **`auth.spec.ts` vai falhar.** `support/mailpit.ts` fala a API do Mailpit,
+  que não existe fora do ambiente local. Ou aponte `E2E_MAILPIT_URL` para um
+  catcher com API compatível, ou exclua esse arquivo da execução.
+- **As fixtures apagam usuários.** `fixtures/scenario.ts` escreve direto em
+  `auth.users` e limpa o que criou. Não aponte para um ambiente com dado que
+  alguém precisa.
+- **Use a conexão direta, na 5432** — não o pooler em modo transaction.
+- **O `webServer` tem `reuseExistingServer: true`**, então com uma URL remota
+  que responde ele não sobe o Vite. É o comportamento desejado, mas significa
+  que uma URL remota fora do ar faz o Playwright servir o site local sem avisar.
+
+`extension.spec.ts` independe do ambiente: carrega `apps/extension/dist` num
+Chromium de verdade, e o `global-setup` compila a extensão antes.
+
+`npm run test:e2e` (o `scripts/roundtrip.mjs`) **não** acompanha: tem
+`127.0.0.1:54321` fixo no código, e só roda local até alguém parametrizar.
+
 ### Usuários do seed
 
 | Papel | E-mail | Senha | UUID |
