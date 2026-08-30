@@ -6,15 +6,25 @@ import {
   getActiveStudyPlan,
   getBlockErrors,
   getBlockPerformance,
+  getCompletedSessions,
+  getCycleErrors,
   getReviewCycles,
   getStudyPlanBlocks,
+  getUsedSessions,
 } from "@/lib/data/student";
+import { ReinforcementForm } from "@/components/student/ReinforcementForm";
+import { buildCycles } from "@/lib/domain/reinforcement";
 import { ROUTES } from "@/lib/routes";
 
 const PHASE_LABEL: Record<string, string> = {
   main: "principal",
   extra: "extra",
   reinforcement: "reforço",
+};
+
+/** Confirmação por query string: o ciclo some da lista com a revalidação. */
+const DONE_MESSAGE: Record<string, string> = {
+  reforco: "Reforço concluído. O ciclo foi revisado e saiu da lista.",
 };
 
 export async function studentReviewsLoader({ request }: { request: Request }) {
@@ -27,13 +37,49 @@ export async function studentReviewsLoader({ request }: { request: Request }) {
     getStudyPlanBlocks(plan.id),
     getBlockPerformance(plan.id),
   ]);
-  const cycles = await getReviewCycles(blocks.map((b) => b.id));
+  const blockIds = blocks.map((b) => b.id);
+  const [cycles, used] = await Promise.all([getReviewCycles(blockIds), getUsedSessions(blockIds)]);
 
-  const requested = new URL(request.url).searchParams.get("bloco");
+  const params = new URL(request.url).searchParams;
+  const requested = params.get("bloco");
   const selectedId = requested && blocks.some((b) => b.id === requested) ? requested : null;
   const errors = selectedId ? await getBlockErrors(plan.id, selectedId) : [];
 
-  return { plan, blocks, performance, cycles, selectedId, errors } as const;
+  // Ciclos abertos de cada bloco. `buildCycles` é pura e devolve só os que
+  // exigem reforço — em 80% ou mais o ciclo se fecha sozinho.
+  const openCycles = await Promise.all(
+    blocks.map(async (block) => {
+      const sessions = await getCompletedSessions(plan.id, block.id);
+      const cycle = buildCycles(sessions, used)[0];
+      if (!cycle) return null;
+      return {
+        blockId: block.id,
+        blockName: block.name,
+        subjectName: block.subject_name,
+        subjectColor: block.subject_color,
+        score: cycle.score,
+        highPriority: cycle.highPriority,
+        sessionIds: cycle.sessions.map((s) => s.id),
+        errors: await getCycleErrors(cycle.sessions.map((s) => s.id)),
+      };
+    }),
+  );
+
+  const feito = params.get("feito");
+
+  return {
+    plan,
+    blocks,
+    performance,
+    cycles,
+    selectedId,
+    errors,
+    openCycles: openCycles.filter((c) => c !== null),
+    doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
+    // Gerado UMA vez por carga da tela, e não a cada submissão: é o que faz o
+    // reenvio devolver o reforço já gravado (R-RCIC-11).
+    requestId: crypto.randomUUID(),
+  } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentReviewsLoader>>;
@@ -50,7 +96,7 @@ export function StudentReviews() {
     );
   }
 
-  const { blocks, selectedId, errors } = data;
+  const { blocks, selectedId, errors, openCycles, doneMessage, requestId } = data;
   const perfById = new Map(data.performance.map((p) => [p.block_id, p]));
 
   const cyclesByBlock = new Map<string, number>();
@@ -77,7 +123,28 @@ export function StudentReviews() {
         description="O caderno de erros reúne as questões erradas nas três fases: principais, extras e reforços."
       />
 
+      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
+
       <div className="stack">
+        {openCycles.map((cycle) => (
+          <Card
+            key={cycle.blockId}
+            title={`Reforço — ${cycle.blockName}`}
+            sub={`Ciclo de 3 baterias com ${cycle.score}% nas principais · ${cycle.errors.length} questão(ões) a revisar`}
+            action={
+              cycle.highPriority ? <Badge tone="red">Prioridade alta</Badge> : <Badge tone="amber">Disponível</Badge>
+            }
+          >
+            <ReinforcementForm
+              studyPlanId={data.plan.id}
+              blockId={cycle.blockId}
+              sessionIds={cycle.sessionIds}
+              errors={cycle.errors}
+              requestId={requestId}
+            />
+          </Card>
+        ))}
+
         <Card title="Blocos" sub="Selecione um bloco para ver os erros acumulados">
           {blocks.length === 0 ? (
             <Empty>Nenhum bloco configurado.</Empty>

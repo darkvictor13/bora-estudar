@@ -1,6 +1,6 @@
 # 20 — Execução do reforço de ciclo
 
-**Situação:** não implementada · **Comparativo:** §12 item 8 (primeira metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 · **Fluxos e2e:** F-RCIC-01 a F-RCIC-06
+**Situação:** implementada · **Comparativo:** §12 item 8 (primeira metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 · **Fluxos e2e:** F-RCIC-01 a F-RCIC-06
 
 ---
 
@@ -103,6 +103,11 @@ aluno abre /aluno/revisoes
 | RPCs | **nenhuma nova.** `record_reinforcement` já existe |
 | Migration | **nenhuma** |
 | Testes | `apps/web/src/lib/domain/reinforcement.test.ts`, `apps/e2e/tests/student.spec.ts` |
+
+**Os erros do ciclo são deduplicados por questão.** Quando o bloco do catálogo
+tem menos questões que três baterias consomem, a terceira já repete o que a
+primeira viu — e a mesma questão errada duas vezes é **um** item a revisar, não
+dois. É o que o `EXCEPT` da RPC também assume, porque compara conjuntos.
 
 **Por que a revisão acontece fora do TEC.** A alternativa seria mandar o aluno
 para o TEC com a fila de erros e deixar a extensão conduzir, como a v96 fazia com

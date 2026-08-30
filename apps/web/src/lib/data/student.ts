@@ -122,3 +122,75 @@ export async function getWaitlistEntry() {
     .maybeSingle();
   return data;
 }
+
+/**
+ * Baterias concluídas de um bloco, para formar os ciclos de reforço — spec 20.
+ *
+ * O desempenho vem de `vw_quiz_session_performance`, nunca recalculado aqui.
+ */
+export async function getCompletedSessions(studyPlanId: string, blockId: string) {
+  const { data: sessions } = await supabase
+    .from("quiz_sessions")
+    .select("id,completed_at")
+    .eq("study_plan_id", studyPlanId)
+    .eq("block_id", blockId)
+    .eq("status", "completed")
+    .order("completed_at");
+
+  const list = sessions ?? [];
+  if (!list.length) return [];
+
+  const { data: performance } = await supabase
+    .from("vw_quiz_session_performance")
+    .select("quiz_session_id,main_count,main_correct")
+    .in("quiz_session_id", list.map((s) => s.id));
+
+  const perfById = new Map((performance ?? []).map((p) => [p.quiz_session_id, p]));
+
+  return list.map((session) => ({
+    id: session.id,
+    completedAt: session.completed_at ?? "",
+    mainCount: perfById.get(session.id)?.main_count ?? 0,
+    mainCorrect: perfById.get(session.id)?.main_correct ?? 0,
+  }));
+}
+
+/** Baterias já ligadas a um reforço. `unique(quiz_session_id)` garante uma só. */
+export async function getUsedSessions(blockIds: readonly string[]): Promise<Set<string>> {
+  if (!blockIds.length) return new Set();
+  const { data } = await supabase
+    .from("reinforcements")
+    .select("id,block_id,reinforcement_sessions(quiz_session_id)")
+    .in("block_id", blockIds);
+
+  const used = new Set<string>();
+  for (const reinforcement of data ?? []) {
+    for (const link of reinforcement.reinforcement_sessions ?? []) used.add(link.quiz_session_id);
+  }
+  return used;
+}
+
+/**
+ * Os erros principais únicos de um conjunto de baterias.
+ *
+ * Só `phase = 'main'`: o ciclo avalia somente as principais, como
+ * `record_reinforcement` impõe pelo `EXCEPT`. Erro em extra ou em reforço
+ * anterior não entra.
+ */
+export async function getCycleErrors(quizSessionIds: readonly string[]) {
+  if (!quizSessionIds.length) return [];
+  const { data } = await supabase
+    .from("quiz_session_questions")
+    .select("question_id,topic,answered_at")
+    .in("quiz_session_id", quizSessionIds)
+    .eq("phase", "main")
+    .eq("outcome", "incorrect")
+    .order("question_id");
+
+  const byQuestion = new Map<number, { questionId: number; topic: string | null }>();
+  for (const row of data ?? []) {
+    const questionId = Number(row.question_id);
+    if (!byQuestion.has(questionId)) byQuestion.set(questionId, { questionId, topic: row.topic });
+  }
+  return [...byQuestion.values()];
+}

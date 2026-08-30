@@ -2,9 +2,9 @@
  * §2 do `docs/fluxos-e2e.md` — telas do aluno.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { addWeek, goalCount, goalStatus } from "../fixtures/scenario.ts";
+import { addWeek, goalCount, goalStatus, type Scenario } from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
-import { asUser, count, one } from "../fixtures/db.ts";
+import { asUser, count, one, query } from "../fixtures/db.ts";
 import { PAGE_TITLES, STUDENT_ROUTES, STUDENT_STUDY_ROUTES } from "../support/routes.ts";
 import { cardByTitle } from "../support/ui.ts";
 
@@ -673,4 +673,194 @@ test.describe("F-EXTRA-06 · validação do tempo", () => {
       expect(await goalCount(scenario.planId)).toBe(antes);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// §2 — execução do reforço de ciclo.
+// Spec docs/specs/20-execucao-do-reforco.md
+// ---------------------------------------------------------------------------
+
+/** Três baterias abaixo de 80% no mesmo bloco: um ciclo aberto. */
+async function openCycle(scenario: Scenario, correct = 8) {
+  const goal = scenario.quizGoal;
+  const done = [await completeQuiz(scenario, goal, { correct, minutes: 60 })];
+  for (const week of [2, 3]) {
+    const [novaGoal] = await addWeek(scenario, week);
+    // addWeek cria uma bateria por bloco; a primeira é do mesmo bloco do quizGoal.
+    const mesmoBloco = (await addWeekGoalsOf(scenario, week)).find(
+      (g) => g.blockId === goal.blockId,
+    )!;
+    done.push(await completeQuiz(scenario, mesmoBloco, { correct, minutes: 60 }));
+    void novaGoal;
+  }
+  return done;
+}
+
+/** As metas de uma semana já criada, na ordem. */
+async function addWeekGoalsOf(scenario: Scenario, week: number) {
+  const rows = await query<{ id: string; type: string; title: string; weekday: number; block_id: string | null }>(
+    `select id, type::text, title, weekday, block_id from public.goals
+      where study_plan_id = $1 and week_number = $2 and deleted_at is null
+      order by weekday, day_order`,
+    [scenario.planId, week],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type as "theory" | "question_block" | "extra_study" | "reinforcement",
+    title: r.title,
+    weekday: r.weekday,
+    blockId: r.block_id,
+  }));
+}
+
+const cycleCard = (page: import("@playwright/test").Page, blockName: string) =>
+  cardByTitle(page, `Reforço — ${blockName}`);
+
+test.describe("F-RCIC-01 · o ciclo aberto aparece com os erros", () => {
+  test("três baterias abaixo de 80% oferecem o reforço", async ({ studentPage, scenario }) => {
+    await openCycle(scenario, 8);
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await studentPage.goto("/aluno/revisoes");
+    const card = cycleCard(studentPage, block.name);
+
+    // 24 de 45 = 53% → abaixo de 75, prioridade alta.
+    await expect(card).toContainText("53% nas principais");
+    await expect(card.locator(".badge")).toHaveText("Prioridade alta");
+    // 7 erradas por bateria, mas o bloco do catálogo tem 30 questões: a
+    // terceira bateria já repete o que a primeira viu, então os ERROS ÚNICOS
+    // do ciclo são 15, não 21. É `getCycleErrors` deduplicando por questão.
+    await expect(card).toContainText("15 questão(ões) a revisar");
+    await expect(card.locator("tbody tr")).toHaveCount(15);
+  });
+});
+
+test.describe("F-RCIC-02 · concluir o reforço", () => {
+  test("grava e o ciclo some da lista", async ({ studentPage, scenario }) => {
+    await openCycle(scenario, 8);
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await studentPage.goto("/aluno/revisoes");
+    const card = cycleCard(studentPage, block.name);
+
+    // `.all()` NÃO espera por nada. Numa SPA a tabela só existe depois de os
+    // loaders da rota resolverem, o que é DEPOIS do `load` que o `goto`
+    // aguarda — sem esta asserção a lista volta vazia, nenhum radio é marcado,
+    // e o teste falha dizendo que faltaram 15 quando na verdade nada foi lido.
+    await expect(card.locator("tbody tr")).toHaveCount(15);
+    for (const radio of await card.locator('input[value="correct"]').all()) {
+      await radio.check();
+    }
+    await card.getByRole("button", { name: "Concluir reforço" }).click();
+
+    await expect(studentPage.locator(".alert--success")).toContainText("Reforço concluído");
+    await expect(cycleCard(studentPage, block.name)).toHaveCount(0);
+
+    // O reforço e as três baterias ficaram ligados, e as questões foram gravadas.
+    expect(
+      await count("select count(*) from public.reinforcements where block_id = $1", [block.id]),
+    ).toBe(1);
+    expect(
+      await count(
+        `select count(*) from public.reinforcement_sessions rs
+           join public.reinforcements r on r.id = rs.reinforcement_id
+          where r.block_id = $1`,
+        [block.id],
+      ),
+    ).toBe(3);
+    expect(
+      await count(
+        `select count(*) from public.reinforcement_questions rq
+           join public.reinforcements r on r.id = rq.reinforcement_id
+          where r.block_id = $1`,
+        [block.id],
+      ),
+    ).toBe(15);
+  });
+});
+
+test.describe("F-RCIC-03 · faltando marcar", () => {
+  test("o envio é impedido, com a contagem do que falta", async ({ studentPage, scenario }) => {
+    await openCycle(scenario, 8);
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await studentPage.goto("/aluno/revisoes");
+    const card = cycleCard(studentPage, block.name);
+
+    // Mesma razão do teste acima: `.all()` não espera.
+    await expect(card.locator("tbody tr")).toHaveCount(15);
+    // Marca todas menos duas.
+    const radios = await card.locator('input[value="correct"]').all();
+    for (const radio of radios.slice(0, radios.length - 2)) await radio.check();
+    await card.getByRole("button", { name: "Concluir reforço" }).click();
+
+    await expect(card.locator(".alert--error")).toContainText("faltam 2");
+    expect(
+      await count("select count(*) from public.reinforcements where block_id = $1", [block.id]),
+    ).toBe(0);
+  });
+});
+
+test.describe("F-RCIC-04 · o que muda depois", () => {
+  test("Ciclos revisados sobe e o desempenho das baterias não muda", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await openCycle(scenario, 8);
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await studentPage.goto("/aluno/revisoes");
+    const linha = studentPage.locator("tbody tr", { hasText: block.name });
+    await expect(linha).toContainText("53%");
+
+    const card = cycleCard(studentPage, block.name);
+    await expect(card.locator("tbody tr")).toHaveCount(15);
+    for (const radio of await card.locator('input[value="incorrect"]').all()) await radio.check();
+    await card.getByRole("button", { name: "Concluir reforço" }).click();
+    await expect(studentPage.locator(".alert--success")).toBeVisible();
+
+    // Reforço não anula bateria: o desempenho oficial continua o mesmo.
+    const depois = studentPage.locator("tbody tr", { hasText: block.name });
+    await expect(depois).toContainText("53%");
+    // E "Ciclos revisados" passou de 0 para 1.
+    await expect(depois).toContainText("1");
+  });
+});
+
+test.describe("F-RCIC-05 · quando não há reforço a fazer", () => {
+  test("com menos de três baterias não aparece ciclo", async ({ studentPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 8, minutes: 60 });
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await studentPage.goto("/aluno/revisoes");
+    await expect(cycleCard(studentPage, block.name)).toHaveCount(0);
+  });
+
+  test("com o acumulado em 80% ou mais, o ciclo se fecha sozinho", async ({
+    studentPage,
+    scenario,
+  }) => {
+    // 12 de 15 em cada = 80% exatos.
+    await openCycle(scenario, 12);
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await studentPage.goto("/aluno/revisoes");
+    await expect(cycleCard(studentPage, block.name)).toHaveCount(0);
+  });
+});
+
+test.describe("F-RCIC-06 · o professor vê, e não executa", () => {
+  test("a prioridade aparece na tela dele, sem botão de concluir", async ({
+    page,
+    scenario,
+    signIn,
+  }) => {
+    await openCycle(scenario, 8);
+
+    await signIn(scenario.teacher);
+    await page.goto("/professor/revisoes");
+
+    await expect(page.locator("tbody tr", { hasText: scenario.blocks[0]!.subjectName })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Concluir reforço" })).toHaveCount(0);
+  });
 });
