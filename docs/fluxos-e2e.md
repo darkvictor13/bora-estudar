@@ -959,6 +959,20 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 25 — tempo de estudo e séries
+
+Spec: [`specs/25-tempo-de-estudo-e-series.md`](specs/25-tempo-de-estudo-e-series.md).
+Migram para a §2 e a §4 quando os testes existirem.
+
+- **F-TEMP-01** — o aluno vê o tempo do período dividido por disciplina.
+- **F-TEMP-02** — trocar o período troca os números.
+- **F-TEMP-03** — período sem tempo mostra o estado vazio, não zero.
+- **F-TEMP-04** — a série traz uma linha por semana, com metas, questões e tempo.
+- **F-TEMP-05** — a sequência de dias aparece e conta.
+- **F-TEMP-06** — meta concluída sem tempo conta como meta e não como tempo.
+- **F-TEMP-07** — o professor vê as três leituras na ficha do aluno.
+- **F-TEMP-08** — reabrir uma meta tira o tempo dela das três.
+
 
 
 
