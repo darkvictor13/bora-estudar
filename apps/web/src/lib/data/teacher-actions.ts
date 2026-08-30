@@ -643,3 +643,54 @@ export async function createBlock(_prev: FormState, data: FormData): Promise<For
   if (error) return { error: translateBlockError(error.message) };
   return { redirectTo: backToNotebooks(data, "criado") };
 }
+
+// ---------------------------------------------------------------------------
+// Anulação de bateria — spec docs/specs/16-historico-e-anulacao-de-bateria.md
+// ---------------------------------------------------------------------------
+
+/** Texto padrão quando o professor não escreve motivo. É o da v96. */
+export const DEFAULT_VOID_REASON = "Anulação administrativa";
+
+/**
+ * Anula uma bateria já finalizada.
+ *
+ * Nenhuma verificação da RPC é repetida aqui: quem exige ser o professor
+ * responsável e a bateria estar `completed` ou `awaiting_time` é
+ * `void_quiz_session`. A tela só evita oferecer o que o banco recusa.
+ *
+ * O `requestId` é gerado uma vez por submissão (R-ANUL-13).
+ */
+export async function voidQuizSession(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+
+  const quizSessionId = String(data.get("quizSessionId") ?? "");
+  const studentId = String(data.get("studentId") ?? "");
+  if (!quizSessionId) return { error: "Bateria não identificada." };
+
+  const reason = String(data.get("reason") ?? "").trim() || DEFAULT_VOID_REASON;
+
+  const { error } = await supabase.rpc("void_quiz_session", {
+    p_quiz_session_id: quizSessionId,
+    p_request_id: crypto.randomUUID(),
+    p_reason: reason,
+  });
+
+  if (error) {
+    const m = error.message.toLowerCase();
+    if (m.includes("somente o professor responsavel")) {
+      return { error: "Esta bateria é de outro professor." };
+    }
+    if (m.includes("somente bateria finalizada")) {
+      return { error: "Só é possível anular bateria já finalizada." };
+    }
+    if (m.includes("bateria nao encontrada")) return { error: "Bateria não encontrada." };
+    if (m.includes("ja utilizado com outro payload")) {
+      return { error: "Este envio já foi usado com outro motivo. Atualize a página." };
+    }
+    return { error: error.message };
+  }
+
+  // A linha muda de situação e o botão some com a revalidação, levando junto o
+  // `useActionState` dono da mensagem. Quem sobrevive é a página.
+  return { redirectTo: `${ROUTES.teacher.student(studentId)}?feito=anulada` };
+}

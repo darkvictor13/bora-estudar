@@ -1,10 +1,33 @@
 import { Link, useLoaderData } from "react-router";
 
-import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth/session";
-import { getPlanProgress, getStudentSubscription, getStudentSummary } from "@/lib/data/teacher";
+import {
+  getPlanProgress,
+  getStudentSessions,
+  getStudentSubscription,
+  getStudentSummary,
+} from "@/lib/data/teacher";
 import { GrantAccessForm, SuspendAccessForm } from "@/components/teacher/AccessForms";
+import { VoidSessionForm } from "@/components/teacher/VoidSessionForm";
+import { QUIZ_STATUS_LABEL, formatMinutes, scorePercent } from "@/lib/domain/goals";
 import { ROUTES } from "@/lib/routes";
+
+/** Confirmação por query string: a linha muda de situação e o botão some. */
+const DONE_MESSAGE: Record<string, string> = {
+  anulada: "Bateria anulada. A meta voltou a pendente e as questões voltaram a ser inéditas.",
+};
+
+/** Só bateria finalizada é anulável — espelha R-ANUL-03, que a RPC impõe. */
+const VOIDABLE = new Set(["completed", "awaiting_time"]);
+
+const QUIZ_TONE: Record<string, "green" | "amber" | "blue" | "neutral" | "red"> = {
+  completed: "green",
+  awaiting_time: "amber",
+  in_progress: "blue",
+  cancelled: "neutral",
+  voided: "red",
+};
 
 const ACCESS_LABEL: Record<string, string> = {
   active: "ativa",
@@ -39,7 +62,13 @@ const PLAN_STATUS: Record<string, { text: string; tone: "green" | "amber" | "neu
   archived: { text: "Arquivado", tone: "neutral" },
 };
 
-export async function teacherStudentLoader({ params }: { params: { studentId?: string } }) {
+export async function teacherStudentLoader({
+  params,
+  request,
+}: {
+  params: { studentId?: string };
+  request: Request;
+}) {
   const session = await requireRole("teacher");
   const studentId = params.studentId ?? "";
 
@@ -49,23 +78,37 @@ export async function teacherStudentLoader({ params }: { params: { studentId?: s
   if (!summary) throw new Response(null, { status: 404, statusText: "Aluno não encontrado" });
 
   const activePlan = summary.plans.find((p) => p.status === "active") ?? null;
-  const [progress, subscription] = await Promise.all([
+  const [progress, subscription, sessions] = await Promise.all([
     activePlan ? getPlanProgress(activePlan.id) : Promise.resolve(null),
     getStudentSubscription(studentId),
+    getStudentSessions(studentId),
   ]);
 
-  return { summary, activePlan, progress, subscription, studentId };
+  const feito = new URL(request.url).searchParams.get("feito");
+
+  return {
+    summary,
+    activePlan,
+    progress,
+    subscription,
+    sessions,
+    studentId,
+    doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
+  };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentLoader>>;
 
 export function TeacherStudent() {
-  const { summary, activePlan, progress, subscription, studentId } = useLoaderData() as LoaderData;
+  const { summary, activePlan, progress, subscription, sessions, studentId, doneMessage } =
+    useLoaderData() as LoaderData;
   const hasActive = subscription?.status === "active";
 
   return (
     <>
       <PageHeader title={summary.profile.name} description={summary.profile.contact_email ?? ""} />
+
+      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
 
       <div className="stack">
         <Card
@@ -124,6 +167,75 @@ export function TeacherStudent() {
                         <td>{new Date(plan.start_date).toLocaleDateString("pt-BR")}</td>
                         <td>
                           <Badge tone={status.tone}>{status.text}</Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="Baterias"
+          sub={`${sessions.length} no histórico — a mais recente primeiro`}
+        >
+          {sessions.length === 0 ? (
+            <Empty>Este aluno ainda não fez nenhuma bateria.</Empty>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bloco</th>
+                    <th className="num">Nº</th>
+                    <th className="num">Oficial</th>
+                    <th className="num">Tempo</th>
+                    <th>Situação</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map((session) => {
+                    const pct = scorePercent(session.mainCorrect, session.mainCount);
+                    return (
+                      <tr key={session.id}>
+                        <td>
+                          <strong style={{ color: session.block?.subject_color }}>
+                            {session.block?.subject_name ?? "—"}
+                          </strong>
+                          <div className="muted">{session.block?.name ?? "—"}</div>
+                          {session.void_reason && (
+                            <div className="muted">
+                              <em>Motivo:</em> {session.void_reason}
+                            </div>
+                          )}
+                        </td>
+                        <td className="num">{session.session_number ?? "—"}</td>
+                        <td className="num">
+                          {session.mainCount ? (
+                            <>
+                              {session.mainCorrect}/{session.mainCount}
+                              {pct !== null && <span className="muted"> · {pct}%</span>}
+                            </>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                        <td className="num">{formatMinutes(session.duration_minutes)}</td>
+                        <td>
+                          <Badge tone={QUIZ_TONE[session.status] ?? "neutral"}>
+                            {QUIZ_STATUS_LABEL[session.status]}
+                          </Badge>
+                        </td>
+                        <td>
+                          {VOIDABLE.has(session.status) && (
+                            <VoidSessionForm
+                              quizSessionId={session.id}
+                              studentId={studentId}
+                            />
+                          )}
                         </td>
                       </tr>
                     );

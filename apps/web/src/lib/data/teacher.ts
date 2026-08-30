@@ -223,3 +223,52 @@ export async function getPlanBlocksForManagement(studyPlanId: string) {
 
   return (blocks ?? []).map((block) => ({ ...block, goalCount: goalsByBlock.get(block.id) ?? 0 }));
 }
+
+/**
+ * Baterias do aluno, da mais recente para a mais antiga.
+ *
+ * A leitura é permitida por `quiz_sessions_read`, que usa
+ * `can_view_context(student_id, teacher_id)` — o professor já enxerga. O
+ * desempenho vem de `vw_quiz_session_performance`, nunca recalculado aqui
+ * (R-ANUL-10).
+ *
+ * Ordena por `execution_sequence`, e não por data: duas baterias criadas no
+ * mesmo instante empatariam em `started_at`, e a sequência é sequencial por
+ * construção. É o mesmo critério de `openSessionOf` nas fixtures do e2e.
+ */
+export async function getStudentSessions(studentId: string) {
+  const { data: sessions } = await supabase
+    .from("quiz_sessions")
+    .select(
+      "id,block_id,goal_id,session_number,execution_sequence,status,main_target,duration_minutes,started_at,void_reason",
+    )
+    .eq("student_id", studentId)
+    .order("execution_sequence", { ascending: false });
+
+  const list = sessions ?? [];
+  if (!list.length) return [];
+
+  const [{ data: performance }, { data: blocks }] = await Promise.all([
+    supabase
+      .from("vw_quiz_session_performance")
+      .select("quiz_session_id,main_count,main_correct")
+      .in(
+        "quiz_session_id",
+        list.map((s) => s.id),
+      ),
+    supabase
+      .from("study_plan_blocks")
+      .select("id,name,subject_name,subject_color")
+      .in("id", [...new Set(list.map((s) => s.block_id))]),
+  ]);
+
+  const perfById = new Map((performance ?? []).map((p) => [p.quiz_session_id, p]));
+  const blockById = new Map((blocks ?? []).map((b) => [b.id, b]));
+
+  return list.map((session) => ({
+    ...session,
+    block: blockById.get(session.block_id) ?? null,
+    mainCount: perfById.get(session.id)?.main_count ?? 0,
+    mainCorrect: perfById.get(session.id)?.main_correct ?? 0,
+  }));
+}

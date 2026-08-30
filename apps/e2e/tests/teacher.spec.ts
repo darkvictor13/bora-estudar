@@ -1036,3 +1036,152 @@ test.describe("F-CAD-06 · caderno avulso", () => {
     await expect(teacherPage.locator(".content")).toContainText("Apostila do aluno");
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — histórico de baterias e anulação.
+// Spec docs/specs/16-historico-e-anulacao-de-bateria.md
+// ---------------------------------------------------------------------------
+
+const sessionsCard = (page: import("@playwright/test").Page) => cardByTitle(page, "Baterias");
+
+test.describe("F-ANUL-01 · a ficha lista as baterias do aluno", () => {
+  test("bloco, número, desempenho oficial e situação", async ({ teacherPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    const row = sessionsCard(teacherPage).locator("tbody tr").first();
+
+    await expect(row).toContainText(block.subjectName);
+    await expect(row).toContainText("11/15");
+    await expect(row).toContainText("73%");
+    await expect(row).toContainText("1h25");
+    await expect(row.locator(".badge")).toHaveText("Concluída");
+  });
+});
+
+test.describe("F-ANUL-02 · anular preserva o ledger", () => {
+  test("a situação vira Anulada, o motivo aparece, e as linhas continuam", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const done = await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+    const antes = await count(
+      "select count(*) from public.quiz_session_questions where quiz_session_id = $1",
+      [done.sessionId],
+    );
+    expect(antes).toBe(15);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    await sessionsCard(teacherPage).getByRole("button", { name: "Anular" }).click();
+    await sessionsCard(teacherPage).locator('input[name="reason"]').fill("Aluno abriu por engano");
+    await sessionsCard(teacherPage)
+      .getByRole("button", { name: "Anular", exact: true })
+      .click();
+
+    await expect(teacherPage.locator(".content > .alert--success")).toContainText(
+      "Bateria anulada",
+    );
+    const row = sessionsCard(teacherPage).locator("tbody tr").first();
+    await expect(row.locator(".badge")).toHaveText("Anulada");
+    await expect(row).toContainText("Aluno abriu por engano");
+
+    // R-ANUL-05: o ledger fica intacto. O que muda é o status.
+    expect(
+      await count("select count(*) from public.quiz_session_questions where quiz_session_id = $1", [
+        done.sessionId,
+      ]),
+    ).toBe(15);
+  });
+});
+
+test.describe("F-ANUL-03 · o desempenho desce e a meta volta", () => {
+  test("os números derivados acompanham, e o aluno vê a meta pendente", async ({
+    page,
+    scenario,
+    signIn,
+  }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    await signIn(scenario.teacher);
+    await page.goto(studentPageOf(scenario.student.id));
+    await expect(cardByTitle(page, "Desempenho oficial")).toContainText("73%");
+
+    await sessionsCard(page).getByRole("button", { name: "Anular" }).click();
+    await sessionsCard(page).getByRole("button", { name: "Anular", exact: true }).click();
+    await expect(page.locator(".content > .alert--success")).toBeVisible();
+
+    // vw_quiz_session_performance filtra status='completed': o número some.
+    await expect(cardByTitle(page, "Desempenho oficial")).toContainText("—");
+    expect(await goalStatus(scenario.quizGoal.id)).toBe("pending");
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(
+      page.locator("tbody tr", { hasText: scenario.quizGoal.title }).locator(".badge"),
+    ).toHaveText("Pendente");
+  });
+});
+
+test.describe("F-ANUL-04 · as questões voltam a ser inéditas", () => {
+  test("a bateria seguinte pode escolher as mesmas questões", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const primeira = await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    await sessionsCard(teacherPage).getByRole("button", { name: "Anular" }).click();
+    await sessionsCard(teacherPage).getByRole("button", { name: "Anular", exact: true }).click();
+    await expect(teacherPage.locator(".content > .alert--success")).toBeVisible();
+
+    // vw_seen_questions também filtra completed: nada foi visto.
+    expect(
+      await count(
+        `select count(*) from public.vw_seen_questions
+          where study_plan_id = $1 and block_id = $2`,
+        [scenario.planId, scenario.quizGoal.blockId],
+      ),
+    ).toBe(0);
+
+    // E a meta, de volta a pendente, produz uma bateria com a MESMA fila.
+    const segunda = await completeQuiz(scenario, scenario.quizGoal, { correct: 15, minutes: 60 });
+    expect(segunda.queue).toEqual(primeira.queue);
+  });
+});
+
+test.describe("F-ANUL-05 · o que não é anulável", () => {
+  test("bateria em andamento não oferece o botão", async ({ page, scenario, signIn }) => {
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await page
+      .locator("tbody tr", { hasText: scenario.quizGoal.title })
+      .getByRole("button", { name: "Iniciar bateria" })
+      .click();
+    await page.waitForURL(/tecconcursos/);
+
+    await signIn(scenario.teacher);
+    await page.goto(studentPageOf(scenario.student.id));
+
+    const row = sessionsCard(page).locator("tbody tr").first();
+    await expect(row.locator(".badge")).toHaveText("Em andamento");
+    await expect(row.getByRole("button", { name: "Anular" })).toHaveCount(0);
+  });
+
+  test("motivo vazio grava o padrão", async ({ teacherPage, scenario }) => {
+    const done = await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    await sessionsCard(teacherPage).getByRole("button", { name: "Anular" }).click();
+    await sessionsCard(teacherPage)
+      .getByRole("button", { name: "Anular", exact: true })
+      .click();
+    await expect(teacherPage.locator(".content > .alert--success")).toBeVisible();
+
+    const voided = await one<{ void_reason: string; status: string }>(
+      "select void_reason, status::text from public.quiz_sessions where id = $1",
+      [done.sessionId],
+    );
+    expect(voided).toMatchObject({ status: "voided", void_reason: "Anulação administrativa" });
+  });
+});
