@@ -8,8 +8,10 @@ import {
   getStudentSubscription,
   getStudentSummary,
 } from "@/lib/data/teacher";
+import { getStudyPlanBlocks, getTopicDifficulty } from "@/lib/data/student";
 import { GrantAccessForm, SuspendAccessForm } from "@/components/teacher/AccessForms";
 import { VoidSessionForm } from "@/components/teacher/VoidSessionForm";
+import { TopicDifficulty } from "@/components/TopicDifficulty";
 import { QUIZ_STATUS_LABEL, formatMinutes, scorePercent } from "@/lib/domain/goals";
 import { ROUTES } from "@/lib/routes";
 
@@ -79,10 +81,12 @@ export async function teacherStudentLoader({
   if (!summary) throw new Response(null, { status: 404, statusText: "Aluno não encontrado" });
 
   const activePlan = summary.plans.find((p) => p.status === "active") ?? null;
-  const [progress, subscription, sessions] = await Promise.all([
+  const [progress, subscription, sessions, topics, blocks] = await Promise.all([
     activePlan ? getPlanProgress(activePlan.id) : Promise.resolve(null),
     getStudentSubscription(studentId),
     getStudentSessions(studentId),
+    activePlan ? getTopicDifficulty(activePlan.id) : Promise.resolve([]),
+    activePlan ? getStudyPlanBlocks(activePlan.id) : Promise.resolve([]),
   ]);
 
   const feito = new URL(request.url).searchParams.get("feito");
@@ -93,6 +97,8 @@ export async function teacherStudentLoader({
     progress,
     subscription,
     sessions,
+    topics,
+    blockNames: blocks.map((b) => [b.id, b.name] as const),
     studentId,
     doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
   };
@@ -101,7 +107,7 @@ export async function teacherStudentLoader({
 type LoaderData = Awaited<ReturnType<typeof teacherStudentLoader>>;
 
 export function TeacherStudent() {
-  const { summary, activePlan, progress, subscription, sessions, studentId, doneMessage } =
+  const { summary, activePlan, progress, subscription, sessions, topics, blockNames, studentId, doneMessage } =
     useLoaderData() as LoaderData;
   const hasActive = subscription?.status === "active";
 
@@ -246,6 +252,8 @@ export function TeacherStudent() {
             </div>
           )}
         </Card>
+
+        <TopicDifficulty rows={topics} blockNames={new Map(blockNames)} />
 
         {progress && (
           <div className="grid-cards">

@@ -884,3 +884,31 @@ test.describe("F-RCIC-06 · o professor vê, e não executa", () => {
     await expect(page.getByRole("button", { name: "Concluir reforço" })).toHaveCount(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §2 — dificuldades por tópico.
+// Spec docs/specs/23-dificuldades-por-topico.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-DIFI-04 · o aluno vê onde está errando", () => {
+  test("o mesmo recorte, para si, em /aluno/estatisticas", async ({ studentPage, scenario }) => {
+    const block = scenario.blocks[0]!;
+    const primeira = scenario.goals.find((goal) => goal.blockId === block.id)!;
+    await completeQuiz(scenario, primeira, {
+      incorrectTopics: ["Local de crime", "Cadeia de custódia"],
+    });
+    const semana2 = await addWeek(scenario, 2);
+    await completeQuiz(scenario, semana2.find((g) => g.blockId === block.id)!, {
+      incorrectTopics: ["Local de crime"],
+    });
+
+    await studentPage.goto("/aluno/estatisticas");
+
+    const card = cardByTitle(studentPage, "Onde você está errando");
+    await expect(card.locator("tbody tr")).toHaveCount(2);
+    await expect(card.locator("tbody tr", { hasText: "Local de crime" })).toContainText(
+      "Recorrente",
+    );
+    await expect(card).not.toContainText("Perícia papiloscópica");
+  });
+});
