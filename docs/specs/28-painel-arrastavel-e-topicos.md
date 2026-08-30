@@ -1,6 +1,6 @@
 # 28 — Painel arrastável e resumo por tópicos
 
-**Situação:** não implementada · **Comparativo:** §12 item 13 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §10 · **Fluxos e2e:** F-PAIN-01 a F-PAIN-06
+**Situação:** implementada · **Comparativo:** §12 item 13 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §10 · **Fluxos e2e:** F-PAIN-01 a F-PAIN-06
 
 ---
 
@@ -85,6 +85,11 @@ respostas → resumo por tópico (feitas · acertos · erros)
 | RPCs | **nenhuma** |
 | Migration | **nenhuma** |
 | Testes | `apps/extension/src/content/engine.test.ts`, `panel-position.test.ts`, `apps/e2e/tests/extension.spec.ts` |
+
+**A largura usada para prender o painel é MEDIDA, não a constante.**
+`width:274px` mais `padding:0 16px` dá 306px de caixa, e prender pela constante
+deixava o painel passar 32px da borda direita. *Corrigido em 31/08/2026, ao
+implementar: quem pegou foi o `F-PAIN-02`.*
 
 **A posição e o estado minimizado ficam em chave separada da sessão.** É o que
 permite `writeSession` continuar sendo a única coisa que a segunda das três

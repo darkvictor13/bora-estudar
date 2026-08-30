@@ -380,8 +380,8 @@ confirma o GAP-03 como lacuna herdada. Aqui `updateProfile` exige
 | **Rodízio por tópico na seleção** (cobertura ascendente) | `selectBalanced` content.js:202 | ✅ | 22 | implementada |
 | **Fase de reforço correlato** (1 do mesmo tópico por erro, profundidade 2) | `pickReinforcement` content.js:261 | ✅ | 21 | implementada |
 | **Rodada extra de +5, tudo ou nada** | `appendExtraRound` content.js:280 | ✅ | 21 | implementada |
-| **Resumo por tópicos no painel** | `topicSummary` content.js:542 | ❌ | 28 | especificada |
-| **Painel arrastável, posição persistida** | `PANEL_POS_KEY` content.js:530 | ❌ | 28 | especificada |
+| **Resumo por tópicos no painel** | `topicSummary` content.js:542 | ✅ | 28 | implementada |
+| **Painel arrastável, posição persistida** | `PANEL_POS_KEY` content.js:530 | ✅ | 28 | implementada |
 
 **O rodízio por tópico é a "correlação de tópico" que
 [`arquitetura.md`](arquitetura.md) lista como decisão pendente.** A v96 ordena os
@@ -451,7 +451,7 @@ condução dentro do TEC.
 | ~~14~~ | Tempo de estudo, séries temporais e sequência de dias — spec [25](specs/25-tempo-de-estudo-e-series.md) ✅ | 1 view, site |
 | ~~15~~ | Resumo por tópicos da bateria concluída — spec [26](specs/26-topicos-do-bloco-e-da-bateria.md) ✅ | 1 view, site |
 | ~~16~~ | Professor edita os próprios dados — spec [27](specs/27-dados-do-professor.md) ✅ | 1 migration (grant), site |
-| 17 | Painel arrastável e resumo por tópicos — spec [28](specs/28-painel-arrastavel-e-topicos.md) | extensão |
+| ~~17~~ | Painel arrastável e resumo por tópicos — spec [28](specs/28-painel-arrastavel-e-topicos.md) ✅ | extensão |
 | 18 | Sidebar recolhível; mostrar/ocultar senha | site |
 | 19 | Login com Google | site, exige configuração de provedor |
 | 20 | Cupom de acesso | 1 RPC, site |
