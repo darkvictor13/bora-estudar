@@ -667,7 +667,6 @@ quem escreve teste — cada uma virou uma peça da suíte:
 
 Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
 
-- **Anular bateria.** `void_quiz_session` existe e ninguém chama.
 - **Reforço de ciclo.** `record_reinforcement` existe; as telas de Revisões só
   recomendam, não executam. O content script também só conduz a fase `main`.
 - **Editar os próprios dados como professor.** `updateProfile` exige
@@ -675,6 +674,22 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
+
+### Reservados pela spec 16 — histórico de baterias e anulação
+
+Spec: [`specs/16-historico-e-anulacao-de-bateria.md`](specs/16-historico-e-anulacao-de-bateria.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-ANUL-01** — a ficha do aluno lista as baterias dele com bloco, número,
+  situação e desempenho oficial, da mais recente para a mais antiga.
+- **F-ANUL-02** — anular muda a situação para "Anulada", mostra o motivo, e o
+  ledger continua com as mesmas linhas.
+- **F-ANUL-03** — depois de anular, o desempenho oficial desce e a meta volta a
+  "Pendente" para o aluno.
+- **F-ANUL-04** — as questões da bateria anulada voltam a ser inéditas para o
+  motor de seleção.
+- **F-ANUL-05** — bateria em andamento não oferece o botão; motivo vazio grava
+  "Anulação administrativa".
 
 
 

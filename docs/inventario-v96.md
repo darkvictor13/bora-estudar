@@ -256,7 +256,7 @@ inventário.**
 | **KPIs no card do aluno** (desempenho, questões, metas, barra) | `renderCardAlunoHTML` professor.js:4019 | ❌ | | pendente |
 | **Resumo da turma** (4 métricas no topo) | `renderResumoAlunos` professor.js:3516 | ❌ | | pendente |
 | **Busca por nome e filtros por status e por plano** | `filtrarAlunos` professor.js:4096 | ❌ | | pendente |
-| **Histórico de baterias do aluno** | `abrirBateriasAluno` professor.js:3962 | ❌ | | pendente |
+| **Histórico de baterias do aluno** | `abrirBateriasAluno` professor.js:3962 | ❌ | 16 | especificada |
 
 **A v96 também não tinha tela para vincular aluno.** O vínculo nascia
 exclusivamente no cadastro, amarrado ao UUID fixo
@@ -341,7 +341,7 @@ total comporta, e o resto pelo maior resto. No PCPR Reta Final a soma dos
 | Fluxo v96 | Onde está no código v96 | Situação | Spec | Estado |
 |---|---|---|---|---|
 | Reforços sugeridos por aluno | `abrirReforcosAluno` professor.js:3736 | ✅ | 09 | — |
-| **Anular bateria** | `anularBateriaAluno` professor.js:3979 | ❌ | | pendente |
+| **Anular bateria** | `anularBateriaAluno` professor.js:3979 | ❌ | 16 | especificada |
 | **Dificuldades por tópico** | `abrirDificuldadesAluno` professor.js:3925 | ❌ | | pendente |
 | **Agendar reforço para o aluno** | `agendarReforcoAlunoSupabase` professor.js:3813 | ❌ | | pendente |
 | Estatísticas gerais do professor | `renderEstatisticas` professor.js:2217 | 🟡 | 08 | — |
@@ -423,7 +423,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
 | ~~4~~ | **Gerenciar blocos do planejamento** — spec [15](specs/15-cadernos-do-planejamento.md), **implementada** | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
-| 5 | **Anular bateria** | `void_quiz_session` pronta e sem chamador | 0 RPC, 0 migration, site |
+| 5 | **Anular bateria e ver o histórico** — spec [16](specs/16-historico-e-anulacao-de-bateria.md) | `void_quiz_session` pronta e sem chamador; e o professor não vê as baterias do aluno para apontar qual anular | 0 RPC, 0 migration, site |
 | 6 | **Ficha da turma** — KPIs, classificação, busca e filtros | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
 | 7 | **Prévia e distribuição por peso na geração da semana** | Hoje o professor gera às cegas | 0 RPC, 0 migration, site |
 | 8 | **Registrar estudo extra avulso** — a metade que saiu da spec 12 | Separada pelo portão do Passo 4: seria a terceira RPC nova, e ela **cria** meta em vez de concluir. Vem depois da spec 12 porque a semana do professor já traz meta de estudo extra, e concluí-la é o que destrava o seed hoje | 1 RPC (`record_extra_study`), 1 migration (enum `extra_activity_kind`, 7 valores), site |
