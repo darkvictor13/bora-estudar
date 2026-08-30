@@ -1,6 +1,6 @@
 # 18 — Prévia e distribuição por peso na semana
 
-**Situação:** não implementada · **Comparativo:** §12 item 7 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §8 · **Fluxos e2e:** F-PREV-01 a F-PREV-06
+**Situação:** implementada · **Comparativo:** §12 item 7 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §8 · **Fluxos e2e:** F-PREV-01 a F-PREV-06
 
 ---
 
@@ -110,6 +110,17 @@ professor abre /professor/metas
 | RPCs | **nenhuma nova** |
 | Migration | **nenhuma** |
 | Testes | `apps/web/src/lib/domain/week-planner.test.ts`, `apps/e2e/tests/teacher.spec.ts` |
+
+**O formulário ganhou `noValidate`**, pela mesma razão do de login (F-AUTH-03):
+quem valida é a action, e a mensagem sai em português dentro da tela. Com a
+validação nativa ligada, `max={80}` no total faria o navegador barrar o envio
+com uma tooltip própria — a action nunca rodaria, e a regra do teto viveria em
+dois lugares.
+
+**O `id` do campo de peso é por índice, não pelo nome da disciplina.**
+"Ciências Forenses" tem espaço e acento, e `#peso-Ciências Forenses` não é
+seletor CSS válido. O `name` continua carregando o nome, que é o que a action
+lê, e é por ele que o teste endereça o campo.
 
 **Sem `prioridadeCiclo`.** A v96 repetia o bloco no ciclo conforme a incidência
 dele na prova — altíssima 3×, alta 2×, média 1× —, lido de um JSON empacotado no

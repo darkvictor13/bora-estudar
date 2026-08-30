@@ -3,7 +3,7 @@ import { Link, useLoaderData } from "react-router";
 import { Card, Empty, PageHeader } from "@/components/ui";
 import { GenerateWeekForm } from "@/components/teacher/GenerateWeekForm";
 import { requireRole } from "@/lib/auth/session";
-import { getAllTeacherPlans, getPlanProgress } from "@/lib/data/teacher";
+import { countGoalsPerBlock, getAllTeacherPlans, getPlanProgress } from "@/lib/data/teacher";
 import { supabase } from "@/lib/supabase/client";
 import { ROUTES } from "@/lib/routes";
 
@@ -19,7 +19,7 @@ export async function teacherGoalsLoader({ request }: { request: Request }) {
 
   if (!selectedId) return { plans, selectedId: null } as const;
 
-  const [{ data: blocks }, progress] = await Promise.all([
+  const [{ data: blocks }, progress, used] = await Promise.all([
     supabase
       .from("study_plan_blocks")
       .select("id,name,subject_name,subject_order,block_order")
@@ -29,9 +29,17 @@ export async function teacherGoalsLoader({ request }: { request: Request }) {
       .order("subject_order")
       .order("block_order"),
     getPlanProgress(selectedId),
+    // Ponto de partida do rodízio, para a prévia mostrar o mesmo bloco que a
+    // gravação vai escolher (R-PREV-08 e R-PREV-14).
+    countGoalsPerBlock(selectedId),
   ]);
 
-  return { plans, selectedId, blocks: blocks ?? [], progress } as const;
+  return {
+    plans,
+    selectedId,
+    blocks: (blocks ?? []).map((block) => ({ ...block, used: used.get(block.id) ?? 0 })),
+    progress,
+  } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherGoalsLoader>>;
@@ -92,6 +100,7 @@ export function TeacherGoals() {
                 id: b.id,
                 name: b.name,
                 subjectName: b.subject_name,
+                used: b.used,
               }))}
             />
           )}

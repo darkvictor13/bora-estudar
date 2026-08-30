@@ -44,10 +44,10 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
 | 6. Professor — alunos e acesso | 12 | 12 | 0 | 0 | 0 |
 | 7. Professor — planejamento | 10 | 7 | 1 | 2 | 0 |
-| 8. Professor — geração de metas | 9 | 3 | 2 | 4 | 0 |
+| 8. Professor — geração de metas | 9 | 6 | 1 | 2 | 0 |
 | 9. Professor — acompanhamento | 8 | 2 | 2 | 4 | 0 |
 | 10. Extensão | 12 | 7 | 0 | 5 | 0 |
-| **Total** | **106** | **57** | **13** | **32** | **4** |
+| **Total** | **106** | **60** | **12** | **30** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -317,9 +317,9 @@ dizer isso ao professor em vez de deixar o banco recusar.
 | Gerar metas da semana para o aluno | `salvarMetasAlunoSupabase` professor.js:5764 | ✅ | 04 | — |
 | Modos substituir / replanejar tudo | `#am-substituir`, `#am-replanejar-tudo` | ✅ | 04 | — |
 | Bateria aberta bloqueia replanejar a semana | professor.js:5873 | ✅ | 04 | — |
-| **Prévia da semana antes de salvar** | `gerarPreviaMetasTeoriaAluno` professor.js:5558 | ❌ | 18 | especificada |
-| **Distribuição por peso da matéria** (`contatosSemanais`) | `calcularDistribuicaoPadraoBlocos` professor.js:5006 | ❌ | 18 | especificada |
-| **Rodízio de blocos B1→B2→…→Bn→B1** | `proximoBlocoParaMeta` professor.js:5544 | 🟡 | 18 | especificada |
+| **Prévia da semana antes de salvar** | `gerarPreviaMetasTeoriaAluno` professor.js:5558 | ✅ | 18 | implementada |
+| **Distribuição por peso da matéria** (`contatosSemanais`) | `calcularDistribuicaoPadraoBlocos` professor.js:5006 | ✅ | 18 | implementada |
+| **Rodízio de blocos B1→B2→…→Bn→B1** | `proximoBlocoParaMeta` professor.js:5544 | ✅ | 18 | implementada |
 | **Repetição por prioridade de incidência** (3×, 2×, 1×) | `sequenciaPrioridadeBlocos` professor.js:5538 | ❌ | | pendente |
 | **Copiar semana anterior** | `copiarSemanaAnterior` professor.js:5282 | ❌ | | pendente |
 | Conferência "Soma X / Total" antes de salvar | `atualizarSomaMetasTeoriaAluno` professor.js:5461 | 🟡 | | pendente |
@@ -425,7 +425,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | ~~4~~ | **Gerenciar blocos do planejamento** — spec [15](specs/15-cadernos-do-planejamento.md), **implementada** | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
 | ~~5~~ | **Anular bateria e ver o histórico** — spec [16](specs/16-historico-e-anulacao-de-bateria.md), **implementada** | `void_quiz_session` pronta e sem chamador; e o professor não vê as baterias do aluno para apontar qual anular | 0 RPC, 0 migration, site |
 | ~~6~~ | **Ficha da turma** — spec [17](specs/17-ficha-da-turma.md), **implementada** | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
-| 7 | **Prévia e distribuição por peso na geração da semana** — spec [18](specs/18-previa-e-distribuicao-da-semana.md) | Hoje o professor gera às cegas, e toda matéria pesa igual | 0 RPC, 0 migration, site |
+| ~~7~~ | **Prévia e distribuição por peso na geração da semana** — spec [18](specs/18-previa-e-distribuicao-da-semana.md), **implementada** | Hoje o professor gera às cegas, e toda matéria pesa igual | 0 RPC, 0 migration, site |
 | 8 | **Registrar estudo extra avulso** — a metade que saiu da spec 12 | Separada pelo portão do Passo 4: seria a terceira RPC nova, e ela **cria** meta em vez de concluir. Vem depois da spec 12 porque a semana do professor já traz meta de estudo extra, e concluí-la é o que destrava o seed hoje | 1 RPC (`record_extra_study`), 1 migration (enum `extra_activity_kind`, 7 valores), site |
 
 ### Fecha o ciclo de estudo

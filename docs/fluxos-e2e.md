@@ -455,6 +455,40 @@ semana bloqueia os dois: `ha bateria aberta nesta semana`.
 `?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
 no planejamento ativo (ou no primeiro) sem quebrar.
 
+### Prévia e distribuição da semana — F-PREV-01 a 06
+
+Spec: [`specs/18-previa-e-distribuicao-da-semana.md`](specs/18-previa-e-distribuicao-da-semana.md).
+O campo de peso é `input[name="peso:<Disciplina>"]` — endereçar por `id` não
+funciona, porque o nome da disciplina tem espaço e acento. A prévia é a seção
+`.preview`, e o botão que a gera é `type="button"`.
+
+**O formulário tem `noValidate`**, como o de login: quem valida é a action. Sem
+isso, `max` no campo de total faria o navegador barrar o envio e a mensagem em
+português nunca apareceria.
+
+#### F-PREV-01 — A prévia não grava nada
+**Esperado** a seção mostra "4 meta(s)", "nada foi gravado ainda" e os dias; a
+contagem de metas do planejamento não muda.
+
+#### F-PREV-02 — O que a prévia mostrou é o que a semana recebe
+**Esperado** o conjunto de títulos da prévia é igual ao dos títulos gravados.
+
+#### F-PREV-03 — Peso maior gera mais metas
+**Esperado** com total 8 e pesos 3 e 1, a primeira disciplina recebe 6 e a
+segunda 2.
+
+#### F-PREV-04 — Peso 0 tira a disciplina da semana
+**Esperado** zero metas da disciplina zerada; o total inteiro vai para a outra.
+
+#### F-PREV-05 — Validação do total e do peso
+**Esperado** total 81 → "O total de metas precisa ficar entre 1 e 80."; peso 21
+→ "entre 0 e 20". Nada é gravado em nenhum dos dois.
+
+#### F-PREV-06 — Mudar um peso não é replay
+**Esperado** a segunda geração da mesma semana, com peso diferente, cria metas
+em vez de devolver "Este lote já tinha sido aplicado". É `R-PREV-16`: o peso
+entra no hash do `batch_id`.
+
 ### Ficha da turma — F-TURMA-01 a 05
 
 Spec: [`specs/17-ficha-da-turma.md`](specs/17-ficha-da-turma.md). Busca e
@@ -686,7 +720,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 199 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 206 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -698,7 +732,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05 e F-TURMA-01 a 05 | 64 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05, F-TURMA-01 a 05 e F-PREV-01 a 06 | 71 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
@@ -734,18 +768,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 18 — prévia e distribuição da semana
-
-Spec: [`specs/18-previa-e-distribuicao-da-semana.md`](specs/18-previa-e-distribuicao-da-semana.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-PREV-01** — a prévia mostra as metas agrupadas por dia e o total, sem
-  gravar nada.
-- **F-PREV-02** — o que a prévia mostrou é o que a semana recebe.
-- **F-PREV-03** — peso maior numa disciplina faz ela receber mais metas.
-- **F-PREV-04** — peso 0 tira a disciplina da semana gerada.
-- **F-PREV-05** — total fora de 1–80 e peso fora de 0–20 são recusados.
-- **F-PREV-06** — mudar um peso e reenviar não é replay: a semana muda.
 
 
 

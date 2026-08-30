@@ -1324,3 +1324,147 @@ test.describe("F-TURMA-05 · quem precisa de atenção vem primeiro", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — prévia e distribuição por peso.
+// Spec docs/specs/18-previa-e-distribuicao-da-semana.md
+// ---------------------------------------------------------------------------
+
+const previewSection = (page: import("@playwright/test").Page) => page.locator(".preview");
+
+test.describe("F-PREV-01 · a prévia não grava nada", () => {
+  test("mostra as metas por dia e o total", async ({ teacherPage, scenario }) => {
+    const antes = await goalCount(scenario.planId);
+
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.click('button:has-text("Gerar prévia")');
+
+    // 2 blocos com teoria ligada: 4 metas.
+    await expect(previewSection(teacherPage).locator("h3")).toContainText("4 meta(s)");
+    await expect(previewSection(teacherPage)).toContainText("nada foi gravado ainda");
+    await expect(previewSection(teacherPage)).toContainText("Segunda");
+
+    expect(await goalCount(scenario.planId)).toBe(antes);
+  });
+});
+
+test.describe("F-PREV-02 · o que a prévia mostrou é o que a semana recebe", () => {
+  test("os títulos batem", async ({ teacherPage, scenario }) => {
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.click('button:has-text("Gerar prévia")');
+
+    const daPrevia = await previewSection(teacherPage).locator("li").allTextContents();
+    expect(daPrevia.length).toBe(4);
+
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+    await expect(teacherPage.locator(".alert--success")).toContainText("4 meta(s) criada(s)");
+
+    const gravadas = await query<{ title: string }>(
+      "select title from public.goals where study_plan_id = $1 and week_number = 2 and deleted_at is null",
+      [scenario.planId],
+    );
+    expect(new Set(gravadas.map((g) => g.title))).toEqual(new Set(daPrevia));
+  });
+});
+
+test.describe("F-PREV-03 · peso maior gera mais metas", () => {
+  test("a disciplina de peso 3 recebe mais que a de peso 1", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const [primeira, segunda] = scenario.blocks;
+
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.uncheck("input[name=withTheory]");
+    await teacherPage.fill("#total", "8");
+    await teacherPage.fill(`input[name="peso:${primeira!.subjectName}"]`, "3");
+    await teacherPage.fill(`input[name="peso:${segunda!.subjectName}"]`, "1");
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+
+    await expect(teacherPage.locator(".alert--success")).toContainText("8 meta(s) criada(s)");
+
+    const daPrimeira = await count(
+      "select count(*) from public.goals where study_plan_id = $1 and week_number = 2 and block_id = $2 and deleted_at is null",
+      [scenario.planId, primeira!.id],
+    );
+    const daSegunda = await count(
+      "select count(*) from public.goals where study_plan_id = $1 and week_number = 2 and block_id = $2 and deleted_at is null",
+      [scenario.planId, segunda!.id],
+    );
+
+    expect(daPrimeira).toBe(6);
+    expect(daSegunda).toBe(2);
+  });
+});
+
+test.describe("F-PREV-04 · peso 0 tira a disciplina da semana", () => {
+  test("nenhuma meta da disciplina zerada é criada", async ({ teacherPage, scenario }) => {
+    const [primeira, segunda] = scenario.blocks;
+
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.uncheck("input[name=withTheory]");
+    await teacherPage.fill("#total", "4");
+    await teacherPage.fill(`input[name="peso:${segunda!.subjectName}"]`, "0");
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+
+    await expect(teacherPage.locator(".alert--success")).toContainText("4 meta(s) criada(s)");
+
+    expect(
+      await count(
+        "select count(*) from public.goals where study_plan_id = $1 and week_number = 2 and block_id = $2 and deleted_at is null",
+        [scenario.planId, segunda!.id],
+      ),
+    ).toBe(0);
+    expect(
+      await count(
+        "select count(*) from public.goals where study_plan_id = $1 and week_number = 2 and block_id = $2 and deleted_at is null",
+        [scenario.planId, primeira!.id],
+      ),
+    ).toBe(4);
+  });
+});
+
+test.describe("F-PREV-05 · validação do total e do peso", () => {
+  test("total acima de 80 é recusado e nada é gravado", async ({ teacherPage, scenario }) => {
+    const antes = await goalCount(scenario.planId);
+
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.fill("#total", "81");
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+
+    await expect(teacherPage.locator(".alert--error")).toHaveText(
+      "O total de metas precisa ficar entre 1 e 80.",
+    );
+    expect(await goalCount(scenario.planId)).toBe(antes);
+  });
+
+  test("peso acima de 20 é recusado", async ({ teacherPage, scenario }) => {
+    const antes = await goalCount(scenario.planId);
+
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.fill(`input[name="peso:${scenario.blocks[0]!.subjectName}"]`, "21");
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+
+    await expect(teacherPage.locator(".alert--error")).toContainText("entre 0 e 20");
+    expect(await goalCount(scenario.planId)).toBe(antes);
+  });
+});
+
+test.describe("F-PREV-06 · mudar um peso não é replay", () => {
+  test("o batch_id acompanha o peso, então a semana muda", async ({ teacherPage, scenario }) => {
+    await teacherPage.goto("/professor/metas");
+    await teacherPage.uncheck("input[name=withTheory]");
+    await teacherPage.fill("#total", "4");
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+    await expect(teacherPage.locator(".alert--success")).toContainText("4 meta(s) criada(s)");
+
+    // Mesma semana, mesmo total, PESO diferente. Se o peso não entrasse no
+    // hash, isto voltaria como "Este lote já tinha sido aplicado".
+    await teacherPage.fill("#week", "2");
+    await teacherPage.fill(`input[name="peso:${scenario.blocks[1]!.subjectName}"]`, "0");
+    await teacherPage.click('button:has-text("Gerar metas da semana")');
+
+    await expect(teacherPage.locator(".alert--success")).toContainText("4 meta(s) criada(s)");
+    await expect(teacherPage.locator(".alert--success")).not.toContainText("já tinha sido aplicado");
+  });
+});

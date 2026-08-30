@@ -39,7 +39,7 @@ de lá vira uma spec nova antes de virar código.
 | 15 | [Cadernos do planejamento](15-cadernos-do-planejamento.md) | Ativar, desativar, editar, incluir, excluir e restaurar bloco |
 | 16 | [Histórico e anulação de bateria](16-historico-e-anulacao-de-bateria.md) | O professor vê as baterias do aluno e anula a que não conta |
 | 17 | [Ficha da turma](17-ficha-da-turma.md) | KPIs, classificação em quatro faixas, busca e filtros |
-| 18 | [Prévia e distribuição da semana](18-previa-e-distribuicao-da-semana.md) | Peso por disciplina e conferência antes de gravar — **não implementada** |
+| 18 | [Prévia e distribuição da semana](18-previa-e-distribuicao-da-semana.md) | Peso por disciplina e conferência antes de gravar |
 
 ---
 
