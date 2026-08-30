@@ -1,6 +1,6 @@
 # 23 — Dificuldades por tópico
 
-**Situação:** não implementada · **Comparativo:** §12 item 8 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-DIFI-01 a F-DIFI-04
+**Situação:** implementada · **Comparativo:** §12 item 8 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-DIFI-01 a F-DIFI-04
 
 ---
 
@@ -79,6 +79,16 @@ quiz_session_questions (completed, phase = main)
 | Migration | **uma:** `create view vw_topic_difficulty` |
 | Banco | `quiz_session_questions` e `quiz_sessions`, leitura |
 | Testes | `supabase/tests/10_topic_difficulty.sql`, `apps/e2e/tests/teacher.spec.ts` |
+
+**O fixture de bateria mandava `topic: null`.** A extensão real manda o tópico
+do item da fila (`content/index.ts`), então toda bateria de teste agregava como
+"Tópico não identificado". Corrigido junto: um fixture que existe para passar
+pelo caminho real não pode divergir dele. *Ajustado em 30/08/2026, ao
+implementar.*
+
+**A décima suíte SQL não rodava.** `supabase/tests/run.sh` fazia glob em
+`0*.sql`, e ainda imprimia "todas as suítes passaram". O glob agora é
+`[0-9]*.sql`. *Ajustado em 30/08/2026, ao implementar.*
 
 **A view é aditiva e o bundle no ar não a conhece** — nenhuma consulta existente
 muda. É o caso mais simples de compatibilidade que a regra do `CLAUDE.md`
