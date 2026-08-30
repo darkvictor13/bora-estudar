@@ -46,6 +46,7 @@ export const ROUTES = {
     goals: "/professor/metas",
     reviews: "/professor/revisoes",
     statistics: "/professor/estatisticas",
+    account: "/professor/conta",
   },
 } as const;
 

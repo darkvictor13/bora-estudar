@@ -1,6 +1,6 @@
 # 27 — Dados do próprio professor
 
-**Situação:** não implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-CONTA-01 a F-CONTA-05
+**Situação:** implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-CONTA-01 a F-CONTA-04
 
 ---
 
@@ -70,6 +70,10 @@ que ele o troque — a promessa da tela não é sustentada por nenhuma defesa.
 | Migration | **uma:** troca o `grant update` de `profiles` por um grant de colunas |
 | Testes | `supabase/tests/14_profile_grants.sql`, `apps/e2e` |
 
+**Não há F-CONTA-05.** "A tela do aluno continua funcionando igual" já é o que
+`F-ALU-04` verifica desde antes desta spec, e o critério aponta para ele em vez
+de duplicar o fluxo. *Ajustado em 31/08/2026, ao implementar.*
+
 **A migration é compatível com o bundle no ar.** O único caminho que escreve em
 `profiles` hoje é `updateProfile`, e ele escreve exatamente `name` e `phone` —
 as duas colunas que continuam concedidas. Nenhuma tela publicada escreve
@@ -88,7 +92,7 @@ as duas colunas que continuam concedidas. Nenhuma tela publicada escreve
 | CA-05 | O professor salva um nome novo e ele aparece na sidebar | F-CONTA-02 |
 | CA-06 | Nome curto demais é recusado com mensagem | F-CONTA-03 |
 | CA-07 | O e-mail aparece bloqueado nas duas telas | F-CONTA-04 |
-| CA-08 | A tela do aluno continua funcionando igual | F-CONTA-05 |
+| CA-08 | A tela do aluno continua funcionando igual | F-ALU-04, que já existia |
 
 ---
 

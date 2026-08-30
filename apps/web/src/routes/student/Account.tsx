@@ -2,12 +2,18 @@ import { useLoaderData } from "react-router";
 
 import { Card, Field, PageHeader } from "@/components/ui";
 import { AuthForm } from "@/components/auth/AuthForm";
-import { requireRole } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/session";
 import { supabase } from "@/lib/supabase/client";
 import { updateProfile } from "@/lib/data/account-actions";
 
+/**
+ * A MESMA tela serve `/aluno/conta` e `/professor/conta` — spec 27.
+ *
+ * Não é duplicação de rota: são os mesmos campos, o mesmo action e a mesma
+ * regra. O que muda é uma frase, e frase não justifica um segundo componente.
+ */
 export async function accountLoader() {
-  const session = await requireRole("student");
+  const session = await requireSession();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -15,17 +21,25 @@ export async function accountLoader() {
     .eq("id", session.profileId)
     .maybeSingle();
 
-  return { profile, email: session.user.email ?? "" };
+  return { profile, email: session.user.email ?? "", role: session.role };
 }
 
 type LoaderData = Awaited<ReturnType<typeof accountLoader>>;
 
 export function Account() {
-  const { profile, email } = useLoaderData() as LoaderData;
+  const { profile, email, role } = useLoaderData() as LoaderData;
+  const isTeacher = role === "teacher";
 
   return (
     <>
-      <PageHeader title="Meus dados" description="Estes dados aparecem para o seu professor." />
+      <PageHeader
+        title="Meus dados"
+        description={
+          isTeacher
+            ? "Estes dados aparecem para os seus alunos."
+            : "Estes dados aparecem para o seu professor."
+        }
+      />
 
       <Card>
         <AuthForm action={updateProfile} submitLabel="Salvar alterações" pendingLabel="Salvando…">
@@ -43,7 +57,11 @@ export function Account() {
               readOnly
               disabled
             />
-            <span className="field__hint">Para trocar o e-mail, fale com o professor.</span>
+            <span className="field__hint">
+              {isTeacher
+                ? "O e-mail de acesso não muda por aqui."
+                : "Para trocar o e-mail, fale com o professor."}
+            </span>
           </div>
         </AuthForm>
       </Card>

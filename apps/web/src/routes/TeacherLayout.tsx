@@ -39,6 +39,10 @@ export function TeacherLayout() {
         { href: ROUTES.teacher.statistics, label: "Estatísticas" },
       ],
     },
+    {
+      title: "Conta",
+      items: [{ href: ROUTES.teacher.account, label: "Meus dados" }],
+    },
   ];
 
   return (
