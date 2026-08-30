@@ -53,3 +53,5 @@ docs/ambiente-staging.md
 # da organização. Apague o arquivo depois de preencher o Environment — isto
 # impede o commit, não o vazamento por backup ou sincronização de pasta.
 /secrets*
+
+code-reference
