@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router";
 
 import { RootLayout } from "@/routes/RootLayout";
-import { PublicLayout } from "@/routes/PublicLayout";
+import { PublicLayout, publicLayoutLoader } from "@/routes/PublicLayout";
 import { StudentLayout, studentLayoutLoader } from "@/routes/StudentLayout";
 import { TeacherLayout, teacherLayoutLoader } from "@/routes/TeacherLayout";
 import { NotFound, RouteError } from "@/routes/RouteError";
@@ -62,6 +62,7 @@ export const router = createBrowserRouter([
       },
 
       {
+        loader: publicLayoutLoader,
         Component: PublicLayout,
         children: [
           {

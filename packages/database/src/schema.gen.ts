@@ -715,21 +715,18 @@ export type Database = {
           cycle_config: Json
           review_config: Json
           student_id: string
-          theme: string
           updated_at: string
         }
         Insert: {
           cycle_config?: Json
           review_config?: Json
           student_id: string
-          theme?: string
           updated_at?: string
         }
         Update: {
           cycle_config?: Json
           review_config?: Json
           student_id?: string
-          theme?: string
           updated_at?: string
         }
         Relationships: [
@@ -1013,6 +1010,32 @@ export type Database = {
             foreignKeyName: "subscriptions_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_preferences: {
+        Row: {
+          profile_id: string
+          theme: Database["public"]["Enums"]["theme_preference"]
+          updated_at: string
+        }
+        Insert: {
+          profile_id: string
+          theme?: Database["public"]["Enums"]["theme_preference"]
+          updated_at?: string
+        }
+        Update: {
+          profile_id?: string
+          theme?: Database["public"]["Enums"]["theme_preference"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1474,6 +1497,7 @@ export type Database = {
         | "cancelled"
         | "voided"
       study_plan_status: "draft" | "active" | "paused" | "archived"
+      theme_preference: "light" | "dark"
       user_role: "student" | "teacher" | "admin"
     }
     CompositeTypes: {
@@ -1623,6 +1647,7 @@ export const Constants = {
         "voided",
       ],
       study_plan_status: ["draft", "active", "paused", "archived"],
+      theme_preference: ["light", "dark"],
       user_role: ["student", "teacher", "admin"],
     },
   },

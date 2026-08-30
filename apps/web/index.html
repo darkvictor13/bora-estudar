@@ -8,6 +8,32 @@
          da rota. Este é só o que aparece antes de o React montar. -->
     <title>Bora Estudar</title>
     <meta name="description" content="Plataforma de estudos para concursos." />
+
+    <!--
+      O TEMA, APLICADO ANTES DO PRIMEIRO PAINT.
+
+      Embutido e síncrono de propósito, e por isso vem antes do módulo da
+      aplicação: este site é uma SPA em modo data, e o documento pinta antes de
+      os loaders da rota resolverem. Aplicar o tema depois do loader — ou num
+      efeito, que roda depois da pintura — significa começar claro e trocar na
+      frente de quem escolheu escuro, em TODA carga de página.
+
+      A conta continua sendo a fonte da verdade: o loader do layout reconcilia
+      logo em seguida. Isto aqui é só a cópia que o navegador já tem em mãos.
+
+      As duas chaves são as mesmas de `src/lib/theme.ts` — um script embutido
+      não importa módulo, então elas estão escritas literalmente nos dois
+      lugares. Mexeu num, mexa no outro.
+    -->
+    <script>
+      try {
+        var active = localStorage.getItem("bora.theme.active");
+        var theme = active && localStorage.getItem("bora.theme." + active);
+        if (theme === "dark") document.documentElement.dataset.theme = "dark";
+      } catch (e) {
+        /* armazenamento bloqueado: fica no claro, que é o default */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

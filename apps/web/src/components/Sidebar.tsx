@@ -1,5 +1,8 @@
 import { Link, useLocation } from "react-router";
 
+import { ThemeToggle } from "@/components/ThemeToggle";
+import type { Theme } from "@/lib/theme";
+
 export interface NavItem {
   readonly href: string;
   readonly label: string;
@@ -16,11 +19,15 @@ export function Sidebar({
   groups,
   userName,
   roleLabel,
+  profileId,
+  theme,
   signOutAction,
 }: {
   groups: readonly NavGroup[];
   userName: string;
   roleLabel: string;
+  profileId: string;
+  theme: Theme;
   signOutAction: () => Promise<void>;
 }) {
   const { pathname } = useLocation();
@@ -72,6 +79,10 @@ export function Sidebar({
       ))}
 
       <div className="sidebar__foot">
+        {/* Acima do bloco de identidade: é preferência da conta, e a conta é o
+            que este rodapé representa. Vale para os três papéis. */}
+        <ThemeToggle profileId={profileId} initial={theme} />
+
         <div className="sidebar__user">
           {userName}
           <span>{roleLabel}</span>
@@ -83,7 +94,11 @@ export function Sidebar({
           `action` — não é nada específico de Server Action.
         */}
         <form action={signOutAction}>
-          <button type="submit" className="btn btn--ghost btn--block btn--sm" style={{ color: "#cbd5e1" }}>
+          <button
+            type="submit"
+            className="btn btn--ghost btn--block btn--sm"
+            style={{ color: "var(--sidebar-text)", borderColor: "rgb(255 255 255 / 40%)" }}
+          >
             Sair
           </button>
         </form>
