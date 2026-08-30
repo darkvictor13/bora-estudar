@@ -340,3 +340,25 @@ export async function getMyStudentsWithProgress(teacherId: string) {
       : { goalCount: 0, completed: 0, mainCount: 0, mainCorrect: 0 },
   }));
 }
+
+/**
+ * Quantas metas de bateria cada bloco já tem no planejamento — spec 18.
+ *
+ * É o ponto de partida do rodízio: sem ele, toda semana recomeçaria no primeiro
+ * bloco de cada disciplina (R-PREV-08). Conta todas as semanas não excluídas.
+ */
+export async function countGoalsPerBlock(studyPlanId: string): Promise<Map<string, number>> {
+  const { data } = await supabase
+    .from("goals")
+    .select("block_id")
+    .eq("study_plan_id", studyPlanId)
+    .eq("type", "question_block")
+    .is("deleted_at", null)
+    .not("block_id", "is", null);
+
+  const counts = new Map<string, number>();
+  for (const goal of data ?? []) {
+    if (goal.block_id) counts.set(goal.block_id, (counts.get(goal.block_id) ?? 0) + 1);
+  }
+  return counts;
+}

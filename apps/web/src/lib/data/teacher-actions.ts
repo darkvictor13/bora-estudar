@@ -2,8 +2,13 @@ import { supabase } from "@/lib/supabase/client";
 import { requireRole } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/actions";
 import type { Enum } from "@bora/database";
-import { buildWeek } from "@/lib/domain/week-planner";
-import { getCatalogBlocks } from "@/lib/data/teacher";
+import {
+  MAX_SUBJECT_WEIGHT,
+  MAX_WEEK_GOALS,
+  buildWeek,
+  groupIntoSubjects,
+} from "@/lib/domain/week-planner";
+import { countGoalsPerBlock, getCatalogBlocks } from "@/lib/data/teacher";
 import { ROUTES } from "@/lib/routes";
 
 /**
@@ -46,6 +51,22 @@ async function batchIdFor(parts: readonly (string | number | boolean)[]): Promis
   ].join("-");
 }
 
+/**
+ * Lê os pesos por disciplina do formulário.
+ *
+ * Cada disciplina manda um campo `peso:<nome>`. Ausente ou inválido vira 1, que
+ * é o padrão e o que reproduz o comportamento anterior à spec 18 (R-PREV-06).
+ */
+export function readWeights(data: FormData): Map<string, number> {
+  const weights = new Map<string, number>();
+  for (const [key, value] of data.entries()) {
+    if (!key.startsWith("peso:")) continue;
+    const parsed = Number(value);
+    weights.set(key.slice(5), Number.isFinite(parsed) ? parsed : 1);
+  }
+  return weights;
+}
+
 export async function generateWeek(_prev: FormState, data: FormData): Promise<FormState> {
   await requireRole("teacher");
 
@@ -62,6 +83,13 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
   if (!weekdays.length) return { error: "Escolha pelo menos um dia de estudo." };
   if (!blockIds.length) return { error: "Escolha pelo menos um bloco." };
 
+  const weights = readWeights(data);
+  for (const [subject, weight] of weights) {
+    if (!Number.isInteger(weight) || weight < 0 || weight > MAX_SUBJECT_WEIGHT) {
+      return { error: `O peso de ${subject} precisa ficar entre 0 e ${MAX_SUBJECT_WEIGHT}.` };
+    }
+  }
+
   const { data: blocks, error: blocksError } = await supabase
     .from("study_plan_blocks")
     .select("id,name,subject_name")
@@ -74,12 +102,36 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
   if (blocksError) return { error: `Não foi possível ler os blocos: ${blocksError.message}` };
   if (!blocks?.length) return { error: "Os blocos escolhidos não pertencem a este planejamento." };
 
+  // O padrão do total é uma meta por bloco marcado — o comportamento anterior.
+  const rawTotal = String(data.get("total") ?? "").trim();
+  const total = rawTotal ? Number(rawTotal) : blocks.length;
+  if (!Number.isInteger(total) || total < 1 || total > MAX_WEEK_GOALS) {
+    return { error: `O total de metas precisa ficar entre 1 e ${MAX_WEEK_GOALS}.` };
+  }
+
+  // O ponto de partida do rodízio é RELIDO do banco na hora de gravar: a prévia
+  // usa o retrato do carregamento da tela, e o que vale é isto (R-PREV-14).
+  const used = await countGoalsPerBlock(studyPlanId);
+  const subjects = groupIntoSubjects(
+    blocks,
+    (subject) => weights.get(subject) ?? 1,
+    (blockId) => used.get(blockId) ?? 0,
+  );
+
   const sortedWeekdays = [...weekdays].sort((a, b) => a - b);
-  const goals = buildWeek(blocks, sortedWeekdays, minutes, withTheory);
+  const goals = buildWeek(subjects, sortedWeekdays, minutes, withTheory, total);
+  if (!goals.length) {
+    return { error: "Com esses pesos nenhuma meta seria criada. Ajuste o total ou os pesos." };
+  }
 
   // Os blocos entram pela ordem que o banco devolveu, não pela ordem em que
   // vieram do formulário: é essa ordem que decide em que dia cada bloco cai,
   // então é ela que define o lote.
+  //
+  // O total e os pesos ENTRAM no hash (R-PREV-16). Sem eles, mudar um peso e
+  // reenviar produziria o mesmo id, e apply_study_plan_batch devolveria a
+  // semana antiga como replay — "reenviar o mesmo lote não duplica" viraria
+  // "mudar o peso não faz nada".
   const batchId = await batchIdFor([
     studyPlanId,
     week,
@@ -88,6 +140,8 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
     withTheory,
     sortedWeekdays.join(","),
     blocks.map((b) => b.id).join(","),
+    total,
+    subjects.map((s) => `${s.name}=${s.weight}`).join(","),
   ]);
 
   const { data: result, error } = await supabase.rpc("apply_study_plan_batch", {
