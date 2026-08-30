@@ -312,3 +312,43 @@ export function answersForResult(
   if (mains.length >= mainTarget) return list;
   return mains;
 }
+
+/** Rótulo único das três telas que agrupam por tópico. */
+export const UNKNOWN_TOPIC = "Tópico não identificado";
+
+export interface TopicTally {
+  readonly topic: string;
+  readonly answered: number;
+  readonly correct: number;
+  readonly incorrect: number;
+}
+
+/**
+ * Resumo por tópico do que SERÁ ENVIADO — spec 28.
+ *
+ * Passa por `answersForResult` de propósito: numa finalização antecipada,
+ * correlata e extra são descartadas do resultado (R-FASE-18), e mostrá-las aqui
+ * prometeria ao aluno um número que o site não vai receber.
+ *
+ * O tópico sai da própria resposta, que o trouxe do item da fila — o painel não
+ * consulta nada, pela mesma razão pela qual a extensão não fala com o Supabase.
+ */
+export function topicSummary(
+  answers: Readonly<Record<string, QuestionAnswer>>,
+  mainTarget: number,
+): TopicTally[] {
+  const tally = new Map<string, { topic: string; answered: number; correct: number; incorrect: number }>();
+
+  for (const answer of answersForResult(answers, mainTarget)) {
+    const topic = answer.topic?.trim() || UNKNOWN_TOPIC;
+    const row = tally.get(topic) ?? { topic, answered: 0, correct: 0, incorrect: 0 };
+    row.answered += 1;
+    if (answer.outcome === "correct") row.correct += 1;
+    else row.incorrect += 1;
+    tally.set(topic, row);
+  }
+
+  return [...tally.values()].sort(
+    (a, b) => b.answered - a.answered || a.topic.localeCompare(b.topic, "pt-BR"),
+  );
+}

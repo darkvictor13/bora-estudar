@@ -18,6 +18,7 @@ import {
   pickQuestions,
   progressOf,
   type QueueItem,
+  topicSummary,
 } from "./engine.ts";
 import {
   currentQuestionId,
@@ -26,7 +27,7 @@ import {
   isAnswerControl,
   watchForAnswer,
 } from "./tec-page.ts";
-import { renderPanel } from "./panel.ts";
+import { loadPanelPlacement, renderPanel } from "./panel.ts";
 
 // ---------------------------------------------------------------------------
 // Importação do payload de início
@@ -153,6 +154,7 @@ async function paintDelivered(session: QuizSessionState): Promise<void> {
   renderPanel({
     sessionNumber: session.start.sessionNumber,
     progress: progressOf(session.queue, session.answers, session.start.mainTarget),
+    topics: topicSummary(session.answers, session.start.mainTarget),
     delivered: true,
     onResend: () => void sendResult(session),
     onDiscard: () => {
@@ -173,6 +175,10 @@ async function paint(session: QuizSessionState): Promise<void> {
   renderPanel({
     sessionNumber: session.start.sessionNumber,
     progress,
+    topics: topicSummary(session.answers, session.start.mainTarget),
+    // Durante a bateria o que importa é quantas faltam; terminada a fila, o
+    // resumo abre sozinho, que é quando ele importa (R-PAIN-12).
+    topicsOpen: pending === null,
     historyComplete: session.start.historyComplete,
     currentIsInQueue: current !== null && session.queue.some((item) => item.id === current),
     onGoToPending: pending === null ? null : () => goToQuestion(pending),
@@ -219,6 +225,9 @@ async function paint(session: QuizSessionState): Promise<void> {
 
 async function boot(): Promise<void> {
   let session: QuizSessionState | null;
+
+  // Antes de qualquer render: o painel precisa nascer onde o aluno o deixou.
+  await loadPanelPlacement();
 
   try {
     session = (await importStartFromUrl()) ?? (await readSession());
