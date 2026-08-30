@@ -875,6 +875,15 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 22 — rodízio por tópico
+
+Spec: [`specs/22-rodizio-por-topico.md`](specs/22-rodizio-por-topico.md).
+Migram para a §3 quando os testes existirem.
+
+- **F-TOPI-01** — a bateria do seed sai equilibrada entre os tópicos do bloco.
+- **F-TOPI-02** — a segunda bateria do bloco continua sem repetir questão.
+- **F-TOPI-03** — a fila que a extensão monta é a mesma que o e2e reproduz.
+
 
 
 

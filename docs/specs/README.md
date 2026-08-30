@@ -43,6 +43,7 @@ de lá vira uma spec nova antes de virar código.
 | 19 | [Estudo extra avulso](19-estudo-extra-avulso.md) | O aluno registra o que estudou fora da semana; `extra_activity` vira enum |
 | 20 | [Execução do reforço de ciclo](20-execucao-do-reforco.md) | O aluno revisa os erros do ciclo de 3 baterias |
 | 21 | [Fases na extensão](21-fases-na-extensao.md) | Reforço correlato e rodada extra dentro do TEC |
+| 22 | [Rodízio por tópico](22-rodizio-por-topico.md) | A bateria deixa de poder cair inteira no mesmo assunto — **não implementada** |
 
 ---
 
