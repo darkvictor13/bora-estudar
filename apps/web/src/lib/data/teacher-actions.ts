@@ -295,7 +295,11 @@ export async function suspendAccess(_prev: FormState, data: FormData): Promise<F
   // erro. Contar é o que transforma isso em mensagem em vez de sucesso falso.
   if (count === 0) return { error: "Este aluno não tem acesso ativo para suspender." };
 
-  return { success: "Acesso suspenso. O aluno volta para a lista de espera." };
+  // Não pode voltar como `success`: o formulário de suspender só é renderizado
+  // com acesso ativo, então ele SOME na revalidação e leva junto o
+  // `useActionState` dono da mensagem. Sob carga, a revalidação chega antes da
+  // asserção e o alerta nunca aparece — era falha real, não teste instável.
+  return { redirectTo: `${ROUTES.teacher.student(studentId)}?feito=suspenso` };
 }
 
 // ---------------------------------------------------------------------------

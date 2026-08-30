@@ -16,6 +16,7 @@ import { ROUTES } from "@/lib/routes";
 /** Confirmação por query string: a linha muda de situação e o botão some. */
 const DONE_MESSAGE: Record<string, string> = {
   anulada: "Bateria anulada. A meta voltou a pendente e as questões voltaram a ser inéditas.",
+  suspenso: "Acesso suspenso. O aluno volta para a lista de espera.",
 };
 
 /** Só bateria finalizada é anulável — espelha R-ANUL-03, que a RPC impõe. */

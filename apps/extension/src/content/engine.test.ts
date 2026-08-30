@@ -328,3 +328,115 @@ describe("answersForResult", () => {
     assert.ok(parcial.every((a) => a.phase === "main"));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Rodízio por tópico — spec docs/specs/22-rodizio-por-topico.md
+// ---------------------------------------------------------------------------
+
+/** Conta quantas questões de cada tópico saíram na fila. */
+const porTopico = (queue: readonly QueueItem[]) => {
+  const contagem = new Map<string, number>();
+  for (const item of queue) {
+    const key = item.topic ?? "";
+    contagem.set(key, (contagem.get(key) ?? 0) + 1);
+  }
+  return contagem;
+};
+
+/** Bloco com `n` tópicos de `porTopico` questões cada. */
+const blocoComTopicos = (nomes: readonly string[], cada: number): AvailableQuestion[] =>
+  nomes.flatMap((nome, t) =>
+    Array.from({ length: cada }, (_, i) => q(t * 100 + i + 1, nome)),
+  );
+
+describe("rodízio por tópico", () => {
+  it("com três tópicos de tamanho igual, 15 saem 5 de cada", () => {
+    const fila = pickQuestions(
+      start({ mainTarget: 15, availableQuestions: blocoComTopicos(["A", "B", "C"], 10) }),
+    );
+    assert.equal(fila.length, 15);
+    assert.deepEqual([...porTopico(fila)].sort(), [["A", 5], ["B", 5], ["C", 5]]);
+  });
+
+  it("o tópico já coberto pelo histórico entra menos", () => {
+    const disponiveis = blocoComTopicos(["A", "B"], 10);
+    // Metade de A já foi vista; B está intocado.
+    const historico = disponiveis
+      .filter((question) => question.topic === "A")
+      .slice(0, 5)
+      .map((question) => seen(question.id));
+
+    const fila = pickQuestions(
+      start({ mainTarget: 6, availableQuestions: disponiveis, history: historico }),
+    );
+    const contagem = porTopico(fila);
+    assert.ok(
+      contagem.get("B")! > contagem.get("A")!,
+      `B deveria entrar mais que A: ${JSON.stringify([...contagem])}`,
+    );
+  });
+
+  it("empate resolve pelo tópico maior", () => {
+    // A tem 10 e B tem 2; nenhum visto. Com uma vaga só, A ganha.
+    const fila = pickQuestions(
+      start({
+        mainTarget: 1,
+        availableQuestions: [...blocoComTopicos(["A"], 10), ...blocoComTopicos(["B"], 2)],
+      }),
+    );
+    assert.equal(fila[0]?.topic, "A");
+  });
+
+  it("é determinística", () => {
+    const entrada = start({
+      mainTarget: 7,
+      availableQuestions: blocoComTopicos(["A", "B", "C"], 5),
+      history: [seen(101), seen(202)],
+    });
+    assert.deepEqual(pickQuestions(entrada), pickQuestions(entrada));
+  });
+
+  it("bloco sem tópico nenhum degrada para a fila anterior", () => {
+    // Todas com topic null: um grupo só, e a ordem é a de sempre.
+    const fila = pickQuestions(
+      start({
+        mainTarget: 3,
+        availableQuestions: [q(1), q(2), q(3), q(4)],
+        history: [seen(1), seen(2)],
+      }),
+    );
+    assert.deepEqual(ids(fila), [3, 4, 1]);
+  });
+
+  it("a rodada extra também respeita o rodízio", () => {
+    const disponiveis = blocoComTopicos(["A", "B", "C"], 5);
+    const entrada = start({ mainTarget: 3, availableQuestions: disponiveis });
+    const fila = pickQuestions(entrada);
+
+    const extras = appendExtraRound(entrada, fila)!;
+    assert.equal(extras.length, 5);
+    // Com 3 principais (uma de cada) e 5 extras, nenhum tópico passa de 3.
+    const contagem = porTopico([...fila, ...extras]);
+    assert.ok(
+      [...contagem.values()].every((n) => n <= 3),
+      `nenhum tópico deveria passar de 3: ${JSON.stringify([...contagem])}`,
+    );
+  });
+
+  it("não repete questão entre a primeira e a segunda bateria", () => {
+    const disponiveis = blocoComTopicos(["A", "B", "C"], 10);
+    const primeira = pickQuestions(start({ mainTarget: 15, availableQuestions: disponiveis }));
+
+    // A segunda bateria enxerga as 15 primeiras como vistas.
+    const segunda = pickQuestions(
+      start({
+        mainTarget: 15,
+        availableQuestions: disponiveis,
+        history: primeira.map((item) => seen(item.id)),
+      }),
+    );
+
+    const repetidas = segunda.filter((item) => primeira.some((p) => p.id === item.id));
+    assert.deepEqual(repetidas, [], "a segunda bateria repetiu questão");
+  });
+});

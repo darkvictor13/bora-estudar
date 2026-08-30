@@ -22,6 +22,7 @@ import {
   openSessionOf,
 } from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
+import { query } from "../fixtures/db.ts";
 import {
   buildAnswers,
   readStartPayload,
@@ -357,4 +358,51 @@ test("F-BAT-17 · a segunda bateria não repete questão", async ({
   const run = simulateExtension(studentPage.url(), { correct: 15 });
   expect(run.queue).toHaveLength(MAIN_TARGET);
   expect(run.queue.filter((item) => done.queue.includes(item.id))).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// §3 — rodízio por tópico. Spec docs/specs/22-rodizio-por-topico.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-TOPI-01/02/03 · a bateria sai equilibrada entre os tópicos", () => {
+  test("15 principais num bloco de 3 tópicos, e a segunda sem repetir", async ({
+    scenario,
+  }) => {
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    // F-TOPI-01: a fila que a extensão montaria, reproduzida pelo motor real.
+    const primeira = await completeQuiz(scenario, scenario.quizGoal, {
+      correct: 15,
+      minutes: 60,
+    });
+
+    // O ledger guarda o tópico que a EXTENSÃO enviou, e a fixture do e2e manda
+    // null — ela reproduz o motor, não o painel. A conferência do equilíbrio é
+    // feita contra o catálogo, que é de onde o tópico realmente vem.
+    const doCatalogo = await query<{ topic: string; total: string }>(
+      `select topic, count(*) total from public.catalog_questions
+        where block_id = $1 and question_id = any($2::bigint[])
+        group by topic`,
+      [block.catalogBlockId, primeira.queue],
+    );
+
+    const contagens = doCatalogo.map((row) => Number(row.total));
+    expect(contagens.length).toBeGreaterThan(1);
+    // Rodízio: nenhum tópico leva mais que um a mais que o menor.
+    expect(Math.max(...contagens) - Math.min(...contagens)).toBeLessThanOrEqual(1);
+
+    // F-TOPI-02: a segunda bateria do bloco não repete nenhuma questão.
+    const semana2 = await addWeek(scenario, 2);
+    const segundaGoal = semana2.find((g) => g.blockId === block.id)!;
+    const segunda = await completeQuiz(scenario, segundaGoal, { correct: 15, minutes: 60 });
+
+    expect(segunda.queue.filter((id) => primeira.queue.includes(id))).toEqual([]);
+
+    // F-TOPI-03: a fila reproduzida é a que o banco registrou.
+    const gravadas = await query<{ question_id: string }>(
+      "select question_id from public.quiz_session_questions where quiz_session_id = $1",
+      [segunda.sessionId],
+    );
+    expect(new Set(gravadas.map((r) => Number(r.question_id)))).toEqual(new Set(segunda.queue));
+  });
 });
