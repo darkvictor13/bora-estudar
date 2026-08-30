@@ -993,6 +993,18 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 26 — tópicos do bloco e da bateria
+
+Spec: [`specs/26-topicos-do-bloco-e-da-bateria.md`](specs/26-topicos-do-bloco-e-da-bateria.md).
+Migram para a §2 e a §4 quando os testes existirem.
+
+- **F-RESU-01** — o bloco mostra seus tópicos com a contagem de questões.
+- **F-RESU-02** — bloco sem catálogo vinculado não mostra a seção.
+- **F-RESU-03** — o aluno abre uma bateria concluída e vê o resumo por tópico.
+- **F-RESU-04** — o resumo separa principais de extras e reforços.
+- **F-RESU-05** — bateria alheia em `?bateria=` não mostra nada e não quebra.
+- **F-RESU-06** — o professor vê o mesmo resumo na ficha do aluno.
+
 
 
 

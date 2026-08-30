@@ -213,8 +213,8 @@ do domínio. `review_cycles` guarda ciclo de reforço, que é outro conceito.
 | Cadernos TEC por disciplina | `renderAulas` aluno.js:3355 | ✅ | 08 | — |
 | Desempenho oficial × aproveitamento total | changelog v93 | ✅ | 08 | — |
 | Blocos × desempenho com composição P/E/R | `renderEstatisticas` aluno.js:3770 | ✅ | 08 | — |
-| Ver tópicos do bloco antes de estudar | `htmlTopicosBloco` aluno.js:1514 | 🟡 | | pendente |
-| Resumo por tópicos da bateria concluída | `resumoBateriaDb` aluno.js:4444 | 🟡 | | pendente |
+| Ver tópicos do bloco antes de estudar | `htmlTopicosBloco` aluno.js:1514 | 🟡 | 26 | especificada |
+| Resumo por tópicos da bateria concluída | `resumoBateriaDb` aluno.js:4444 | 🟡 | 26 | especificada |
 | **Tempo de estudo por período** (hoje/semana/mês/ano/total) | `obterResumoTempoEstudo` aluno.js:924 | ✅ | 25 | implementada |
 | **Série de desempenho por semana** | `getWeeklyStats` aluno.js:3549 | ✅ | 25 | implementada |
 | **Radar por disciplina** (≥3 matérias) | `svgRadarDisciplinas` aluno.js:3679 | ❌ | | pendente |
@@ -449,7 +449,7 @@ condução dentro do TEC.
 | # | Feature | Superfície prevista |
 |---|---|---|
 | ~~14~~ | Tempo de estudo, séries temporais e sequência de dias — spec [25](specs/25-tempo-de-estudo-e-series.md) ✅ | 1 view, site |
-| 15 | Resumo por tópicos da bateria concluída | site |
+| 15 | Resumo por tópicos da bateria concluída — spec [26](specs/26-topicos-do-bloco-e-da-bateria.md) | 1 view, site |
 | 16 | Professor edita os próprios dados | site |
 | 17 | Painel arrastável na extensão | extensão |
 | 18 | Sidebar recolhível; mostrar/ocultar senha | site |
