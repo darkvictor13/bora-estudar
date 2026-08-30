@@ -1,6 +1,6 @@
 # 14 — Gestão do planejamento pelo professor
 
-**Situação:** não implementada · **Comparativo:** §12 item 3 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-GPLAN-01 a F-GPLAN-07
+**Situação:** implementada · **Comparativo:** §12 item 3 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-GPLAN-01 a F-GPLAN-07
 
 ---
 
@@ -132,12 +132,20 @@ aceito, e é melhor que o inverso.
 | Rota | `/professor/planejamentos` — ganha o formulário de criação e as ações por linha |
 | Componentes | `NewPlanForm` e `PlanActions`, em `components/teacher/` |
 | Actions | `createStudyPlan`, `activateStudyPlan`, `archiveStudyPlan`, em `lib/data/teacher-actions.ts` |
+| Confirmação | Ativar e arquivar devolvem `redirectTo` com `?feito=`, e a página anuncia |
 | Leitura | `getAllTeacherPlans` (já existe), mais os catálogos ativos e os alunos vinculados |
 | RPCs | **nenhuma nova.** `activate_study_plan` já existe |
 | Migration | **nenhuma** |
 | Banco | `study_plans` e `study_plan_blocks`, escrita direta já concedida; `catalog_blocks`, leitura |
 | Protocolo | **nada muda** |
 | Testes | `apps/e2e/tests/teacher.spec.ts` |
+
+**Ativar e arquivar não devolvem `success`.** As duas mudam a situação da linha
+e, com ela, quais botões existem — o formulário que mostraria a mensagem some na
+revalidação, levando junto o `useActionState` dono dela. As duas devolvem
+`redirectTo` com `?feito=`, e a página anuncia. É o mesmo motivo de
+`registerQuizTime` e de `completeGoal`, e foi descoberto no primeiro teste
+vermelho desta spec.
 
 **Esta spec não tem migration nem RPC, e isso é o ponto.** O banco já sabia
 fazer tudo o que ela precisa desde agosto — inclusive a parte difícil, que é a

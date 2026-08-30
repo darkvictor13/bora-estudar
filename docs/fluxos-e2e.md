@@ -455,6 +455,48 @@ semana bloqueia os dois: `ha bateria aberta nesta semana`.
 `?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
 no planejamento ativo (ou no primeiro) sem quebrar.
 
+### Gestão do planejamento — F-GPLAN-01 a 07
+
+Spec: [`specs/14-gestao-do-planejamento.md`](specs/14-gestao-do-planejamento.md).
+O formulário fica no cartão "Novo planejamento" de `/professor/planejamentos`;
+as ações por linha são "Ativar" e "Arquivar".
+
+**Duas armadilhas do harness aqui.** A confirmação de ativar e arquivar é do
+NÍVEL DA PÁGINA — `.content > .alert--success` —, porque o alerta do formulário
+de criação continua na tela dentro do cartão e `.alert--success` sozinho casa os
+dois, em violação do modo estrito. E o formulário some na revalidação: quem
+anuncia é a página, lendo `?feito=`.
+
+#### F-GPLAN-01 — Criar planejamento
+**Esperado** "criado como rascunho"; `study_plans` com `status='draft'`;
+`study_plan_blocks` com os blocos ativos do catálogo, `block_order` começando em
+0 dentro de cada disciplina.
+
+#### F-GPLAN-02 — O rascunho não é visível para o aluno
+**Esperado** badge "Rascunho" para o professor; o aluno continua com "Nenhum
+planejamento ativo".
+
+#### F-GPLAN-03 — Ativar
+**Esperado** "Planejamento ativado."; **exatamente um** ativo para o aluno; o
+anterior fica `archived` e **não** apagado; o aluno passa a ver o novo no
+cabeçalho da Visão geral.
+
+#### F-GPLAN-04 — Gerar metas usa os blocos materializados
+**Esperado** `/professor/metas` não diz "não tem blocos ativos" e oferece os
+checkboxes de bloco.
+
+#### F-GPLAN-05 — Arquivar
+**Esperado** "Planejamento arquivado."; a contagem de metas do planejamento não
+muda; o aluno volta ao estado vazio.
+
+#### F-GPLAN-06 — Nome repetido
+**Esperado** "Este aluno já tem um planejamento com esse nome. Escolha outro." e
+nenhuma linha nova — é `study_plan_name_unique` traduzida.
+
+#### F-GPLAN-07 — Professor sem aluno vinculado
+**Esperado** o cartão diz "Vincule um aluno a você" e **não** renderiza o
+seletor de alunos.
+
 ### Vínculo e liberação de acesso — F-VINC-01 a 07
 
 Spec: [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-e-liberacao-de-acesso.md).
@@ -548,7 +590,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 172 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 179 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -560,7 +602,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09 e F-VINC-01 a 07 | 37 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07 e F-GPLAN-01 a 07 | 44 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
@@ -597,25 +639,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 14 — gestão do planejamento
-
-Spec: [`specs/14-gestao-do-planejamento.md`](specs/14-gestao-do-planejamento.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-GPLAN-01** — criar um planejamento grava `status='draft'` e materializa os
-  blocos ativos do catálogo escolhido, com `subject_order` e `block_order`
-  coerentes.
-- **F-GPLAN-02** — o planejamento recém-criado aparece como "Rascunho" e o aluno
-  ainda não o vê.
-- **F-GPLAN-03** — ativar troca o estado, arquiva o anterior do mesmo aluno na
-  mesma transação, e o aluno passa a ver o novo.
-- **F-GPLAN-04** — depois de ativar, `/professor/metas` aceita gerar a semana
-  com os blocos materializados.
-- **F-GPLAN-05** — arquivar troca o estado e preserva metas e baterias.
-- **F-GPLAN-06** — nome repetido para o mesmo aluno é recusado com mensagem em
-  português, e nada é gravado.
-- **F-GPLAN-07** — o seletor de alunos oferece só quem tem vínculo vigente; sem
-  aluno vinculado, a tela explica em vez de mostrar um formulário inútil.
 
 
 

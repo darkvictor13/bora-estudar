@@ -164,3 +164,27 @@ export async function getStudentSubscription(studentId: string) {
   // PostgREST devolveu. Um aluno que renovou tem histórico ao lado da atual.
   return list.find((s) => s.status === "active") ?? list[0] ?? null;
 }
+
+/** Catálogos ativos, para materializar os blocos de um planejamento novo. */
+export async function getActiveCatalogs() {
+  const { data } = await supabase.from("catalogs").select("key,name").eq("active", true).order("name");
+  return data ?? [];
+}
+
+/**
+ * Blocos ativos de um catálogo, na ordem em que vão para o planejamento.
+ *
+ * A ordenação por `subject_name` e depois `number` é a mesma que decide
+ * `subject_order` e `block_order` — e é `study_plan_block_order_uidx` que exige
+ * o par ser único dentro do planejamento.
+ */
+export async function getCatalogBlocks(catalogKey: string) {
+  const { data } = await supabase
+    .from("catalog_blocks")
+    .select("id,name,subject_name,number,question_count")
+    .eq("catalog_key", catalogKey)
+    .eq("active", true)
+    .order("subject_name")
+    .order("number");
+  return data ?? [];
+}
