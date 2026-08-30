@@ -85,7 +85,7 @@ export async function getBlockPerformance(studyPlanId: string) {
 export async function getStudyPlanBlocks(studyPlanId: string) {
   const { data } = await supabase
     .from("study_plan_blocks")
-    .select("id,name,subject_name,subject_color,subject_target,question_count,link,active,block_order")
+    .select("id,name,subject_name,subject_color,subject_target,question_count,link,active,block_order,catalog_block_id")
     .eq("study_plan_id", studyPlanId)
     .is("deleted_at", null)
     .order("subject_order")
@@ -292,4 +292,77 @@ export async function getStudyTime(studyPlanId: string) {
         ]
       : [],
   );
+}
+
+// ---------------------------------------------------------------------------
+// Tópicos do bloco e da bateria — spec docs/specs/26-topicos-do-bloco-e-da-bateria.md
+// ---------------------------------------------------------------------------
+
+/**
+ * Tópicos de um bloco de catálogo, com quantas questões cada um tem.
+ *
+ * A v96 baixava 1,97 MB de catálogo para responder isto. Aqui é uma consulta do
+ * bloco aberto — e a extensão continua sem catálogo embutido.
+ */
+export async function getBlockTopics(
+  catalogBlockIds: readonly string[],
+): Promise<Map<string, { topic: string; questions: number }[]>> {
+  const ids = [...new Set(catalogBlockIds)];
+  if (ids.length === 0) return new Map();
+
+  // Uma consulta para o planejamento inteiro, e não uma por bloco: um plano de
+  // 92 blocos daria 92 idas ao servidor no loader de uma tela só.
+  const { data } = await supabase
+    .from("catalog_questions")
+    .select("block_id,topic")
+    .in("block_id", ids);
+
+  const counts = new Map<string, Map<string, number>>();
+  for (const row of data ?? []) {
+    if (!row.block_id) continue;
+    const perBlock = counts.get(row.block_id) ?? new Map<string, number>();
+    const topic = row.topic?.trim() || "Tópico não identificado";
+    perBlock.set(topic, (perBlock.get(topic) ?? 0) + 1);
+    counts.set(row.block_id, perBlock);
+  }
+
+  return new Map(
+    [...counts.entries()].map(([blockId, perBlock]) => [
+      blockId,
+      [...perBlock.entries()]
+        .map(([topic, questions]) => ({ topic, questions }))
+        .sort((a, b) => b.questions - a.questions || a.topic.localeCompare(b.topic)),
+    ]),
+  );
+}
+
+/** Baterias concluídas do planejamento, da mais recente para a mais antiga. */
+export async function getStudentCompletedSessions(studyPlanId: string) {
+  const { data } = await supabase
+    .from("quiz_sessions")
+    .select("id,block_id,session_number,completed_at,duration_minutes")
+    .eq("study_plan_id", studyPlanId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(50);
+  return data ?? [];
+}
+
+/**
+ * Resumo por tópico de uma bateria.
+ *
+ * As três fases entram, e separadas: aqui o número é diagnóstico da sessão, não
+ * nota — e o aluno quer saber que errou a correlata do mesmo assunto
+ * (R-RESU-07). A RLS já filtra bateria alheia, então id que não é do aluno
+ * volta vazio em vez de erro.
+ */
+export async function getSessionTopics(quizSessionId: string) {
+  const { data } = await supabase
+    .from("vw_session_topics")
+    .select(
+      "topic,answered,correct,incorrect,main_count,main_correct,reinforcement_count,reinforcement_correct,extra_count,extra_correct",
+    )
+    .eq("quiz_session_id", quizSessionId)
+    .order("answered", { ascending: false });
+  return data ?? [];
 }

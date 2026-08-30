@@ -338,6 +338,30 @@ botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
 
+### F-RESU-01 — Tópicos do bloco antes de estudar
+**Esperado** cada bloco do catálogo traz um `<details>` "Ver o que será
+estudado" com os tópicos e quantas questões cada um tem. Recolhido: um bloco de
+27 tópicos empurraria a tabela para fora da tela.
+
+### F-RESU-02 — Bloco sem catálogo vinculado
+**Esperado** bloco criado à mão pelo professor **não** mostra a seção. Não é
+erro: é bloco sem questões cadastradas. `addBlocks` do e2e cria exatamente esse
+caso, sem `catalog_block_id`.
+
+### F-RESU-03 — Resumo da bateria concluída
+**Esperado** "Ver tópicos" abre o resumo daquela bateria, uma linha por tópico.
+O estado vai na query string (`?bateria=`), como `?bloco=` em `/aluno/revisoes`:
+recarregar mantém o resumo aberto.
+
+### F-RESU-04 — O resumo separa as três fases
+**Esperado** colunas de principais, reforços e extras. Fase que não aconteceu
+vem com `—`, e não `0/0`: não ter tido extra é diferente de ter errado todas.
+
+### F-RESU-05 — Bateria alheia na query string
+**Esperado** a tela abre normalmente e **nenhum resumo** aparece. A RLS já não
+devolveria a linha; a tela não pode reagir a isso com erro. Não existe status
+404 neste servidor — verifica-se a TELA.
+
 ### F-TEMP-01 — Tempo do período, por disciplina e por atividade
 **Esperado** o cartão soma o tempo das metas concluídas e divide em uma linha
 por grupo: meta **com bloco** vai pela disciplina, meta **sem bloco** pela
@@ -852,6 +876,11 @@ Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
 acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
 somente as questões `main`.
 
+### F-RESU-06 — O resumo da bateria na ficha
+**Esperado** o professor abre "Ver tópicos" no cartão "Baterias" e vê o mesmo
+resumo. Só bateria `completed` oferece o link: anulada saiu do desempenho, e
+mostrá-la contradiria a tela que a anulou.
+
 ### F-TEMP-06 — As três leituras na ficha do aluno
 **Esperado** o professor vê tempo, sequência e série do aluno, com os mesmos
 números que o aluno vê. Nenhuma policy nova: `vw_study_time` tem
@@ -947,7 +976,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 246 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 252 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -993,17 +1022,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 26 — tópicos do bloco e da bateria
-
-Spec: [`specs/26-topicos-do-bloco-e-da-bateria.md`](specs/26-topicos-do-bloco-e-da-bateria.md).
-Migram para a §2 e a §4 quando os testes existirem.
-
-- **F-RESU-01** — o bloco mostra seus tópicos com a contagem de questões.
-- **F-RESU-02** — bloco sem catálogo vinculado não mostra a seção.
-- **F-RESU-03** — o aluno abre uma bateria concluída e vê o resumo por tópico.
-- **F-RESU-04** — o resumo separa principais de extras e reforços.
-- **F-RESU-05** — bateria alheia em `?bateria=` não mostra nada e não quebra.
-- **F-RESU-06** — o professor vê o mesmo resumo na ficha do aluno.
 
 
 

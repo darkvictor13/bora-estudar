@@ -6,28 +6,52 @@ import {
   getActiveStudyPlan,
   getBlockPerformance,
   getPlanWeeks,
+  getSessionTopics,
+  getStudentCompletedSessions,
   getStudyPlanBlocks,
   getStudyTime,
   getTopicDifficulty,
 } from "@/lib/data/student";
 import { StudyStreak, StudyTime, WeeklySeries } from "@/components/StudyTime";
+import { SessionTopics } from "@/components/SessionTopics";
+import { Link } from "react-router";
 import { TopicDifficulty } from "@/components/TopicDifficulty";
 import { scorePercent } from "@/lib/domain/goals";
 
-export async function studentStatisticsLoader() {
+export async function studentStatisticsLoader({ request }: { request: Request }) {
   await requireStudentAccess();
 
   const plan = await getActiveStudyPlan();
   if (!plan) return { plan: null } as const;
 
-  const [performance, blocks, topics, studyTime, weeks] = await Promise.all([
+  const [performance, blocks, topics, studyTime, weeks, sessions] = await Promise.all([
     getBlockPerformance(plan.id),
     getStudyPlanBlocks(plan.id),
     getTopicDifficulty(plan.id),
     getStudyTime(plan.id),
     getPlanWeeks(plan.id),
+    getStudentCompletedSessions(plan.id),
   ]);
-  return { plan, performance, blocks, topics, studyTime, weeks } as const;
+
+  // A bateria escolhida mora na query string, como `?bloco=` em /aluno/revisoes:
+  // recarregar mantém, e o link é compartilhável com o professor. Id alheio ou
+  // inexistente não quebra a tela — a RLS já não devolveria a linha, e a tela
+  // simplesmente não mostra resumo nenhum (R-RESU-13).
+  const requested = new URL(request.url).searchParams.get("bateria");
+  const selectedSession = requested && sessions.some((s) => s.id === requested) ? requested : null;
+  const sessionTopics = selectedSession ? await getSessionTopics(selectedSession) : [];
+
+  return {
+    plan,
+    performance,
+    blocks,
+    topics,
+    studyTime,
+    weeks,
+    sessions,
+    selectedSession,
+    sessionTopics,
+  } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentStatisticsLoader>>;
@@ -44,7 +68,9 @@ export function StudentStatistics() {
     );
   }
 
-  const { performance, topics, studyTime, weeks } = data;
+  const { performance, topics, studyTime, weeks, sessions, selectedSession, sessionTopics } =
+    data;
+  const blockNameById = new Map(data.blocks.map((b) => [b.id, b.name]));
   // `new Date()` no render, e não no loader: o loader é serializado e uma Date
   // atravessaria como string. O dia de hoje é do navegador, que é onde o aluno
   // está.
@@ -103,6 +129,47 @@ export function StudentStatistics() {
         </div>
 
         <WeeklySeries rows={studyTime} plannedWeeks={weeks} />
+
+        <Card title="Suas baterias" sub="Concluídas, da mais recente para a mais antiga">
+          {sessions.length === 0 ? (
+            <Empty>Nenhuma bateria concluída ainda.</Empty>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bloco</th>
+                    <th className="num">Bateria</th>
+                    <th className="num">Tempo</th>
+                    <th>Tópicos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map((session) => (
+                    <tr key={session.id}>
+                      <td>
+                        {(session.block_id && blockNameById.get(session.block_id)) ?? "—"}
+                      </td>
+                      <td className="num">{session.session_number ?? "—"}</td>
+                      <td className="num">
+                        {session.duration_minutes ? `${session.duration_minutes}min` : "—"}
+                      </td>
+                      <td>
+                        {selectedSession === session.id ? (
+                          <Link to="/aluno/estatisticas">Fechar</Link>
+                        ) : (
+                          <Link to={`/aluno/estatisticas?bateria=${session.id}`}>Ver tópicos</Link>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {selectedSession && <SessionTopics rows={sessionTopics} />}
 
         <TopicDifficulty
           rows={topics}
