@@ -514,3 +514,155 @@ test.describe("F-FASE-05 · finalização antecipada descarta o que não é prin
     expect(result.answers[0]?.phase).toBe("main");
   });
 });
+
+// ---------------------------------------------------------------------------
+// §3 — painel arrastável e resumo por tópicos.
+// Spec docs/specs/28-painel-arrastavel-e-topicos.md
+// ---------------------------------------------------------------------------
+
+const HANDLE = `${PANEL} [data-role="drag-handle"]`;
+const MINIMIZE = `${PANEL} [data-role="minimize"]`;
+
+/** Arrasta a alça por um delta, com eventos de ponteiro reais. */
+async function dragBy(
+  page: import("@playwright/test").Page,
+  dx: number,
+  dy: number,
+): Promise<void> {
+  const handle = page.locator(HANDLE);
+  const box = await handle.boundingBox();
+  if (!box) throw new Error("a alça do painel não tem caixa");
+
+  const fromX = box.x + box.width / 2;
+  const fromY = box.y + box.height / 2;
+  await page.mouse.move(fromX, fromY);
+  await page.mouse.down();
+  // Dois passos: um `pointermove` só costuma ser engolido pelo início do
+  // arrasto nativo.
+  await page.mouse.move(fromX + dx / 2, fromY + dy / 2);
+  await page.mouse.move(fromX + dx, fromY + dy);
+  await page.mouse.up();
+}
+
+async function panelBox(page: import("@playwright/test").Page) {
+  const box = await page.locator(PANEL).boundingBox();
+  if (!box) throw new Error("o painel não tem caixa");
+  return box;
+}
+
+test.describe("F-PAIN-01 · arrastar o painel", () => {
+  test("move, e a posição sobrevive à navegação", async ({ extPage }) => {
+    const start = syntheticStart();
+    await extPage.goto(startUrlFor(start));
+    await waitForPanel(extPage);
+
+    const antes = await panelBox(extPage);
+    await dragBy(extPage, -220, -160);
+
+    const depois = await panelBox(extPage);
+    expect(depois.x).toBeLessThan(antes.x - 100);
+    expect(depois.y).toBeLessThan(antes.y - 80);
+
+    // A posição é preferência, e vive em chave própria do storage: recarregar
+    // a página — que é o que a navegação entre questões faz — a mantém.
+    await extPage.reload();
+    await waitForPanel(extPage);
+
+    const restaurada = await panelBox(extPage);
+    expect(Math.abs(restaurada.x - depois.x)).toBeLessThan(3);
+    expect(Math.abs(restaurada.y - depois.y)).toBeLessThan(3);
+  });
+});
+
+test.describe("F-PAIN-02 · o painel não sai da tela", () => {
+  test("arrastar para fora prende nas bordas", async ({ extPage }) => {
+    await extPage.goto(startUrlFor(syntheticStart()));
+    await waitForPanel(extPage);
+
+    // Para cima e para a esquerda, muito além da borda.
+    await dragBy(extPage, -5000, -5000);
+
+    const canto = await panelBox(extPage);
+    expect(canto.x).toBeGreaterThanOrEqual(0);
+    expect(canto.y).toBeGreaterThanOrEqual(0);
+    expect(canto.x).toBeLessThan(5);
+    expect(canto.y).toBeLessThan(5);
+
+    // E para baixo e para a direita: um painel arrastado para fora não teria
+    // como voltar, porque a alça vai junto.
+    await dragBy(extPage, 5000, 5000);
+
+    const viewport = extPage.viewportSize()!;
+    const depois = await panelBox(extPage);
+    expect(depois.x + depois.width).toBeLessThanOrEqual(viewport.width + 1);
+    expect(depois.y).toBeLessThanOrEqual(viewport.height - 50 + 1);
+  });
+});
+
+test.describe("F-PAIN-03/04 · minimizar", () => {
+  test("reduz a um botão, restaura, e o estado sobrevive à navegação", async ({ extPage }) => {
+    const start = syntheticStart();
+    await extPage.goto(startUrlFor(start));
+    await waitForPanel(extPage);
+
+    const inteiro = await panelBox(extPage);
+    await expect(extPage.locator(PANEL)).toContainText("respondidas");
+
+    await extPage.locator(MINIMIZE).click();
+
+    await expect(extPage.locator(PANEL)).toHaveAttribute("data-minimized", "true");
+    await expect(extPage.locator(PANEL)).not.toContainText("respondidas");
+    const reduzido = await panelBox(extPage);
+    expect(reduzido.width).toBeLessThan(inteiro.width);
+
+    // Sobrevive à navegação: quem minimizou não quer o painel de volta a cada
+    // questão.
+    await extPage.reload();
+    await waitForPanel(extPage);
+    await expect(extPage.locator(PANEL)).toHaveAttribute("data-minimized", "true");
+
+    await extPage.locator(MINIMIZE).click();
+    await expect(extPage.locator(PANEL)).toHaveAttribute("data-minimized", "false");
+    await expect(extPage.locator(PANEL)).toContainText("respondidas");
+  });
+});
+
+test.describe("F-PAIN-05 · resumo por tópicos", () => {
+  test("aparece com as respostas e conta acertos e erros", async ({ extPage, tec }) => {
+    const start = syntheticStart();
+    const queue = pickQuestions(start);
+
+    await extPage.goto(startUrlFor(start));
+    await waitForPanel(extPage);
+
+    await tec.answer(extPage, "correct");
+    await expect(extPage.locator(PANEL)).toContainText("1 de");
+
+    const resumo = extPage.locator(`${PANEL} [data-role="topics"]`);
+    await expect(resumo).toHaveCount(1);
+    // Começa recolhido: durante a bateria o que importa é quantas faltam.
+    await expect(resumo).not.toHaveAttribute("open", "");
+
+    await resumo.locator("summary").click();
+    const topico = queue[0]!.topic ?? "Tópico não identificado";
+    await expect(resumo.locator(`[data-topic="${topico}"]`)).toContainText("1✓ 0✕");
+  });
+});
+
+test.describe("F-PAIN-06 · clicar não é arrastar", () => {
+  test("o botão de minimizar não move o painel", async ({ extPage }) => {
+    await extPage.goto(startUrlFor(syntheticStart()));
+    await waitForPanel(extPage);
+
+    await dragBy(extPage, -200, -120);
+    const antes = await panelBox(extPage);
+
+    // Clicar no botão dentro da alça: minimiza, e não arrasta um pixel.
+    await extPage.locator(MINIMIZE).click();
+    await expect(extPage.locator(PANEL)).toHaveAttribute("data-minimized", "true");
+
+    const depois = await panelBox(extPage);
+    expect(Math.abs(depois.x - antes.x)).toBeLessThan(3);
+    expect(Math.abs(depois.y - antes.y)).toBeLessThan(3);
+  });
+});

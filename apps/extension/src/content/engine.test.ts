@@ -11,6 +11,8 @@ import {
   pickQuestions,
   progressOf,
   type QueueItem,
+  topicSummary,
+  UNKNOWN_TOPIC,
 } from "./engine.ts";
 import type { AvailableQuestion, QuestionAnswer, QuizStart, SeenQuestion } from "@bora/protocol";
 
@@ -438,5 +440,90 @@ describe("rodízio por tópico", () => {
 
     const repetidas = segunda.filter((item) => primeira.some((p) => p.id === item.id));
     assert.deepEqual(repetidas, [], "a segunda bateria repetiu questão");
+  });
+});
+
+describe("resumo por tópico do painel", () => {
+  const resposta = (
+    id: number,
+    topic: string | null,
+    outcome: "correct" | "incorrect",
+    phase: "main" | "reinforcement" | "extra" = "main",
+  ) => ({
+    questionId: id,
+    executionOrder: id,
+    round: 0,
+    phase,
+    outcome,
+    topic,
+    sourceQuestionId: null,
+    answeredAt: "2026-08-31T10:00:00.000Z",
+  });
+
+  it("agrupa por tópico e conta acertos e erros", () => {
+    const answers = {
+      "1": resposta(1, "Álgebra", "correct"),
+      "2": resposta(2, "Álgebra", "incorrect"),
+      "3": resposta(3, "Geometria", "correct"),
+    };
+
+    assert.deepEqual(topicSummary(answers, 3), [
+      { topic: "Álgebra", answered: 2, correct: 1, incorrect: 1 },
+      { topic: "Geometria", answered: 1, correct: 1, incorrect: 0 },
+    ]);
+  });
+
+  it("ordena por feitas, e empate pelo nome em português", () => {
+    const answers = {
+      "1": resposta(1, "Ética", "correct"),
+      "2": resposta(2, "Administração", "correct"),
+      "3": resposta(3, "Zoologia", "correct"),
+      "4": resposta(4, "Zoologia", "correct"),
+    };
+
+    assert.deepEqual(
+      topicSummary(answers, 4).map((row) => row.topic),
+      ["Zoologia", "Administração", "Ética"],
+    );
+  });
+
+  it("tópico nulo e em branco caem no mesmo rótulo das telas do site", () => {
+    const answers = {
+      "1": resposta(1, null, "correct"),
+      "2": resposta(2, "   ", "incorrect"),
+    };
+
+    assert.deepEqual(topicSummary(answers, 2), [
+      { topic: UNKNOWN_TOPIC, answered: 2, correct: 1, incorrect: 1 },
+    ]);
+  });
+
+  it("na finalização antecipada conta só o que será enviado", () => {
+    // 2 principais de 15, mais uma correlata: o site receberá só as duas
+    // principais, e o resumo não pode prometer a terceira.
+    const answers = {
+      "1": resposta(1, "Álgebra", "incorrect"),
+      "2": resposta(2, "Álgebra", "correct"),
+      "3": resposta(3, "Álgebra", "correct", "reinforcement"),
+    };
+
+    assert.deepEqual(topicSummary(answers, 15), [
+      { topic: "Álgebra", answered: 2, correct: 1, incorrect: 1 },
+    ]);
+  });
+
+  it("com todas as principais respondidas, as outras fases entram", () => {
+    const answers = {
+      "1": resposta(1, "Álgebra", "correct"),
+      "2": resposta(2, "Álgebra", "incorrect", "reinforcement"),
+    };
+
+    assert.deepEqual(topicSummary(answers, 1), [
+      { topic: "Álgebra", answered: 2, correct: 1, incorrect: 1 },
+    ]);
+  });
+
+  it("sem resposta nenhuma, lista vazia", () => {
+    assert.deepEqual(topicSummary({}, 15), []);
   });
 });

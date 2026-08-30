@@ -607,6 +607,39 @@ correlatas, o ledger fica com 19 linhas, nenhuma correlata sem
 **Esperado** a extensão **não** pode reoferecer "Finalizar e enviar" para uma
 bateria que já foi entregue ao site.
 
+### F-PAIN-01 — Arrastar o painel
+**Esperado** arrastar o cabeçalho move o painel, e recarregar a página o traz de
+volta onde foi deixado. A posição vive em chave própria do `storage.local`, e
+não no envelope da sessão: preferência perdida é irritação, bateria perdida é
+uma hora de estudo.
+
+**O arrasto usa ponteiro, e o `pointermove` fica no documento só enquanto dura.**
+O teste move em dois passos — um `pointermove` só costuma ser engolido pelo
+início do arrasto nativo.
+
+### F-PAIN-02 — O painel não sai da tela
+**Esperado** arrastado para fora em qualquer direção, ele prende nas bordas. Um
+painel fora da tela não tem como voltar, porque a alça vai junto.
+
+**A largura é MEDIDA, não a constante.** `width:274px` mais `padding:0 16px` dá
+306px de caixa: prender pela constante deixava o painel passar 32px da borda
+direita, e foi este teste que pegou.
+
+### F-PAIN-03/04 — Minimizar
+**Esperado** o painel vira um botão, o corpo some, e o estado sobrevive à
+navegação entre questões — quem minimizou não quer o painel de volta a cada
+questão. Restaurar traz tudo.
+
+### F-PAIN-05 — Resumo por tópicos
+**Esperado** com a primeira resposta o resumo existe, **recolhido**: durante a
+bateria o que importa é quantas faltam. Terminada a fila, abre sozinho. Os
+números são de `topicSummary`, que conta **o que será enviado** — numa
+finalização antecipada, correlata e extra não entram.
+
+### F-PAIN-06 — Clicar não é arrastar
+**Esperado** o botão de minimizar, que fica dentro da alça, minimiza sem mover o
+painel um pixel.
+
 ---
 
 ## 4. Professor
@@ -995,7 +1028,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 259 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 264 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -1038,17 +1071,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 28 — painel arrastável e resumo por tópicos
-
-Spec: [`specs/28-painel-arrastavel-e-topicos.md`](specs/28-painel-arrastavel-e-topicos.md).
-Migram para a §3 quando os testes existirem.
-
-- **F-PAIN-01** — arrastar move o painel, e a posição sobrevive à navegação.
-- **F-PAIN-02** — o painel não sai da tela.
-- **F-PAIN-03** — minimizar reduz a um botão, e restaurar traz de volta.
-- **F-PAIN-04** — o estado minimizado sobrevive à navegação.
-- **F-PAIN-05** — o resumo por tópicos aparece com as respostas.
-- **F-PAIN-06** — clicar num botão do painel não vira arrasto.
 
 
 
