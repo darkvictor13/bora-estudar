@@ -368,3 +368,9 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .study-total strong, .streak-value strong { font-size: 1.8rem; font-weight: 700; }
 .streak-value { margin-bottom: 6px; }
+
+/* Tópicos do bloco — spec docs/specs/26-topicos-do-bloco-e-da-bateria.md */
+.block-topics { margin-top: 6px; font-size: 0.85rem; }
+.block-topics > summary { cursor: pointer; color: var(--accent-text); }
+.block-topics__list { margin: 6px 0 0; padding-left: 18px; color: var(--text-label); }
+.block-topics__list li { margin-bottom: 2px; }

@@ -2,7 +2,13 @@ import { useLoaderData } from "react-router";
 
 import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { requireStudentAccess } from "@/lib/auth/session";
-import { getActiveStudyPlan, getBlockPerformance, getStudyPlanBlocks } from "@/lib/data/student";
+import {
+  getActiveStudyPlan,
+  getBlockPerformance,
+  getBlockTopics,
+  getStudyPlanBlocks,
+} from "@/lib/data/student";
+import { BlockTopics } from "@/components/SessionTopics";
 
 export async function studentNotebooksLoader() {
   await requireStudentAccess();
@@ -14,7 +20,11 @@ export async function studentNotebooksLoader() {
     getStudyPlanBlocks(plan.id),
     getBlockPerformance(plan.id),
   ]);
-  return { plan, blocks, performance } as const;
+  const topics = await getBlockTopics(
+    blocks.map((b) => b.catalog_block_id).filter((id) => id !== null),
+  );
+  // O Map não sobrevive à serialização do loader; a lista de pares, sim.
+  return { plan, blocks, performance, topics: [...topics.entries()] } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentNotebooksLoader>>;
@@ -33,6 +43,7 @@ export function StudentNotebooks() {
 
   const { blocks } = data;
   const perfById = new Map(data.performance.map((p) => [p.block_id, p]));
+  const topicsByCatalog = new Map(data.topics);
 
   const bySubject = new Map<string, typeof blocks>();
   for (const block of blocks) {
@@ -79,6 +90,11 @@ export function StudentNotebooks() {
                               </a>
                             ) : (
                               block.name
+                            )}
+                            {block.catalog_block_id && (
+                              <BlockTopics
+                                topics={topicsByCatalog.get(block.catalog_block_id) ?? []}
+                              />
                             )}
                           </td>
                           <td className="num">{block.question_count || "—"}</td>

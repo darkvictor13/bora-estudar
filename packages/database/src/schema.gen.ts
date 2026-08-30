@@ -444,6 +444,13 @@ export type Database = {
             referencedRelation: "vw_quiz_session_performance"
             referencedColumns: ["quiz_session_id"]
           },
+          {
+            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "vw_session_topics"
+            referencedColumns: ["quiz_session_id"]
+          },
         ]
       }
       quiz_sessions: {
@@ -619,6 +626,13 @@ export type Database = {
             columns: ["quiz_session_id"]
             isOneToOne: true
             referencedRelation: "vw_quiz_session_performance"
+            referencedColumns: ["quiz_session_id"]
+          },
+          {
+            foreignKeyName: "reinforcement_sessions_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: true
+            referencedRelation: "vw_session_topics"
             referencedColumns: ["quiz_session_id"]
           },
           {
@@ -1390,6 +1404,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "study_plan_blocks"
             referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+        ]
+      }
+      vw_session_topics: {
+        Row: {
+          answered: number | null
+          block_id: string | null
+          correct: number | null
+          extra_correct: number | null
+          extra_count: number | null
+          incorrect: number | null
+          main_correct: number | null
+          main_count: number | null
+          quiz_session_id: string | null
+          reinforcement_correct: number | null
+          reinforcement_count: number | null
+          student_id: string | null
+          study_plan_id: string | null
+          teacher_id: string | null
+          topic: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+          {
+            foreignKeyName: "quiz_session_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
           },
         ]
       }

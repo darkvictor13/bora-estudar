@@ -6,6 +6,7 @@ import {
   addBlocks,
   addWeek,
   completeGoal,
+  createScenario,
   goalCount,
   goalStatus,
   reviewsDone,
@@ -1154,5 +1155,105 @@ test.describe("F-TEMP-07 · reabrir uma meta", () => {
       cardByTitle(studentPage, "Sequência").locator(".streak-value strong"),
     ).toHaveText("0");
     await expect(cardByTitle(studentPage, "Semana a semana")).toContainText("0min");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §2 — tópicos do bloco e resumo da bateria.
+// Spec docs/specs/26-topicos-do-bloco-e-da-bateria.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-RESU-01 · tópicos do bloco antes de estudar", () => {
+  test("cada bloco lista seus tópicos com a contagem", async ({ studentPage, scenario }) => {
+    await studentPage.goto("/aluno/cadernos");
+
+    const card = cardByTitle(studentPage, "Ciências Forenses");
+    const detalhe = card.locator("details.block-topics");
+    await expect(detalhe).toHaveCount(1);
+    // Três tópicos, os do catálogo do cenário.
+    await expect(detalhe.locator("summary")).toContainText("3 tópicos");
+
+    await detalhe.locator("summary").click();
+    await expect(detalhe).toContainText("Cadeia de custódia");
+    await expect(detalhe).toContainText("questão(ões)");
+    expect(scenario.planId).toBeTruthy();
+  });
+});
+
+test.describe("F-RESU-02 · bloco sem catálogo", () => {
+  test("não mostra a seção de tópicos", async ({ studentPage, scenario }) => {
+    // `addBlocks` cria bloco sem `catalog_block_id`: é o bloco criado à mão.
+    await addBlocks(scenario, "Ciências Forenses", 1);
+
+    await studentPage.goto("/aluno/cadernos");
+
+    const card = cardByTitle(studentPage, "Ciências Forenses");
+    await expect(card.locator("tbody tr")).toHaveCount(2);
+    // Só o bloco do catálogo tem a seção; o criado à mão, não.
+    await expect(card.locator("details.block-topics")).toHaveCount(1);
+  });
+});
+
+test.describe("F-RESU-03 · resumo da bateria concluída", () => {
+  test("o aluno abre a bateria e vê os tópicos dela", async ({ studentPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, {
+      incorrectTopics: ["Local de crime"],
+      minutes: 85,
+    });
+
+    await studentPage.goto("/aluno/estatisticas");
+    const lista = cardByTitle(studentPage, "Suas baterias");
+    await expect(lista.locator("tbody tr")).toHaveCount(1);
+
+    await lista.getByRole("link", { name: "Ver tópicos" }).click();
+
+    const resumo = cardByTitle(studentPage, "Tópicos desta bateria");
+    // A bateria rodou os três tópicos do bloco, pelo rodízio da spec 22.
+    await expect(resumo.locator("tbody tr")).toHaveCount(3);
+    await expect(resumo.locator("tbody tr", { hasText: "Local de crime" })).toContainText("erro(s)");
+    // O estado está na URL: recarregar mantém o resumo aberto.
+    await studentPage.reload();
+    await expect(cardByTitle(studentPage, "Tópicos desta bateria")).toBeVisible();
+  });
+});
+
+test.describe("F-RESU-04 · o resumo separa as fases", () => {
+  test("principais, reforços e extras em colunas distintas", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    await studentPage.goto("/aluno/estatisticas");
+    await cardByTitle(studentPage, "Suas baterias")
+      .getByRole("link", { name: "Ver tópicos" })
+      .click();
+
+    const resumo = cardByTitle(studentPage, "Tópicos desta bateria");
+    await expect(resumo.locator("thead")).toContainText("Principais");
+    await expect(resumo.locator("thead")).toContainText("Reforços");
+    await expect(resumo.locator("thead")).toContainText("Extras");
+    // Esta bateria não teve reforço nem extra: as colunas vêm com "—", que não
+    // é 0/0 — a fase não aconteceu.
+    const linhas = resumo.locator("tbody tr");
+    await expect(linhas.first()).toContainText("—");
+  });
+});
+
+test.describe("F-RESU-05 · bateria alheia na query string", () => {
+  test("não mostra nada e não quebra a tela", async ({ studentPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    // Uma bateria real, de outro aluno.
+    const outro = await createScenario();
+    const alheia = await completeQuiz(outro, outro.quizGoal, { correct: 11, minutes: 85 });
+
+    await studentPage.goto(`/aluno/estatisticas?bateria=${alheia.sessionId}`);
+
+    // A tela abre normalmente; o resumo simplesmente não existe.
+    await expect(studentPage.locator("h1")).toBeVisible();
+    await expect(cardByTitle(studentPage, "Suas baterias")).toBeVisible();
+    await expect(cardByTitle(studentPage, "Tópicos desta bateria")).toHaveCount(0);
+    expect(scenario.planId).not.toBe(outro.planId);
   });
 });

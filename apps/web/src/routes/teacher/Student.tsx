@@ -11,12 +11,14 @@ import {
 import {
   getPlanWeeks,
   getReviewCompletions,
+  getSessionTopics,
   getReviewSpacings,
   getStudyPlanBlocks,
   getStudyTime,
   getTopicDifficulty,
 } from "@/lib/data/student";
 import { StudyStreak, StudyTime, WeeklySeries } from "@/components/StudyTime";
+import { SessionTopics } from "@/components/SessionTopics";
 import { SpacingForms } from "@/components/teacher/SpacingForms";
 import { ReviewGrid } from "@/components/ReviewGrid";
 import { buildGrid } from "@/lib/domain/spacing";
@@ -138,7 +140,17 @@ export async function teacherStudentLoader({
     });
   }
 
-  const feito = new URL(request.url).searchParams.get("feito");
+  const search = new URL(request.url).searchParams;
+  const feito = search.get("feito");
+
+  // Só bateria concluída tem resumo (R-RESU-08), e só do próprio aluno: id
+  // alheio simplesmente não abre nada.
+  const requestedSession = search.get("bateria");
+  const selectedSession =
+    requestedSession && sessions.some((s) => s.id === requestedSession && s.status === "completed")
+      ? requestedSession
+      : null;
+  const sessionTopics = selectedSession ? await getSessionTopics(selectedSession) : [];
 
   return {
     summary,
@@ -152,6 +164,8 @@ export async function teacherStudentLoader({
     grids: buildGrid(spacings, blocks, reviewsDone),
     studyTime,
     weeks,
+    selectedSession,
+    sessionTopics,
     teacherId: session.profileId,
     studyPlanId: activePlan?.id ?? null,
     studentId,
@@ -174,6 +188,8 @@ export function TeacherStudent() {
     grids,
     studyTime,
     weeks,
+    selectedSession,
+    sessionTopics,
     teacherId,
     studyPlanId,
     studentId,
@@ -271,6 +287,7 @@ export function TeacherStudent() {
                     <th className="num">Tempo</th>
                     <th>Situação</th>
                     <th />
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -307,6 +324,18 @@ export function TeacherStudent() {
                           </Badge>
                         </td>
                         <td>
+                          {session.status === "completed" &&
+                            (selectedSession === session.id ? (
+                              <Link to={ROUTES.teacher.student(studentId)}>Fechar</Link>
+                            ) : (
+                              <Link
+                                to={`${ROUTES.teacher.student(studentId)}?bateria=${session.id}`}
+                              >
+                                Ver tópicos
+                              </Link>
+                            ))}
+                        </td>
+                        <td>
                           {VOIDABLE.has(session.status) && (
                             <VoidSessionForm
                               quizSessionId={session.id}
@@ -322,6 +351,8 @@ export function TeacherStudent() {
             </div>
           )}
         </Card>
+
+        {selectedSession && <SessionTopics rows={sessionTopics} />}
 
         <div className="grid-cards">
           <StudyTime rows={studyTime} today={new Date()} />

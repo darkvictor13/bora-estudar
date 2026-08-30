@@ -1700,3 +1700,29 @@ test.describe("F-TEMP-06 · o professor vê as três leituras", () => {
     await expect(serie.locator("tbody tr", { hasText: "Semana 1" })).toContainText("80%");
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — resumo por tópicos da bateria, na ficha.
+// Spec docs/specs/26-topicos-do-bloco-e-da-bateria.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-RESU-06 · o professor vê o resumo da bateria", () => {
+  test("do cartão Baterias, com as três fases", async ({ teacherPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, {
+      incorrectTopics: ["Cadeia de custódia"],
+      minutes: 85,
+    });
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    const lista = cardByTitle(teacherPage, "Baterias");
+    await expect(lista.locator("tbody tr")).toHaveCount(1);
+    await lista.getByRole("link", { name: "Ver tópicos" }).click();
+
+    const resumo = cardByTitle(teacherPage, "Tópicos desta bateria");
+    await expect(resumo.locator("tbody tr")).toHaveCount(3);
+    await expect(resumo.locator("tbody tr", { hasText: "Cadeia de custódia" })).toContainText(
+      "erro(s)",
+    );
+  });
+});
