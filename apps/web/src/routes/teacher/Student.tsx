@@ -9,11 +9,14 @@ import {
   getStudentSummary,
 } from "@/lib/data/teacher";
 import {
+  getPlanWeeks,
   getReviewCompletions,
   getReviewSpacings,
   getStudyPlanBlocks,
+  getStudyTime,
   getTopicDifficulty,
 } from "@/lib/data/student";
+import { StudyStreak, StudyTime, WeeklySeries } from "@/components/StudyTime";
 import { SpacingForms } from "@/components/teacher/SpacingForms";
 import { ReviewGrid } from "@/components/ReviewGrid";
 import { buildGrid } from "@/lib/domain/spacing";
@@ -92,7 +95,17 @@ export async function teacherStudentLoader({
   if (!summary) throw new Response(null, { status: 404, statusText: "Aluno não encontrado" });
 
   const activePlan = summary.plans.find((p) => p.status === "active") ?? null;
-  const [progress, subscription, sessions, topics, blocks, spacings, reviewsDone] = await Promise.all([
+  const [
+    progress,
+    subscription,
+    sessions,
+    topics,
+    blocks,
+    spacings,
+    reviewsDone,
+    studyTime,
+    weeks,
+  ] = await Promise.all([
     activePlan ? getPlanProgress(activePlan.id) : Promise.resolve(null),
     getStudentSubscription(studentId),
     getStudentSessions(studentId),
@@ -100,6 +113,8 @@ export async function teacherStudentLoader({
     activePlan ? getStudyPlanBlocks(activePlan.id) : Promise.resolve([]),
     activePlan ? getReviewSpacings(activePlan.id) : Promise.resolve([]),
     activePlan ? getReviewCompletions(activePlan.id) : Promise.resolve(new Set<string>()),
+    activePlan ? getStudyTime(activePlan.id) : Promise.resolve([]),
+    activePlan ? getPlanWeeks(activePlan.id) : Promise.resolve([]),
   ]);
 
   // Toda disciplina do planejamento aparece na tabela de espaçamento, inclusive
@@ -135,6 +150,8 @@ export async function teacherStudentLoader({
     blockNames: blocks.map((b) => [b.id, b.name] as const),
     spacings: [...subjects].map(([subject, value]) => ({ subject, ...value })),
     grids: buildGrid(spacings, blocks, reviewsDone),
+    studyTime,
+    weeks,
     teacherId: session.profileId,
     studyPlanId: activePlan?.id ?? null,
     studentId,
@@ -155,6 +172,8 @@ export function TeacherStudent() {
     blockNames,
     spacings,
     grids,
+    studyTime,
+    weeks,
     teacherId,
     studyPlanId,
     studentId,
@@ -303,6 +322,13 @@ export function TeacherStudent() {
             </div>
           )}
         </Card>
+
+        <div className="grid-cards">
+          <StudyTime rows={studyTime} today={new Date()} />
+          <StudyStreak rows={studyTime} today={new Date()} />
+        </div>
+
+        <WeeklySeries rows={studyTime} plannedWeeks={weeks} />
 
         <TopicDifficulty rows={topics} blockNames={new Map(blockNames)} />
 

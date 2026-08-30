@@ -5,6 +5,7 @@ import { expect, test } from "../fixtures/index.ts";
 import {
   addBlocks,
   addWeek,
+  completeGoal,
   goalCount,
   goalStatus,
   reviewsDone,
@@ -1025,5 +1026,133 @@ test.describe("F-REVE-06 · mudar o espaçamento", () => {
     // O bloco marcado é o segundo da disciplina: com 1ª = 2, a linha 2 revisa
     // o caderno de índice 1, que é o primeiro criado por `addBlocks`.
     expect(antes).toEqual([`${novos[0]}:1`]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §2 — tempo de estudo, série semanal e sequência.
+// Spec docs/specs/25-tempo-de-estudo-e-series.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-TEMP-01 · tempo do período por disciplina", () => {
+  test("soma o tempo e divide entre disciplina e atividade", async ({
+    studentPage,
+    scenario,
+  }) => {
+    // Bateria: 85 minutos, na disciplina do bloco.
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+    // Estudo extra: 45 minutos, agrupado pela ATIVIDADE, não por disciplina.
+    const extra = scenario.goals.find((g) => g.type === "extra_study")!;
+    await completeGoal(scenario, extra.id, 45);
+
+    await studentPage.goto("/aluno/estatisticas");
+
+    const card = cardByTitle(studentPage, "Tempo de estudo");
+    await expect(card.locator("tbody tr")).toHaveCount(2);
+    await expect(card.locator(".study-total")).toContainText("2h10");
+    await expect(card.locator("tbody tr", { hasText: "Ciências Forenses" })).toContainText("1h25");
+    // A meta extra vem rotulada como atividade, e não como disciplina.
+    await expect(card.locator("tbody tr", { hasText: "Revisão" })).toContainText("45min");
+  });
+});
+
+test.describe("F-TEMP-02 · trocar o período", () => {
+  test("troca os números sem buscar nada de novo", async ({ studentPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    await studentPage.goto("/aluno/estatisticas");
+    const card = cardByTitle(studentPage, "Tempo de estudo");
+    await expect(card.locator(".study-total")).toContainText("1h25");
+
+    // "Hoje" contém a conclusão, que é de agora: o número não muda.
+    await card.getByRole("button", { name: "Hoje" }).click();
+    await expect(card.locator(".study-total")).toContainText("1h25");
+    await expect(card.getByRole("button", { name: "Hoje" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await card.getByRole("button", { name: "Total" }).click();
+    await expect(card.locator(".study-total")).toContainText("1h25");
+  });
+});
+
+test.describe("F-TEMP-03 · período sem tempo", () => {
+  test("mostra o estado vazio, e não zero", async ({ studentPage, scenario }) => {
+    // Nenhuma meta concluída: nem hoje nem nunca.
+    await studentPage.goto("/aluno/estatisticas");
+
+    const card = cardByTitle(studentPage, "Tempo de estudo");
+    await expect(card).toContainText("Nenhum tempo registrado neste período");
+    await expect(card.locator("tbody tr")).toHaveCount(0);
+    expect(scenario.planId).toBeTruthy();
+  });
+});
+
+test.describe("F-TEMP-04 · série semana a semana", () => {
+  test("uma linha por semana planejada, com a parada em zero", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 12, minutes: 85 });
+    // Semana 2 planejada e intocada: precisa aparecer com zeros, senão a tela
+    // esconde justamente a semana em que o aluno parou.
+    await addWeek(scenario, 2);
+
+    await studentPage.goto("/aluno/estatisticas");
+
+    const card = cardByTitle(studentPage, "Semana a semana");
+    await expect(card.locator("tbody tr")).toHaveCount(2);
+
+    const semana1 = card.locator("tbody tr", { hasText: "Semana 1" });
+    await expect(semana1).toContainText("1h25");
+    await expect(semana1).toContainText("80%");
+
+    const semana2 = card.locator("tbody tr", { hasText: "Semana 2" });
+    await expect(semana2).toContainText("0min");
+    // Nulo é "não respondeu nada", que não é 0%.
+    await expect(semana2).toContainText("—");
+  });
+});
+
+test.describe("F-TEMP-05 · sequência de dias", () => {
+  test("conta o dia com meta concluída", async ({ studentPage, scenario }) => {
+    await studentPage.goto("/aluno/estatisticas");
+    await expect(cardByTitle(studentPage, "Sequência")).toContainText("0");
+
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+    await studentPage.reload();
+
+    const card = cardByTitle(studentPage, "Sequência");
+    await expect(card.locator(".streak-value strong")).toHaveText("1");
+    await expect(card).toContainText("dia de estudo");
+  });
+});
+
+test.describe("F-TEMP-07 · reabrir uma meta", () => {
+  test("tira o tempo dela das três leituras", async ({ studentPage, scenario }) => {
+    const extra = scenario.goals.find((g) => g.type === "extra_study")!;
+    await completeGoal(scenario, extra.id, 45);
+
+    await studentPage.goto("/aluno/estatisticas");
+    await expect(cardByTitle(studentPage, "Tempo de estudo").locator(".study-total")).toContainText(
+      "45min",
+    );
+    await expect(
+      cardByTitle(studentPage, "Sequência").locator(".streak-value strong"),
+    ).toHaveText("1");
+
+    await asUser(scenario.student.id, (client) =>
+      client.query("select public.reopen_goal($1::uuid, gen_random_uuid())", [extra.id]),
+    );
+
+    await studentPage.reload();
+    await expect(cardByTitle(studentPage, "Tempo de estudo")).toContainText(
+      "Nenhum tempo registrado",
+    );
+    await expect(
+      cardByTitle(studentPage, "Sequência").locator(".streak-value strong"),
+    ).toHaveText("0");
+    await expect(cardByTitle(studentPage, "Semana a semana")).toContainText("0min");
   });
 });

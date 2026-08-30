@@ -1,6 +1,6 @@
 # 25 — Tempo de estudo, série semanal e sequência de dias
 
-**Situação:** não implementada · **Comparativo:** §12 item 10 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 e §9 · **Fluxos e2e:** F-TEMP-01 a F-TEMP-08
+**Situação:** não implementada · **Comparativo:** §12 item 10 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 e §9 · **Fluxos e2e:** F-TEMP-01 a F-TEMP-07
 
 ---
 
@@ -50,8 +50,8 @@ aparece.
 |---|---|
 | R-TEMP-07 | Os períodos são os cinco da v96: **hoje, semana, mês, ano, total**. "Semana" é a semana **corrente começando na segunda**, não os últimos sete dias — é o que `filtrarMetasPorPeriodoTempo` faz (aluno.js:1201). |
 | R-TEMP-08 | Meta **sem bloco** — teoria avulsa, estudo extra — é agrupada pela **atividade**; meta com bloco, pela **disciplina**. Uma linha por grupo, da maior para a menor, e o total é a soma. |
-| R-TEMP-09 | Meta concluída **sem tempo declarado** conta como meta e **não** como tempo. Estimar minuto que o aluno não informou seria inventar o dado mais fácil de inventar e o mais caro de desmentir. |
-| R-TEMP-10 | Período sem tempo nenhum mostra estado vazio nomeado — "Nenhum tempo registrado neste período" —, e não zero. Zero e "não registrou" são coisas diferentes. |
+| R-TEMP-09 | **Toda meta concluída tem tempo**, e a view pode contar com isso. Os dois únicos caminhos até `status = 'completed'` exigem o minuto: `complete_goal` recusa fora de 1..240 e `record_quiz_session_time` recusa nulo. A v96 aceitava meta concluída sem tempo e somava `Number(m.tempo)||0`; aqui o estado não é exprimível, e é o banco que garante. *Corrigido em 30/08/2026, ao implementar: a regra anterior descrevia um estado impossível.* |
+| R-TEMP-10 | Período sem meta concluída nenhuma mostra estado vazio nomeado — "Nenhum tempo registrado neste período" —, e não zero. Zero e "não registrou" são coisas diferentes. |
 
 ### Série por semana
 
@@ -132,9 +132,9 @@ banco. É o que permite os oito casos de borda de fuso serem teste de unidade.
 | CA-10 | Período sem tempo mostra o estado vazio, não zero | F-TEMP-03 |
 | CA-11 | A série mostra uma linha por semana, com metas, questões e tempo | F-TEMP-04 |
 | CA-12 | A sequência aparece e conta os dias de estudo | F-TEMP-05 |
-| CA-13 | Meta concluída sem tempo conta como meta e não como tempo | F-TEMP-06 |
-| CA-14 | O professor vê as três leituras do aluno na ficha | F-TEMP-07 |
-| CA-15 | Reabrir uma meta tira o tempo dela das três leituras | F-TEMP-08 |
+| CA-13 | Não existe meta concluída sem minuto: os dois caminhos de conclusão recusam nulo | `12_study_time.sql` |
+| CA-14 | O professor vê as três leituras do aluno na ficha | F-TEMP-06 |
+| CA-15 | Reabrir uma meta tira o tempo dela das três leituras | F-TEMP-07 |
 
 ---
 
