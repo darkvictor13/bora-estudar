@@ -4,7 +4,12 @@ import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { QuizResultHandler } from "@/components/student/QuizResultHandler";
 import { StartQuizButton } from "@/components/student/StartQuizButton";
 import { CancelSessionForm, RegisterTimeForm } from "@/components/student/QuizSessionPanel";
-import { CompleteGoalForm, ReopenGoalForm } from "@/components/student/GoalCompletion";
+import {
+  CompleteGoalForm,
+  DeleteExtraForm,
+  ExtraStudyForm,
+  ReopenGoalForm,
+} from "@/components/student/GoalCompletion";
 import { requireStudentAccess } from "@/lib/auth/session";
 import {
   getActiveStudyPlan,
@@ -37,10 +42,12 @@ const DONE_MESSAGE: Record<string, string> = {
   cancelada: "Bateria cancelada. Ela não conta no desempenho nem como questão vista.",
   meta: "Meta concluída.",
   reaberta: "Meta reaberta. Ela voltou para pendente.",
+  extra: "Estudo extra registrado.",
+  "extra-removido": "Registro removido.",
 };
 
 export async function overviewLoader({ request }: { request: Request }) {
-  await requireStudentAccess();
+  const session = await requireStudentAccess();
 
   const plan = await getActiveStudyPlan();
   if (!plan) return { plan: null } as const;
@@ -67,6 +74,7 @@ export async function overviewLoader({ request }: { request: Request }) {
     performance,
     openSession,
     blocks,
+    studentId: session.profileId,
   } as const;
 }
 
@@ -86,7 +94,10 @@ export function Overview() {
     );
   }
 
-  const { plan, weeks, week, doneMessage, goals, performance, openSession, blocks } = data;
+  const { plan, weeks, week, doneMessage, goals, performance, openSession, blocks, studentId } =
+    data;
+  // Os dias que a semana já usa; o registro avulso cai num deles.
+  const weekdays = [...new Set(goals.map((g) => g.weekday))].sort((a, b) => a - b);
   const blockById = new Map(blocks.map((b) => [b.id, b]));
 
   const byWeekday = new Map<number, typeof goals>();
@@ -143,19 +154,28 @@ export function Overview() {
           title={`Semana ${week}`}
           sub={`${done} de ${goals.length} metas concluídas`}
           action={
-            weeks.length > 1 ? (
-              <nav className="row" aria-label="Semanas">
-                {weeks.map((w) => (
-                  <Link
-                    key={w}
-                    to={`${ROUTES.student.overview}?semana=${w}`}
-                    className={`btn btn--sm ${w === week ? "btn--primary" : "btn--ghost"}`}
-                  >
-                    {w}
-                  </Link>
-                ))}
-              </nav>
-            ) : null
+            <div className="row" style={{ alignItems: "center" }}>
+              {goals.length > 0 && (
+                <ExtraStudyForm
+                  studyPlanId={plan.id}
+                  week={week}
+                  weekdays={weekdays.length ? weekdays : [1, 2, 3, 4, 5]}
+                />
+              )}
+              {weeks.length > 1 ? (
+                <nav className="row" aria-label="Semanas">
+                  {weeks.map((w) => (
+                    <Link
+                      key={w}
+                      to={`${ROUTES.student.overview}?semana=${w}`}
+                      className={`btn btn--sm ${w === week ? "btn--primary" : "btn--ghost"}`}
+                    >
+                      {w}
+                    </Link>
+                  ))}
+                </nav>
+              ) : null}
+            </div>
           }
         >
           {goals.length === 0 ? (
@@ -246,7 +266,20 @@ export function Overview() {
                                   ) : goal.status === "pending" ? (
                                     <CompleteGoalForm goalId={goal.id} week={week} />
                                   ) : goal.status === "completed" ? (
-                                    <ReopenGoalForm goalId={goal.id} week={week} />
+                                    <div className="row">
+                                      <ReopenGoalForm goalId={goal.id} week={week} />
+                                      {/*
+                                        Remover só no registro que o PRÓPRIO
+                                        aluno criou. `created_by` é o que separa
+                                        isso da meta de estudo extra que o
+                                        professor planejou — as duas são
+                                        `extra_study` (R-EXTRA-15).
+                                      */}
+                                      {goal.type === "extra_study" &&
+                                        goal.created_by === studentId && (
+                                          <DeleteExtraForm goalId={goal.id} week={week} />
+                                        )}
+                                    </div>
                                   ) : null}
                                 </td>
                               </tr>

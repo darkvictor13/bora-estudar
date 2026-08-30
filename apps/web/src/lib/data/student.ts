@@ -31,7 +31,7 @@ export async function getWeekGoals(studyPlanId: string, week: number) {
     // GenericStringError). Os blocos são poucos por planejamento, então sai
     // mais barato buscá-los uma vez e casar por id em memória.
     .select(
-      "id,week_number,weekday,day_order,type,status,title,teacher_note,student_note,external_link,planned_minutes,spent_minutes,completed_at,block_id",
+      "id,week_number,weekday,day_order,type,status,title,teacher_note,student_note,external_link,planned_minutes,spent_minutes,completed_at,block_id,created_by,extra_activity",
     )
     .eq("study_plan_id", studyPlanId)
     .eq("week_number", week)

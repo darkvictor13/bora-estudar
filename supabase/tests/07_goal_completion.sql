@@ -25,7 +25,7 @@ select '00 semana 90 criada' item, public.apply_study_plan_batch(
     jsonb_build_object('weekday',1,'position',1,'type','theory',
       'title','Teoria da semana 90','planned_minutes',45),
     jsonb_build_object('weekday',2,'position',1,'type','extra_study',
-      'title','Estudo extra da semana 90','extra_activity','revisao','planned_minutes',30),
+      'title','Estudo extra da semana 90','extra_activity','review','planned_minutes',30),
     jsonb_build_object('weekday',3,'position',1,'type','theory',
       'title','Teoria a reabrir','planned_minutes',45),
     jsonb_build_object('weekday',4,'position',1,'type','question_block',

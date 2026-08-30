@@ -74,3 +74,21 @@ export function scorePercent(correct: number, total: number): number | null {
   if (!total) return null;
   return Math.round((correct / total) * 100);
 }
+
+/**
+ * Os sete tipos de estudo extra — spec 19.
+ *
+ * Identificador em inglês no banco, rótulo em português na tela. São os mesmos
+ * sete do `<select id="extra-tipo">` da v96 (aluno.html:1067).
+ */
+export const EXTRA_ACTIVITY_LABEL: Record<Enum<"extra_activity_kind">, string> = {
+  statute: "Lei seca",
+  flashcards: "Anki",
+  mock_exam: "Simulado",
+  review: "Revisão",
+  extra_questions: "Questões extras",
+  video_lesson: "Videoaula",
+  other: "Outro",
+};
+
+export const EXTRA_ACTIVITIES = Object.keys(EXTRA_ACTIVITY_LABEL) as Enum<"extra_activity_kind">[];

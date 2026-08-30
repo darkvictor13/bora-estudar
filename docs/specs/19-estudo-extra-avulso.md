@@ -1,6 +1,6 @@
 # 19 — Estudo extra avulso
 
-**Situação:** não implementada · **Comparativo:** §12 item 1 (segunda metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-EXTRA-01 a F-EXTRA-06
+**Situação:** implementada · **Comparativo:** §12 item 1 (segunda metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-EXTRA-01 a F-EXTRA-06
 
 ---
 

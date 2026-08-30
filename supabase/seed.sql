@@ -210,7 +210,7 @@ begin
           'block_id','bbbb0000-0000-4000-8000-000000000002',
           'title','Bateria — Teoria Geral do Crime','planned_minutes',90),
         jsonb_build_object('weekday',5,'position',1,'type','extra_study',
-          'title','Revisão livre da semana','extra_activity','revisao',
+          'title','Revisão livre da semana','extra_activity','review',
           'planned_minutes',45)
       )
     );
