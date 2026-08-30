@@ -1,6 +1,6 @@
 # 12 — Conclusão de meta sem bateria
 
-**Situação:** não implementada · **Comparativo:** §12 item 1 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-CONC-01 a F-CONC-06
+**Situação:** implementada · **Comparativo:** §12 item 1 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-CONC-01 a F-CONC-06
 
 ---
 

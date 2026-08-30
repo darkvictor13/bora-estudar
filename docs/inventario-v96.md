@@ -38,7 +38,7 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | Área | Fluxos na v96 | ✅ | 🟡 | ❌ | 🚫 |
 |---|---:|---:|---:|---:|---:|
 | 1. Autenticação e conta | 12 | 7 | 2 | 3 | 0 |
-| 2. Aluno — metas e execução | 12 | 2 | 2 | 5 | 3 |
+| 2. Aluno — metas e execução | 12 | 5 | 2 | 2 | 3 |
 | 3. Aluno — bateria inteligente | 9 | 7 | 1 | 1 | 0 |
 | 4. Aluno — reforço e revisão | 10 | 3 | 1 | 6 | 0 |
 | 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
@@ -47,7 +47,7 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 8. Professor — geração de metas | 9 | 3 | 2 | 4 | 0 |
 | 9. Professor — acompanhamento | 8 | 1 | 2 | 5 | 0 |
 | 10. Extensão | 12 | 7 | 0 | 5 | 0 |
-| **Total** | **104** | **38** | **14** | **48** | **4** |
+| **Total** | **104** | **41** | **14** | **45** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -109,25 +109,29 @@ código morto. A versão atual barra no loader com `requireStudentAccess`.
 |---|---|---|---|---|
 | Painel da semana agrupado por dia | `renderDashWeek` aluno.js:1406 | ✅ | 03 | — |
 | Seletor de semana | `#dash-sem-sel` aluno.js:1359 | ✅ | 03 | — |
-| **Concluir meta de teoria** (sem exigir questões) | `salvarRegistroMeta` aluno.js:2815, ramo :2824 | ❌ | 12 | especificada |
-| **Concluir meta de estudo extra planejada pelo professor** | idem | ❌ | 12 | especificada |
+| **Concluir meta de teoria** (sem exigir questões) | `salvarRegistroMeta` aluno.js:2815, ramo :2824 | ✅ | 12 | implementada |
+| **Concluir meta de estudo extra planejada pelo professor** | idem | ✅ | 12 | implementada |
 | **Registrar estudo extra avulso** (7 tipos fechados) | `salvarEstudoExtra` aluno.js:2367 | ❌ | | pendente |
 | **Editar e excluir estudo extra** | `excluirEstudoExtra` aluno.js:2503 | ❌ | | pendente |
-| **Desfazer conclusão / voltar a pendente** | `desfazerRegistroMeta` aluno.js:2907 | ❌ | 12 | especificada |
+| **Desfazer conclusão / voltar a pendente** | `desfazerRegistroMeta` aluno.js:2907 | ✅ | 12 | implementada |
 | Tempo aceito em `80`, `1:20`, `1h20`, `40min` | `interpretarTempoRegistro` aluno.js:2717 | 🟡 | 05 | — |
 | Abas Metas / Reforços no painel | `ensureDashboardTabs` aluno.js:1297 | 🟡 | | pendente |
 | Aluno apaga metas filtradas / todas | `deleteFilteredMetas` aluno.js:1604 | 🚫 | — | — |
 | Aluno gera o próprio ciclo semanal | `gerarCicloSemanal` aluno.js:2161 | 🚫 | — | — |
 | Aluno cadastra disciplina e blocos | `salvarDisc` aluno.js:1467 | 🚫 | — | — |
 
-**Esta é a lacuna que trava o uso real.** O seed cria 5 metas por semana: 2 de
-teoria, 2 de bateria e 1 de estudo extra. Só as 2 de bateria têm como ser
-fechadas — as outras 3 não têm caminho nenhum, porque **nenhuma action da web
-escreve em `goals`** e o aluno não tem grant nessa tabela.
+**Era a lacuna que travava o uso real, e foi a primeira fechada.** O seed cria 5
+metas por semana: 2 de teoria, 2 de bateria e 1 de estudo extra. Só as 2 de
+bateria tinham como ser fechadas — as outras 3 não tinham caminho nenhum, porque
+nenhuma action da web escrevia em `goals`. A spec
+[12](specs/12-conclusao-de-meta.md) resolveu com `complete_goal` e `reopen_goal`,
+**sem conceder grant nenhum ao aluno na tabela**.
 
-**Divergência de número a resolver na spec:** a v96 limita o tempo de uma meta a
-**1–240 minutos** (`interpretarTempoRegistro`); `registerQuizTime` aqui aceita até
-**1440**. Um dos dois está errado.
+**Divergência de número que continua aberta:** meta sem bateria adotou o teto da
+v96, **1–240 minutos**, na constraint `goal_spent_minutes_range`;
+`record_quiz_session_time` continua aceitando **1440** para bateria. Está
+registrado em `R-CONC-10` como suposição para revisão humana — alinhar os dois é
+mudança na spec 05.
 
 **`goals.extra_activity` é `text` hoje.** A v96 tem exatamente **sete** tipos —
 Lei seca, Anki, Simulado, Revisão, Questões extras, Videoaula, Outro
@@ -405,7 +409,7 @@ faixa, primeiro o que não tem dependência.
 
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
-| 1 | **Conclusão de meta sem bateria** — spec [12](specs/12-conclusao-de-meta.md) | 3 das 5 metas semanais do seed são impossíveis de fechar hoje | 2 RPCs (`complete_goal`, `reopen_goal`), 1 migration (`goals.spent_minutes`), site |
+| ~~1~~ | **Conclusão de meta sem bateria** — spec [12](specs/12-conclusao-de-meta.md), **implementada** | 3 das 5 metas semanais do seed eram impossíveis de fechar | 2 RPCs (`complete_goal`, `reopen_goal`), 1 migration (`goals.spent_minutes`), site |
 | 2 | **Vincular aluno e liberar acesso** | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC, 1 migration (policy da lista de espera), site |
 | 3 | **Criar, ativar e arquivar planejamento** | Fora do seed, um professor novo não tem por onde começar | 0 RPC nova (`activate_study_plan` existe), 0 migration, site |
 
