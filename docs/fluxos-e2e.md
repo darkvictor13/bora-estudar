@@ -1038,6 +1038,18 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 28 — painel arrastável e resumo por tópicos
+
+Spec: [`specs/28-painel-arrastavel-e-topicos.md`](specs/28-painel-arrastavel-e-topicos.md).
+Migram para a §3 quando os testes existirem.
+
+- **F-PAIN-01** — arrastar move o painel, e a posição sobrevive à navegação.
+- **F-PAIN-02** — o painel não sai da tela.
+- **F-PAIN-03** — minimizar reduz a um botão, e restaurar traz de volta.
+- **F-PAIN-04** — o estado minimizado sobrevive à navegação.
+- **F-PAIN-05** — o resumo por tópicos aparece com as respostas.
+- **F-PAIN-06** — clicar num botão do painel não vira arrasto.
+
 
 
 

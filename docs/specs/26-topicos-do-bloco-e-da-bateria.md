@@ -120,8 +120,9 @@ viaja no payload desde a spec 21, e some quando a bateria termina.
 
 ## Fora de escopo
 
-- **Resumo por tópicos no painel da extensão.** A v96 o mostrava ali. É leitura,
-  não condução, e o painel não fala com o Supabase.
+- **Resumo por tópicos no painel da extensão.** É a spec
+  [28](28-painel-arrastavel-e-topicos.md): mesmo número, outro momento — ali o
+  aluno ainda está no TEC, e o painel o calcula localmente, sem rede.
 - **Comparar tópicos entre duas baterias.** Evolução por tópico é a série da
   spec [25](25-tempo-de-estudo-e-series.md) aplicada a outro eixo, e pede outra tela.
 - **Editar o tópico de uma questão.** É catálogo, e catálogo é do admin.
