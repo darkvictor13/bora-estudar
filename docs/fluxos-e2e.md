@@ -455,6 +455,36 @@ semana bloqueia os dois: `ha bateria aberta nesta semana`.
 `?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
 no planejamento ativo (ou no primeiro) sem quebrar.
 
+### Ficha da turma — F-TURMA-01 a 05
+
+Spec: [`specs/17-ficha-da-turma.md`](specs/17-ficha-da-turma.md). Busca e
+filtros vivem na query string: `?busca=`, `?situacao=`, `?plano=`.
+
+**A linha tem DOIS badges** — situação de estudo e situação de acesso. Use
+`td.situacao .badge` e `td.acesso .badge`; `tr .badge` é violação de modo
+estrito. E **`allTextContents()` não espera por nada**: para ler a ordem da
+lista, faça antes uma asserção que aguarde a tabela existir.
+
+#### F-TURMA-01 — A lista mostra o diagnóstico
+**Esperado** metas `concluídas/total` com o percentual, desempenho oficial, e o
+badge da faixa; os quatro números do resumo batem com as linhas.
+
+#### F-TURMA-02 — O limiar de desempenho decide a faixa
+**Esperado** 10 de 15 (67%) é "Atenção"; com a segunda bateria de 15 de 15 o
+acumulado sobe e vira "Em ritmo".
+
+#### F-TURMA-03 — Busca e filtros
+**Esperado** `?busca=` casa nome **e** e-mail, sem acento; `?situacao=` e
+`?plano=` filtram; termo sem correspondência mostra "Nenhum aluno neste filtro".
+
+#### F-TURMA-04 — Filtro inválido não quebra
+**Esperado** situação inexistente, plano inexistente e valores vazios devolvem a
+lista inteira, sem erro de console. Mesma regra de `?semana=`.
+
+#### F-TURMA-05 — Quem precisa de atenção vem primeiro
+**Esperado** Atrasado antes de Sem dados. A ordenação é por faixa e, dentro
+dela, por nome.
+
 ### Histórico de baterias e anulação — F-ANUL-01 a 05
 
 Spec: [`specs/16-historico-e-anulacao-de-bateria.md`](specs/16-historico-e-anulacao-de-bateria.md).
@@ -655,8 +685,8 @@ e `05_teacher_writes.sql`.
 |---|---|
 | `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
-| `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 191 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
+| `npm run e2e` | 199 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -668,7 +698,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06 e F-ANUL-01 a 05 | 56 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05 e F-TURMA-01 a 05 | 64 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
@@ -704,19 +734,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 17 — ficha da turma
-
-Spec: [`specs/17-ficha-da-turma.md`](specs/17-ficha-da-turma.md). Migram para a
-§4 quando os testes existirem.
-
-- **F-TURMA-01** — a lista mostra progresso, desempenho oficial e faixa de cada
-  aluno, e o resumo da turma bate com as linhas.
-- **F-TURMA-02** — aluno abaixo de 70% aparece como "Atenção"; acima, "Em ritmo".
-- **F-TURMA-03** — `?busca=` casa nome e e-mail sem acento; `?situacao=` e
-  `?plano=` filtram.
-- **F-TURMA-04** — valor inválido em qualquer filtro devolve a lista inteira,
-  sem erro de console.
-- **F-TURMA-05** — quem precisa de atenção vem primeiro.
 
 
 

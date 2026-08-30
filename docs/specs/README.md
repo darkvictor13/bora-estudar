@@ -38,7 +38,7 @@ de lá vira uma spec nova antes de virar código.
 | 14 | [Gestão do planejamento](14-gestao-do-planejamento.md) | Criar, ativar e arquivar planejamento, com os blocos do catálogo |
 | 15 | [Cadernos do planejamento](15-cadernos-do-planejamento.md) | Ativar, desativar, editar, incluir, excluir e restaurar bloco |
 | 16 | [Histórico e anulação de bateria](16-historico-e-anulacao-de-bateria.md) | O professor vê as baterias do aluno e anula a que não conta |
-| 17 | [Ficha da turma](17-ficha-da-turma.md) | KPIs, classificação em quatro faixas, busca e filtros — **não implementada** |
+| 17 | [Ficha da turma](17-ficha-da-turma.md) | KPIs, classificação em quatro faixas, busca e filtros |
 
 ---
 

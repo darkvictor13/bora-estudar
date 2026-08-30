@@ -40,7 +40,7 @@ test.describe("F-PROF-02 · lista de alunos", () => {
     const row = teacherPage.locator("tbody tr", { hasText: scenario.student.name });
     await expect(row).toContainText(scenario.student.email);
     await expect(row).toContainText(scenario.planName);
-    await expect(row.locator(".badge")).toHaveText("Acesso ativo");
+    await expect(row.locator("td.acesso .badge")).toHaveText("Acesso ativo");
   });
 
   for (const [status, label] of [
@@ -53,7 +53,7 @@ test.describe("F-PROF-02 · lista de alunos", () => {
 
       await teacherPage.goto("/professor");
       const row = teacherPage.locator("tbody tr", { hasText: scenario.student.name });
-      await expect(row.locator(".badge")).toHaveText(label);
+      await expect(row.locator("td.acesso .badge")).toHaveText(label);
     });
   }
 
@@ -70,7 +70,7 @@ test.describe("F-PROF-02 · lista de alunos", () => {
 
     await teacherPage.goto("/professor");
     const row = teacherPage.locator("tbody tr", { hasText: scenario.student.name });
-    await expect(row.locator(".badge")).toHaveText("Acesso ativo");
+    await expect(row.locator("td.acesso .badge")).toHaveText("Acesso ativo");
   });
 });
 
@@ -443,7 +443,7 @@ test.describe("F-VINC-02 · vincular", () => {
       })).toHaveCount(0);
 
       const row = teacherPage.locator("tbody tr", { hasText: candidate.name });
-      await expect(row.locator(".badge")).toHaveText("Aguardando liberação");
+      await expect(row.locator("td.acesso .badge")).toHaveText("Aguardando liberação");
 
       const link = await one<{ teacher_id: string; ended_at: string | null }>(
         "select teacher_id, ended_at from public.student_teacher_links where student_id = $1",
@@ -587,7 +587,9 @@ test.describe("F-VINC-06 · suspender", () => {
 
     await teacherPage.goto("/professor");
     await expect(
-      teacherPage.locator("tbody tr", { hasText: scenario.student.name }).locator(".badge"),
+      teacherPage
+        .locator("tbody tr", { hasText: scenario.student.name })
+        .locator("td.acesso .badge"),
     ).toHaveText("Suspenso");
 
     await signIn(scenario.student);
@@ -1183,5 +1185,142 @@ test.describe("F-ANUL-05 · o que não é anulável", () => {
       [done.sessionId],
     );
     expect(voided).toMatchObject({ status: "voided", void_reason: "Anulação administrativa" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4 — ficha da turma. Spec docs/specs/17-ficha-da-turma.md
+// ---------------------------------------------------------------------------
+
+const studentRow = (page: import("@playwright/test").Page, name: string) =>
+  page.locator("tbody tr", { hasText: name });
+
+test.describe("F-TURMA-01 · a lista mostra o diagnóstico", () => {
+  test("progresso, desempenho e faixa, com o resumo batendo", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    // 1 de 5 metas concluídas = 0,20 de progresso → atrasado.
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+
+    await teacherPage.goto("/professor");
+
+    const row = studentRow(teacherPage, scenario.student.name);
+    await expect(row).toContainText("1/5");
+    await expect(row).toContainText("73%");
+    await expect(row.locator("td.situacao .badge")).toHaveText("Atrasado");
+
+    await expect(cardByTitle(teacherPage, "Alunos")).toContainText("1");
+    await expect(cardByTitle(teacherPage, "Precisam de atenção")).toContainText("1");
+    await expect(cardByTitle(teacherPage, "Questões da turma")).toContainText("15");
+    await expect(cardByTitle(teacherPage, "Questões da turma")).toContainText("73% de acerto");
+  });
+});
+
+test.describe("F-TURMA-02 · o limiar de desempenho decide a faixa", () => {
+  test("abaixo de 70% é Atenção; acima, Em ritmo", async ({ teacherPage, scenario }) => {
+    // Todas as metas fechadas tira o progresso da conta; sobra o desempenho.
+    for (const goal of scenario.goals.filter((g) => g.type !== "question_block")) {
+      await asUser(scenario.student.id, (client) =>
+        client.query("select public.complete_goal($1::uuid, gen_random_uuid(), 45, null)", [
+          goal.id,
+        ]),
+      );
+    }
+    const baterias = scenario.goals.filter((g) => g.type === "question_block");
+    // 10 de 15 = 67% → abaixo do limiar.
+    await completeQuiz(scenario, baterias[0]!, { correct: 10, minutes: 60 });
+
+    await teacherPage.goto("/professor");
+    await expect(
+      studentRow(teacherPage, scenario.student.name).locator("td.situacao .badge"),
+    ).toHaveText("Atenção");
+
+    // A segunda bateria, com 15 de 15, leva o acumulado para 83%.
+    await completeQuiz(scenario, baterias[1]!, { correct: 15, minutes: 60 });
+    await teacherPage.goto("/professor");
+    await expect(
+      studentRow(teacherPage, scenario.student.name).locator("td.situacao .badge"),
+    ).toHaveText("Em ritmo");
+  });
+});
+
+test.describe("F-TURMA-03 · busca e filtros na query string", () => {
+  test("busca casa nome e e-mail, sem acento", async ({ teacherPage, scenario }) => {
+    await teacherPage.goto("/professor?busca=aluno");
+    await expect(studentRow(teacherPage, scenario.student.name)).toBeVisible();
+
+    // O e-mail do cenário começa com "aluno-"; buscar por ele também casa.
+    await teacherPage.goto(`/professor?busca=${scenario.student.email.split("@")[0]}`);
+    await expect(studentRow(teacherPage, scenario.student.name)).toBeVisible();
+
+    await teacherPage.goto("/professor?busca=ninguem-com-esse-nome");
+    await expect(teacherPage.locator(".empty")).toContainText("Nenhum aluno neste filtro");
+  });
+
+  test("situação e plano filtram", async ({ teacherPage, scenario }) => {
+    await teacherPage.goto("/professor?situacao=ritmo");
+    // O aluno do cenário tem 0 de 5 metas: está atrasado, não em ritmo.
+    await expect(studentRow(teacherPage, scenario.student.name)).toHaveCount(0);
+
+    await teacherPage.goto("/professor?situacao=atrasado");
+    await expect(studentRow(teacherPage, scenario.student.name)).toBeVisible();
+
+    await teacherPage.goto(`/professor?plano=${encodeURIComponent(scenario.planName)}`);
+    await expect(studentRow(teacherPage, scenario.student.name)).toBeVisible();
+  });
+});
+
+test.describe("F-TURMA-04 · filtro inválido não quebra", () => {
+  for (const [label, query] of [
+    ["situação inexistente", "situacao=abacaxi"],
+    ["plano inexistente", "plano=Plano%20que%20nao%20existe"],
+    ["os dois", "situacao=&plano="],
+  ] as const) {
+    test(`${label} devolve a lista inteira`, async ({ teacherPage, scenario, consoleErrors }) => {
+      await teacherPage.goto(`/professor?${query}`);
+
+      await expect(studentRow(teacherPage, scenario.student.name)).toBeVisible();
+      expect(consoleErrors).toEqual([]);
+    });
+  }
+});
+
+test.describe("F-TURMA-05 · quem precisa de atenção vem primeiro", () => {
+  test.use({ scenarioOptions: { withGoals: false } });
+
+  test("a ordenação é por urgência, depois por nome", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    // Um segundo aluno, vinculado ao mesmo professor e sem nada: "Sem dados".
+    const outro = await createUser("student", "Zulmira Sem Dados", "aluno");
+    try {
+      await asUser(scenario.teacher.id, (client) =>
+        client.query("select public.link_student($1::uuid, gen_random_uuid())", [outro.id]),
+      );
+      // O aluno do cenário tem planejamento sem metas e sem questões: também
+      // "Sem dados". Damos metas a ele para virar "Atrasado".
+      await addWeek(scenario, 1);
+
+      await teacherPage.goto("/professor");
+      // `allTextContents()` NÃO espera por nada — devolve o que casa naquele
+      // instante. O site é uma SPA: a tabela só existe depois de os loaders da
+      // rota resolverem, o que é DEPOIS do `load` que o `goto` aguarda. Sem uma
+      // asserção que espere antes, a lista volta vazia e o teste falha
+      // acusando outra coisa.
+      await expect(studentRow(teacherPage, outro.name)).toBeVisible();
+      const nomes = await teacherPage.locator("tbody tr td:first-child strong").allTextContents();
+      const doCenario = nomes.indexOf(scenario.student.name);
+      const semDados = nomes.indexOf(outro.name);
+
+      expect(doCenario).toBeGreaterThanOrEqual(0);
+      expect(semDados).toBeGreaterThanOrEqual(0);
+      // Atrasado (rank 0) antes de Sem dados (rank 2).
+      expect(doCenario).toBeLessThan(semDados);
+    } finally {
+      await query("delete from public.student_teacher_links where student_id = $1", [outro.id]);
+      await deleteUser(outro.id);
+    }
   });
 });
