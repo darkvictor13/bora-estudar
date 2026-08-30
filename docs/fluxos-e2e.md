@@ -1016,11 +1016,19 @@ quem escreve teste — cada uma virou uma peça da suíte:
 
 Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
 
-- **Editar os próprios dados como professor.** `updateProfile` exige
-  `requireRole("student")`.
-
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
+
+### Reservados pela spec 27 — dados do próprio professor
+
+Spec: [`specs/27-dados-do-professor.md`](specs/27-dados-do-professor.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-CONTA-01** — o professor abre `/professor/conta` e vê os próprios dados.
+- **F-CONTA-02** — salva um nome novo e ele aparece na sidebar.
+- **F-CONTA-03** — nome curto demais é recusado com mensagem.
+- **F-CONTA-04** — o e-mail aparece bloqueado nas duas telas.
+- **F-CONTA-05** — a tela do aluno continua funcionando igual.
 
 
 

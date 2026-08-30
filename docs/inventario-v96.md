@@ -347,7 +347,7 @@ total comporta, e o resto pelo maior resto. No PCPR Reta Final a soma dos
 | Estatísticas gerais do professor | `renderEstatisticas` professor.js:2217 | 🟡 | 08 | — |
 | **Tempo de estudo e sequência de dias** | `renderTempoEstudoStats` professor.js:644 e `calcularSequenciaEstudos` aluno.js:1162 | ✅ | 25 | implementada |
 | Controle manual de revisões | `renderControleRevisoes` professor.js:1792 | ✅ | 24 | implementada |
-| **Editar os próprios dados como professor** | não existe na v96 | 🟡 | | pendente |
+| **Editar os próprios dados como professor** | não existe na v96 | 🟡 | 27 | especificada |
 
 **`void_quiz_session` já existe e faz exatamente o que `anular_bateria` fazia**:
 só o professor responsável, só bateria finalizada (`completed` ou
@@ -450,7 +450,7 @@ condução dentro do TEC.
 |---|---|---|
 | ~~14~~ | Tempo de estudo, séries temporais e sequência de dias — spec [25](specs/25-tempo-de-estudo-e-series.md) ✅ | 1 view, site |
 | ~~15~~ | Resumo por tópicos da bateria concluída — spec [26](specs/26-topicos-do-bloco-e-da-bateria.md) ✅ | 1 view, site |
-| 16 | Professor edita os próprios dados | site |
+| 16 | Professor edita os próprios dados — spec [27](specs/27-dados-do-professor.md) | 1 migration (grant), site |
 | 17 | Painel arrastável na extensão | extensão |
 | 18 | Sidebar recolhível; mostrar/ocultar senha | site |
 | 19 | Login com Google | site, exige configuração de provedor |
