@@ -194,6 +194,7 @@ export type Database = {
           reinforcement_skipped: boolean
           source_goal_id: string | null
           source_week: number | null
+          spent_minutes: number | null
           status: Database["public"]["Enums"]["goal_status"]
           student_id: string
           student_note: string | null
@@ -221,6 +222,7 @@ export type Database = {
           reinforcement_skipped?: boolean
           source_goal_id?: string | null
           source_week?: number | null
+          spent_minutes?: number | null
           status?: Database["public"]["Enums"]["goal_status"]
           student_id: string
           student_note?: string | null
@@ -248,6 +250,7 @@ export type Database = {
           reinforcement_skipped?: boolean
           source_goal_id?: string | null
           source_week?: number | null
+          spent_minutes?: number | null
           status?: Database["public"]["Enums"]["goal_status"]
           student_id?: string
           student_note?: string | null
@@ -1296,6 +1299,48 @@ export type Database = {
         Args: { p_professor_id: string; p_student_id: string }
         Returns: boolean
       }
+      complete_goal: {
+        Args: {
+          p_goal_id: string
+          p_note?: string
+          p_request_id: string
+          p_spent_minutes: number
+        }
+        Returns: {
+          batch_id: string | null
+          block_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          day_order: number
+          deleted_at: string | null
+          external_link: string | null
+          extra_activity: string | null
+          id: string
+          planned_minutes: number | null
+          reinforcement_skipped: boolean
+          source_goal_id: string | null
+          source_week: number | null
+          spent_minutes: number | null
+          status: Database["public"]["Enums"]["goal_status"]
+          student_id: string
+          student_note: string | null
+          study_plan_id: string
+          teacher_id: string
+          teacher_note: string | null
+          title: string
+          type: Database["public"]["Enums"]["goal_type"]
+          updated_at: string
+          week_number: number
+          weekday: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       finish_quiz_session: {
         Args: {
           p_cancel?: boolean
@@ -1395,6 +1440,43 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "reinforcements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reopen_goal: {
+        Args: { p_goal_id: string; p_request_id: string }
+        Returns: {
+          batch_id: string | null
+          block_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          day_order: number
+          deleted_at: string | null
+          external_link: string | null
+          extra_activity: string | null
+          id: string
+          planned_minutes: number | null
+          reinforcement_skipped: boolean
+          source_goal_id: string | null
+          source_week: number | null
+          spent_minutes: number | null
+          status: Database["public"]["Enums"]["goal_status"]
+          student_id: string
+          student_note: string | null
+          study_plan_id: string
+          teacher_id: string
+          teacher_note: string | null
+          title: string
+          type: Database["public"]["Enums"]["goal_type"]
+          updated_at: string
+          week_number: number
+          weekday: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goals"
           isOneToOne: true
           isSetofReturn: false
         }
