@@ -1,6 +1,6 @@
 # 13 — Vínculo do aluno e liberação de acesso
 
-**Situação:** não implementada · **Comparativo:** §12 item 2 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-VINC-01 a F-VINC-07
+**Situação:** implementada · **Comparativo:** §12 item 2 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-VINC-01 a F-VINC-07
 
 ---
 

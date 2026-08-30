@@ -130,3 +130,37 @@ export async function getAllTeacherPlans(teacherId: string) {
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.name]));
   return (plans ?? []).map((plan) => ({ ...plan, studentName: nameById.get(plan.student_id) ?? "—" }));
 }
+
+/**
+ * Candidatos da lista de espera — spec 13.
+ *
+ * A leitura é permitida pela policy `waitlist_teacher_read`, que mostra quem
+ * ainda não tem professor mais quem este professor já reivindicou. Sem ela esta
+ * consulta voltaria vazia sempre: `waitlist_own` passa por `is_teacher_of`, e o
+ * professor só enxerga quem já é aluno dele.
+ *
+ * O filtro `teacher_id is null` é explícito além da policy — a policy garante,
+ * o filtro deixa a intenção legível e usa o índice.
+ */
+export async function getWaitlistCandidates() {
+  const { data } = await supabase
+    .from("waitlist")
+    .select("student_id,name,email,whatsapp,interest_area,focus_exam,created_at")
+    .is("teacher_id", null)
+    .order("created_at");
+  return data ?? [];
+}
+
+/** Assinatura vigente do aluno, para a ficha. */
+export async function getStudentSubscription(studentId: string) {
+  const { data } = await supabase
+    .from("subscriptions")
+    .select("id,status,plan,validity,updated_at")
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false });
+
+  const list = data ?? [];
+  // Mesmo critério de getMyStudents: a vigente é a `active`, não a última que o
+  // PostgREST devolveu. Um aluno que renovou tem histórico ao lado da atual.
+  return list.find((s) => s.status === "active") ?? list[0] ?? null;
+}

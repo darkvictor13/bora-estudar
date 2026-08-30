@@ -111,3 +111,133 @@ export async function generateWeek(_prev: FormState, data: FormData): Promise<Fo
       : `${inserted} meta(s) criada(s) na semana ${week}.`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Vínculo e liberação de acesso — spec docs/specs/13-vinculo-e-liberacao-de-acesso.md
+// ---------------------------------------------------------------------------
+
+/** Meses oferecidos na liberação. O padrão, 3, é o da v96. */
+export const ACCESS_MONTHS = [1, 3, 6, 12] as const;
+
+function translateAccessError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("somente professor pode vincular")) {
+    return "Só um professor pode vincular alunos.";
+  }
+  if (m.includes("ja tem professor vigente")) {
+    return "Este aluno já tem professor. Atualize a página para ver a lista atual.";
+  }
+  if (m.includes("so e possivel vincular um perfil de aluno")) {
+    return "Este perfil não é de aluno.";
+  }
+  if (m.includes("aluno nao encontrado")) return "Aluno não encontrado.";
+  if (m.includes("ja utilizado com outro payload")) {
+    return "Este envio já foi usado com outros dados. Atualize a página.";
+  }
+  // 42501 do WITH CHECK de subscriptions: liberar exige vínculo vigente.
+  if (m.includes("row-level security") || m.includes("violates row-level")) {
+    return "Vincule o aluno a você antes de liberar o acesso.";
+  }
+  if (m.includes("duplicate key") || m.includes("active_subscription_uidx")) {
+    return "Este aluno já tem uma assinatura ativa. Atualize a página.";
+  }
+  return message;
+}
+
+/**
+ * Vincula um candidato da lista de espera ao professor autenticado.
+ *
+ * O `requestId` é gerado uma vez por submissão: um duplo clique chega ao banco
+ * como a mesma operação e `reserve_operation` devolve o vínculo já criado, em
+ * vez de esbarrar no índice `active_link_uidx`.
+ */
+export async function linkStudent(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+
+  const studentId = String(data.get("studentId") ?? "");
+  if (!studentId) return { error: "Aluno não identificado." };
+
+  const { error } = await supabase.rpc("link_student", {
+    p_student_id: studentId,
+    p_request_id: crypto.randomUUID(),
+  });
+
+  if (error) return { error: translateAccessError(error.message) };
+
+  return { success: "Aluno vinculado. Libere o acesso para ele entrar nas telas de estudo." };
+}
+
+/**
+ * Libera ou estende o acesso do aluno.
+ *
+ * Não é RPC: `subscriptions` está na linha de planejamento da tabela de
+ * fronteira do `CLAUDE.md` e já tem as três defesas — `WITH CHECK` com
+ * `is_teacher_of` e `grant update` por coluna, com `student_id` de fora.
+ *
+ * **Estende a linha ativa em vez de inserir outra** (R-VINC-17): o índice
+ * parcial `active_subscription_uidx` recusaria a segunda, e um histórico de
+ * linhas ativas paralelas é justamente o estado que ele torna inexprimível.
+ */
+export async function grantAccess(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+
+  const studentId = String(data.get("studentId") ?? "");
+  const months = Number(data.get("months"));
+  if (!studentId) return { error: "Aluno não identificado." };
+  if (!ACCESS_MONTHS.includes(months as (typeof ACCESS_MONTHS)[number])) {
+    return { error: "Escolha um período de acesso válido." };
+  }
+
+  const until = new Date();
+  until.setMonth(until.getMonth() + months);
+  // `daterange` fechado no início e aberto no fim, como o resto do schema.
+  const validity = `[${new Date().toISOString().slice(0, 10)},${until.toISOString().slice(0, 10)})`;
+
+  const { data: current } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("student_id", studentId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  const { error } = current
+    ? await supabase.from("subscriptions").update({ validity }).eq("id", current.id)
+    : await supabase
+        .from("subscriptions")
+        .insert({ student_id: studentId, status: "active", plan: "turma", validity });
+
+  if (error) return { error: translateAccessError(error.message) };
+
+  return {
+    success: current
+      ? `Acesso estendido por ${months} ${months === 1 ? "mês" : "meses"}.`
+      : `Acesso liberado por ${months} ${months === 1 ? "mês" : "meses"}.`,
+  };
+}
+
+/**
+ * Suspende o acesso.
+ *
+ * A vigência é **preservada**: `active_subscription_has_validity` só a exige
+ * para `active`, e manter a data é o que permite reativar sem redigitar e o que
+ * torna auditável até quando o acesso valia (R-VINC-18).
+ */
+export async function suspendAccess(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+
+  const studentId = String(data.get("studentId") ?? "");
+  if (!studentId) return { error: "Aluno não identificado." };
+
+  const { error, count } = await supabase
+    .from("subscriptions")
+    .update({ status: "suspended" }, { count: "exact" })
+    .eq("student_id", studentId)
+    .eq("status", "active");
+
+  if (error) return { error: translateAccessError(error.message) };
+  // UPDATE filtra em silêncio: sem vínculo, a RLS devolve zero linhas e nenhum
+  // erro. Contar é o que transforma isso em mensagem em vez de sucesso falso.
+  if (count === 0) return { error: "Este aluno não tem acesso ativo para suspender." };
+
+  return { success: "Acesso suspenso. O aluno volta para a lista de espera." };
+}

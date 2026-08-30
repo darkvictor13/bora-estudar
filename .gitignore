@@ -17,8 +17,11 @@ dist/
 # Testes e cobertura
 coverage/
 
-# Artefatos do Playwright — vídeo, trace e screenshot de cada execução
+# Artefatos do Playwright — vídeo, trace e screenshot de cada execução.
+# A segunda linha existe porque rodar `npx playwright test` da raiz, e não de
+# apps/e2e, despeja os artefatos aqui.
 apps/e2e/test-results/
+/test-results/
 apps/e2e/playwright-report/
 apps/e2e/blob-report/
 apps/e2e/.playwright-cache/

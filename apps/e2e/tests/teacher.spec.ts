@@ -2,9 +2,17 @@
  * §4 do `docs/fluxos-e2e.md` — telas do professor.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { addWeek, createScenario, goalCount, planWeeks, setAccess } from "../fixtures/scenario.ts";
+import {
+  addWeek,
+  createScenario,
+  createUser,
+  deleteUser,
+  goalCount,
+  planWeeks,
+  setAccess,
+} from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
-import { count, query } from "../fixtures/db.ts";
+import { asUser, count, one, query } from "../fixtures/db.ts";
 import { PAGE_TITLES, TEACHER_ROUTES, studentPageOf } from "../support/routes.ts";
 import { cardByTitle } from "../support/ui.ts";
 
@@ -362,5 +370,274 @@ test.describe("F-PROF-01 · professor sem aluno vinculado", () => {
     await expect(teacherPage.locator(".empty")).toContainText("Nenhum planejamento criado.");
 
     expect(consoleErrors).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4 — vínculo e liberação de acesso.
+// Spec docs/specs/13-vinculo-e-liberacao-de-acesso.md
+// ---------------------------------------------------------------------------
+
+/**
+ * Um candidato: aluno com linha na lista de espera e sem professor nenhum.
+ *
+ * É exatamente o estado de quem acabou de se cadastrar pelo site — o cadastro
+ * cria `auth.users` e `profiles`, a tela de lista de espera cria a linha, e
+ * nada mais acontece.
+ */
+async function createCandidate(name: string) {
+  const person = await createUser("student", name, "candidato");
+  await query(
+    `insert into public.waitlist (student_id, name, email, whatsapp, interest_area, focus_exam)
+     values ($1, $2, $3, '41999990000', 'Policial', 'PCPR — Investigador')`,
+    [person.id, person.name, person.email],
+  );
+  return person;
+}
+
+const candidateRow = (page: import("@playwright/test").Page, name: string) =>
+  cardByTitle(page, "Candidatos").locator("tbody tr", { hasText: name });
+
+test.describe("F-VINC-01 · o candidato aparece na fila", () => {
+  test("quem se cadastrou e não tem professor é visível para o professor", async ({
+    teacherPage,
+  }) => {
+    const candidate = await createCandidate("Candidata Helena");
+    try {
+      await teacherPage.goto("/professor");
+
+      const row = candidateRow(teacherPage, candidate.name);
+      await expect(row).toContainText(candidate.email);
+      await expect(row).toContainText("PCPR — Investigador");
+      await expect(row.getByRole("button", { name: "Vincular a mim" })).toBeVisible();
+    } finally {
+      await deleteUser(candidate.id);
+    }
+  });
+
+  test("aluno que já tem professor não entra na fila", async ({ teacherPage, scenario }) => {
+    // O aluno do cenário já é vinculado; ele não pode aparecer como candidato.
+    await teacherPage.goto("/professor");
+    await expect(
+      cardByTitle(teacherPage, "Candidatos").locator("tbody tr", { hasText: scenario.student.name }),
+    ).toHaveCount(0);
+  });
+});
+
+test.describe("F-VINC-02 · vincular", () => {
+  test("cria o vínculo, tira da fila e o aluno aparece em Meus alunos", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const candidate = await createCandidate("Candidato Igor");
+    try {
+      await teacherPage.goto("/professor");
+      await candidateRow(teacherPage, candidate.name)
+        .getByRole("button", { name: "Vincular a mim" })
+        .click();
+
+      // Some da fila e passa a constar na lista, ainda sem acesso.
+      await expect(cardByTitle(teacherPage, "Candidatos").locator("tbody tr", {
+        hasText: candidate.name,
+      })).toHaveCount(0);
+
+      const row = teacherPage.locator("tbody tr", { hasText: candidate.name });
+      await expect(row.locator(".badge")).toHaveText("Aguardando liberação");
+
+      const link = await one<{ teacher_id: string; ended_at: string | null }>(
+        "select teacher_id, ended_at from public.student_teacher_links where student_id = $1",
+        [candidate.id],
+      );
+      expect(link.teacher_id).toBe(scenario.teacher.id);
+      expect(link.ended_at).toBeNull();
+
+      // A linha da lista de espera foi reivindicada.
+      expect(
+        await count(
+          "select count(*) from public.waitlist where student_id = $1 and teacher_id = $2",
+          [candidate.id, scenario.teacher.id],
+        ),
+      ).toBe(1);
+    } finally {
+      await query("delete from public.student_teacher_links where student_id = $1", [candidate.id]);
+      await deleteUser(candidate.id);
+    }
+  });
+});
+
+test.describe("F-VINC-03 · candidato reivindicado sai da fila dos outros", () => {
+  test("outro professor não o enxerga mais", async ({ page, teacherPage, scenario, signIn }) => {
+    const candidate = await createCandidate("Candidata Joana");
+    const outro = await createUser("teacher", "Professor Vizinho", "prof");
+    try {
+      await teacherPage.goto("/professor");
+      await candidateRow(teacherPage, candidate.name)
+        .getByRole("button", { name: "Vincular a mim" })
+        .click();
+      await expect(
+        cardByTitle(teacherPage, "Candidatos").locator("tbody tr", { hasText: candidate.name }),
+      ).toHaveCount(0);
+
+      await signIn(outro);
+      await page.goto("/professor");
+      // Sem candidatos, o cartão inteiro não é renderizado.
+      await expect(page.locator("tbody tr", { hasText: candidate.name })).toHaveCount(0);
+    } finally {
+      await query("delete from public.student_teacher_links where student_id = $1", [candidate.id]);
+      await deleteUser(candidate.id);
+      await deleteUser(outro.id);
+      void scenario;
+    }
+  });
+});
+
+test.describe("F-VINC-04 · liberar acesso", () => {
+  test.use({ scenarioOptions: { access: "none" } });
+
+  test("cria a assinatura e o aluno passa a abrir as telas de estudo", async ({
+    page,
+    teacherPage,
+    scenario,
+    signIn,
+  }) => {
+    // Sem assinatura, o aluno é empurrado para a lista de espera.
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(page).toHaveURL(/\/aluno\/lista-espera$/);
+
+    await signIn(scenario.teacher);
+    await page.goto(studentPageOf(scenario.student.id));
+    await expect(cardByTitle(page, "Acesso")).toContainText("nunca teve acesso liberado");
+
+    await cardByTitle(page, "Acesso").locator('select[name="months"]').selectOption("3");
+    await cardByTitle(page, "Acesso").getByRole("button", { name: "Liberar acesso" }).click();
+
+    await expect(page.locator(".alert--success")).toHaveText("Acesso liberado por 3 meses.");
+    await expect(cardByTitle(page, "Acesso")).toContainText("Ativo · vigência");
+
+    const sub = await one<{ status: string; validity: string }>(
+      "select status::text, validity::text from public.subscriptions where student_id = $1",
+      [scenario.student.id],
+    );
+    expect(sub.status).toBe("active");
+    // Fechado no início, aberto no fim, e três meses de janela.
+    expect(sub.validity).toMatch(/^\[\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2}\)$/);
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(page).toHaveURL(/\/aluno$/);
+    await expect(page.locator("h1")).toHaveText("Visão geral");
+
+    void teacherPage;
+  });
+});
+
+test.describe("F-VINC-05 · liberar de novo estende a mesma linha", () => {
+  test("não cria uma segunda assinatura ativa", async ({ teacherPage, scenario }) => {
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    await cardByTitle(teacherPage, "Acesso").locator('select[name="months"]').selectOption("12");
+    await cardByTitle(teacherPage, "Acesso")
+      .getByRole("button", { name: "Estender acesso" })
+      .click();
+
+    await expect(teacherPage.locator(".alert--success")).toHaveText("Acesso estendido por 12 meses.");
+
+    // O índice active_subscription_uidx recusaria uma segunda ativa; a action
+    // atualiza a existente justamente por isso.
+    expect(
+      await count(
+        "select count(*) from public.subscriptions where student_id = $1 and status = 'active'",
+        [scenario.student.id],
+      ),
+    ).toBe(1);
+  });
+});
+
+test.describe("F-VINC-06 · suspender", () => {
+  test("troca o badge, preserva a vigência e devolve o aluno à lista de espera", async ({
+    page,
+    teacherPage,
+    scenario,
+    signIn,
+  }) => {
+    const antes = await one<{ validity: string }>(
+      "select validity::text from public.subscriptions where student_id = $1 and status = 'active'",
+      [scenario.student.id],
+    );
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    await cardByTitle(teacherPage, "Acesso")
+      .getByRole("button", { name: "Suspender acesso" })
+      .click();
+
+    await expect(teacherPage.locator(".alert--success")).toHaveText(
+      "Acesso suspenso. O aluno volta para a lista de espera.",
+    );
+
+    const depois = await one<{ status: string; validity: string }>(
+      "select status::text, validity::text from public.subscriptions where student_id = $1",
+      [scenario.student.id],
+    );
+    expect(depois.status).toBe("suspended");
+    // R-VINC-18: a vigência é preservada, para reativar sem redigitar e para
+    // continuar auditável até quando o acesso valia.
+    expect(depois.validity).toBe(antes.validity);
+
+    await teacherPage.goto("/professor");
+    await expect(
+      teacherPage.locator("tbody tr", { hasText: scenario.student.name }).locator(".badge"),
+    ).toHaveText("Suspenso");
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(page).toHaveURL(/\/aluno\/lista-espera$/);
+  });
+});
+
+test.describe("F-VINC-07 · vincular duas vezes", () => {
+  test("o duplo clique devolve o mesmo vínculo, sem segunda linha", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const candidate = await createCandidate("Candidato Kaio");
+    try {
+      await teacherPage.goto("/professor");
+      const button = candidateRow(teacherPage, candidate.name).getByRole("button", {
+        name: "Vincular a mim",
+      });
+
+      // Dois cliques em sequência: o segundo encontra a tela já revalidada, e o
+      // caminho que ele exercita é o de vincular quem já é aluno — que a RPC
+      // devolve em vez de recusar.
+      await button.click();
+      // Esperar o candidato SAIR da fila, e não uma linha que já estava na
+      // tela: `tbody tr` com o nome dele também casa a linha da própria fila,
+      // então a asserção passaria de imediato e a contagem abaixo rodaria antes
+      // de a action terminar.
+      await expect(
+        cardByTitle(teacherPage, "Candidatos").locator("tbody tr", { hasText: candidate.name }),
+      ).toHaveCount(0);
+
+      expect(
+        await count("select count(*) from public.student_teacher_links where student_id = $1", [
+          candidate.id,
+        ]),
+      ).toBe(1);
+
+      // E chamar a RPC de novo, com request_id novo, continua devolvendo o
+      // vínculo existente em vez de esbarrar no índice active_link_uidx.
+      await asUser(scenario.teacher.id, (client) =>
+        client.query("select public.link_student($1::uuid, gen_random_uuid())", [candidate.id]),
+      );
+      expect(
+        await count("select count(*) from public.student_teacher_links where student_id = $1", [
+          candidate.id,
+        ]),
+      ).toBe(1);
+    } finally {
+      await query("delete from public.student_teacher_links where student_id = $1", [candidate.id]);
+      await deleteUser(candidate.id);
+    }
   });
 });
