@@ -1071,6 +1071,18 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 29 — sidebar recolhível e senha visível
+
+Spec: [`specs/29-sidebar-e-senha-visivel.md`](specs/29-sidebar-e-senha-visivel.md).
+Migram para a §1 e a §2 quando os testes existirem.
+
+- **F-UI-01** — o botão recolhe e expande a sidebar.
+- **F-UI-02** — o estado sobrevive à navegação e ao recarregamento.
+- **F-UI-03** — `aria-expanded` acompanha o estado.
+- **F-UI-04** — o botão de senha revela e volta a ocultar.
+- **F-UI-05** — clicar no botão de senha não submete o formulário.
+- **F-UI-06** — a senha começa sempre oculta.
+
 
 
 
