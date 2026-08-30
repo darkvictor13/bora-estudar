@@ -1,13 +1,21 @@
 import { supabase } from "@/lib/supabase/client";
-import { requireRole } from "@/lib/auth/session";
+import { requireRole, requireSession } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/actions";
 
 function text(data: FormData, field: string): string {
   return String(data.get(field) ?? "").trim();
 }
 
+/**
+ * Nome e telefone do próprio usuário — spec 27.
+ *
+ * Exige SESSÃO, não papel. Quem decide o que pode ser escrito é a RLS, que
+ * limita a linha a `id = auth.uid()`, mais o grant por coluna, que reduz a
+ * escrita a `name` e `phone`. O papel nunca foi o que protegia isto — era só o
+ * que impedia o professor de corrigir o próprio nome.
+ */
 export async function updateProfile(_prev: FormState, data: FormData): Promise<FormState> {
-  const session = await requireRole("student");
+  const session = await requireSession();
   const name = text(data, "name");
   if (name.length < 3) return { error: "Informe seu nome completo." };
 

@@ -27,6 +27,7 @@ export const TEACHER_ROUTES = [
   "/professor/cadernos",
   "/professor/revisoes",
   "/professor/estatisticas",
+  "/professor/conta",
 ] as const;
 
 export const PROTECTED_ROUTES = [...STUDENT_ROUTES, ...TEACHER_ROUTES] as const;
@@ -46,6 +47,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/professor/cadernos": "Cadernos",
   "/professor/revisoes": "Revisões",
   "/professor/estatisticas": "Estatísticas",
+  "/professor/conta": "Meus dados",
 };
 
 export function studentPageOf(studentId: string): string {

@@ -1726,3 +1726,64 @@ test.describe("F-RESU-06 · o professor vê o resumo da bateria", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — dados do próprio professor.
+// Spec docs/specs/27-dados-do-professor.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-CONTA-01 · o professor vê os próprios dados", () => {
+  test("a mesma tela do aluno, com o texto do papel dele", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto("/professor/conta");
+
+    await expect(teacherPage.locator("h1")).toHaveText("Meus dados");
+    await expect(teacherPage.locator('input[name="name"]')).toHaveValue(scenario.teacher.name);
+    await expect(teacherPage.locator(".content")).toContainText("aparecem para os seus alunos");
+  });
+});
+
+test.describe("F-CONTA-02 · salvar um nome novo", () => {
+  test("o nome muda na sidebar sem recarregar", async ({ teacherPage, scenario }) => {
+    const novo = `${scenario.teacher.name} Editado`;
+
+    await teacherPage.goto("/professor/conta");
+    await teacherPage.locator('input[name="name"]').fill(novo);
+    await teacherPage.locator(".content button[type=submit]").click();
+
+    await expect(teacherPage.locator(".alert--success")).toContainText("Dados atualizados");
+    // A revalidação re-roda o loader do layout, que é quem alimenta a sidebar.
+    await expect(teacherPage.locator(".sidebar")).toContainText(novo);
+  });
+});
+
+test.describe("F-CONTA-03 · nome curto demais", () => {
+  test("é recusado com mensagem, e nada é gravado", async ({ teacherPage, scenario }) => {
+    await teacherPage.goto("/professor/conta");
+    await teacherPage.locator('input[name="name"]').fill("An");
+    await teacherPage.locator(".content button[type=submit]").click();
+
+    await expect(teacherPage.locator(".alert--error")).toContainText("nome completo");
+    await expect(teacherPage.locator(".sidebar")).toContainText(scenario.teacher.name);
+  });
+});
+
+test.describe("F-CONTA-04 · o e-mail é bloqueado", () => {
+  test("nas duas telas, e o texto muda com o papel", async ({
+    teacherPage,
+    signIn,
+    scenario,
+  }) => {
+    await teacherPage.goto("/professor/conta");
+    const emailProf = teacherPage.locator("#field-contactEmail");
+    await expect(emailProf).toBeDisabled();
+    await expect(teacherPage.locator(".content")).toContainText("não muda por aqui");
+
+    await signIn(scenario.student);
+    await teacherPage.goto("/aluno/conta");
+    await expect(teacherPage.locator("#field-contactEmail")).toBeDisabled();
+    await expect(teacherPage.locator(".content")).toContainText("fale com o professor");
+  });
+});

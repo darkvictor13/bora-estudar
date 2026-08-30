@@ -876,6 +876,25 @@ Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
 acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
 somente as questões `main`.
 
+### F-CONTA-01 — O professor vê os próprios dados
+**Esperado** `/professor/conta` abre a **mesma** tela de `/aluno/conta`, com o
+nome preenchido e o texto do papel dele. Não é rota duplicada: são os mesmos
+campos e o mesmo action, e o que muda é uma frase.
+
+### F-CONTA-02 — Salvar um nome novo
+**Esperado** "Dados atualizados" e o nome muda **na sidebar** sem recarregar. A
+revalidação que o `useFormActionState` dispara ao ver `success` re-roda o loader
+do layout, que é quem alimenta a sidebar.
+
+### F-CONTA-03 — Nome curto demais
+**Esperado** "Informe seu nome completo." e a sidebar intacta. A tela exige 3
+caracteres e a `check` da tabela exige 2: a tela é mais estrita de propósito.
+
+### F-CONTA-04 — O e-mail é bloqueado nas duas telas
+**Esperado** o campo vem desabilitado para os dois papéis, com a frase de cada
+um. A frase agora é sustentada pela fronteira: `contact_email` saiu do
+`grant update` (`supabase/tests/14_profile_grants.sql`).
+
 ### F-RESU-06 — O resumo da bateria na ficha
 **Esperado** o professor abre "Ver tópicos" no cartão "Baterias" e vê o mesmo
 resumo. Só bateria `completed` oferece o link: anulada saiu do desempenho, e
@@ -976,7 +995,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 252 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 259 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -1019,16 +1038,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 27 — dados do próprio professor
-
-Spec: [`specs/27-dados-do-professor.md`](specs/27-dados-do-professor.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-CONTA-01** — o professor abre `/professor/conta` e vê os próprios dados.
-- **F-CONTA-02** — salva um nome novo e ele aparece na sidebar.
-- **F-CONTA-03** — nome curto demais é recusado com mensagem.
-- **F-CONTA-04** — o e-mail aparece bloqueado nas duas telas.
-- **F-CONTA-05** — a tela do aluno continua funcionando igual.
 
 
 

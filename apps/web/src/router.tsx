@@ -188,6 +188,13 @@ export const router = createBrowserRouter([
             Component: TeacherStatistics,
             handle: { title: "Estatísticas · Bora Estudar" },
           },
+          {
+            // A mesma tela de `/aluno/conta`: mesmos campos, mesmo action.
+            path: ROUTES.teacher.account,
+            loader: accountLoader,
+            Component: Account,
+            handle: { title: "Meus dados · Bora Estudar" },
+          },
         ],
       },
 
