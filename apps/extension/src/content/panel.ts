@@ -18,6 +18,8 @@ export interface PanelState {
   /** Bateria já entregue ao site: só reenvio deliberado ou descarte. */
   readonly delivered?: boolean;
   readonly onGoToPending?: (() => void) | null;
+  /** Só com todas as principais respondidas. Acrescenta 5, ou nenhuma. */
+  readonly onExtraRound?: (() => void) | null;
   readonly onFinish?: (() => void) | null;
   readonly onFinishEarly?: (() => void) | null;
   readonly onCancel?: (() => void) | null;
@@ -99,6 +101,18 @@ export function renderPanel(state: PanelState): void {
     panel.appendChild(line(`${progress.answered} de ${progress.total} respondidas`));
     if (progress.answered > 0) {
       panel.appendChild(line(`${progress.correct} acertos · ${progress.incorrect} erros`, true));
+      // A composição aparece assim que a FILA cresce além das principais — ou
+      // seja, quando entrou uma correlata ou uma rodada extra. Condicioná-la às
+      // RESPOSTAS a esconderia justamente no momento em que ela explica o que
+      // acabou de acontecer: a fila aumentou porque o aluno errou.
+      if (progress.total > progress.mainTarget) {
+        panel.appendChild(
+          line(
+            `${progress.main} principais · ${progress.reinforcement} reforços · ${progress.extra} extras`,
+            true,
+          ),
+        );
+      }
     }
   }
 
@@ -126,6 +140,9 @@ export function renderPanel(state: PanelState): void {
   }
 
   if (state.onGoToPending) panel.appendChild(button("Ir para a próxima", state.onGoToPending, true));
+  if (state.onExtraRound) {
+    panel.appendChild(button("+ 5 questões extras", state.onExtraRound));
+  }
   if (state.onFinish) panel.appendChild(button("Finalizar e enviar", state.onFinish, true));
   if (state.onFinishEarly) panel.appendChild(button("Finalizar agora", state.onFinishEarly));
   if (state.onCancel) panel.appendChild(button("Cancelar bateria", state.onCancel));

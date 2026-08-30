@@ -9,7 +9,16 @@ import {
 } from "@bora/protocol";
 
 import { readSession, writeSession, clearSession, type QuizSessionState } from "../shared/session.ts";
-import { nextUnanswered, pickQuestions, progressOf } from "./engine.ts";
+import {
+  answersForResult,
+  appendExtraRound,
+  canAnswer,
+  nextUnanswered,
+  pickCorrelate,
+  pickQuestions,
+  progressOf,
+  type QueueItem,
+} from "./engine.ts";
 import {
   currentQuestionId,
   detectOutcome,
@@ -49,26 +58,46 @@ async function importStartFromUrl(): Promise<QuizSessionState | null> {
 // Registro das respostas
 // ---------------------------------------------------------------------------
 
+/**
+ * Grava a resposta e, se foi erro, acrescenta a correlata.
+ *
+ * A correlata entra no FIM da fila, com `phase = "reinforcement"` e a questão
+ * errada em `sourceQuestionId`. Combinada com `canAnswer`, isso produz o efeito
+ * de produto: as principais primeiro, os reforços depois.
+ */
 async function recordAnswer(
   session: QuizSessionState,
-  questionId: number,
+  item: QueueItem,
   outcome: "correct" | "incorrect",
 ): Promise<QuizSessionState> {
   const answer: QuestionAnswer = {
-    questionId,
+    questionId: item.id,
     executionOrder: Object.keys(session.answers).length + 1,
-    round: 0,
-    phase: "main",
+    round: item.round,
+    phase: item.phase,
     outcome,
-    topic: null,
-    sourceQuestionId: null,
+    topic: item.topic,
+    sourceQuestionId: item.sourceQuestionId,
     answeredAt: new Date().toISOString(),
   };
 
+  const answers = { ...session.answers, [String(item.id)]: answer };
+  const correlate = outcome === "incorrect" ? pickCorrelate(session.start, item, session.queue) : null;
+
   const updated: QuizSessionState = {
     ...session,
-    answers: { ...session.answers, [String(questionId)]: answer },
+    queue: correlate ? [...session.queue, correlate] : session.queue,
+    answers,
   };
+  await writeSession(updated);
+  return updated;
+}
+
+/** Acrescenta uma rodada de 5 extras. Tudo ou nada. */
+async function addExtraRound(session: QuizSessionState): Promise<QuizSessionState | null> {
+  const extras = appendExtraRound(session.start, session.queue);
+  if (!extras) return null;
+  const updated: QuizSessionState = { ...session, queue: [...session.queue, ...extras] };
   await writeSession(updated);
   return updated;
 }
@@ -96,7 +125,11 @@ async function sendResult(session: QuizSessionState, cancel = false): Promise<vo
     quizSessionId: finished.start.quizSessionId,
     requestId: finished.requestId!,
     cancel,
-    answers: Object.values(finished.answers),
+    // Na finalização antecipada, tudo que não é principal é DESCARTADO. Sem
+    // isso, quem para com 7 de 15 tendo gerado uma correlata teria a bateria
+    // inteira recusada por finish_quiz_session, e perderia uma hora de estudo
+    // por causa de uma questão que o motor acrescentou sozinho. R-FASE-18.
+    answers: answersForResult(finished.answers, finished.start.mainTarget),
   };
 
   location.assign(buildResultUrl(body, finished.start.returnUrl));
@@ -119,7 +152,7 @@ async function sendResult(session: QuizSessionState, cancel = false): Promise<vo
 async function paintDelivered(session: QuizSessionState): Promise<void> {
   renderPanel({
     sessionNumber: session.start.sessionNumber,
-    progress: progressOf(session.queue, session.answers),
+    progress: progressOf(session.queue, session.answers, session.start.mainTarget),
     delivered: true,
     onResend: () => void sendResult(session),
     onDiscard: () => {
@@ -133,7 +166,7 @@ async function paintDelivered(session: QuizSessionState): Promise<void> {
 }
 
 async function paint(session: QuizSessionState): Promise<void> {
-  const progress = progressOf(session.queue, session.answers);
+  const progress = progressOf(session.queue, session.answers, session.start.mainTarget);
   const pending = nextUnanswered(session.queue, session.answers);
   const current = currentQuestionId();
 
@@ -141,9 +174,28 @@ async function paint(session: QuizSessionState): Promise<void> {
     sessionNumber: session.start.sessionNumber,
     progress,
     historyComplete: session.start.historyComplete,
-    currentIsInQueue: current !== null && session.queue.includes(current),
+    currentIsInQueue: current !== null && session.queue.some((item) => item.id === current),
     onGoToPending: pending === null ? null : () => goToQuestion(pending),
     onFinish: pending !== null ? null : () => void sendResult(session),
+    // Só com TODAS as principais respondidas: é o que finish_quiz_session
+    // exige, e oferecer antes seria oferecer o que o banco recusa.
+    onExtraRound:
+      pending === null && progress.main >= progress.mainTarget
+        ? () => {
+            void (async () => {
+              const updated = await addExtraRound(session);
+              if (!updated) {
+                alert(
+                  "Não há 5 questões inéditas suficientes neste bloco para acrescentar uma rodada extra.",
+                );
+                return;
+              }
+              await paint(updated);
+              const next = nextUnanswered(updated.queue, updated.answers);
+              if (next !== null) goToQuestion(next);
+            })();
+          }
+        : null,
     onFinishEarly:
       pending !== null && progress.answered > 0
         ? () => {
@@ -231,13 +283,19 @@ async function boot(): Promise<void> {
       const questionId = currentQuestionId();
       if (questionId === null) return;
       if (questionId === guardedId) return;
-      if (!fresh.queue.includes(questionId)) return;
+
+      const item = fresh.queue.find((candidate) => candidate.id === questionId);
+      if (!item) return;
       if (fresh.answers[String(questionId)]) return;
+      // Correlata e extra só depois das principais; correlata de rodada N só
+      // depois das extras daquela rodada. A guarda vale ANTES de o aluno perder
+      // o trabalho — o banco recusaria a bateria inteira no fim.
+      if (!canAnswer(item, fresh.queue, fresh.answers)) return;
 
       const outcome = detectOutcome();
       if (!outcome) return;
 
-      const updated = await recordAnswer(fresh, questionId, outcome);
+      const updated = await recordAnswer(fresh, item, outcome);
       await paint(updated);
     })();
   });

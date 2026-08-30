@@ -4,8 +4,14 @@
  * Incremente ao fazer uma mudança incompatível. A extensão instalada é sempre
  * mais antiga que o site (o usuário atualiza quando quer), então o site precisa
  * detectar e avisar em vez de enviar um payload que a extensão não entende.
+ *
+ * Histórico:
+ *   1 → 2  `availableQuestions` deixou de ser `number[]` e passou a carregar o
+ *          tópico de cada questão. Sem ele não existe reforço correlato "do
+ *          mesmo tópico", e a extensão não fala com o Supabase para buscá-lo.
+ *          Ver docs/specs/21-fases-na-extensao.md.
  */
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
 /** Chaves do fragmento da URL usadas em cada direção. */
 export const HASH_KEYS = {

@@ -17,6 +17,19 @@ export interface SeenQuestion {
   readonly lastSeenAt: string;
 }
 
+/**
+ * Uma questão do bloco, como o catálogo a conhece.
+ *
+ * O `topic` viaja porque é o que permite à extensão escolher a correlata **do
+ * mesmo tópico** quando o aluno erra. Ele é `null` quando o bloco não tem
+ * tópico cadastrado, e o motor degrada para "qualquer questão" em vez de
+ * quebrar.
+ */
+export interface AvailableQuestion {
+  readonly id: number;
+  readonly topic: string | null;
+}
+
 export interface QuizStart {
   /** Para onde a extensão devolve o resultado. Origem exata, sem fragmento. */
   readonly returnUrl: string;
@@ -27,8 +40,8 @@ export interface QuizStart {
   readonly sessionNumber: number;
   /** Quantas questões principais a sessão persegue. */
   readonly mainTarget: number;
-  /** Questões do bloco, na ordem do catálogo. */
-  readonly availableQuestions: readonly number[];
+  /** Questões do bloco, na ordem do catálogo, com o tópico de cada uma. */
+  readonly availableQuestions: readonly AvailableQuestion[];
   readonly history: readonly SeenQuestion[];
   /**
    * `false` quando o site não conseguiu carregar o histórico inteiro.
