@@ -187,7 +187,7 @@ importante deste inventário**, porque o §12 item 8 as trata como uma só.
 | **Agendar reforço como meta futura** | `agendarReforco` aluno.js:2003 | ❌ | | pendente |
 | **Ignorar reforço sugerido** | `ignorarReforco` aluno.js:1986 | ❌ | | pendente |
 | **Cancelar reforço já agendado** | `cancelarReforcoDoRegistro` aluno.js:2668 | ❌ | | pendente |
-| **Grade de revisão espaçada** (1ª e 2ª revisão por caderno) | `renderControleRevisoes` aluno.js:3164 | ❌ | 24 | especificada |
+| **Grade de revisão espaçada** (1ª e 2ª revisão por caderno) | `renderControleRevisoes` aluno.js:3164 | ✅ | 24 | implementada |
 
 **`record_reinforcement` já existe, já é idempotente e já exige a bijeção** —
 o conjunto revisado tem de ser exatamente o conjunto de erradas únicas do ciclo,
@@ -346,7 +346,7 @@ total comporta, e o resto pelo maior resto. No PCPR Reta Final a soma dos
 | **Agendar reforço para o aluno** | `agendarReforcoAlunoSupabase` professor.js:3813 | ❌ | | pendente |
 | Estatísticas gerais do professor | `renderEstatisticas` professor.js:2217 | 🟡 | 08 | — |
 | **Tempo de estudo e sequência de dias** | `renderTempoEstudoStats` professor.js:644 | ❌ | | pendente |
-| Controle manual de revisões | `renderControleRevisoes` professor.js:1792 | ❌ | 24 | especificada |
+| Controle manual de revisões | `renderControleRevisoes` professor.js:1792 | ✅ | 24 | implementada |
 | **Editar os próprios dados como professor** | não existe na v96 | 🟡 | | pendente |
 
 **`void_quiz_session` já existe e faz exatamente o que `anular_bateria` fazia**:
@@ -436,7 +436,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | ~~10~~ | **Conduzir `reinforcement` e `extra` no content script** — spec [21](specs/21-fases-na-extensao.md), **implementada** | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
 | ~~11~~ | **Rodízio por tópico na seleção** — spec [22](specs/22-rodizio-por-topico.md), **implementada** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
 | ~~12~~ | **Dificuldades por tópico** — spec [23](specs/23-dificuldades-por-topico.md) ✅ | O professor vê o número, não vê a causa. O histórico de baterias saiu antes, na spec 16 | 0 RPC, 1 view, site |
-| 13 | **Revisão espaçada** — spec [24](specs/24-revisao-espacada.md) | Grade por matéria, 1ª e 2ª revisão. Conceito separado do reforço | 1 migration, 1 RPC, site |
+| ~~13~~ | **Revisão espaçada** — spec [24](specs/24-revisao-espacada.md) ✅ | Grade por matéria, 1ª e 2ª revisão. Conceito separado do reforço | 1 migration, 1 RPC, site |
 
 Os itens 9 e 10 são as duas metades do mesmo fluxo e estão separados **pelo portão
 do Passo 4 da skill**: entregar junto significaria uma migration e um

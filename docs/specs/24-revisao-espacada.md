@@ -1,6 +1,6 @@
 # 24 — Revisão espaçada
 
-**Situação:** não implementada · **Comparativo:** §12 item 9 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 e §9 · **Fluxos e2e:** F-REVE-01 a F-REVE-07
+**Situação:** implementada · **Comparativo:** §12 item 9 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 e §9 · **Fluxos e2e:** F-REVE-01 a F-REVE-07
 
 ---
 
@@ -107,6 +107,18 @@ review_spacings (plano, disciplina)          ← escrita direta, RLS
 | Migration | **uma:** duas tabelas, políticas, grants por coluna, a RPC |
 | Banco | `review_spacings` e `review_completions`, ambas novas |
 | Testes | `supabase/tests/11_review_spacing.sql`, `spacing.test.ts`, `apps/e2e` |
+
+**A auditoria é por gatilho, não por `insert` dentro da RPC.** `audit_log` tem
+colunas fixas — `table_name`, `record_id`, `action`, `old_value`, `new_value` —
+e quem as preenche é `tg_write_audit_log`, o mesmo gatilho de `study_plans`,
+`goals`, `quiz_sessions` e `subscriptions`. As duas tabelas novas entram nele.
+*Corrigido em 30/08/2026, ao implementar: a primeira versão escrevia à mão, num
+formato que a tabela não tem.*
+
+**`review_completions` carrega `teacher_id` denormalizado.** `can_view_context`
+COMPARA ids, não consulta vínculo: sem a coluna, a grade sumiria para o
+professor. É o mesmo motivo pelo qual `quiz_sessions` a carrega. *Ajustado em
+30/08/2026, ao implementar.*
 
 **Duas tabelas novas e nenhuma alterada** — é o caso mais simples de
 compatibilidade com o bundle no ar: nada que já roda as conhece.
