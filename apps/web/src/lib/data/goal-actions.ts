@@ -214,3 +214,84 @@ export async function deleteExtraStudy(_prev: FormState, data: FormData): Promis
 
   return { redirectTo: backTo(data, "extra-removido") };
 }
+
+// ---------------------------------------------------------------------------
+// Reforço de ciclo — spec docs/specs/20-execucao-do-reforco.md
+// ---------------------------------------------------------------------------
+
+/** URL da questão no TEC. É o mesmo host que a extensão conhece. */
+export const TEC_QUESTION_URL = "https://www.tecconcursos.com.br/questoes";
+
+/**
+ * Grava o reforço do ciclo.
+ *
+ * O `requestId` vem do formulário, gerado **uma vez quando o aluno abriu o
+ * reforço** — não a cada submissão. Reenviar devolve o reforço já gravado em vez
+ * de recusar por `unique(quiz_session_id)` em `reinforcement_sessions`.
+ *
+ * Nenhuma verificação da RPC é repetida aqui: quem confere as três baterias, o
+ * acumulado abaixo de 80% e a cobertura completa dos erros é
+ * `record_reinforcement`. A tela evita oferecer o que o banco recusaria.
+ */
+export async function recordReinforcement(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireStudentAccess();
+
+  const studyPlanId = String(data.get("studyPlanId") ?? "");
+  const blockId = String(data.get("blockId") ?? "");
+  const requestId = String(data.get("requestId") ?? "");
+  const sessionIds = String(data.get("sessionIds") ?? "").split(",").filter(Boolean);
+  if (!studyPlanId || !blockId || !requestId) return { error: "Reforço não identificado." };
+  if (sessionIds.length !== 3) return { error: "O ciclo precisa de exatamente 3 baterias." };
+
+  const questions = data.getAll("question").map(String);
+  const outcomes: { question_id: number; phase: string; outcome: string; topic: string | null }[] =
+    [];
+
+  for (const raw of questions) {
+    const [id, topic] = raw.split("|");
+    const answer = String(data.get(`outcome:${id}`) ?? "");
+    if (answer !== "correct" && answer !== "incorrect") {
+      // A mesma contagem que a RPC daria, antes de o aluno perder o trabalho.
+      const faltam = questions.filter(
+        (q) => !["correct", "incorrect"].includes(String(data.get(`outcome:${q.split("|")[0]}`))),
+      ).length;
+      return {
+        error: `Marque acertei ou errei em todas as questões — faltam ${faltam}.`,
+      };
+    }
+    outcomes.push({
+      question_id: Number(id),
+      // A fase é a do erro original, e é por ela que o EXCEPT da RPC casa.
+      phase: "main",
+      outcome: answer,
+      topic: topic || null,
+    });
+  }
+
+  if (!outcomes.length) return { error: "Este ciclo não tem erro a revisar." };
+
+  const { error } = await supabase.rpc("record_reinforcement", {
+    p_study_plan_id: studyPlanId,
+    p_block_id: blockId,
+    p_quiz_session_ids: sessionIds,
+    p_request_id: requestId,
+    p_outcomes: outcomes,
+  });
+
+  if (error) {
+    const m = error.message.toLowerCase();
+    if (m.includes("atingiu 80")) {
+      return { error: "Este ciclo já atingiu 80% e não exige mais reforço." };
+    }
+    if (m.includes("precisa revisar as")) {
+      return { error: "Marque acertei ou errei em todas as questões antes de enviar." };
+    }
+    if (m.includes("exige exatamente 3")) {
+      return { error: "O ciclo precisa de exatamente 3 baterias concluídas." };
+    }
+    if (m.includes("planejamento invalido")) return { error: "Este planejamento não é seu." };
+    return { error: error.message };
+  }
+
+  return { redirectTo: `${ROUTES.student.reviews}?feito=reforco` };
+}

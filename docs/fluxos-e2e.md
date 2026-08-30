@@ -223,6 +223,44 @@ outro aluno.
 `/aluno/conta` e `/aluno/lista-espera` continuam abrindo; os itens de estudo da
 sidebar vêm com `aria-disabled="true"`.
 
+### Execução do reforço de ciclo — F-RCIC-01 a 06
+
+Spec: [`specs/20-execucao-do-reforco.md`](specs/20-execucao-do-reforco.md). O
+cartão é "Reforço — <bloco>" em `/aluno/revisoes`, com uma linha por erro e dois
+radios (`input[value="correct"]` e `input[value="incorrect"]`).
+
+**`.all()` não espera por nada.** Marcar os radios logo depois do `goto`
+encontra a lista vazia, nenhum é marcado, e o teste falha dizendo que faltaram
+15 — quando na verdade nada foi lido. Faça uma asserção que aguarde
+`tbody tr` antes.
+
+**Os erros são deduplicados por questão.** O bloco do seed tem 30 questões, e
+três baterias de 15 já repetem: 7 erros por bateria dão **15 únicos**, não 21.
+
+#### F-RCIC-01 — O ciclo aberto aparece
+**Esperado** "Ciclo de 3 baterias com 53% nas principais · 15 questão(ões) a
+revisar", badge "Prioridade alta" (abaixo de 75%), e 15 linhas.
+
+#### F-RCIC-02 — Concluir o reforço
+**Esperado** "Reforço concluído."; o cartão some; `reinforcements` ganha 1 linha,
+`reinforcement_sessions` 3 e `reinforcement_questions` 15.
+
+#### F-RCIC-03 — Faltando marcar
+**Esperado** "faltam 2" e nenhuma linha em `reinforcements`. A tela impede antes
+de a RPC recusar, para o aluno não perder o trabalho.
+
+#### F-RCIC-04 — O que muda depois
+**Esperado** "Ciclos revisados" sobe para 1 e o desempenho oficial do bloco
+continua **53%** — reforço não anula bateria.
+
+#### F-RCIC-05 — Quando não há reforço
+**Esperado** com menos de três baterias, e com o acumulado em 80% exatos, o
+cartão não existe.
+
+#### F-RCIC-06 — O professor vê e não executa
+**Esperado** `/professor/revisoes` mostra o bloco e **não** tem "Concluir
+reforço".
+
 ### Estudo extra avulso — F-EXTRA-01 a 06
 
 Spec: [`specs/19-estudo-extra-avulso.md`](specs/19-estudo-extra-avulso.md). O
@@ -754,7 +792,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 213 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 220 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -763,7 +801,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | Arquivo | Fluxos | Testes |
 |---|---|---|
 | `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
-| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14, F-CONC-01 a 06 e F-EXTRA-01 a 06 | 52 |
+| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14, F-CONC-01 a 06, F-EXTRA-01 a 06 e F-RCIC-01 a 06 | 59 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
 | `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05, F-TURMA-01 a 05 e F-PREV-01 a 06 | 71 |
@@ -802,19 +840,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 20 — execução do reforço de ciclo
-
-Spec: [`specs/20-execucao-do-reforco.md`](specs/20-execucao-do-reforco.md).
-Migram para a §2 quando os testes existirem.
-
-- **F-RCIC-01** — com três baterias abaixo de 80%, a tela oferece o reforço e
-  lista as questões erradas únicas.
-- **F-RCIC-02** — marcar todas e enviar grava o reforço, e o ciclo some.
-- **F-RCIC-03** — deixar uma sem marcar impede o envio, com a contagem.
-- **F-RCIC-04** — "Ciclos revisados" sobe e o desempenho das três baterias não
-  muda.
-- **F-RCIC-05** — com menos de três baterias, ou com 80% ou mais, não há reforço.
-- **F-RCIC-06** — o professor vê o ciclo com a prioridade e não o executa.
 
 
 
