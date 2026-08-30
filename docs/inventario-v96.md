@@ -248,10 +248,10 @@ inventário.**
 | Lista de alunos vinculados | `renderMeusAlunos` professor.js:3551 | ✅ | 03 | — |
 | Ficha individual do aluno | `verDetalhesAluno` professor.js:4220 | ✅ | 03 | — |
 | Estatísticas do aluno | `verEstatAluno` professor.js:4262 | ✅ | 08 | — |
-| **Liberar acesso do aluno por 3 meses** | `liberarAlunoAcesso` professor.js:3992 | ❌ | | pendente |
-| **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ❌ | | pendente |
-| **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ❌ | | pendente |
-| **Badge de acesso com data de validade** | `badgeAcessoAluno` professor.js:4011 | 🟡 | | pendente |
+| **Liberar acesso do aluno por 3 meses** | `liberarAlunoAcesso` professor.js:3992 | ❌ | 13 | especificada |
+| **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ❌ | 13 | especificada |
+| **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ❌ | 13 | especificada |
+| **Badge de acesso com data de validade** | `badgeAcessoAluno` professor.js:4011 | 🟡 | 13 | especificada |
 | **Classificação Em ritmo / Atenção / Atrasado / Sem dados** | `classificarAluno` professor.js:3274 | ❌ | | pendente |
 | **KPIs no card do aluno** (desempenho, questões, metas, barra) | `renderCardAlunoHTML` professor.js:4019 | ❌ | | pendente |
 | **Resumo da turma** (4 métricas no topo) | `renderResumoAlunos` professor.js:3516 | ❌ | | pendente |
@@ -410,7 +410,7 @@ faixa, primeiro o que não tem dependência.
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
 | ~~1~~ | **Conclusão de meta sem bateria** — spec [12](specs/12-conclusao-de-meta.md), **implementada** | 3 das 5 metas semanais do seed eram impossíveis de fechar | 2 RPCs (`complete_goal`, `reopen_goal`), 1 migration (`goals.spent_minutes`), site |
-| 2 | **Vincular aluno e liberar acesso** | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC, 1 migration (policy da lista de espera), site |
+| 2 | **Vincular aluno e liberar acesso** — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC (`link_student`) mais o predicado `student_has_teacher`, 1 migration (policy da lista de espera), site |
 | 3 | **Criar, ativar e arquivar planejamento** | Fora do seed, um professor novo não tem por onde começar | 0 RPC nova (`activate_study_plan` existe), 0 migration, site |
 
 O item 2 vem antes do 3 porque um planejamento exige um aluno vinculado; o 1 vem

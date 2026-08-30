@@ -555,6 +555,26 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 13 — vínculo e liberação de acesso
+
+Spec: [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-e-liberacao-de-acesso.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-VINC-01** — aluno cadastrado, inscrito na lista de espera e sem professor
+  aparece em "Candidatos" para um professor qualquer.
+- **F-VINC-02** — vincular cria o vínculo, tira o candidato da fila e o aluno
+  passa a aparecer em "Meus alunos" com "Aguardando liberação".
+- **F-VINC-03** — depois de vinculado, o candidato não aparece na fila de outro
+  professor.
+- **F-VINC-04** — liberar por 3 meses cria a assinatura com vigência de hoje a
+  hoje+3 meses, e o aluno passa a abrir as telas de estudo.
+- **F-VINC-05** — liberar de novo quem já tem assinatura ativa estende a mesma
+  linha, sem criar uma segunda.
+- **F-VINC-06** — suspender troca o badge, preserva a vigência e devolve o aluno
+  à lista de espera.
+- **F-VINC-07** — vincular duas vezes seguidas devolve o mesmo vínculo, sem
+  segunda linha e sem erro na tela.
+
 
 
 ---
