@@ -334,3 +334,14 @@ tbody tr:last-child td { border-bottom: none; }
   .sidebar { position: static; height: auto; }
   .content { padding: 20px 16px 48px; }
 }
+
+/* Revisão espaçada — spec docs/specs/24-revisao-espacada.md */
+.field--inline { display: grid; gap: 4px; margin-bottom: 0; }
+.field--inline input { width: 84px; }
+
+.spacing-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+
+/* A grade tem uma célula com nome e botão. Empilhar mantém a coluna estreita
+   o bastante para as três caberem sem rolagem no desktop. */
+.review-cell { display: grid; gap: 6px; justify-items: start; }
+.review-table td { vertical-align: top; }

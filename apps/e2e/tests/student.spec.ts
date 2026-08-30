@@ -2,7 +2,15 @@
  * §2 do `docs/fluxos-e2e.md` — telas do aluno.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { addWeek, goalCount, goalStatus, type Scenario } from "../fixtures/scenario.ts";
+import {
+  addBlocks,
+  addWeek,
+  goalCount,
+  goalStatus,
+  reviewsDone,
+  setSpacing,
+  type Scenario,
+} from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
 import { asUser, count, one, query } from "../fixtures/db.ts";
 import { PAGE_TITLES, STUDENT_ROUTES, STUDENT_STUDY_ROUTES } from "../support/routes.ts";
@@ -910,5 +918,112 @@ test.describe("F-DIFI-04 · o aluno vê onde está errando", () => {
       "Recorrente",
     );
     await expect(card).not.toContainText("Perícia papiloscópica");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §2 — revisão espaçada.
+// Spec docs/specs/24-revisao-espacada.md
+// ---------------------------------------------------------------------------
+
+const REVIEW_SUBJECT = "Ciências Forenses";
+
+test.describe("F-REVE-02 · o aluno marca uma revisão", () => {
+  test("e ela permanece marcada depois de recarregar", async ({ studentPage, scenario }) => {
+    await addBlocks(scenario, REVIEW_SUBJECT, 3);
+    await setSpacing(scenario, REVIEW_SUBJECT, 2, 0);
+
+    await studentPage.goto("/aluno/revisoes");
+    const grade = cardByTitle(studentPage, REVIEW_SUBJECT);
+    // Espera a grade existir antes de contar: o loader resolve depois do
+    // `load` que o `goto` aguarda, e um seletor solto voltaria vazio.
+    await expect(grade.locator("tbody tr")).toHaveCount(4);
+
+    const primeira = grade.locator("tbody tr").nth(1);
+    await primeira.getByRole("button", { name: "Marcar feita" }).click();
+
+    await expect(studentPage.locator(".content > .alert--success")).toContainText(
+      "Revisão marcada",
+    );
+    await expect(primeira.locator(".badge")).toHaveText("Feita");
+    expect(await reviewsDone(scenario.planId)).toHaveLength(1);
+
+    await studentPage.reload();
+    await expect(
+      cardByTitle(studentPage, REVIEW_SUBJECT).locator("tbody tr").nth(1).locator(".badge"),
+    ).toHaveText("Feita");
+  });
+});
+
+test.describe("F-REVE-03 · desmarcar", () => {
+  test("volta a célula ao pendente e não apaga a linha", async ({ studentPage, scenario }) => {
+    await addBlocks(scenario, REVIEW_SUBJECT, 3);
+    await setSpacing(scenario, REVIEW_SUBJECT, 2, 0);
+
+    await studentPage.goto("/aluno/revisoes");
+    const grade = cardByTitle(studentPage, REVIEW_SUBJECT);
+    await expect(grade.locator("tbody tr")).toHaveCount(4);
+
+    const linha = grade.locator("tbody tr").nth(1);
+    await linha.getByRole("button", { name: "Marcar feita" }).click();
+    await expect(linha.locator(".badge")).toHaveText("Feita");
+
+    await cardByTitle(studentPage, REVIEW_SUBJECT)
+      .locator("tbody tr")
+      .nth(1)
+      .getByRole("button", { name: "Desfazer" })
+      .click();
+
+    await expect(studentPage.locator(".content > .alert--success")).toContainText(
+      "Revisão desmarcada",
+    );
+    expect(await reviewsDone(scenario.planId)).toHaveLength(0);
+    // A linha continua na tabela: desmarcar escreve deleted_at, não apaga.
+    expect(
+      await count("select count(*) from public.review_completions where study_plan_id = $1", [
+        scenario.planId,
+      ]),
+    ).toBe(1);
+  });
+});
+
+test.describe("F-REVE-06 · mudar o espaçamento", () => {
+  test("não perde a marcação já feita", async ({ studentPage, scenario }) => {
+    const novos = await addBlocks(scenario, REVIEW_SUBJECT, 4);
+    await setSpacing(scenario, REVIEW_SUBJECT, 2, 0);
+
+    await studentPage.goto("/aluno/revisoes");
+    const grade = cardByTitle(studentPage, REVIEW_SUBJECT);
+    await expect(grade.locator("tbody tr")).toHaveCount(5);
+    await grade.locator("tbody tr").nth(2).getByRole("button", { name: "Marcar feita" }).click();
+    await expect(studentPage.locator(".content > .alert--success")).toBeVisible();
+
+    const antes = await reviewsDone(scenario.planId);
+    expect(antes).toHaveLength(1);
+
+    // O professor aperta o intervalo. A chave da marcação é o BLOCO, não a
+    // linha da grade — na v96 era `disciplina:linha:tipo:aula`, e mexer no
+    // intervalo órfãava tudo.
+    await asUser(scenario.teacher.id, (client) =>
+      client.query(
+        "update public.review_spacings set first_interval = 3 where study_plan_id = $1",
+        [scenario.planId],
+      ),
+    );
+
+    await studentPage.reload();
+    await expect(cardByTitle(studentPage, REVIEW_SUBJECT)).toContainText(
+      "1ª revisão a cada 3 caderno(s)",
+    );
+    expect(await reviewsDone(scenario.planId)).toEqual(antes);
+    // E o caderno marcado continua marcado, agora numa linha diferente.
+    // A asserção é no badge, não em `hasText: "Feita"`: o `hasText` do
+    // Playwright é case-insensitive e o botão "Marcar feita" casaria também.
+    await expect(
+      cardByTitle(studentPage, REVIEW_SUBJECT).locator("td .badge"),
+    ).toHaveCount(1);
+    // O bloco marcado é o segundo da disciplina: com 1ª = 2, a linha 2 revisa
+    // o caderno de índice 1, que é o primeiro criado por `addBlocks`.
+    expect(antes).toEqual([`${novos[0]}:1`]);
   });
 });

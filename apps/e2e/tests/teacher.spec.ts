@@ -3,6 +3,7 @@
  */
 import { expect, test } from "../fixtures/index.ts";
 import {
+  addBlocks,
   addWeek,
   createScenario,
   createUser,
@@ -11,6 +12,7 @@ import {
   goalStatus,
   planWeeks,
   setAccess,
+  setSpacing,
 } from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
 import { asUser, count, one, query } from "../fixtures/db.ts";
@@ -1557,5 +1559,119 @@ test.describe("F-DIFI-03 · sem erro nenhum, o cartão explica", () => {
     await teacherPage.goto(studentPageOf(scenario.student.id));
 
     await expect(difficultyCard(teacherPage)).toContainText("Nenhum erro registrado");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4 — revisão espaçada.
+// Spec docs/specs/24-revisao-espacada.md
+// ---------------------------------------------------------------------------
+
+const SUBJECT = "Ciências Forenses";
+
+test.describe("F-REVE-01 · o professor define o espaçamento", () => {
+  // `teacherPage` e `studentPage` embrulham a MESMA Page: pedir os dois no
+  // mesmo teste faz o segundo login sobrescrever o primeiro, e a tela do
+  // professor abre como aluno. Troca de identidade é `signIn`, explícita.
+  test("a grade do aluno passa a mostrar as revisões", async ({
+    teacherPage,
+    signIn,
+    scenario,
+  }) => {
+    // 5 cadernos na disciplina: com 1ª = 2, a partir do segundo há o que revisar.
+    await addBlocks(scenario, SUBJECT, 4);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    const card = cardByTitle(teacherPage, "Revisão espaçada");
+    const linha = card.locator("tbody tr", { hasText: SUBJECT });
+    await expect(linha).toBeVisible();
+    await expect(linha).toContainText("sem revisão programada");
+
+    await linha.locator('input[name="firstInterval"]').fill("2");
+    await linha.locator('input[name="secondInterval"]').fill("3");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(teacherPage.locator(".content > .alert--success")).toContainText(
+      "Espaçamento salvo",
+    );
+
+    // E o aluno vê a grade que isso produz.
+    await signIn(scenario.student);
+    await teacherPage.goto("/aluno/revisoes");
+    const grade = cardByTitle(teacherPage, SUBJECT);
+    await expect(grade).toContainText("1ª revisão a cada 2 caderno(s)");
+    // 5 cadernos: a linha do 2º revisa o 1º, e assim por diante.
+    await expect(grade.locator("tbody tr")).toHaveCount(5);
+  });
+});
+
+test.describe("F-REVE-04 · disciplina sem espaçamento", () => {
+  test("não entra na grade do aluno e aparece zerada na do professor", async ({
+    studentPage,
+    signIn,
+    scenario,
+  }) => {
+    await addBlocks(scenario, SUBJECT, 3);
+    await setSpacing(scenario, SUBJECT, 2, 0);
+
+    await studentPage.goto("/aluno/revisoes");
+    await expect(cardByTitle(studentPage, SUBJECT)).toBeVisible();
+    // A outra disciplina do cenário tem cadernos e nenhum espaçamento.
+    await expect(cardByTitle(studentPage, "Direito Penal")).toHaveCount(0);
+
+    await signIn(scenario.teacher);
+    const teacherPage = studentPage;
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    const card = cardByTitle(teacherPage, "Revisão espaçada");
+    await expect(card.locator("tbody tr", { hasText: "Direito Penal" })).toContainText(
+      "sem revisão programada",
+    );
+  });
+});
+
+test.describe("F-REVE-05 · espaçamento fora da faixa", () => {
+  test("é recusado com mensagem, e nada é gravado", async ({ teacherPage, scenario }) => {
+    await addBlocks(scenario, SUBJECT, 2);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+    const linha = cardByTitle(teacherPage, "Revisão espaçada").locator("tbody tr", {
+      hasText: SUBJECT,
+    });
+
+    // 61 passa pelo navegador porque o formulário é `noValidate`: a validação
+    // nativa BLOQUEARIA o submit e a action nunca rodaria, deixando a tela muda.
+    await linha.locator('input[name="firstInterval"]').fill("61");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(linha.locator(".field__error")).toContainText("entre 0 e 60");
+    expect(
+      await count("select count(*) from public.review_spacings where study_plan_id = $1", [
+        scenario.planId,
+      ]),
+    ).toBe(0);
+  });
+});
+
+test.describe("F-REVE-07 · isolamento do espaçamento", () => {
+  test("professor sem vínculo não chega à ficha nem ao espaçamento", async ({
+    page,
+    signIn,
+    scenario,
+  }) => {
+    await addBlocks(scenario, SUBJECT, 3);
+    await setSpacing(scenario, SUBJECT, 2, 0);
+
+    // O outro professor tem aluno próprio, e nenhum vínculo com este.
+    const outro = await createScenario();
+    await signIn(outro.teacher);
+
+    // Não existe status 404 neste servidor: o que se verifica é a TELA e a
+    // ausência do dado no HTML. A garantia de RLS está em
+    // supabase/tests/11_review_spacing.sql, que roda como `authenticated` —
+    // `asUser` do e2e conecta como superusuário e não exerce policy nenhuma.
+    await page.goto(studentPageOf(scenario.student.id));
+    await expect(page.locator("body")).not.toContainText(SUBJECT);
+    await expect(page.locator("body")).not.toContainText(scenario.student.name);
   });
 });

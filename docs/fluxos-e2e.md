@@ -338,6 +338,23 @@ botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
 
+### F-REVE-02 — O aluno marca uma revisão
+**Esperado** a célula da revisão vira "Feita", a mensagem aparece no nível da
+página, e recarregar mantém a marcação. Uma linha viva em `review_completions`.
+
+**A asserção é no badge, nunca em `hasText: "Feita"`.** O `hasText` do Playwright
+é case-insensitive, e o botão "Marcar feita" casa com ele: a asserção passaria
+antes de qualquer clique.
+
+### F-REVE-03 — Desmarcar
+**Esperado** a célula volta ao pendente e `review_completions` fica com **zero
+linhas vivas e uma linha total** — desmarcar escreve `deleted_at`, não apaga.
+
+### F-REVE-06 — Mudar o espaçamento não perde a marcação
+**Esperado** apertar o intervalo reordena a grade e a revisão já feita continua
+feita, agora noutra linha. A chave é `(bloco, ordinal)`: na v96 era
+`disciplina:linha:tipo:aula`, e mexer no intervalo órfãava tudo.
+
 ### F-DIFI-04 — O aluno vê onde está errando
 **Esperado** `/aluno/estatisticas` traz o cartão "Onde você está errando" com o
 mesmo recorte de F-DIFI-01, para o próprio aluno. Não há policy nova: a RLS de
@@ -806,6 +823,35 @@ Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
 acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
 somente as questões `main`.
 
+### F-REVE-01 — O professor define o espaçamento
+**Esperado** a disciplina aparece com "sem revisão programada"; preenchidos os
+dois campos e salvo, a página anuncia "Espaçamento salvo" e a grade do aluno
+passa a mostrar as revisões.
+
+**`teacherPage` e `studentPage` embrulham a MESMA Page.** Pedir os dois no mesmo
+teste faz o segundo login sobrescrever o primeiro, e a tela do professor abre
+como aluno — sem erro visível, só um cartão que não existe. Troca de identidade
+é `signIn`, explícita.
+
+### F-REVE-04 — Disciplina sem espaçamento
+**Esperado** ela **não** entra na grade do aluno, e aparece na tabela do
+professor com os campos zerados e "sem revisão programada". Grade vazia com dez
+disciplinas listadas seria ruído.
+
+### F-REVE-05 — Espaçamento fora da faixa
+**Esperado** 61 é recusado com "entre 0 e 60" e nada é gravado. O formulário é
+`noValidate` de propósito: a validação nativa bloquearia o submit e a action
+nunca rodaria, deixando a tela muda. Quem garante é a `check` do banco.
+
+### F-REVE-07 — Isolamento do espaçamento
+**Esperado** o professor sem vínculo abre a ficha e não vê nem o aluno nem a
+disciplina. Não existe status 404 neste servidor: verifica-se a TELA e a
+ausência do dado no HTML.
+
+**A garantia de RLS não é testável por aqui.** `asUser` do e2e conecta como
+superusuário, que não exerce policy nenhuma; quem prova o isolamento é
+`supabase/tests/11_review_spacing.sql`, que roda como `authenticated`.
+
 ### F-DIFI-01 — Dificuldades por tópico na ficha
 **Esperado** o cartão "Dificuldades por tópico" lista um tópico por linha, **do
 que mais errou para o que menos errou**, com o bloco de origem, respondidas,
@@ -867,7 +913,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 232 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 239 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -913,18 +959,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 24 — revisão espaçada
-
-Spec: [`specs/24-revisao-espacada.md`](specs/24-revisao-espacada.md).
-Migram para a §2 e a §4 quando os testes existirem.
-
-- **F-REVE-01** — o professor define o espaçamento e a grade do aluno o reflete.
-- **F-REVE-02** — o aluno marca uma revisão como feita, e ela permanece.
-- **F-REVE-03** — desmarcar volta a célula ao pendente.
-- **F-REVE-04** — disciplina sem espaçamento não entra na grade do aluno.
-- **F-REVE-05** — espaçamento fora de 0..60 é recusado.
-- **F-REVE-06** — mudar o espaçamento não perde a marcação já feita.
-- **F-REVE-07** — professor sem vínculo não vê nem escreve o espaçamento alheio.
 
 
 

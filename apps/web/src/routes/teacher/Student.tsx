@@ -8,7 +8,15 @@ import {
   getStudentSubscription,
   getStudentSummary,
 } from "@/lib/data/teacher";
-import { getStudyPlanBlocks, getTopicDifficulty } from "@/lib/data/student";
+import {
+  getReviewCompletions,
+  getReviewSpacings,
+  getStudyPlanBlocks,
+  getTopicDifficulty,
+} from "@/lib/data/student";
+import { SpacingForms } from "@/components/teacher/SpacingForms";
+import { ReviewGrid } from "@/components/ReviewGrid";
+import { buildGrid } from "@/lib/domain/spacing";
 import { GrantAccessForm, SuspendAccessForm } from "@/components/teacher/AccessForms";
 import { VoidSessionForm } from "@/components/teacher/VoidSessionForm";
 import { TopicDifficulty } from "@/components/TopicDifficulty";
@@ -19,6 +27,9 @@ import { ROUTES } from "@/lib/routes";
 const DONE_MESSAGE: Record<string, string> = {
   anulada: "Bateria anulada. A meta voltou a pendente e as questões voltaram a ser inéditas.",
   suspenso: "Acesso suspenso. O aluno volta para a lista de espera.",
+  espacamento: "Espaçamento salvo. A grade de revisão do aluno já reflete a mudança.",
+  revisao: "Revisão marcada como feita.",
+  "revisao-desfeita": "Revisão desmarcada.",
 };
 
 /** Só bateria finalizada é anulável — espelha R-ANUL-03, que a RPC impõe. */
@@ -81,13 +92,36 @@ export async function teacherStudentLoader({
   if (!summary) throw new Response(null, { status: 404, statusText: "Aluno não encontrado" });
 
   const activePlan = summary.plans.find((p) => p.status === "active") ?? null;
-  const [progress, subscription, sessions, topics, blocks] = await Promise.all([
+  const [progress, subscription, sessions, topics, blocks, spacings, reviewsDone] = await Promise.all([
     activePlan ? getPlanProgress(activePlan.id) : Promise.resolve(null),
     getStudentSubscription(studentId),
     getStudentSessions(studentId),
     activePlan ? getTopicDifficulty(activePlan.id) : Promise.resolve([]),
     activePlan ? getStudyPlanBlocks(activePlan.id) : Promise.resolve([]),
+    activePlan ? getReviewSpacings(activePlan.id) : Promise.resolve([]),
+    activePlan ? getReviewCompletions(activePlan.id) : Promise.resolve(new Set<string>()),
   ]);
+
+  // Toda disciplina do planejamento aparece na tabela de espaçamento, inclusive
+  // a que ainda não tem linha: é aqui que o professor a liga (R-REVE-19).
+  const subjects = new Map<string, { firstInterval: number; secondInterval: number; blockCount: number }>();
+  for (const block of blocks) {
+    const current = subjects.get(block.subject_name) ?? {
+      firstInterval: 0,
+      secondInterval: 0,
+      blockCount: 0,
+    };
+    subjects.set(block.subject_name, { ...current, blockCount: current.blockCount + 1 });
+  }
+  for (const spacing of spacings) {
+    const current = subjects.get(spacing.subject_name);
+    if (!current) continue;
+    subjects.set(spacing.subject_name, {
+      ...current,
+      firstInterval: spacing.first_interval,
+      secondInterval: spacing.second_interval,
+    });
+  }
 
   const feito = new URL(request.url).searchParams.get("feito");
 
@@ -99,6 +133,10 @@ export async function teacherStudentLoader({
     sessions,
     topics,
     blockNames: blocks.map((b) => [b.id, b.name] as const),
+    spacings: [...subjects].map(([subject, value]) => ({ subject, ...value })),
+    grids: buildGrid(spacings, blocks, reviewsDone),
+    teacherId: session.profileId,
+    studyPlanId: activePlan?.id ?? null,
     studentId,
     doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
   };
@@ -107,8 +145,21 @@ export async function teacherStudentLoader({
 type LoaderData = Awaited<ReturnType<typeof teacherStudentLoader>>;
 
 export function TeacherStudent() {
-  const { summary, activePlan, progress, subscription, sessions, topics, blockNames, studentId, doneMessage } =
-    useLoaderData() as LoaderData;
+  const {
+    summary,
+    activePlan,
+    progress,
+    subscription,
+    sessions,
+    topics,
+    blockNames,
+    spacings,
+    grids,
+    teacherId,
+    studyPlanId,
+    studentId,
+    doneMessage,
+  } = useLoaderData() as LoaderData;
   const hasActive = subscription?.status === "active";
 
   return (
@@ -254,6 +305,24 @@ export function TeacherStudent() {
         </Card>
 
         <TopicDifficulty rows={topics} blockNames={new Map(blockNames)} />
+
+        {studyPlanId && (
+          <>
+            <SpacingForms
+              spacings={spacings}
+              studyPlanId={studyPlanId}
+              studentId={studentId}
+              teacherId={teacherId}
+            />
+            <ReviewGrid
+              grids={grids}
+              studyPlanId={studyPlanId}
+              redirectTo={ROUTES.teacher.student(studentId)}
+              emptyHint="Nenhuma disciplina com revisão programada. Defina o espaçamento acima."
+              emptyTitle="Grade de revisão"
+            />
+          </>
+        )}
 
         {progress && (
           <div className="grid-cards">
