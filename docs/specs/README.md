@@ -44,6 +44,7 @@ de lá vira uma spec nova antes de virar código.
 | 20 | [Execução do reforço de ciclo](20-execucao-do-reforco.md) | O aluno revisa os erros do ciclo de 3 baterias |
 | 21 | [Fases na extensão](21-fases-na-extensao.md) | Reforço correlato e rodada extra dentro do TEC |
 | 22 | [Rodízio por tópico](22-rodizio-por-topico.md) | A bateria deixa de poder cair inteira no mesmo assunto |
+| 23 | [Dificuldades por tópico](23-dificuldades-por-topico.md) | Em que o aluno está errando, e o que é recorrente — **não implementada** |
 
 ---
 

@@ -885,6 +885,16 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 23 — dificuldades por tópico
+
+Spec: [`specs/23-dificuldades-por-topico.md`](specs/23-dificuldades-por-topico.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-DIFI-01** — a ficha do aluno mostra os tópicos com erro, mais erros primeiro.
+- **F-DIFI-02** — erro em duas baterias distintas vem marcado como recorrente.
+- **F-DIFI-03** — tópico sem erro não aparece.
+- **F-DIFI-04** — o aluno vê o mesmo recorte para si em `/aluno/estatisticas`.
+
 
 
 

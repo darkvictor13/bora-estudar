@@ -342,7 +342,7 @@ total comporta, e o resto pelo maior resto. No PCPR Reta Final a soma dos
 |---|---|---|---|---|
 | Reforços sugeridos por aluno | `abrirReforcosAluno` professor.js:3736 | ✅ | 09 | — |
 | **Anular bateria** | `anularBateriaAluno` professor.js:3979 | ✅ | 16 | implementada |
-| **Dificuldades por tópico** | `abrirDificuldadesAluno` professor.js:3925 | ❌ | | pendente |
+| **Dificuldades por tópico** | `abrirDificuldadesAluno` professor.js:3925 | ❌ | 23 | especificada |
 | **Agendar reforço para o aluno** | `agendarReforcoAlunoSupabase` professor.js:3813 | ❌ | | pendente |
 | Estatísticas gerais do professor | `renderEstatisticas` professor.js:2217 | 🟡 | 08 | — |
 | **Tempo de estudo e sequência de dias** | `renderTempoEstudoStats` professor.js:644 | ❌ | | pendente |
@@ -435,7 +435,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | ~~9~~ | **Executar o reforço do ciclo** (site) — spec [20](specs/20-execucao-do-reforco.md), **implementada** | `record_reinforcement` pronta e sem chamador: a tela recomenda e não executa | 0 RPC, 0 migration, site |
 | ~~10~~ | **Conduzir `reinforcement` e `extra` no content script** — spec [21](specs/21-fases-na-extensao.md), **implementada** | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
 | ~~11~~ | **Rodízio por tópico na seleção** — spec [22](specs/22-rodizio-por-topico.md), **implementada** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
-| 12 | **Dificuldades por tópico e histórico de baterias** | O professor vê o número, não vê a causa | 0 RPC, 1 view, site |
+| 12 | **Dificuldades por tópico** — spec [23](specs/23-dificuldades-por-topico.md) | O professor vê o número, não vê a causa. O histórico de baterias saiu antes, na spec 16 | 0 RPC, 1 view, site |
 | 13 | **Revisão espaçada** como conceito separado do reforço | Grade por matéria, 1ª e 2ª revisão | 1 migration, 1 RPC, site |
 
 Os itens 9 e 10 são as duas metades do mesmo fluxo e estão separados **pelo portão
