@@ -2,7 +2,13 @@ import { useLoaderData } from "react-router";
 
 import { Alert, Card, Empty, PageHeader } from "@/components/ui";
 import { requireStudentAccess } from "@/lib/auth/session";
-import { getActiveStudyPlan, getBlockPerformance, getStudyPlanBlocks } from "@/lib/data/student";
+import {
+  getActiveStudyPlan,
+  getBlockPerformance,
+  getStudyPlanBlocks,
+  getTopicDifficulty,
+} from "@/lib/data/student";
+import { TopicDifficulty } from "@/components/TopicDifficulty";
 import { scorePercent } from "@/lib/domain/goals";
 
 export async function studentStatisticsLoader() {
@@ -11,11 +17,12 @@ export async function studentStatisticsLoader() {
   const plan = await getActiveStudyPlan();
   if (!plan) return { plan: null } as const;
 
-  const [performance, blocks] = await Promise.all([
+  const [performance, blocks, topics] = await Promise.all([
     getBlockPerformance(plan.id),
     getStudyPlanBlocks(plan.id),
+    getTopicDifficulty(plan.id),
   ]);
-  return { plan, performance, blocks } as const;
+  return { plan, performance, blocks, topics } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentStatisticsLoader>>;
@@ -32,7 +39,7 @@ export function StudentStatistics() {
     );
   }
 
-  const { performance } = data;
+  const { performance, topics } = data;
   const blockById = new Map(data.blocks.map((b) => [b.id, b]));
 
   const totals = performance.reduce(
@@ -80,6 +87,12 @@ export function StudentStatistics() {
             </p>
           </Card>
         </div>
+
+        <TopicDifficulty
+          rows={topics}
+          blockNames={new Map(data.blocks.map((b) => [b.id, b.name]))}
+          title="Onde você está errando"
+        />
 
         <Card title="Blocos x desempenho" sub="Pior desempenho oficial primeiro">
           {rows.length === 0 ? (

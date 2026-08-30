@@ -194,3 +194,32 @@ export async function getCycleErrors(quizSessionIds: readonly string[]) {
   }
   return [...byQuestion.values()];
 }
+
+/** Abaixo disto de acerto no tópico, a linha é destacada. É a faixa do produto. */
+export const TOPIC_ATTENTION_PCT = 75;
+/** Erro em duas baterias distintas é "não sabe a matéria", não "leu mal". */
+export const RECURRENT_SESSIONS = 2;
+/** Teto de linhas na tela. É o da v96, e existe para 92 blocos não virarem parede. */
+export const TOPIC_ROWS_LIMIT = 60;
+
+/**
+ * Dificuldades por tópico — spec 23.
+ *
+ * Só tópicos **com erro**: a tela responde "onde está o problema", e um tópico
+ * com 100% não é problema (R-DIFI-07). Quem esconde é aqui, não a view: a view
+ * descreve, a tela decide o que mostrar.
+ */
+export async function getTopicDifficulty(studyPlanId: string) {
+  const { data } = await supabase
+    .from("vw_topic_difficulty")
+    .select("block_id,topic,answered,correct,incorrect,distinct_wrong,sessions_with_error,score_pct")
+    .eq("study_plan_id", studyPlanId)
+    .gt("incorrect", 0)
+    .order("incorrect", { ascending: false })
+    .limit(TOPIC_ROWS_LIMIT);
+
+  return (data ?? []).map((row) => ({
+    ...row,
+    recurrent: (row.sessions_with_error ?? 0) >= RECURRENT_SESSIONS,
+  }));
+}

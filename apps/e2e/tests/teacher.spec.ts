@@ -1470,3 +1470,92 @@ test.describe("F-PREV-06 · mudar um peso não é replay", () => {
     await expect(teacherPage.locator(".alert--success")).not.toContainText("já tinha sido aplicado");
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — dificuldades por tópico.
+// Spec docs/specs/23-dificuldades-por-topico.md
+// ---------------------------------------------------------------------------
+
+const difficultyCard = (page: import("@playwright/test").Page) =>
+  cardByTitle(page, "Dificuldades por tópico");
+
+/**
+ * Duas baterias no mesmo bloco, errando tópicos escolhidos.
+ *
+ * "Local de crime" erra nas duas → recorrente. "Cadeia de custódia" erra numa
+ * só → pontual. "Perícia papiloscópica" não erra → não deve aparecer.
+ */
+async function twoBatteriesWithTopicErrors(scenario: import("../fixtures/scenario.ts").Scenario) {
+  const block = scenario.blocks[0]!;
+  const primeira = scenario.goals.find((goal) => goal.blockId === block.id)!;
+  await completeQuiz(scenario, primeira, {
+    incorrectTopics: ["Local de crime", "Cadeia de custódia"],
+  });
+  const semana2 = await addWeek(scenario, 2);
+  await completeQuiz(scenario, semana2.find((g) => g.blockId === block.id)!, {
+    incorrectTopics: ["Local de crime"],
+  });
+  return block;
+}
+
+test.describe("F-DIFI-01 · a ficha mostra os tópicos com erro", () => {
+  test("ordenados por mais erros, com o bloco de origem", async ({ teacherPage, scenario }) => {
+    const block = await twoBatteriesWithTopicErrors(scenario);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    const card = difficultyCard(teacherPage);
+    // Espera a tabela existir antes de ler: `allTextContents()` devolve o que
+    // casa naquele instante, e o loader da rota resolve depois do `load`.
+    await expect(card.locator("tbody tr")).toHaveCount(2);
+    const topicos = await card.locator("tbody tr td:first-child").allTextContents();
+    expect(topicos).toEqual(["Local de crime", "Cadeia de custódia"]);
+
+    const linha = card.locator("tbody tr", { hasText: "Local de crime" });
+    await expect(linha).toContainText(block.name);
+  });
+});
+
+test.describe("F-DIFI-02 · erro em duas baterias é recorrente", () => {
+  test("erro numa bateria só não é", async ({ teacherPage, scenario }) => {
+    await twoBatteriesWithTopicErrors(scenario);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    const card = difficultyCard(teacherPage);
+    await expect(card.locator("tbody tr", { hasText: "Local de crime" })).toContainText(
+      "Recorrente",
+    );
+    await expect(card.locator("tbody tr", { hasText: "Local de crime" })).toContainText(
+      "em 2 bateria(s)",
+    );
+    const pontual = card.locator("tbody tr", { hasText: "Cadeia de custódia" });
+    await expect(pontual).not.toContainText("Recorrente");
+    await expect(pontual).toContainText("em 1 bateria(s)");
+  });
+});
+
+test.describe("F-DIFI-03 · tópico sem erro não aparece", () => {
+  test("e a bateria toda certa deixa o cartão vazio", async ({ teacherPage, scenario }) => {
+    await twoBatteriesWithTopicErrors(scenario);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    const card = difficultyCard(teacherPage);
+    await expect(card.locator("tbody tr")).toHaveCount(2);
+    // O aluno respondeu esse tópico e acertou tudo: ele não é problema.
+    await expect(card).not.toContainText("Perícia papiloscópica");
+  });
+});
+
+test.describe("F-DIFI-03 · sem erro nenhum, o cartão explica", () => {
+  test("bateria inteira certa não gera linha", async ({ teacherPage, scenario }) => {
+    const block = scenario.blocks[0]!;
+    const goal = scenario.goals.find((g) => g.blockId === block.id)!;
+    await completeQuiz(scenario, goal, { incorrectTopics: [] });
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    await expect(difficultyCard(teacherPage)).toContainText("Nenhum erro registrado");
+  });
+});

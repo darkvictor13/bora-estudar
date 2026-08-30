@@ -59,8 +59,16 @@ export interface CompletedQuiz {
 }
 
 export interface CompleteQuizOptions {
-  /** Quantas questões da fila são acertos. */
-  readonly correct: number;
+  /** Quantas questões da fila são acertos. Ignorado com `incorrectTopics`. */
+  readonly correct?: number;
+  /**
+   * Erra exatamente as questões destes tópicos, e acerta o resto.
+   *
+   * Existe porque a fila é montada pelo rodízio por tópico, e "as N últimas"
+   * não diz em que assunto o aluno errou. Um teste de dificuldade por tópico
+   * precisa dizer o assunto, não a posição.
+   */
+  readonly incorrectTopics?: readonly string[];
   /** Quantas questões são respondidas. Padrão: `main_target` inteiro. */
   readonly answer?: number;
   /** Tempo registrado. `null` deixa a sessão em `awaiting_time`. */
@@ -106,13 +114,20 @@ export async function completeQuiz(
   });
 
   const answered = options.answer ?? queue.length;
+  const wrongTopics = options.incorrectTopics;
+  const isWrong = (item: { topic: string | null }, index: number) =>
+    wrongTopics ? wrongTopics.includes(item.topic ?? "") : index >= (options.correct ?? 0);
+
   const answers: QuestionAnswer[] = queue.slice(0, answered).map((item, index) => ({
     questionId: item.id,
     executionOrder: index + 1,
     round: 0,
     phase: "main",
-    outcome: index < options.correct ? "correct" : "incorrect",
-    topic: null,
+    outcome: isWrong(item, index) ? "incorrect" : "correct",
+    // O tópico vai porque a extensão o envia (content/index.ts): ele sai do
+    // item da fila, que o traz do catálogo. Mandar null aqui deixaria toda
+    // bateria de teste agregada como "Tópico não identificado".
+    topic: item.topic,
     sourceQuestionId: null,
     answeredAt: new Date().toISOString(),
   }));
@@ -155,7 +170,7 @@ export async function completeQuiz(
     sessionNumber: session.session_number,
     // Só os ids: quem chama compara conjuntos de questões, não itens de fila.
     queue: queue.map((item) => item.id),
-    correct: Math.min(options.correct, answered),
+    correct: answers.filter((answer) => answer.outcome === "correct").length,
     answered,
   };
 }

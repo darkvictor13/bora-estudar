@@ -1264,6 +1264,29 @@ export type Database = {
           },
         ]
       }
+      vw_topic_difficulty: {
+        Row: {
+          answered: number | null
+          block_id: string | null
+          correct: number | null
+          distinct_wrong: number | null
+          incorrect: number | null
+          score_pct: number | null
+          sessions_with_error: number | null
+          student_id: string | null
+          study_plan_id: string | null
+          topic: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+        ]
+      }
     }
     Functions: {
       activate_study_plan: {

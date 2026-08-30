@@ -20,7 +20,10 @@ docker exec "$CONTAINER" psql -U postgres -q \
       truncate public.catalogs cascade;
       truncate public.audit_log;"
 
-for suite in supabase/tests/0*.sql; do
+# O glob é [0-9]*, e não 0*: com a décima suíte, `0*.sql` passou a PULAR
+# silenciosamente tudo a partir de 10_. Suíte que não roda é pior que suíte que
+# não existe — ela dá a impressão de cobertura.
+for suite in supabase/tests/[0-9]*.sql; do
   echo
   echo "══ $(basename "$suite")"
   docker cp "$suite" "$CONTAINER:/tmp/suite.sql" >/dev/null

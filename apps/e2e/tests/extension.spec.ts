@@ -23,6 +23,7 @@ import { MAIN_TARGET, goalStatus, ledgerCount, openSessionOf } from "../fixtures
 import { count } from "../fixtures/db.ts";
 import { questionUrl } from "../fixtures/tec.ts";
 import { STUDENT_RETURN_URL } from "../support/app.ts";
+import { cardByTitle } from "../support/ui.ts";
 
 const PANEL = "#bora-panel";
 
@@ -317,8 +318,13 @@ test("volta completa · site → extensão → site, sem atalho nenhum", async (
   ).toContainText("11/15");
 
   // As estatísticas passam a mostrar a composição com reforços diferentes de zero.
+  // O `tbody tr` vai ESCOPADO no cartão: a tela ganhou a tabela de dificuldades
+  // por tópico (F-DIFI-04) acima desta, e um seletor solto passou a casar a
+  // primeira linha dela.
   await extPage.goto("/aluno/estatisticas");
-  await expect(extPage.locator("tbody tr").first()).toContainText("4 reforços");
+  await expect(
+    cardByTitle(extPage, "Blocos x desempenho").locator("tbody tr").first(),
+  ).toContainText("4 reforços");
 });
 
 // ---------------------------------------------------------------------------

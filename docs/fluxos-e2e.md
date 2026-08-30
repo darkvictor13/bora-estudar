@@ -338,6 +338,12 @@ botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
 
+### F-DIFI-04 — O aluno vê onde está errando
+**Esperado** `/aluno/estatisticas` traz o cartão "Onde você está errando" com o
+mesmo recorte de F-DIFI-01, para o próprio aluno. Não há policy nova: a RLS de
+`quiz_session_questions` já passa por `can_view_context`, e a view tem
+`security_invoker`.
+
 ---
 
 ## 3. Bateria — a volta completa
@@ -800,6 +806,28 @@ Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
 acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
 somente as questões `main`.
 
+### F-DIFI-01 — Dificuldades por tópico na ficha
+**Esperado** o cartão "Dificuldades por tópico" lista um tópico por linha, **do
+que mais errou para o que menos errou**, com o bloco de origem, respondidas,
+erros, em quantas baterias houve erro, questões distintas erradas e o acerto.
+
+O cenário erra dois tópicos numa bateria e um deles de novo na seguinte, usando
+`incorrectTopics` do `completeQuiz`: a fila é montada pelo rodízio por tópico
+(F-TOPI), então **"as N últimas" não diz em que assunto o aluno errou**. Um
+teste de dificuldade precisa nomear o assunto, não a posição.
+
+### F-DIFI-02 — Recorrente é erro em duas baterias distintas
+**Esperado** o tópico errado nas duas baterias vem com o badge "Recorrente" e
+"em 2 bateria(s)"; o errado numa só vem sem o badge e com "em 1 bateria(s)".
+Errar duas vezes na mesma bateria pode ser o enunciado; em duas diferentes, é a
+matéria.
+
+### F-DIFI-03 — Tópico sem erro não aparece
+**Esperado** o tópico respondido e todo certo **não** tem linha, e a bateria
+inteira certa deixa o cartão com "Nenhum erro registrado ainda". A tela responde
+"onde está o problema", e 100% não é problema (R-DIFI-07). Quem esconde é a
+leitura, não a view: `vw_topic_difficulty` descreve, a tela decide.
+
 ---
 
 ## 5. Isolamento entre contextos
@@ -839,7 +867,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 227 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 232 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -885,15 +913,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 23 — dificuldades por tópico
-
-Spec: [`specs/23-dificuldades-por-topico.md`](specs/23-dificuldades-por-topico.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-DIFI-01** — a ficha do aluno mostra os tópicos com erro, mais erros primeiro.
-- **F-DIFI-02** — erro em duas baterias distintas vem marcado como recorrente.
-- **F-DIFI-03** — tópico sem erro não aparece.
-- **F-DIFI-04** — o aluno vê o mesmo recorte para si em `/aluno/estatisticas`.
 
 
 
