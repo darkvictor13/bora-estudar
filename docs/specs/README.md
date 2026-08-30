@@ -42,6 +42,7 @@ de lá vira uma spec nova antes de virar código.
 | 18 | [Prévia e distribuição da semana](18-previa-e-distribuicao-da-semana.md) | Peso por disciplina e conferência antes de gravar |
 | 19 | [Estudo extra avulso](19-estudo-extra-avulso.md) | O aluno registra o que estudou fora da semana; `extra_activity` vira enum |
 | 20 | [Execução do reforço de ciclo](20-execucao-do-reforco.md) | O aluno revisa os erros do ciclo de 3 baterias |
+| 21 | [Fases na extensão](21-fases-na-extensao.md) | Reforço correlato e rodada extra dentro do TEC — **não implementada** |
 
 ---
 

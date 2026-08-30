@@ -832,13 +832,25 @@ quem escreve teste — cada uma virou uma peça da suíte:
 
 Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
 
-- **Fases `reinforcement` e `extra` no content script.** O `QuestionPhase` do
-  protocolo já as tem; o content script só conduz `main`.
 - **Editar os próprios dados como professor.** `updateProfile` exige
   `requireRole("student")`.
 
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
+
+### Reservados pela spec 21 — fases na extensão
+
+Spec: [`specs/21-fases-na-extensao.md`](specs/21-fases-na-extensao.md). Migram
+para a §3 quando os testes existirem.
+
+- **F-FASE-01** — errar põe uma correlata do mesmo tópico no fim da fila.
+- **F-FASE-02** — a correlata é gravada com `phase='reinforcement'` e
+  `source_question_id` da errada.
+- **F-FASE-03** — com todas as principais respondidas, "+5 questões extras"
+  acrescenta 5 na rodada 1.
+- **F-FASE-04** — sem 5 inéditas, nada é acrescentado e a tela diz por quê.
+- **F-FASE-05** — finalizar antecipadamente descarta correlatas e extras.
+- **F-FASE-06** — o ledger recebe as três fases e as estatísticas mostram E e R.
 
 
 
