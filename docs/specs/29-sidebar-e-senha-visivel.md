@@ -1,6 +1,6 @@
 # 29 — Sidebar recolhível e senha visível
 
-**Situação:** não implementada · **Comparativo:** §12 item 14 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-UI-01 a F-UI-06
+**Situação:** implementada · **Comparativo:** §12 item 14 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-UI-01 a F-UI-06
 
 ---
 

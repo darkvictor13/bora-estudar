@@ -84,10 +84,10 @@ linha 247.
 | Roteamento por perfil | `destinoPorPerfil` index.js:2195 | ✅ | 01 | — |
 | Tema claro e escuro | `toggleTheme` index.js:1945 | ✅ | 11 | — |
 | **Entrar com Google (OAuth)** | `iniciarLoginGoogle` index.js:2029 | ❌ | | pendente |
-| **Mostrar/ocultar a senha digitada** | `alternarVisibilidadeSenha` index.js:2008 | ❌ | 29 | especificada |
+| **Mostrar/ocultar a senha digitada** | `alternarVisibilidadeSenha` index.js:2008 | ✅ | 29 | implementada |
 | Cupom de acesso concede 3 meses | `dadosCupomAcesso` aluno.js:3905, `CUPONS_ACESSO_TESTE` | 🟡 | | pendente |
 | Vínculo automático ao professor padrão no cadastro | `garantirPerfilNovoAluno` index.js:2045 (`PROFESSOR_PADRAO_ID`) | 🟡 | | pendente |
-| **Sidebar recolhível, estado persistido** | `toggleSidebar` index.js:261 | ❌ | 29 | especificada |
+| **Sidebar recolhível, estado persistido** | `toggleSidebar` index.js:261 | ✅ | 29 | implementada |
 
 **A tabela `coupons` existe no schema atual e nenhuma tela a lê ou escreve.** Na
 v96 o cupom era aplicado por **upsert direto em `profiles` a partir do
@@ -452,7 +452,7 @@ condução dentro do TEC.
 | ~~15~~ | Resumo por tópicos da bateria concluída — spec [26](specs/26-topicos-do-bloco-e-da-bateria.md) ✅ | 1 view, site |
 | ~~16~~ | Professor edita os próprios dados — spec [27](specs/27-dados-do-professor.md) ✅ | 1 migration (grant), site |
 | ~~17~~ | Painel arrastável e resumo por tópicos — spec [28](specs/28-painel-arrastavel-e-topicos.md) ✅ | extensão |
-| 18 | Sidebar recolhível; mostrar/ocultar senha — spec [29](specs/29-sidebar-e-senha-visivel.md) | site |
+| ~~18~~ | Sidebar recolhível; mostrar/ocultar senha — spec [29](specs/29-sidebar-e-senha-visivel.md) ✅ | site |
 | 19 | Login com Google | site, exige configuração de provedor |
 | 20 | Cupom de acesso | 1 RPC, site |
 | 21 | Bateria livre por bloco, fora da meta | 1 RPC, site |
