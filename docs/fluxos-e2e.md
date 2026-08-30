@@ -768,6 +768,21 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 19 — estudo extra avulso
+
+Spec: [`specs/19-estudo-extra-avulso.md`](specs/19-estudo-extra-avulso.md).
+Migram para a §2 quando os testes existirem.
+
+- **F-EXTRA-01** — registrar cria a meta no dia escolhido, já concluída, com
+  tempo, tipo e título derivado.
+- **F-EXTRA-02** — o tempo entra na contagem da semana; nenhum número de acerto
+  muda.
+- **F-EXTRA-03** — os sete tipos são oferecidos e gravam o valor em inglês.
+- **F-EXTRA-04** — remover marca `deleted_at` e a linha some da semana.
+- **F-EXTRA-05** — o aluno não remove meta de estudo extra planejada pelo
+  professor.
+- **F-EXTRA-06** — tempo fora de 1–240 é recusado, e nada é gravado.
+
 
 
 

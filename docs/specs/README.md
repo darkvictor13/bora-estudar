@@ -40,6 +40,7 @@ de lá vira uma spec nova antes de virar código.
 | 16 | [Histórico e anulação de bateria](16-historico-e-anulacao-de-bateria.md) | O professor vê as baterias do aluno e anula a que não conta |
 | 17 | [Ficha da turma](17-ficha-da-turma.md) | KPIs, classificação em quatro faixas, busca e filtros |
 | 18 | [Prévia e distribuição da semana](18-previa-e-distribuicao-da-semana.md) | Peso por disciplina e conferência antes de gravar |
+| 19 | [Estudo extra avulso](19-estudo-extra-avulso.md) | O aluno registra o que estudou fora da semana; `extra_activity` vira enum — **não implementada** |
 
 ---
 

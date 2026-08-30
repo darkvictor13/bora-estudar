@@ -111,8 +111,8 @@ código morto. A versão atual barra no loader com `requireStudentAccess`.
 | Seletor de semana | `#dash-sem-sel` aluno.js:1359 | ✅ | 03 | — |
 | **Concluir meta de teoria** (sem exigir questões) | `salvarRegistroMeta` aluno.js:2815, ramo :2824 | ✅ | 12 | implementada |
 | **Concluir meta de estudo extra planejada pelo professor** | idem | ✅ | 12 | implementada |
-| **Registrar estudo extra avulso** (7 tipos fechados) | `salvarEstudoExtra` aluno.js:2367 | ❌ | | pendente |
-| **Editar e excluir estudo extra** | `excluirEstudoExtra` aluno.js:2503 | ❌ | | pendente |
+| **Registrar estudo extra avulso** (7 tipos fechados) | `salvarEstudoExtra` aluno.js:2367 | ❌ | 19 | especificada |
+| **Editar e excluir estudo extra** | `excluirEstudoExtra` aluno.js:2503 | ❌ | 19 | especificada |
 | **Desfazer conclusão / voltar a pendente** | `desfazerRegistroMeta` aluno.js:2907 | ✅ | 12 | implementada |
 | Tempo aceito em `80`, `1:20`, `1h20`, `40min` | `interpretarTempoRegistro` aluno.js:2717 | 🟡 | 05 | — |
 | Abas Metas / Reforços no painel | `ensureDashboardTabs` aluno.js:1297 | 🟡 | | pendente |
@@ -426,7 +426,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | ~~5~~ | **Anular bateria e ver o histórico** — spec [16](specs/16-historico-e-anulacao-de-bateria.md), **implementada** | `void_quiz_session` pronta e sem chamador; e o professor não vê as baterias do aluno para apontar qual anular | 0 RPC, 0 migration, site |
 | ~~6~~ | **Ficha da turma** — spec [17](specs/17-ficha-da-turma.md), **implementada** | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
 | ~~7~~ | **Prévia e distribuição por peso na geração da semana** — spec [18](specs/18-previa-e-distribuicao-da-semana.md), **implementada** | Hoje o professor gera às cegas, e toda matéria pesa igual | 0 RPC, 0 migration, site |
-| 8 | **Registrar estudo extra avulso** — a metade que saiu da spec 12 | Separada pelo portão do Passo 4: seria a terceira RPC nova, e ela **cria** meta em vez de concluir. Vem depois da spec 12 porque a semana do professor já traz meta de estudo extra, e concluí-la é o que destrava o seed hoje | 1 RPC (`record_extra_study`), 1 migration (enum `extra_activity_kind`, 7 valores), site |
+| 8 | **Registrar estudo extra avulso** — spec [19](specs/19-estudo-extra-avulso.md), a metade que saiu da spec 12 | Separada pelo portão do Passo 4: seria a terceira RPC nova, e ela **cria** meta em vez de concluir. Vem depois da spec 12 porque a semana do professor já traz meta de estudo extra, e concluí-la é o que destrava o seed hoje | 1 RPC (`record_extra_study`), 1 migration (enum `extra_activity_kind`, 7 valores), site |
 
 ### Fecha o ciclo de estudo
 
