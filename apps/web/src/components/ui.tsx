@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export function Card({
   title,
@@ -83,12 +83,39 @@ export function Field({
   hint?: string | undefined;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   const id = `field-${name}`;
+  const isPassword = type === "password";
+  const [revealed, setRevealed] = useState(false);
+
   return (
     <div className="field">
       <label className="field__label" htmlFor={id}>
         {label}
       </label>
-      <input id={id} name={name} type={type} {...rest} />
+      <div className={isPassword ? "field__control" : undefined}>
+        {/* Alternar o `type` do PRÓPRIO input, e nada mais: a senha nunca
+            existe em dois lugares, e o `autoComplete` que o campo já tinha
+            continua valendo — o gerenciador de senhas não pode perder o campo
+            só porque o texto ficou visível (R-UI-09, R-UI-12). */}
+        <input
+          id={id}
+          name={name}
+          type={isPassword && revealed ? "text" : type}
+          {...rest}
+        />
+        {isPassword && (
+          // `type="button"` não é detalhe: um <button> sem tipo dentro de
+          // <form> SUBMETE, e aqui submeteria o login ao tentar ver a senha.
+          <button
+            type="button"
+            className="field__reveal"
+            aria-label={revealed ? "Ocultar senha" : "Mostrar senha"}
+            aria-pressed={revealed}
+            onClick={() => setRevealed((current) => !current)}
+          >
+            {revealed ? "Ocultar" : "Mostrar"}
+          </button>
+        )}
+      </div>
       {hint && <span className="field__hint">{hint}</span>}
     </div>
   );

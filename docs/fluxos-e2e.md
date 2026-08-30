@@ -176,6 +176,22 @@ ela funciona; a senha antiga deixa de funcionar.
 `#field-password` ≠ `#field-passwordConfirmation` → "As senhas não conferem."
 Menos de 6 caracteres → "A senha precisa ter pelo menos 6 caracteres."
 
+### F-UI-04 — Mostrar e ocultar a senha
+**Esperado** o botão alterna o `type` do próprio input entre `password` e
+`text`, e o valor continua no mesmo campo. A senha nunca existe em dois lugares,
+e o `autoComplete` original fica — o gerenciador de senhas não pode perder o
+campo só porque o texto ficou visível.
+
+### F-UI-05 — O botão de senha não submete
+**Esperado** clicar nele não dispara o login: a URL não muda e nenhum erro de
+credencial aparece. **Um `<button>` sem `type` dentro de `<form>` submete** — sem
+`type="button"`, tentar ver a senha faria login com ela.
+
+### F-UI-06 — A senha começa sempre oculta
+**Esperado** revelar e recarregar devolve o campo a `password`. Nada de lembrar
+"estava visível": quem abre a tela depois pode ser outra pessoa no mesmo
+computador.
+
 ---
 
 ## 2. Aluno
@@ -337,6 +353,22 @@ terminou, não o que o aluno escreveu.
 botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
+
+### F-UI-01 — Recolher a sidebar
+**Esperado** o botão recolhe, o conteúdo ganha a largura, e o **botão continua
+visível** — uma sidebar recolhida sem como expandir é uma sidebar perdida.
+Recolher é CSS, não desmontagem: a barra segue no DOM, e os testes que leem o
+nome nela continuam valendo.
+
+### F-UI-02 — O estado persiste
+**Esperado** sobrevive à navegação e ao recarregamento. Vive em `localStorage`,
+e não em `user_preferences` como o tema: recolher é preferência do **aparelho**,
+e a mesma pessoa quer a barra aberta no monitor grande e recolhida no laptop.
+
+### F-UI-03 — O estado é anunciado
+**Esperado** `aria-expanded` diz o que **é** e o rótulo diz o que **vai**
+acontecer: "Recolher menu" com a barra aberta, "Expandir menu" com ela
+recolhida.
 
 ### F-RESU-01 — Tópicos do bloco antes de estudar
 **Esperado** cada bloco do catálogo traz um `<details>` "Ver o que será
@@ -1028,7 +1060,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 264 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 270 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -1071,17 +1103,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 29 — sidebar recolhível e senha visível
-
-Spec: [`specs/29-sidebar-e-senha-visivel.md`](specs/29-sidebar-e-senha-visivel.md).
-Migram para a §1 e a §2 quando os testes existirem.
-
-- **F-UI-01** — o botão recolhe e expande a sidebar.
-- **F-UI-02** — o estado sobrevive à navegação e ao recarregamento.
-- **F-UI-03** — `aria-expanded` acompanha o estado.
-- **F-UI-04** — o botão de senha revela e volta a ocultar.
-- **F-UI-05** — clicar no botão de senha não submete o formulário.
-- **F-UI-06** — a senha começa sempre oculta.
 
 
 

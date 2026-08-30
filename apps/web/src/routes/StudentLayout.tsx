@@ -3,6 +3,7 @@ import { Outlet, useLoaderData } from "react-router";
 import { Sidebar, type NavGroup } from "@/components/Sidebar";
 import { Alert } from "@/components/ui";
 import { useSignOut } from "@/lib/auth/useSignOut";
+import { useSidebar } from "@/lib/ui/useSidebar";
 import { requireRole } from "@/lib/auth/session";
 import { adoptTheme } from "@/lib/theme";
 import { ROUTES } from "@/lib/routes";
@@ -22,6 +23,7 @@ type LoaderData = Awaited<ReturnType<typeof studentLayoutLoader>>;
 export function StudentLayout() {
   const session = useLoaderData() as LoaderData;
   const signOut = useSignOut();
+  const sidebar = useSidebar();
 
   const groups: NavGroup[] = [
     {
@@ -44,7 +46,7 @@ export function StudentLayout() {
   ];
 
   return (
-    <div className="shell">
+    <div className="shell" data-collapsed={sidebar.collapsed}>
       <Sidebar
         groups={groups}
         userName={session.name}
@@ -52,6 +54,8 @@ export function StudentLayout() {
         theme={session.theme}
         roleLabel="Aluno"
         signOutAction={signOut}
+        collapsed={sidebar.collapsed}
+        onToggle={sidebar.toggle}
       />
       <main className="content">
         {!session.hasAccess && (

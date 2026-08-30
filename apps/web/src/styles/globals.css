@@ -374,3 +374,56 @@ tbody tr:last-child td { border-bottom: none; }
 .block-topics > summary { cursor: pointer; color: var(--accent-text); }
 .block-topics__list { margin: 6px 0 0; padding-left: 18px; color: var(--text-label); }
 .block-topics__list li { margin-bottom: 2px; }
+
+/* Sidebar recolhível — spec docs/specs/29-sidebar-e-senha-visivel.md */
+.sidebar__nav { display: contents; }
+
+.sidebar__collapse {
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: transparent;
+  color: var(--sidebar-text);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sidebar__collapse:hover { background: rgb(255 255 255 / 8%); color: var(--sidebar-text-strong); }
+
+/* Recolhida é CSS, não desmontagem: a barra continua no DOM, e os testes que
+   leem o nome nela continuam valendo (R-UI-06). O botão fica — uma sidebar
+   recolhida sem como expandir é uma sidebar perdida. */
+.shell[data-collapsed="true"] { grid-template-columns: 64px 1fr; }
+.shell[data-collapsed="true"] .sidebar { padding: 22px 8px; }
+.shell[data-collapsed="true"] .sidebar__nav,
+.shell[data-collapsed="true"] .sidebar__foot,
+.shell[data-collapsed="true"] .sidebar__brand span { display: none; }
+.shell[data-collapsed="true"] .sidebar__brand {
+  font-size: 0.72rem;
+  padding: 0;
+  text-align: center;
+  overflow: hidden;
+}
+.shell[data-collapsed="true"] .sidebar__collapse { padding: 5px 4px; font-size: 0.68rem; }
+
+/* Senha visível — spec docs/specs/29-sidebar-e-senha-visivel.md */
+.field__control { position: relative; display: block; }
+.field__control input { padding-right: 88px; }
+.field__reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 550;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.field__reveal:hover { background: var(--surface-raised); }

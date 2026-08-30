@@ -1257,3 +1257,66 @@ test.describe("F-RESU-05 · bateria alheia na query string", () => {
     expect(scenario.planId).not.toBe(outro.planId);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §2 — sidebar recolhível.
+// Spec docs/specs/29-sidebar-e-senha-visivel.md
+// ---------------------------------------------------------------------------
+
+const SHELL = ".shell";
+const COLLAPSE = ".sidebar__collapse";
+
+test.describe("F-UI-01 · recolher a sidebar", () => {
+  test("o botão recolhe e expande, e o conteúdo ganha a largura", async ({ studentPage }) => {
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator("h1")).toBeVisible();
+
+    const conteudoAberto = (await studentPage.locator(".content").boundingBox())!;
+    await expect(studentPage.locator(".sidebar__nav")).toBeVisible();
+
+    await studentPage.locator(COLLAPSE).click();
+
+    await expect(studentPage.locator(SHELL)).toHaveAttribute("data-collapsed", "true");
+    await expect(studentPage.locator(".sidebar__nav")).toBeHidden();
+    const conteudoRecolhido = (await studentPage.locator(".content").boundingBox())!;
+    expect(conteudoRecolhido.width).toBeGreaterThan(conteudoAberto.width);
+
+    // O botão continua acessível: uma sidebar recolhida sem como expandir é
+    // uma sidebar perdida.
+    await expect(studentPage.locator(COLLAPSE)).toBeVisible();
+    await studentPage.locator(COLLAPSE).click();
+    await expect(studentPage.locator(SHELL)).toHaveAttribute("data-collapsed", "false");
+    await expect(studentPage.locator(".sidebar__nav")).toBeVisible();
+  });
+});
+
+test.describe("F-UI-02 · o estado persiste", () => {
+  test("sobrevive à navegação e ao recarregamento", async ({ studentPage }) => {
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator("h1")).toBeVisible();
+    await studentPage.locator(COLLAPSE).click();
+    await expect(studentPage.locator(SHELL)).toHaveAttribute("data-collapsed", "true");
+
+    // Navegação de SPA: o layout não remonta, mas o estado tem de acompanhar.
+    await studentPage.goto("/aluno/cadernos");
+    await expect(studentPage.locator(SHELL)).toHaveAttribute("data-collapsed", "true");
+
+    await studentPage.reload();
+    await expect(studentPage.locator(SHELL)).toHaveAttribute("data-collapsed", "true");
+  });
+});
+
+test.describe("F-UI-03 · o estado é anunciado", () => {
+  test("aria-expanded acompanha, e o rótulo diz a ação", async ({ studentPage }) => {
+    await studentPage.goto("/aluno");
+
+    const botao = studentPage.locator(COLLAPSE);
+    // Aberta: `aria-expanded` é "true" e o rótulo oferece recolher.
+    await expect(botao).toHaveAttribute("aria-expanded", "true");
+    await expect(botao).toHaveText("Recolher menu");
+
+    await botao.click();
+    await expect(botao).toHaveAttribute("aria-expanded", "false");
+    await expect(botao).toHaveText("Expandir menu");
+  });
+});

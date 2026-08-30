@@ -2,6 +2,7 @@ import { Outlet, useLoaderData } from "react-router";
 
 import { Sidebar, type NavGroup } from "@/components/Sidebar";
 import { useSignOut } from "@/lib/auth/useSignOut";
+import { useSidebar } from "@/lib/ui/useSidebar";
 import { requireRole } from "@/lib/auth/session";
 import { adoptTheme } from "@/lib/theme";
 import { ROUTES } from "@/lib/routes";
@@ -21,6 +22,7 @@ type LoaderData = Awaited<ReturnType<typeof teacherLayoutLoader>>;
 export function TeacherLayout() {
   const session = useLoaderData() as LoaderData;
   const signOut = useSignOut();
+  const sidebar = useSidebar();
 
   const groups: NavGroup[] = [
     {
@@ -46,7 +48,7 @@ export function TeacherLayout() {
   ];
 
   return (
-    <div className="shell">
+    <div className="shell" data-collapsed={sidebar.collapsed}>
       <Sidebar
         groups={groups}
         userName={session.name}
@@ -54,6 +56,8 @@ export function TeacherLayout() {
         theme={session.theme}
         roleLabel="Professor"
         signOutAction={signOut}
+        collapsed={sidebar.collapsed}
+        onToggle={sidebar.toggle}
       />
       <main className="content">
         <Outlet />

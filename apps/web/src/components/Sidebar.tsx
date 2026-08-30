@@ -22,6 +22,8 @@ export function Sidebar({
   profileId,
   theme,
   signOutAction,
+  collapsed = false,
+  onToggle,
 }: {
   groups: readonly NavGroup[];
   userName: string;
@@ -29,6 +31,8 @@ export function Sidebar({
   profileId: string;
   theme: Theme;
   signOutAction: () => Promise<void>;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   const { pathname } = useLocation();
 
@@ -47,6 +51,21 @@ export function Sidebar({
         <span>Concursos</span>
       </div>
 
+      {onToggle && (
+        // O rótulo diz o que VAI acontecer; o `aria-expanded` diz o que É.
+        // Leitor de tela lê o estado, e quem enxerga lê a ação.
+        <button
+          type="button"
+          className="sidebar__collapse"
+          aria-expanded={!collapsed}
+          aria-controls="sidebar-nav"
+          onClick={onToggle}
+        >
+          {collapsed ? "Expandir menu" : "Recolher menu"}
+        </button>
+      )}
+
+      <div id="sidebar-nav" className="sidebar__nav">
       {groups.map((group) => (
         <div key={group.title} className="sidebar__group">
           <p className="sidebar__title">{group.title}</p>
@@ -77,6 +96,8 @@ export function Sidebar({
           })}
         </div>
       ))}
+
+      </div>
 
       <div className="sidebar__foot">
         {/* Acima do bloco de identidade: é preferência da conta, e a conta é o

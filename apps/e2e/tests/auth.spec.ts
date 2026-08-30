@@ -298,3 +298,68 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// §1 — senha visível.
+// Spec docs/specs/29-sidebar-e-senha-visivel.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-UI-04 · mostrar e ocultar a senha", () => {
+  test("o botão revela e volta a ocultar, sem copiar o valor", async ({ page }) => {
+    await page.goto("/entrar");
+
+    const campo = page.locator("#field-password");
+    const botao = page.getByRole("button", { name: "Mostrar senha" });
+
+    await campo.fill("segredo-do-teste");
+    await expect(campo).toHaveAttribute("type", "password");
+    await expect(botao).toHaveAttribute("aria-pressed", "false");
+
+    await botao.click();
+    await expect(campo).toHaveAttribute("type", "text");
+    // O valor continua no MESMO input: a senha nunca existe em dois lugares.
+    await expect(campo).toHaveValue("segredo-do-teste");
+    await expect(page.getByRole("button", { name: "Ocultar senha" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await page.getByRole("button", { name: "Ocultar senha" }).click();
+    await expect(campo).toHaveAttribute("type", "password");
+    await expect(campo).toHaveValue("segredo-do-teste");
+  });
+});
+
+test.describe("F-UI-05 · o botão de senha não submete", () => {
+  test("clicar nele não dispara o login", async ({ page }) => {
+    await page.goto("/entrar");
+    await page.fill("#field-email", "ninguem@exemplo.com");
+    await page.fill("#field-password", "qualquer-coisa");
+
+    // Um <button> sem `type` dentro de <form> submete. Se este submetesse, o
+    // login tentaria acontecer e a tela mostraria erro de credencial.
+    await page.getByRole("button", { name: "Mostrar senha" }).click();
+
+    await expect(page).toHaveURL(/\/entrar$/);
+    await expect(page.locator(".alert--error")).toHaveCount(0);
+    await expect(page.locator("#field-password")).toHaveAttribute("type", "text");
+  });
+});
+
+test.describe("F-UI-06 · a senha começa sempre oculta", () => {
+  test("mesmo depois de revelada numa visita anterior", async ({ page }) => {
+    await page.goto("/entrar");
+    await page.getByRole("button", { name: "Mostrar senha" }).click();
+    await expect(page.locator("#field-password")).toHaveAttribute("type", "text");
+
+    // Nada de lembrar "estava visível": quem abre a tela depois pode ser outra
+    // pessoa, no mesmo computador.
+    await page.reload();
+    await expect(page.locator("#field-password")).toHaveAttribute("type", "password");
+
+    // E na tela de cadastro, que abre com o campo oculto como qualquer outra.
+    await page.goto("/cadastro");
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Mostrar senha" })).toBeVisible();
+  });
+});
