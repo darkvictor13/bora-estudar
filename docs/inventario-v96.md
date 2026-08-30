@@ -42,12 +42,12 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 3. Aluno — bateria inteligente | 9 | 7 | 1 | 1 | 0 |
 | 4. Aluno — reforço e revisão | 10 | 3 | 1 | 6 | 0 |
 | 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
-| 6. Professor — alunos e acesso | 12 | 3 | 1 | 8 | 0 |
+| 6. Professor — alunos e acesso | 12 | 7 | 0 | 5 | 0 |
 | 7. Professor — planejamento | 8 | 1 | 1 | 6 | 0 |
 | 8. Professor — geração de metas | 9 | 3 | 2 | 4 | 0 |
 | 9. Professor — acompanhamento | 8 | 1 | 2 | 5 | 0 |
 | 10. Extensão | 12 | 7 | 0 | 5 | 0 |
-| **Total** | **104** | **41** | **14** | **45** | **4** |
+| **Total** | **104** | **45** | **13** | **42** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -248,10 +248,10 @@ inventário.**
 | Lista de alunos vinculados | `renderMeusAlunos` professor.js:3551 | ✅ | 03 | — |
 | Ficha individual do aluno | `verDetalhesAluno` professor.js:4220 | ✅ | 03 | — |
 | Estatísticas do aluno | `verEstatAluno` professor.js:4262 | ✅ | 08 | — |
-| **Liberar acesso do aluno por 3 meses** | `liberarAlunoAcesso` professor.js:3992 | ❌ | 13 | especificada |
-| **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ❌ | 13 | especificada |
-| **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ❌ | 13 | especificada |
-| **Badge de acesso com data de validade** | `badgeAcessoAluno` professor.js:4011 | 🟡 | 13 | especificada |
+| **Liberar acesso do aluno por 3 meses** | `liberarAlunoAcesso` professor.js:3992 | ✅ | 13 | implementada |
+| **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ✅ | 13 | implementada |
+| **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ✅ | 13 | implementada |
+| **Badge de acesso com data de validade** | `badgeAcessoAluno` professor.js:4011 | ✅ | 13 | implementada |
 | **Classificação Em ritmo / Atenção / Atrasado / Sem dados** | `classificarAluno` professor.js:3274 | ❌ | | pendente |
 | **KPIs no card do aluno** (desempenho, questões, metas, barra) | `renderCardAlunoHTML` professor.js:4019 | ❌ | | pendente |
 | **Resumo da turma** (4 métricas no topo) | `renderResumoAlunos` professor.js:3516 | ❌ | | pendente |
@@ -410,7 +410,7 @@ faixa, primeiro o que não tem dependência.
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
 | ~~1~~ | **Conclusão de meta sem bateria** — spec [12](specs/12-conclusao-de-meta.md), **implementada** | 3 das 5 metas semanais do seed eram impossíveis de fechar | 2 RPCs (`complete_goal`, `reopen_goal`), 1 migration (`goals.spent_minutes`), site |
-| 2 | **Vincular aluno e liberar acesso** — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC (`link_student`) mais o predicado `student_has_teacher`, 1 migration (policy da lista de espera), site |
+| ~~2~~ | **Vincular aluno e liberar acesso** — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md), **implementada** | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC (`link_student`) mais o predicado `student_has_teacher`, 1 migration (policy da lista de espera), site |
 | 3 | **Criar, ativar e arquivar planejamento** | Fora do seed, um professor novo não tem por onde começar | 0 RPC nova (`activate_study_plan` existe), 0 migration, site |
 
 O item 2 vem antes do 3 porque um planejamento exige um aluno vinculado; o 1 vem

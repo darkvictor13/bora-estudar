@@ -1,6 +1,6 @@
 # 13 — Vínculo do aluno e liberação de acesso
 
-**Situação:** não implementada · **Comparativo:** §12 item 2 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-VINC-01 a F-VINC-07
+**Situação:** implementada · **Comparativo:** §12 item 2 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-VINC-01 a F-VINC-07
 
 ---
 
@@ -70,7 +70,7 @@ RLS e grant por coluna prontos: falta só quem a acione.
 | R-VINC-10 | **Um professor vigente por aluno**, garantido pelo índice parcial `active_link_uidx` (`student_id` onde `ended_at is null`). A RPC verifica antes e recusa com mensagem legível; o índice é a rede embaixo, e é ele que segura duas requisições simultâneas. |
 | R-VINC-11 | A RPC **reivindica a linha da lista de espera** no mesmo comando, gravando `waitlist.teacher_id = auth.uid()`. É o que tira o candidato da fila compartilhada. Aluno sem linha na lista de espera é vinculável do mesmo jeito — o `update` simplesmente não acha linha. |
 | R-VINC-12 | Idempotência **com payload**: `request_id` + `reserve_operation`, com hash de `student_id`. Um duplo clique devolve o vínculo já criado em vez de esbarrar no índice. |
-| R-VINC-13 | `link_student` declara `set search_path = ''`, leva `revoke execute ... from public` e só então recebe `execute` nominal para `authenticated`. `student_has_teacher` fica **sem grant para papel nenhum**: é usada dentro de uma policy, e policy roda com o privilégio do dono da tabela. |
+| R-VINC-13 | As duas funções declaram `set search_path = ''`, levam `revoke execute ... from public` e só então recebem `execute` nominal para `authenticated`. **`student_has_teacher` precisa desse grant**: a expressão de uma policy é avaliada com o privilégio de quem consulta, não do dono da tabela, e sem ele todo `select` em `waitlist` morre com `permission denied for function`. É por isso que `is_teacher`, `is_teacher_of`, `is_admin` e `can_view_context` já estão na lista de grants da migration inicial. O `security definer` resolve outra coisa: a leitura de `student_teacher_links` lá dentro. *Corrigido em 30/08/2026, ao implementar — a redação anterior dizia que a função ficaria sem grant nenhum.* |
 | R-VINC-14 | Vincular **não libera acesso**. São dois passos, como na v96: o vínculo diz de quem o aluno é; a assinatura diz se ele entra. Um aluno vinculado e sem assinatura continua vendo a lista de espera, o que é o comportamento de `R-ACC-01`. |
 
 ### Liberar e suspender
@@ -172,7 +172,7 @@ capacidade de escolher o que se enxerga.
 | CA-13 | Um professor não vê, na fila, candidato já reivindicado por outro | `supabase/tests/08_student_link.sql` |
 | CA-14 | Liberar acesso de aluno **sem vínculo** é recusado pelo `WITH CHECK` de `subscriptions` | `supabase/tests/08_student_link.sql` |
 | CA-15 | `student_id` continua fora do `grant update` de `subscriptions`, e `delete` continua não concedido | `supabase/tests/08_student_link.sql` |
-| CA-16 | `link_student` não tem `execute` para `public`; `student_has_teacher` não tem `execute` para papel nenhum | `supabase/tests/08_student_link.sql` |
+| CA-16 | Nenhuma das duas funções tem `execute` para `public`, e `student_has_teacher` tem para `authenticated` — sem esse grant a policy de `waitlist` quebraria | `supabase/tests/08_student_link.sql` |
 
 ---
 

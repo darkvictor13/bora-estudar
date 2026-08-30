@@ -1381,6 +1381,23 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_teacher: { Args: never; Returns: boolean }
       is_teacher_of: { Args: { p_student_id: string }; Returns: boolean }
+      link_student: {
+        Args: { p_request_id: string; p_student_id: string }
+        Returns: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          started_at: string
+          student_id: string
+          teacher_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "student_teacher_links"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_quiz_session_time: {
         Args: {
           p_duration_minutes: number
@@ -1522,6 +1539,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      student_has_teacher: { Args: { p_student_id: string }; Returns: boolean }
       void_quiz_session: {
         Args: {
           p_quiz_session_id: string

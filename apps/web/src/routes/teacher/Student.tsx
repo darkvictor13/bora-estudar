@@ -2,8 +2,35 @@ import { Link, useLoaderData } from "react-router";
 
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth/session";
-import { getPlanProgress, getStudentSummary } from "@/lib/data/teacher";
+import { getPlanProgress, getStudentSubscription, getStudentSummary } from "@/lib/data/teacher";
+import { GrantAccessForm, SuspendAccessForm } from "@/components/teacher/AccessForms";
 import { ROUTES } from "@/lib/routes";
+
+const ACCESS_LABEL: Record<string, string> = {
+  active: "ativa",
+  pending: "aguardando liberação",
+  suspended: "suspensa",
+  expired: "expirada",
+};
+
+/**
+ * `daterange` chega como texto do PostgREST: `[2026-08-30,2026-11-30)`.
+ * Mostrar a data final é o que a v96 fazia no badge "Acesso ativo · até
+ * DD/MM/AAAA", e é o que responde "até quando" sem abrir o banco.
+ *
+ * O parâmetro é `unknown` porque é assim que `supabase gen types` mapeia
+ * `daterange` — não existe tipo TypeScript para ele. A checagem em runtime é o
+ * que transforma isso em algo seguro de renderizar.
+ */
+function formatValidity(validity: unknown): string {
+  if (typeof validity !== "string") return "";
+  const match = validity.match(/^[[(]([^,]*),([^)\]]*)[)\]]$/);
+  if (!match) return validity;
+  const [, inicio, fim] = match;
+  const br = (iso: string) =>
+    iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR") : "sem fim";
+  return `${br(inicio ?? "")} até ${br(fim ?? "")}`;
+}
 
 const PLAN_STATUS: Record<string, { text: string; tone: "green" | "amber" | "neutral" }> = {
   active: { text: "Ativo", tone: "green" },
@@ -22,21 +49,41 @@ export async function teacherStudentLoader({ params }: { params: { studentId?: s
   if (!summary) throw new Response(null, { status: 404, statusText: "Aluno não encontrado" });
 
   const activePlan = summary.plans.find((p) => p.status === "active") ?? null;
-  const progress = activePlan ? await getPlanProgress(activePlan.id) : null;
+  const [progress, subscription] = await Promise.all([
+    activePlan ? getPlanProgress(activePlan.id) : Promise.resolve(null),
+    getStudentSubscription(studentId),
+  ]);
 
-  return { summary, activePlan, progress };
+  return { summary, activePlan, progress, subscription, studentId };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentLoader>>;
 
 export function TeacherStudent() {
-  const { summary, activePlan, progress } = useLoaderData() as LoaderData;
+  const { summary, activePlan, progress, subscription, studentId } = useLoaderData() as LoaderData;
+  const hasActive = subscription?.status === "active";
 
   return (
     <>
       <PageHeader title={summary.profile.name} description={summary.profile.contact_email ?? ""} />
 
       <div className="stack">
+        <Card
+          title="Acesso"
+          sub={
+            hasActive
+              ? `Ativo${formatValidity(subscription?.validity) ? ` · vigência ${formatValidity(subscription?.validity)}` : ""}`
+              : subscription
+                ? `Sem acesso ativo · última assinatura ${ACCESS_LABEL[subscription.status] ?? subscription.status}`
+                : "Este aluno nunca teve acesso liberado"
+          }
+        >
+          <div className="row" style={{ alignItems: "flex-end", gap: 16 }}>
+            <GrantAccessForm studentId={studentId} hasActive={hasActive} />
+            {hasActive && <SuspendAccessForm studentId={studentId} />}
+          </div>
+        </Card>
+
         <Card
           title="Planejamentos"
           sub={`${summary.plans.length} no histórico`}

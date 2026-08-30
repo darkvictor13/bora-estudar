@@ -455,6 +455,55 @@ semana bloqueia os dois: `ha bateria aberta nesta semana`.
 `?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
 no planejamento ativo (ou no primeiro) sem quebrar.
 
+### Vínculo e liberação de acesso — F-VINC-01 a 07
+
+Spec: [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-e-liberacao-de-acesso.md).
+O cartão "Candidatos" em `/professor` só existe por causa da policy
+`waitlist_teacher_read`: sem ela, `waitlist_own` passa por `is_teacher_of` e a
+consulta volta vazia. As ações de acesso ficam no cartão "Acesso" da ficha do
+aluno.
+
+**Armadilha, e ela custou um teste vermelho.** `tbody tr` com o nome do
+candidato casa **a linha da própria fila**, então esperar por ela depois de
+clicar em "Vincular a mim" passa de imediato e a conferência no banco roda antes
+de a action terminar. Espere o candidato **sair** do cartão "Candidatos" —
+`toHaveCount(0)` —, que é o que só é verdade depois da gravação.
+
+#### F-VINC-01 — O candidato aparece na fila
+**Pré** aluno com linha em `waitlist` e sem `student_teacher_links`.
+**Esperado** ele aparece em "Candidatos" com nome, e-mail e concurso em foco.
+Aluno que já tem professor **não** aparece.
+
+#### F-VINC-02 — Vincular
+**Esperado** o candidato sai da fila; passa a constar em "Meus alunos" com
+"Aguardando liberação"; `student_teacher_links` ganha a linha com
+`teacher_id` de quem clicou e `ended_at` nulo; `waitlist.teacher_id` é
+reivindicado.
+
+#### F-VINC-03 — O candidato reivindicado sai da fila dos outros
+**Esperado** outro professor, autenticado em seguida, não o enxerga.
+
+#### F-VINC-04 — Liberar acesso
+**Pré** cenário com `access: "none"`; o aluno é empurrado para
+`/aluno/lista-espera`.
+**Esperado** "Acesso liberado por 3 meses."; `subscriptions` ganha a linha
+`active` com `validity` fechada no início e aberta no fim; o aluno passa a abrir
+`/aluno`.
+
+#### F-VINC-05 — Liberar de novo estende a mesma linha
+**Esperado** "Acesso estendido por 12 meses." e **uma** assinatura ativa. O
+índice `active_subscription_uidx` recusaria a segunda.
+
+#### F-VINC-06 — Suspender
+**Esperado** "Acesso suspenso."; o status vira `suspended` e **a vigência é
+preservada** (R-VINC-18); o badge na lista vira "Suspenso"; o aluno volta a ser
+mandado para a lista de espera.
+
+#### F-VINC-07 — Vincular duas vezes
+**Esperado** uma linha em `student_teacher_links`. Chamar `link_student` de novo,
+com `request_id` novo, continua devolvendo o vínculo existente em vez de
+esbarrar no índice `active_link_uidx`.
+
 ### F-PROF-09 — Revisões
 Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
 acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
@@ -496,10 +545,10 @@ e `05_teacher_writes.sql`.
 
 | Comando | Cobertura |
 |---|---|
-| `npm run db:test` | 96 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta |
+| `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 164 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 172 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -511,7 +560,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09 | 29 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09 e F-VINC-01 a 07 | 37 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
@@ -539,10 +588,6 @@ quem escreve teste — cada uma virou uma peça da suíte:
 
 Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
 
-- **Vincular aluno a professor.** Só direto no banco. Sem isso, quem se cadastra
-  fica na lista de espera para sempre.
-- **Liberar/suspender acesso.** A RLS e o grant já permitem ao professor
-  escrever em `subscriptions`; falta a tela.
 - **Criar planejamento e cadastrar blocos.** `study_plans` e
   `study_plan_blocks` só nascem no seed.
 - **Ativar planejamento.** A RPC `activate_study_plan` existe e ninguém chama.
@@ -555,25 +600,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 13 — vínculo e liberação de acesso
-
-Spec: [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-e-liberacao-de-acesso.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-VINC-01** — aluno cadastrado, inscrito na lista de espera e sem professor
-  aparece em "Candidatos" para um professor qualquer.
-- **F-VINC-02** — vincular cria o vínculo, tira o candidato da fila e o aluno
-  passa a aparecer em "Meus alunos" com "Aguardando liberação".
-- **F-VINC-03** — depois de vinculado, o candidato não aparece na fila de outro
-  professor.
-- **F-VINC-04** — liberar por 3 meses cria a assinatura com vigência de hoje a
-  hoje+3 meses, e o aluno passa a abrir as telas de estudo.
-- **F-VINC-05** — liberar de novo quem já tem assinatura ativa estende a mesma
-  linha, sem criar uma segunda.
-- **F-VINC-06** — suspender troca o badge, preserva a vigência e devolve o aluno
-  à lista de espera.
-- **F-VINC-07** — vincular duas vezes seguidas devolve o mesmo vínculo, sem
-  segunda linha e sem erro na tela.
 
 
 
