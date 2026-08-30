@@ -1450,3 +1450,113 @@ test.describe("F-CUP-04 · o cupom não cria vínculo", () => {
     ).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §2 — iniciar a bateria pelo caderno.
+// Spec docs/specs/31-iniciar-bateria-pelo-caderno.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-LIVR-01 · iniciar pelo caderno", () => {
+  test("o botão leva ao TEC com a bateria da meta do bloco", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno/cadernos");
+
+    const linha = studentPage.locator("tbody tr", { hasText: scenario.blocks[0]!.name });
+    await expect(linha).toBeVisible();
+    await linha.getByRole("button", { name: "Iniciar bateria" }).click();
+
+    // O domínio do TEC é interceptado em todo teste: a URL é lida do frame
+    // depois da navegação, porque o fragmento não chega ao servidor.
+    await studentPage.waitForURL(/tecconcursos\.com\.br/);
+    expect(studentPage.url()).toContain("boraQuizStart=");
+
+    // E a sessão existe, ligada à meta do bloco.
+    const sessao = await one<{ goal_id: string; block_id: string }>(
+      "select goal_id, block_id from public.quiz_sessions where study_plan_id = $1",
+      [scenario.planId],
+    );
+    expect(sessao.block_id).toBe(scenario.blocks[0]!.id);
+    expect(sessao.goal_id).toBe(scenario.quizGoal.id);
+  });
+});
+
+test.describe("F-LIVR-02 · bloco sem meta pendente", () => {
+  test.use({ scenarioOptions: { withGoals: false } });
+
+  test("diz que não tem, em vez de oferecer um botão que falharia", async ({
+    studentPage,
+  }) => {
+    await studentPage.goto("/aluno/cadernos");
+
+    const linhas = studentPage.locator("tbody tr");
+    await expect(linhas.first()).toBeVisible();
+    await expect(linhas.first()).toContainText("Sem meta pendente");
+    await expect(studentPage.getByRole("button", { name: "Iniciar bateria" })).toHaveCount(0);
+  });
+});
+
+test.describe("F-LIVR-03 · com bateria aberta", () => {
+  test("todo bloco aponta para ela, e não para uma nova", async ({
+    studentPage,
+    scenario,
+  }) => {
+    // Abre a bateria pela RPC real, como a visão geral faria.
+    await asUser(scenario.student.id, (client) =>
+      client.query("select public.start_quiz_session($1::uuid, $2::uuid, $3::uuid)", [
+        scenario.planId,
+        scenario.blocks[0]!.id,
+        scenario.quizGoal.id,
+      ]),
+    );
+
+    await studentPage.goto("/aluno/cadernos");
+
+    // Só existe uma bateria aberta por planejamento: oferecer "Iniciar" no
+    // outro bloco daria um botão que só levanta erro.
+    const continuar = studentPage.getByRole("button", { name: "Continuar no TEC" });
+    await expect(continuar).toHaveCount(scenario.blocks.length);
+    await expect(studentPage.getByRole("button", { name: "Iniciar bateria" })).toHaveCount(0);
+  });
+});
+
+test.describe("F-LIVR-04 · é a mesma bateria da visão geral", () => {
+  test("iniciar pelo caderno e voltar à visão geral mostra a mesma sessão", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno/cadernos");
+    const linha = studentPage.locator("tbody tr", { hasText: scenario.blocks[0]!.name });
+    await expect(linha).toBeVisible();
+    await linha.getByRole("button", { name: "Iniciar bateria" }).click();
+    await studentPage.waitForURL(/tecconcursos\.com\.br/);
+
+    await studentPage.goto("/aluno");
+
+    // Uma sessão, uma meta: não há caminho paralelo para o mesmo ato.
+    await expect(studentPage.getByRole("button", { name: "Continuar no TEC" })).toBeVisible();
+    expect(
+      await count("select count(*) from public.quiz_sessions where study_plan_id = $1", [
+        scenario.planId,
+      ]),
+    ).toBe(1);
+    expect(await goalStatus(scenario.quizGoal.id)).toBe("in_progress");
+  });
+});
+
+test.describe("F-LIVR-05 · bloco desativado", () => {
+  test("não oferece início, porque a RPC recusaria", async ({ studentPage, scenario }) => {
+    await asUser(scenario.teacher.id, (client) =>
+      client.query("update public.study_plan_blocks set active = false where id = $1", [
+        scenario.blocks[0]!.id,
+      ]),
+    );
+
+    await studentPage.goto("/aluno/cadernos");
+
+    const linha = studentPage.locator("tbody tr", { hasText: scenario.blocks[0]!.name });
+    await expect(linha).toContainText("Bloco desativado");
+    await expect(linha.getByRole("button", { name: "Iniciar bateria" })).toHaveCount(0);
+  });
+});

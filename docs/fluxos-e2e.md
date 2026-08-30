@@ -357,6 +357,28 @@ botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
 
+### F-LIVR-01 — Iniciar a bateria pelo caderno
+**Esperado** o botão na linha do bloco abre o TEC com `boraQuizStart=`, e a
+sessão nasce ligada à meta daquele bloco. É a **mesma** `start_quiz_session` de
+`/aluno`: não há caminho paralelo para o mesmo ato.
+
+### F-LIVR-02 — Bloco sem meta pendente
+**Esperado** "Sem meta pendente", e nenhum botão. Oferecer o início sem meta
+daria um botão que só levanta erro — é o `'—'` da v96 com a razão escrita.
+
+### F-LIVR-03 — Com bateria aberta
+**Esperado** **todo** bloco mostra "Continuar no TEC", inclusive os outros. Só
+existe uma bateria aberta por planejamento, e `start_quiz_session` recusa a
+segunda.
+
+### F-LIVR-04 — É a mesma bateria da visão geral
+**Esperado** iniciar pelo caderno e voltar a `/aluno` mostra a mesma sessão: uma
+linha em `quiz_sessions` e a meta em `in_progress`.
+
+### F-LIVR-05 — Bloco desativado
+**Esperado** "Bloco desativado" e nenhum botão: `start_quiz_session` recusaria
+com "bloco invalido ou indisponivel".
+
 ### F-CUP-01 — Resgatar um cupom
 **Esperado** o código é aceito **normalizado** — sem espaços, maiúsculas ou
 minúsculas tanto faz —, a assinatura nasce `active` com plano `cupom`, e as
@@ -1091,7 +1113,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 274 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 279 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -1134,16 +1156,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 31 — iniciar a bateria pelo caderno
-
-Spec: [`specs/31-iniciar-bateria-pelo-caderno.md`](specs/31-iniciar-bateria-pelo-caderno.md).
-Migram para a §2 quando os testes existirem.
-
-- **F-LIVR-01** — o aluno inicia a bateria pelo caderno e chega ao TEC.
-- **F-LIVR-02** — bloco sem meta pendente diz que não tem.
-- **F-LIVR-03** — com bateria aberta, todo bloco aponta para ela.
-- **F-LIVR-04** — é a mesma bateria da visão geral: uma sessão, uma meta.
-- **F-LIVR-05** — bloco desativado não oferece início.
 
 
 

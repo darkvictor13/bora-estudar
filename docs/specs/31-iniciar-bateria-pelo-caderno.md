@@ -1,6 +1,6 @@
 # 31 — Iniciar a bateria pelo caderno
 
-**Situação:** não implementada · **Comparativo:** §12 item 16 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §3 · **Fluxos e2e:** F-LIVR-01 a F-LIVR-05
+**Situação:** implementada · **Comparativo:** §12 item 16 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §3 · **Fluxos e2e:** F-LIVR-01 a F-LIVR-05
 
 ---
 
