@@ -83,7 +83,7 @@ linha 247.
 | Redefinir senha pelo link | `salvarNovaSenhaSupabase` index.js:2298 | ✅ | 01 | — |
 | Roteamento por perfil | `destinoPorPerfil` index.js:2195 | ✅ | 01 | — |
 | Tema claro e escuro | `toggleTheme` index.js:1945 | ✅ | 11 | — |
-| **Entrar com Google (OAuth)** | `iniciarLoginGoogle` index.js:2029 | ❌ | | pendente |
+| **Entrar com Google (OAuth)** | `iniciarLoginGoogle` index.js:2029 | ❌ | | **bloqueada: provedor não configurado** |
 | **Mostrar/ocultar a senha digitada** | `alternarVisibilidadeSenha` index.js:2008 | ✅ | 29 | implementada |
 | Cupom de acesso concede 3 meses | `dadosCupomAcesso` aluno.js:3905, `CUPONS_ACESSO_TESTE` | 🟡 | | pendente |
 | Vínculo automático ao professor padrão no cadastro | `garantirPerfilNovoAluno` index.js:2045 (`PROFESSOR_PADRAO_ID`) | 🟡 | | pendente |
@@ -453,7 +453,7 @@ condução dentro do TEC.
 | ~~16~~ | Professor edita os próprios dados — spec [27](specs/27-dados-do-professor.md) ✅ | 1 migration (grant), site |
 | ~~17~~ | Painel arrastável e resumo por tópicos — spec [28](specs/28-painel-arrastavel-e-topicos.md) ✅ | extensão |
 | ~~18~~ | Sidebar recolhível; mostrar/ocultar senha — spec [29](specs/29-sidebar-e-senha-visivel.md) ✅ | site |
-| 19 | Login com Google | site, exige configuração de provedor |
+| 19 | Login com Google | **bloqueada** — ver [Bloqueios](#bloqueios) |
 | 20 | Cupom de acesso | 1 RPC, site |
 | 21 | Bateria livre por bloco, fora da meta | 1 RPC, site |
 
@@ -486,4 +486,42 @@ escopo" da spec vizinha quando ela for escrita.
 
 ## Bloqueios
 
-Nenhum até agora.
+### 19 — Login com Google
+
+**Bloqueada em 31/08/2026: o provedor OAuth não está configurado, e configurá-lo
+exige credenciais que não estão neste repositório.**
+
+O que foi verificado:
+
+- `supabase/config.toml` **não tem** bloco `[auth.external.google]`. O arquivo
+  traz o modelo comentado do Apple, e nada do Google;
+- não existe `client_id` nem `secret` do Google em lugar nenhum do repositório —
+  nem em `.env.example`, nem em variável de CI. Os segredos dos workflows são
+  `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` e `CLOUDFLARE_API_TOKEN`;
+- sem o provedor habilitado no projeto Supabase, `signInWithOAuth` não
+  redireciona: devolve *"Unsupported provider: provider is not enabled"*.
+
+**Por que não foi entregue pela metade.** Daria para habilitar o provedor no
+`config.toml` local com credencial de mentira e escrever um teste que intercepta
+o redirecionamento para `accounts.google.com` — o e2e já intercepta o domínio do
+TEC assim. Só que staging e produção continuariam sem credencial, e o resultado
+seria um botão "Entrar com Google" visível para quem usa o produto, levando a
+uma tela de erro do provedor. Botão que falha é pior que botão ausente, e o
+`CLAUDE.md` não deixa afirmar que algo funciona sem ter rodado.
+
+**O que destrava**, na ordem:
+
+1. criar as credenciais OAuth no Google Cloud Console, com as URIs de retorno
+   dos dois ambientes (`https://<projeto>.supabase.co/auth/v1/callback`);
+2. habilitar o provedor no painel do Supabase de staging e de produção;
+3. acrescentar `[auth.external.google]` ao `config.toml` para o ambiente local,
+   com `secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"` — nunca o valor
+   literal, que o `CLAUDE.md` proíbe commitar;
+4. `skip_nonce_check = true` **só no local**: o comentário do próprio
+   `config.toml` diz que é exigido para o login com Google local.
+
+Feito isso, a superfície do site é pequena: um botão em `/entrar` e `/cadastro`
+chamando `signInWithOAuth({ provider: "google" })`, e `/confirmar` — que já
+existe e já trata o retorno do link mágico — recebendo também este retorno. O
+fluxo e2e é o de interceptar `accounts.google.com` e conferir que a URL montada
+leva o `redirect_to` do ambiente.
