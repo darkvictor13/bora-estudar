@@ -276,7 +276,7 @@ function weekOneGoals(blockIds: readonly string[], suffix: string): unknown[] {
       position: 1,
       type: "extra_study",
       title: `Revisão livre da semana · ${suffix}`,
-      extra_activity: "revisao",
+      extra_activity: "review",
       planned_minutes: 45,
     },
   ];

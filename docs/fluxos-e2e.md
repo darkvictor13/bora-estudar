@@ -223,6 +223,40 @@ outro aluno.
 `/aluno/conta` e `/aluno/lista-espera` continuam abrindo; os itens de estudo da
 sidebar vêm com `aria-disabled="true"`.
 
+### Estudo extra avulso — F-EXTRA-01 a 06
+
+Spec: [`specs/19-estudo-extra-avulso.md`](specs/19-estudo-extra-avulso.md). O
+botão "Registrar estudo extra" fica no cabeçalho do cartão da semana; o submit
+do formulário é "Registrar", e o clique precisa de `{ exact: true }` para não
+casar o botão que o abriu.
+
+#### F-EXTRA-01 — Registrar
+**Esperado** "Estudo extra registrado."; a linha aparece como "Estudo extra —
+Anki", concluída, com a observação e o tempo; no banco, `status='completed'`,
+`extra_activity='flashcards'`, `created_by` do aluno, `block_id` nulo.
+
+#### F-EXTRA-02 — Entra no tempo, não no desempenho
+**Esperado** "0 de 5" vira "1 de 6" — a meta nasce concluída, então sobe os
+dois lados; `1:20` vira 80 minutos em `minutes_spent`; `questions_answered`
+continua 0.
+
+#### F-EXTRA-03 — Os sete tipos
+**Esperado** o `<select>` oferece Lei seca, Anki, Simulado, Revisão, Questões
+extras, Videoaula e Outro, nessa ordem, e grava o valor em inglês.
+
+#### F-EXTRA-04 — Remover
+**Esperado** "Registro removido."; a linha some da semana e `deleted_at` fica
+preenchido — a linha continua no banco.
+
+#### F-EXTRA-05 — A meta do professor não é removível pelo aluno
+**Esperado** a linha planejada não tem "Remover", e `delete_extra_study`
+chamada direto levanta "planejada pelo professor". `created_by` é o que separa
+as duas: ambas são `extra_study`.
+
+#### F-EXTRA-06 — Validação do tempo
+**Esperado** `241` e texto sem número são recusados, e a contagem de metas não
+muda.
+
 ### Conclusão de meta sem bateria — F-CONC-01 a 06
 
 Spec: [`specs/12-conclusao-de-meta.md`](specs/12-conclusao-de-meta.md). Meta de
@@ -717,10 +751,10 @@ e `05_teacher_writes.sql`.
 
 | Comando | Cobertura |
 |---|---|
-| `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
+| `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 206 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 213 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -729,7 +763,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | Arquivo | Fluxos | Testes |
 |---|---|---|
 | `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
-| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
+| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14, F-CONC-01 a 06 e F-EXTRA-01 a 06 | 52 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
 | `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05, F-TURMA-01 a 05 e F-PREV-01 a 06 | 71 |
@@ -768,20 +802,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 19 — estudo extra avulso
-
-Spec: [`specs/19-estudo-extra-avulso.md`](specs/19-estudo-extra-avulso.md).
-Migram para a §2 quando os testes existirem.
-
-- **F-EXTRA-01** — registrar cria a meta no dia escolhido, já concluída, com
-  tempo, tipo e título derivado.
-- **F-EXTRA-02** — o tempo entra na contagem da semana; nenhum número de acerto
-  muda.
-- **F-EXTRA-03** — os sete tipos são oferecidos e gravam o valor em inglês.
-- **F-EXTRA-04** — remover marca `deleted_at` e a linha some da semana.
-- **F-EXTRA-05** — o aluno não remove meta de estudo extra planejada pelo
-  professor.
-- **F-EXTRA-06** — tempo fora de 1–240 é recusado, e nada é gravado.
 
 
 

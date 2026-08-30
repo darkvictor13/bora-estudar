@@ -2,7 +2,7 @@
  * §2 do `docs/fluxos-e2e.md` — telas do aluno.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { addWeek, goalStatus } from "../fixtures/scenario.ts";
+import { addWeek, goalCount, goalStatus } from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
 import { asUser, count, one } from "../fixtures/db.ts";
 import { PAGE_TITLES, STUDENT_ROUTES, STUDENT_STUDY_ROUTES } from "../support/routes.ts";
@@ -497,4 +497,180 @@ test.describe("F-CONC-06 · meta de bateria não conclui por aqui", () => {
 
     expect(await goalStatus(scenario.quizGoal.id)).toBe("pending");
   });
+});
+
+// ---------------------------------------------------------------------------
+// §2 — estudo extra avulso. Spec docs/specs/19-estudo-extra-avulso.md
+// ---------------------------------------------------------------------------
+
+/** Abre e preenche o formulário de estudo extra. */
+async function registerExtra(
+  page: import("@playwright/test").Page,
+  { activity = "flashcards", minutes = "45", note = "" }: {
+    activity?: string;
+    minutes?: string;
+    note?: string;
+  } = {},
+) {
+  await page.getByRole("button", { name: "Registrar estudo extra" }).click();
+  await page.locator("#extra-activity").selectOption(activity);
+  await page.locator("#extra-minutes").fill(minutes);
+  if (note) await page.locator("#extra-note").fill(note);
+  await page.locator(".content").getByRole("button", { name: "Registrar", exact: true }).click();
+}
+
+test.describe("F-EXTRA-01 · registrar estudo extra", () => {
+  test("cria a meta já concluída, com título derivado do tipo", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno");
+    await registerExtra(studentPage, { activity: "flashcards", minutes: "45", note: "Baralho de penal" });
+
+    await expect(studentPage.locator(".alert--success")).toHaveText("Estudo extra registrado.");
+
+    const row = studentPage.locator("tbody tr", { hasText: "Estudo extra — Anki" });
+    await expect(row.locator(".badge")).toHaveText("Concluída");
+    await expect(row).toContainText("Baralho de penal");
+    await expect(row).toContainText("45min");
+
+    const saved = await one<{
+      status: string;
+      extra_activity: string;
+      spent_minutes: number;
+      created_by: string;
+      block_id: string | null;
+    }>(
+      `select status::text, extra_activity::text, spent_minutes, created_by, block_id
+         from public.goals where study_plan_id = $1 and title = 'Estudo extra — Anki'`,
+      [scenario.planId],
+    );
+    expect(saved).toMatchObject({
+      status: "completed",
+      extra_activity: "flashcards",
+      spent_minutes: 45,
+      created_by: scenario.student.id,
+      block_id: null,
+    });
+  });
+});
+
+test.describe("F-EXTRA-02 · entra no tempo, não no desempenho", () => {
+  test("a contagem da semana sobe dos dois lados e nenhum acerto muda", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator(".card__sub").first()).toHaveText("0 de 5 metas concluídas");
+
+    await registerExtra(studentPage, { minutes: "1:20" });
+
+    // A meta nasce concluída: sobe o numerador E o denominador.
+    await expect(studentPage.locator(".card__sub").first()).toHaveText("1 de 6 metas concluídas");
+    await expect(studentPage.locator("tbody tr", { hasText: "Estudo extra — Anki" })).toContainText(
+      "1h20",
+    );
+
+    // Nenhum número de acerto: estudo extra tem tempo, não tem acerto.
+    const perf = await one<{ questions_answered: string; minutes_spent: string }>(
+      `select questions_answered, minutes_spent from public.vw_goal_performance
+        where goal_id = (select id from public.goals
+                          where study_plan_id = $1 and title = 'Estudo extra — Anki')`,
+      [scenario.planId],
+    );
+    expect(Number(perf.questions_answered)).toBe(0);
+    expect(Number(perf.minutes_spent)).toBe(80);
+  });
+});
+
+test.describe("F-EXTRA-03 · os sete tipos", () => {
+  test("são oferecidos e gravam o valor em inglês", async ({ studentPage, scenario }) => {
+    await studentPage.goto("/aluno");
+    await studentPage.getByRole("button", { name: "Registrar estudo extra" }).click();
+
+    const options = await studentPage.locator("#extra-activity option").allTextContents();
+    expect(options).toEqual([
+      "Lei seca",
+      "Anki",
+      "Simulado",
+      "Revisão",
+      "Questões extras",
+      "Videoaula",
+      "Outro",
+    ]);
+
+    await studentPage.locator("#extra-activity").selectOption("mock_exam");
+    await studentPage.locator("#extra-minutes").fill("120");
+    await studentPage.locator(".content").getByRole("button", { name: "Registrar", exact: true }).click();
+
+    await expect(studentPage.locator("tbody tr", { hasText: "Estudo extra — Simulado" })).toBeVisible();
+    expect(
+      await count(
+        "select count(*) from public.goals where study_plan_id = $1 and extra_activity = 'mock_exam'",
+        [scenario.planId],
+      ),
+    ).toBe(1);
+  });
+});
+
+test.describe("F-EXTRA-04 · remover", () => {
+  test("marca deleted_at e a linha some da semana", async ({ studentPage, scenario }) => {
+    await studentPage.goto("/aluno");
+    await registerExtra(studentPage);
+    await expect(studentPage.locator("tbody tr", { hasText: "Estudo extra — Anki" })).toBeVisible();
+
+    await studentPage
+      .locator("tbody tr", { hasText: "Estudo extra — Anki" })
+      .getByRole("button", { name: "Remover" })
+      .click();
+
+    await expect(studentPage.locator(".alert--success")).toHaveText("Registro removido.");
+    await expect(studentPage.locator("tbody tr", { hasText: "Estudo extra — Anki" })).toHaveCount(0);
+
+    // deleted_at, nunca DELETE: a linha continua no banco.
+    const saved = await one<{ deleted_at: string | null }>(
+      "select deleted_at from public.goals where study_plan_id = $1 and title = 'Estudo extra — Anki'",
+      [scenario.planId],
+    );
+    expect(saved.deleted_at).not.toBeNull();
+  });
+});
+
+test.describe("F-EXTRA-05 · a meta do professor não é removível pelo aluno", () => {
+  test("a linha planejada não oferece Remover", async ({ studentPage, scenario }) => {
+    // O cenário traz uma meta extra_study criada pelo PROFESSOR.
+    const doProfessor = scenario.goals.find((g) => g.type === "extra_study")!;
+
+    await studentPage.goto("/aluno");
+    const row = studentPage.locator("tbody tr", { hasText: doProfessor.title });
+
+    // Ela está pendente, então oferece Concluir — e nunca Remover.
+    await expect(row.getByRole("button", { name: "Remover" })).toHaveCount(0);
+
+    // E a RPC recusa mesmo chamada direto: created_by é do professor.
+    await expect(
+      asUser(scenario.student.id, (client) =>
+        client.query("select public.delete_extra_study($1::uuid, gen_random_uuid())", [
+          doProfessor.id,
+        ]),
+      ),
+    ).rejects.toThrow(/planejada pelo professor/);
+  });
+});
+
+test.describe("F-EXTRA-06 · validação do tempo", () => {
+  for (const [label, value] of [
+    ["acima do teto", "241"],
+    ["texto", "abacaxi"],
+  ] as const) {
+    test(`${label} é recusado e nada é gravado`, async ({ studentPage, scenario }) => {
+      const antes = await goalCount(scenario.planId);
+
+      await studentPage.goto("/aluno");
+      await registerExtra(studentPage, { minutes: value });
+
+      await expect(studentPage.locator(".alert--error")).toBeVisible();
+      expect(await goalCount(scenario.planId)).toBe(antes);
+    });
+  }
 });

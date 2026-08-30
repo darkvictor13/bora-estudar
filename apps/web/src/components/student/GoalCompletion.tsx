@@ -3,7 +3,18 @@ import { useFormStatus } from "react-dom";
 
 import { Alert } from "@/components/ui";
 import { useFormActionState } from "@/lib/forms/useFormActionState";
-import { completeGoal, reopenGoal, MAX_GOAL_MINUTES } from "@/lib/data/goal-actions";
+import {
+  completeGoal,
+  deleteExtraStudy,
+  recordExtraStudy,
+  reopenGoal,
+  MAX_GOAL_MINUTES,
+} from "@/lib/data/goal-actions";
+import {
+  EXTRA_ACTIVITIES,
+  EXTRA_ACTIVITY_LABEL,
+  weekdayName,
+} from "@/lib/domain/goals";
 
 function Submit({
   label,
@@ -102,6 +113,112 @@ export function ReopenGoalForm({ goalId, week }: { goalId: string; week: number 
       <input type="hidden" name="goalId" value={goalId} />
       <input type="hidden" name="week" value={week} />
       <Submit label="Desfazer" pendingLabel="Desfazendo…" variant="ghost" />
+    </form>
+  );
+}
+
+/**
+ * Registra estudo feito fora da semana montada pelo professor.
+ *
+ * Nasce concluído: é registro do que aconteceu, não plano. O tipo é um
+ * `<select>` com os sete valores fechados — o que a pessoa quer escrever vai na
+ * observação, nunca no título.
+ */
+export function ExtraStudyForm({
+  studyPlanId,
+  week,
+  weekdays,
+}: {
+  studyPlanId: string;
+  week: number;
+  weekdays: readonly number[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction] = useFormActionState(recordExtraStudy);
+
+  if (!open) {
+    return (
+      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpen(true)}>
+        Registrar estudo extra
+      </button>
+    );
+  }
+
+  return (
+    <form action={formAction} className="stack-sm" noValidate>
+      {state.error && <Alert kind="error">{state.error}</Alert>}
+      <input type="hidden" name="studyPlanId" value={studyPlanId} />
+      <input type="hidden" name="week" value={week} />
+
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <div className="field" style={{ minWidth: 170, marginBottom: 0 }}>
+          <label className="field__label" htmlFor="extra-activity">
+            O que você estudou
+          </label>
+          <select id="extra-activity" name="activity" defaultValue="review">
+            {EXTRA_ACTIVITIES.map((kind) => (
+              <option key={kind} value={kind}>
+                {EXTRA_ACTIVITY_LABEL[kind]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field" style={{ minWidth: 140, marginBottom: 0 }}>
+          <label className="field__label" htmlFor="extra-weekday">
+            Dia
+          </label>
+          <select id="extra-weekday" name="weekday" defaultValue={weekdays[0] ?? 1}>
+            {weekdays.map((day) => (
+              <option key={day} value={day}>
+                {weekdayName(day)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field" style={{ minWidth: 130, marginBottom: 0 }}>
+          <label className="field__label" htmlFor="extra-minutes">
+            Tempo
+          </label>
+          <input
+            id="extra-minutes"
+            name="minutes"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="45"
+          />
+        </div>
+      </div>
+
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label className="field__label" htmlFor="extra-note">
+          Observação <span className="muted">(opcional)</span>
+        </label>
+        <textarea id="extra-note" name="note" rows={2} maxLength={2000} />
+      </div>
+
+      <div className="row">
+        <Submit label="Registrar" pendingLabel="Registrando…" />
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpen(false)}>
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Remove um registro avulso. Só aparece no que o próprio aluno criou. */
+export function DeleteExtraForm({ goalId, week }: { goalId: string; week: number }) {
+  const [state, formAction] = useFormActionState(deleteExtraStudy);
+
+  return (
+    <form action={formAction}>
+      {state.error && <Alert kind="error">{state.error}</Alert>}
+      <input type="hidden" name="goalId" value={goalId} />
+      <input type="hidden" name="week" value={week} />
+      <Submit label="Remover" pendingLabel="Removendo…" variant="ghost" />
     </form>
   );
 }

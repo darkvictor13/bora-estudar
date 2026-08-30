@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { requireStudentAccess } from "@/lib/auth/session";
-import { parseDuration } from "@/lib/domain/goals";
+import { EXTRA_ACTIVITIES, parseDuration } from "@/lib/domain/goals";
+import type { Enum } from "@bora/database";
 import { ROUTES } from "@/lib/routes";
 import type { FormState } from "@/lib/auth/actions";
 
@@ -130,4 +131,86 @@ export async function reopenGoal(_prev: FormState, data: FormData): Promise<Form
   if (error) return { error: translateGoalError(error.message) };
 
   return { redirectTo: backTo(data, "reaberta") };
+}
+
+// ---------------------------------------------------------------------------
+// Estudo extra avulso — spec docs/specs/19-estudo-extra-avulso.md
+// ---------------------------------------------------------------------------
+
+function translateExtraError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("ainda nao tem metas neste planejamento")) {
+    return "Esta semana ainda não foi montada pelo seu professor.";
+  }
+  if (m.includes("planejamento nao esta active")) {
+    return "Seu planejamento não está ativo. Fale com seu professor.";
+  }
+  if (m.includes("somente o aluno")) return "Este planejamento não é seu.";
+  if (m.includes("planejada pelo professor")) {
+    return "Esta meta foi planejada pelo seu professor. Use Desfazer para reabri-la.";
+  }
+  if (m.includes("so registro de estudo extra")) {
+    return "Só um registro de estudo extra pode ser removido.";
+  }
+  if (m.includes("tempo em minutos deve estar entre")) {
+    return `Informe um tempo entre 1 e ${MAX_GOAL_MINUTES} minutos.`;
+  }
+  return translateGoalError(message);
+}
+
+/** Registra o que o aluno estudou fora da semana montada pelo professor. */
+export async function recordExtraStudy(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireStudentAccess();
+
+  const studyPlanId = String(data.get("studyPlanId") ?? "");
+  const week = Number(data.get("week"));
+  const weekday = Number(data.get("weekday"));
+  const activity = String(data.get("activity") ?? "") as Enum<"extra_activity_kind">;
+  if (!studyPlanId) return { error: "Planejamento não identificado." };
+  if (!Number.isInteger(week) || week < 1) return { error: "Semana inválida." };
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+    return { error: "Escolha o dia do estudo." };
+  }
+  if (!EXTRA_ACTIVITIES.includes(activity)) return { error: "Escolha o tipo de estudo." };
+
+  const minutes = parseDuration(String(data.get("minutes") ?? ""));
+  if (minutes === null || minutes <= 0) {
+    return { error: "Informe o tempo em minutos ou no formato hora:minuto. Ex.: 45 ou 1:20." };
+  }
+  if (minutes > MAX_GOAL_MINUTES) {
+    return { error: `O tempo de um estudo não passa de ${MAX_GOAL_MINUTES} minutos (4 horas).` };
+  }
+
+  const note = String(data.get("note") ?? "").trim();
+
+  const { error } = await supabase.rpc("record_extra_study", {
+    p_study_plan_id: studyPlanId,
+    p_request_id: crypto.randomUUID(),
+    p_week: week,
+    p_weekday: weekday,
+    p_activity: activity,
+    p_spent_minutes: minutes,
+    ...(note ? { p_note: note } : {}),
+  });
+
+  if (error) return { error: translateExtraError(error.message) };
+
+  return { redirectTo: backTo(data, "extra") };
+}
+
+/** Remove um registro que o próprio aluno criou. */
+export async function deleteExtraStudy(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireStudentAccess();
+
+  const goalId = String(data.get("goalId") ?? "");
+  if (!goalId) return { error: "Registro não identificado." };
+
+  const { error } = await supabase.rpc("delete_extra_study", {
+    p_goal_id: goalId,
+    p_request_id: crypto.randomUUID(),
+  });
+
+  if (error) return { error: translateExtraError(error.message) };
+
+  return { redirectTo: backTo(data, "extra-removido") };
 }
