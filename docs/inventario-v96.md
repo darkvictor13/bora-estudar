@@ -215,8 +215,8 @@ do domínio. `review_cycles` guarda ciclo de reforço, que é outro conceito.
 | Blocos × desempenho com composição P/E/R | `renderEstatisticas` aluno.js:3770 | ✅ | 08 | — |
 | Ver tópicos do bloco antes de estudar | `htmlTopicosBloco` aluno.js:1514 | 🟡 | | pendente |
 | Resumo por tópicos da bateria concluída | `resumoBateriaDb` aluno.js:4444 | 🟡 | | pendente |
-| **Tempo de estudo por período** (hoje/semana/mês/ano/total) | `obterResumoTempoEstudo` aluno.js:924 | ❌ | 25 | especificada |
-| **Série de desempenho por semana** | `getWeeklyStats` aluno.js:3549 | ❌ | 25 | especificada |
+| **Tempo de estudo por período** (hoje/semana/mês/ano/total) | `obterResumoTempoEstudo` aluno.js:924 | ✅ | 25 | implementada |
+| **Série de desempenho por semana** | `getWeeklyStats` aluno.js:3549 | ✅ | 25 | implementada |
 | **Radar por disciplina** (≥3 matérias) | `svgRadarDisciplinas` aluno.js:3679 | ❌ | | pendente |
 | **Filtros de histórico por plano e por ano** | `carregarHistoricoEstatisticasAluno` aluno.js:777 | ❌ | | pendente |
 | **Marcar teoria/PDF e caderno TEC como feitos** | `toggleAula` aluno.js:3494 | ❌ | | pendente |
@@ -345,7 +345,7 @@ total comporta, e o resto pelo maior resto. No PCPR Reta Final a soma dos
 | **Dificuldades por tópico** | `abrirDificuldadesAluno` professor.js:3925 | ✅ | 23 | implementada |
 | **Agendar reforço para o aluno** | `agendarReforcoAlunoSupabase` professor.js:3813 | ❌ | | pendente |
 | Estatísticas gerais do professor | `renderEstatisticas` professor.js:2217 | 🟡 | 08 | — |
-| **Tempo de estudo e sequência de dias** | `renderTempoEstudoStats` professor.js:644 e `calcularSequenciaEstudos` aluno.js:1162 | ❌ | 25 | especificada |
+| **Tempo de estudo e sequência de dias** | `renderTempoEstudoStats` professor.js:644 e `calcularSequenciaEstudos` aluno.js:1162 | ✅ | 25 | implementada |
 | Controle manual de revisões | `renderControleRevisoes` professor.js:1792 | ✅ | 24 | implementada |
 | **Editar os próprios dados como professor** | não existe na v96 | 🟡 | | pendente |
 
@@ -448,7 +448,7 @@ condução dentro do TEC.
 
 | # | Feature | Superfície prevista |
 |---|---|---|
-| 14 | Tempo de estudo, séries temporais e sequência de dias — spec [25](specs/25-tempo-de-estudo-e-series.md) | 1 view, site |
+| ~~14~~ | Tempo de estudo, séries temporais e sequência de dias — spec [25](specs/25-tempo-de-estudo-e-series.md) ✅ | 1 view, site |
 | 15 | Resumo por tópicos da bateria concluída | site |
 | 16 | Professor edita os próprios dados | site |
 | 17 | Painel arrastável na extensão | extensão |

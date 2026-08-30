@@ -1,6 +1,6 @@
 # 25 — Tempo de estudo, série semanal e sequência de dias
 
-**Situação:** não implementada · **Comparativo:** §12 item 10 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 e §9 · **Fluxos e2e:** F-TEMP-01 a F-TEMP-07
+**Situação:** implementada · **Comparativo:** §12 item 10 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 e §9 · **Fluxos e2e:** F-TEMP-01 a F-TEMP-07
 
 ---
 
