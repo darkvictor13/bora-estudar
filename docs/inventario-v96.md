@@ -252,10 +252,10 @@ inventário.**
 | **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ✅ | 13 | implementada |
 | **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ✅ | 13 | implementada |
 | **Badge de acesso com data de validade** | `badgeAcessoAluno` professor.js:4011 | ✅ | 13 | implementada |
-| **Classificação Em ritmo / Atenção / Atrasado / Sem dados** | `classificarAluno` professor.js:3274 | ❌ | | pendente |
-| **KPIs no card do aluno** (desempenho, questões, metas, barra) | `renderCardAlunoHTML` professor.js:4019 | ❌ | | pendente |
-| **Resumo da turma** (4 métricas no topo) | `renderResumoAlunos` professor.js:3516 | ❌ | | pendente |
-| **Busca por nome e filtros por status e por plano** | `filtrarAlunos` professor.js:4096 | ❌ | | pendente |
+| **Classificação Em ritmo / Atenção / Atrasado / Sem dados** | `classificarAluno` professor.js:3274 | ❌ | 17 | especificada |
+| **KPIs no card do aluno** (desempenho, questões, metas, barra) | `renderCardAlunoHTML` professor.js:4019 | ❌ | 17 | especificada |
+| **Resumo da turma** (4 métricas no topo) | `renderResumoAlunos` professor.js:3516 | ❌ | 17 | especificada |
+| **Busca por nome e filtros por status e por plano** | `filtrarAlunos` professor.js:4096 | ❌ | 17 | especificada |
 | **Histórico de baterias do aluno** | `abrirBateriasAluno` professor.js:3962 | ✅ | 16 | implementada |
 
 **A v96 também não tinha tela para vincular aluno.** O vínculo nascia
@@ -424,7 +424,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 |---|---|---|---|
 | ~~4~~ | **Gerenciar blocos do planejamento** — spec [15](specs/15-cadernos-do-planejamento.md), **implementada** | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
 | ~~5~~ | **Anular bateria e ver o histórico** — spec [16](specs/16-historico-e-anulacao-de-bateria.md), **implementada** | `void_quiz_session` pronta e sem chamador; e o professor não vê as baterias do aluno para apontar qual anular | 0 RPC, 0 migration, site |
-| 6 | **Ficha da turma** — KPIs, classificação, busca e filtros | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
+| 6 | **Ficha da turma** — spec [17](specs/17-ficha-da-turma.md) | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
 | 7 | **Prévia e distribuição por peso na geração da semana** | Hoje o professor gera às cegas | 0 RPC, 0 migration, site |
 | 8 | **Registrar estudo extra avulso** — a metade que saiu da spec 12 | Separada pelo portão do Passo 4: seria a terceira RPC nova, e ela **cria** meta em vez de concluir. Vem depois da spec 12 porque a semana do professor já traz meta de estudo extra, e concluí-la é o que destrava o seed hoje | 1 RPC (`record_extra_study`), 1 migration (enum `extra_activity_kind`, 7 valores), site |
 

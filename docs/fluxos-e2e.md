@@ -704,6 +704,20 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 17 — ficha da turma
+
+Spec: [`specs/17-ficha-da-turma.md`](specs/17-ficha-da-turma.md). Migram para a
+§4 quando os testes existirem.
+
+- **F-TURMA-01** — a lista mostra progresso, desempenho oficial e faixa de cada
+  aluno, e o resumo da turma bate com as linhas.
+- **F-TURMA-02** — aluno abaixo de 70% aparece como "Atenção"; acima, "Em ritmo".
+- **F-TURMA-03** — `?busca=` casa nome e e-mail sem acento; `?situacao=` e
+  `?plano=` filtram.
+- **F-TURMA-04** — valor inválido em qualquer filtro devolve a lista inteira,
+  sem erro de console.
+- **F-TURMA-05** — quem precisa de atenção vem primeiro.
+
 
 
 
