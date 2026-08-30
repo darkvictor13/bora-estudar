@@ -35,6 +35,7 @@ de lá vira uma spec nova antes de virar código.
 | 11 | [Tema claro e escuro](11-tema-claro-escuro.md) | Preferência de interface da conta, para os três papéis |
 | 12 | [Conclusão de meta sem bateria](12-conclusao-de-meta.md) | O aluno fecha meta de teoria, estudo extra e reforço |
 | 13 | [Vínculo e liberação de acesso](13-vinculo-e-liberacao-de-acesso.md) | O professor encontra, vincula e libera o aluno |
+| 14 | [Gestão do planejamento](14-gestao-do-planejamento.md) | Criar, ativar e arquivar planejamento, com os blocos do catálogo — **não implementada** |
 
 ---
 

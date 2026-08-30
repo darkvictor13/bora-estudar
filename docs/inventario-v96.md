@@ -283,12 +283,12 @@ com desempenho **< 70%** (havendo questões) **ou** progresso **< 0,55**;
 
 | Fluxo v96 | Onde está no código v96 | Situação | Spec | Estado |
 |---|---|---|---|---|
-| **Criar planejamento a partir de curso-modelo** | `salvarNovoPlanejamentoAluno` professor.js:4365 | ❌ | | pendente |
-| **Ativar planejamento, arquivando o anterior** | idem, `.neq('id',planoId)` | ❌ | | pendente |
+| **Criar planejamento a partir de curso-modelo** | `salvarNovoPlanejamentoAluno` professor.js:4365 | ❌ | 14 | especificada |
+| **Ativar planejamento, arquivando o anterior** | idem, `.neq('id',planoId)` | ❌ | 14 | especificada |
 | **Editar planejamento** | `salvarAlteracaoPlanejamentoAluno` professor.js:4539 | ❌ | | pendente |
-| **Arquivar planejamento** | `arquivarPlanejamentoSelecionadoAluno` professor.js:4588 | ❌ | | pendente |
+| **Arquivar planejamento** | `arquivarPlanejamentoSelecionadoAluno` professor.js:4588 | ❌ | 14 | especificada |
 | **Excluir planejamento sem histórico** | `excluirPlanejamentoSelecionadoAluno` professor.js:4718 | ❌ | | pendente |
-| **Materializar os blocos do catálogo no planejamento** | `registrosModeloParaPlano` professor.js:2741 | ❌ | | pendente |
+| **Materializar os blocos do catálogo no planejamento** | `registrosModeloParaPlano` professor.js:2741 | ❌ | 14 | especificada |
 | **Limpar metas pendentes do plano / de todos** | RPC `limpar_metas_pendentes_professor` 015:8 | 🟡 | 04 | — |
 | `/professor/planejamentos` lista os planejamentos | — | ✅ (aqui) | 03 | — |
 
@@ -411,7 +411,7 @@ faixa, primeiro o que não tem dependência.
 |---|---|---|---|
 | ~~1~~ | **Conclusão de meta sem bateria** — spec [12](specs/12-conclusao-de-meta.md), **implementada** | 3 das 5 metas semanais do seed eram impossíveis de fechar | 2 RPCs (`complete_goal`, `reopen_goal`), 1 migration (`goals.spent_minutes`), site |
 | ~~2~~ | **Vincular aluno e liberar acesso** — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md), **implementada** | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC (`link_student`) mais o predicado `student_has_teacher`, 1 migration (policy da lista de espera), site |
-| 3 | **Criar, ativar e arquivar planejamento** | Fora do seed, um professor novo não tem por onde começar | 0 RPC nova (`activate_study_plan` existe), 0 migration, site |
+| 3 | **Criar, ativar e arquivar planejamento** — spec [14](specs/14-gestao-do-planejamento.md) | Fora do seed, um professor novo não tem por onde começar | 0 RPC nova (`activate_study_plan` existe), 0 migration, site |
 
 O item 2 vem antes do 3 porque um planejamento exige um aluno vinculado; o 1 vem
 antes dos dois porque não depende de nada e destrava o seed que já existe.

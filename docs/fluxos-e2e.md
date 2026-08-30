@@ -588,9 +588,6 @@ quem escreve teste — cada uma virou uma peça da suíte:
 
 Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
 
-- **Criar planejamento e cadastrar blocos.** `study_plans` e
-  `study_plan_blocks` só nascem no seed.
-- **Ativar planejamento.** A RPC `activate_study_plan` existe e ninguém chama.
 - **Anular bateria.** `void_quiz_session` existe e ninguém chama.
 - **Reforço de ciclo.** `record_reinforcement` existe; as telas de Revisões só
   recomendam, não executam. O content script também só conduz a fase `main`.
@@ -599,6 +596,26 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
+
+### Reservados pela spec 14 — gestão do planejamento
+
+Spec: [`specs/14-gestao-do-planejamento.md`](specs/14-gestao-do-planejamento.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-GPLAN-01** — criar um planejamento grava `status='draft'` e materializa os
+  blocos ativos do catálogo escolhido, com `subject_order` e `block_order`
+  coerentes.
+- **F-GPLAN-02** — o planejamento recém-criado aparece como "Rascunho" e o aluno
+  ainda não o vê.
+- **F-GPLAN-03** — ativar troca o estado, arquiva o anterior do mesmo aluno na
+  mesma transação, e o aluno passa a ver o novo.
+- **F-GPLAN-04** — depois de ativar, `/professor/metas` aceita gerar a semana
+  com os blocos materializados.
+- **F-GPLAN-05** — arquivar troca o estado e preserva metas e baterias.
+- **F-GPLAN-06** — nome repetido para o mesmo aluno é recusado com mensagem em
+  português, e nada é gravado.
+- **F-GPLAN-07** — o seletor de alunos oferece só quem tem vínculo vigente; sem
+  aluno vinculado, a tela explica em vez de mostrar um formulário inútil.
 
 
 
