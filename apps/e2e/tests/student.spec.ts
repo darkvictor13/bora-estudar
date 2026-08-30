@@ -6,6 +6,7 @@ import {
   addBlocks,
   addWeek,
   completeGoal,
+  createCoupon,
   createScenario,
   goalCount,
   goalStatus,
@@ -140,14 +141,19 @@ test.describe("F-ALU-05 · lista de espera", () => {
     await studentPage.fill("#field-focusExam", "PCPR — Investigador");
     await studentPage.fill("#field-birthDate", "1995-04-20");
     await studentPage.fill("#field-timezone", "America/Sao_Paulo");
-    await studentPage.click(".content button[type=submit]");
+    // Pelo NOME do botão, e não por `.content button[type=submit]`: sem acesso
+    // liberado a tela tem dois formulários — este e o do cupom (spec 30) —, e
+    // o seletor por tipo casa os dois. É a mesma armadilha do "Sair" da
+    // sidebar, um nível mais fundo.
+    const salvar = studentPage.getByRole("button", { name: "Salvar cadastro" });
+    await salvar.click();
 
     await expect(studentPage.locator(".alert--success")).toHaveText(
       "Cadastro salvo. Você está na lista de espera.",
     );
 
     // Salvar de novo é upsert por student_id: uma linha, não duas.
-    await studentPage.click(".content button[type=submit]");
+    await salvar.click();
     await expect(studentPage.locator(".alert--success")).toBeVisible();
 
     expect(
@@ -160,7 +166,7 @@ test.describe("F-ALU-05 · lista de espera", () => {
   test("os três campos obrigatórios são validados na action", async ({ studentPage }) => {
     await studentPage.goto("/aluno/lista-espera");
     await studentPage.fill("#field-whatsapp", "(41) 98888-0000");
-    await studentPage.click(".content button[type=submit]");
+    await studentPage.getByRole("button", { name: "Salvar cadastro" }).click();
 
     await expect(studentPage.locator(".alert--error")).toHaveText(
       "Informe WhatsApp, área de interesse e concurso em foco.",
@@ -1318,5 +1324,129 @@ test.describe("F-UI-03 · o estado é anunciado", () => {
     await botao.click();
     await expect(botao).toHaveAttribute("aria-expanded", "false");
     await expect(botao).toHaveText("Expandir menu");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §2 — cupom de acesso.
+// Spec docs/specs/30-cupom-de-acesso.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-CUP-01 · resgatar um cupom", () => {
+  test.use({ scenarioOptions: { access: "pending", withPlan: false } });
+
+  test("libera o acesso e abre as telas de estudo", async ({ studentPage, scenario }) => {
+    const cupom = await createCoupon({ months: 3 });
+
+    await studentPage.goto("/aluno/lista-espera");
+
+    const card = cardByTitle(studentPage, "Tem um cupom?");
+    // Minúsculas e com espaço: a pessoa digita o que está no papel.
+    await card.locator("#field-code").fill(` ${cupom.toLowerCase()} `);
+    await card.getByRole("button", { name: "Resgatar cupom" }).click();
+
+    await expect(studentPage.locator(".content .alert--success").first()).toContainText(
+      "Cupom resgatado",
+    );
+
+    const assinatura = await one<{ status: string; plan: string }>(
+      "select status::text, plan from public.subscriptions where student_id = $1 and status = 'active'",
+      [scenario.student.id],
+    );
+    expect(assinatura).toMatchObject({ status: "active", plan: "cupom" });
+
+    // E as telas de estudo passam a abrir.
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator("h1")).toHaveText("Visão geral");
+  });
+});
+
+test.describe("F-CUP-02 · código inválido", () => {
+  test.use({ scenarioOptions: { access: "pending", withPlan: false } });
+
+  test("mostra a mensagem única, e não distingue o motivo", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const recusados = [
+      "NAOEXISTE",
+      await createCoupon({ active: false }),
+      await createCoupon({ expired: true }),
+      await createCoupon({ maxUses: 1, usedUp: true }),
+    ];
+
+    await studentPage.goto("/aluno/lista-espera");
+    const card = cardByTitle(studentPage, "Tem um cupom?");
+
+    // Inexistente, inativo, vencido e esgotado: a mesma resposta para os
+    // quatro. Distinguir entregaria um oráculo para adivinhar códigos.
+    for (const codigo of recusados) {
+      await card.locator("#field-code").fill(codigo);
+      await expect(card.locator("#field-code")).toHaveValue(codigo);
+      await card.getByRole("button", { name: "Resgatar cupom" }).click();
+      await expect(card.locator(".alert--error")).toContainText("Cupom inválido ou expirado.");
+    }
+
+    expect(
+      await count("select count(*) from public.subscriptions where student_id = $1 and status = 'active'", [
+        scenario.student.id,
+      ]),
+    ).toBe(0);
+  });
+});
+
+test.describe("F-CUP-03 · resgatar duas vezes", () => {
+  test.use({ scenarioOptions: { access: "pending", withPlan: false } });
+
+  test("o reenvio não concede um segundo acesso nem consome outro uso", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const cupom = await createCoupon();
+
+    await studentPage.goto("/aluno/lista-espera");
+    const card = cardByTitle(studentPage, "Tem um cupom?");
+    await card.locator("#field-code").fill(cupom);
+    await card.getByRole("button", { name: "Resgatar cupom" }).click();
+    await expect(studentPage.locator(".content .alert--success").first()).toBeVisible();
+
+    // O formulário some com o acesso liberado; voltar e tentar de novo é o que
+    // uma pessoa faria com o botão de voltar.
+    await studentPage.goto("/aluno/lista-espera");
+    await expect(cardByTitle(studentPage, "Tem um cupom?")).toHaveCount(0);
+
+    // Duas linhas: a `pending` que o cenário criou e a `active` do cupom. O que
+    // não pode haver é uma segunda ATIVA — `active_subscription_uidx` garante.
+    expect(
+      await count(
+        "select count(*) from public.subscriptions where student_id = $1 and status = 'active'",
+        [scenario.student.id],
+      ),
+    ).toBe(1);
+    expect(await count("select current_uses from public.coupons where code = $1", [cupom])).toBe(1);
+  });
+});
+
+test.describe("F-CUP-04 · o cupom não cria vínculo", () => {
+  test.use({ scenarioOptions: { access: "pending", withPlan: false } });
+
+  test("o aluno liberado continua sem planejamento", async ({ studentPage, scenario }) => {
+    const cupom = await createCoupon();
+
+    await studentPage.goto("/aluno/lista-espera");
+    const card = cardByTitle(studentPage, "Tem um cupom?");
+    await card.locator("#field-code").fill(cupom);
+    await card.getByRole("button", { name: "Resgatar cupom" }).click();
+    await expect(studentPage.locator(".content .alert--success").first()).toBeVisible();
+
+    // Acesso resolvido, ensino não: quem monta planejamento é o professor.
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator(".alert--info")).toContainText("Nenhum planejamento ativo");
+
+    expect(
+      await count("select count(*) from public.study_plans where student_id = $1", [
+        scenario.student.id,
+      ]),
+    ).toBe(0);
   });
 });

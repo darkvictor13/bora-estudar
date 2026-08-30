@@ -1,6 +1,6 @@
 # 30 — Cupom de acesso
 
-**Situação:** não implementada · **Comparativo:** §12 item 15 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-CUP-01 a F-CUP-07
+**Situação:** implementada · **Comparativo:** §12 item 15 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-CUP-01 a F-CUP-07
 
 ---
 
@@ -76,12 +76,19 @@ redeem_coupon(code, request_id)
 | Actions | `redeemCoupon`, em `lib/data/account-actions.ts` |
 | Leitura | nenhuma nova — a tela já sabe se o aluno tem acesso |
 | RPCs | **uma nova:** `redeem_coupon(text, uuid)` |
-| Migration | **uma:** a RPC, mais o grant de `select` em `coupons` |
+| Migration | **uma:** só a RPC — `select` em `coupons` já era concedido desde a migration inicial |
 | Banco | `coupons` e `subscriptions`, escrita só pela RPC |
 | Testes | `supabase/tests/15_coupon.sql`, `apps/e2e/tests/student.spec.ts` |
 
-**O seed ganha um cupom**, porque sem ele o e2e não teria o que resgatar e a
-tabela continuaria sendo a única do schema que nenhum teste exercita.
+**O campo do código é controlado.** O React 19 reseta o formulário quando a
+action termina, **inclusive quando ela devolve erro**: com o campo solto, quem
+errasse o código perderia o que digitou. *Ajustado em 31/08/2026, ao
+implementar: foi o `F-CUP-02` que expôs isso, submetendo o mesmo formulário
+quatro vezes seguidas.*
+
+**Cada teste cria o próprio cupom.** `current_uses` é um contador
+compartilhado, e dois testes resgatando o mesmo código em paralelo leem um do
+outro. O seed ganha cupons também, mas só para uso à mão no navegador.
 
 ---
 

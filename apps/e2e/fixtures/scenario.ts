@@ -657,3 +657,38 @@ export async function completeGoal(
     ]),
   );
 }
+
+export interface CouponOptions {
+  readonly months?: number;
+  readonly maxUses?: number | null;
+  readonly usedUp?: boolean;
+  readonly active?: boolean;
+  readonly expired?: boolean;
+}
+
+/**
+ * Um cupom só deste teste.
+ *
+ * `current_uses` é um contador compartilhado: dois testes resgatando o cupom do
+ * seed em paralelo leem um do outro. Cada teste que afirma sobre a contagem
+ * cria o próprio código, pela mesma razão que cada teste cria o próprio par
+ * professor/aluno.
+ */
+export async function createCoupon(options: CouponOptions = {}): Promise<string> {
+  const code = `E2E${randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+  const maxUses = options.maxUses === undefined ? null : options.maxUses;
+
+  await query(
+    `insert into public.coupons (code, months, max_uses, current_uses, valid_until, active)
+     values ($1, $2, $3, $4, $5, $6)`,
+    [
+      code,
+      options.months ?? 3,
+      maxUses,
+      options.usedUp ? (maxUses ?? 1) : 0,
+      options.expired ? "yesterday" : null,
+      options.active ?? true,
+    ],
+  );
+  return code;
+}
