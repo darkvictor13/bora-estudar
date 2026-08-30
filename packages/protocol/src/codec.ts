@@ -6,6 +6,7 @@ import {
   type HashKey,
 } from "./envelope.ts";
 import type {
+  AvailableQuestion,
   QuestionAnswer,
   QuestionOutcome,
   QuestionPhase,
@@ -136,6 +137,14 @@ function readAnswer(v: unknown, i: number): QuestionAnswer {
   };
 }
 
+function readAvailableQuestion(v: unknown, i: number): AvailableQuestion {
+  if (!isObject(v)) invalid(`availableQuestions[${i}]`);
+  return {
+    id: readInteger(v["id"], `availableQuestions[${i}].id`, { min: 1 }),
+    topic: readNullableString(v["topic"], `availableQuestions[${i}].topic`),
+  };
+}
+
 function readQuizStart(v: unknown): QuizStart {
   if (!isObject(v)) invalid("body");
   return {
@@ -146,8 +155,8 @@ function readQuizStart(v: unknown): QuizStart {
     blockId: readString(v["blockId"], "blockId"),
     sessionNumber: readInteger(v["sessionNumber"], "sessionNumber", { min: 1 }),
     mainTarget: readInteger(v["mainTarget"], "mainTarget", { min: 1 }),
-    availableQuestions: readArray(v["availableQuestions"], "availableQuestions").map((q, i) =>
-      readInteger(q, `availableQuestions[${i}]`, { min: 1 }),
+    availableQuestions: readArray(v["availableQuestions"], "availableQuestions").map(
+      readAvailableQuestion,
     ),
     history: readArray(v["history"], "history").map(readSeenQuestion),
     historyComplete: readBoolean(v["historyComplete"], "historyComplete"),

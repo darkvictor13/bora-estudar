@@ -19,7 +19,13 @@ const start: QuizStart = {
   blockId: "44444444-4444-4444-8444-444444444444",
   sessionNumber: 3,
   mainTarget: 15,
-  availableQuestions: [101, 102, 103],
+  availableQuestions: [
+    { id: 101, topic: "Local de crime" },
+    // Tópico nulo é caso real: o bloco pode não ter tópico cadastrado, e o
+    // motor degrada para "qualquer questão" em vez de quebrar (R-FASE-03).
+    { id: 102, topic: null },
+    { id: 103, topic: "Cadeia de custódia" },
+  ],
   history: [
     {
       questionId: 101,
@@ -160,5 +166,38 @@ describe("hashHasPayload", () => {
     assert.equal(hashHasPayload(`#${HASH_KEYS.start}=lixo`, HASH_KEYS.start), true);
     assert.equal(hashHasPayload(`#${HASH_KEYS.start}=lixo`, HASH_KEYS.result), false);
     assert.equal(hashHasPayload("", HASH_KEYS.start), false);
+  });
+});
+
+describe("protocolo 2", () => {
+  it("recusa um payload da versão 1", () => {
+    // O envelope antigo trazia `protocol: 1` e `availableQuestions: number[]`.
+    // Quem tem a extensão desatualizada precisa de uma mensagem acionável, não
+    // de um campo faltando em runtime.
+    const antigo = { protocol: 1, kind: "quiz.start", body: { ...start, availableQuestions: [1] } };
+    const hash = `#${HASH_KEYS.start}=${Buffer.from(JSON.stringify(antigo))
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "")}`;
+
+    assert.throws(
+      () => parseStartHash(hash),
+      (error: unknown) =>
+        error instanceof ProtocolError && error.code === "incompatible_version",
+    );
+  });
+
+  it("recusa availableQuestions em forma de número", () => {
+    const url = buildStartUrl("https://tec.example/questoes", {
+      ...start,
+      // Forma da versão 1, forçada: precisa falhar na validação, e não passar
+      // adiante um item sem `id`.
+      availableQuestions: [1, 2] as never,
+    });
+    assert.throws(
+      () => parseStartHash(`#${url.split("#")[1]}`),
+      (error: unknown) => error instanceof ProtocolError && error.code === "invalid_body",
+    );
   });
 });

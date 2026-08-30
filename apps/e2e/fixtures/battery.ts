@@ -106,8 +106,8 @@ export async function completeQuiz(
   });
 
   const answered = options.answer ?? queue.length;
-  const answers: QuestionAnswer[] = queue.slice(0, answered).map((questionId, index) => ({
-    questionId,
+  const answers: QuestionAnswer[] = queue.slice(0, answered).map((item, index) => ({
+    questionId: item.id,
     executionOrder: index + 1,
     round: 0,
     phase: "main",
@@ -153,7 +153,8 @@ export async function completeQuiz(
   return {
     sessionId: session.id,
     sessionNumber: session.session_number,
-    queue,
+    // Só os ids: quem chama compara conjuntos de questões, não itens de fila.
+    queue: queue.map((item) => item.id),
     correct: Math.min(options.correct, answered),
     answered,
   };

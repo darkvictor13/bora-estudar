@@ -1,4 +1,4 @@
-import type { SeenQuestion } from "@bora/protocol";
+import type { AvailableQuestion, SeenQuestion } from "@bora/protocol";
 
 import { supabase } from "@/lib/supabase/client";
 
@@ -62,29 +62,34 @@ export async function getQuestionHistory(
 }
 
 /**
- * Questões do bloco, na ordem do catálogo.
+ * Questões do bloco, na ordem do catálogo, **com o tópico de cada uma**.
+ *
+ * O tópico viaja no payload desde o protocolo 2: é o que permite à extensão
+ * escolher a correlata do MESMO tópico quando o aluno erra. Sem ele, a
+ * alternativa seria a extensão carregar o catálogo — que é justamente o 1,97 MB
+ * de JSON que a versão anterior empacotava e que esta arquitetura tirou.
  *
  * Também paginada: um bloco do catálogo passa de mil questões com facilidade.
  */
-export async function getBlockQuestions(catalogBlockId: string): Promise<number[]> {
-  const ids: number[] = [];
+export async function getBlockQuestions(catalogBlockId: string): Promise<AvailableQuestion[]> {
+  const questions: AvailableQuestion[] = [];
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const from = page * PAGE_SIZE;
     const { data, error } = await supabase
       .from("catalog_questions")
-      .select("question_id")
+      .select("question_id,topic")
       .eq("block_id", catalogBlockId)
       .order("position")
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) throw error;
     const rows = data ?? [];
-    ids.push(...rows.map((r) => Number(r.question_id)));
+    questions.push(...rows.map((r) => ({ id: Number(r.question_id), topic: r.topic })));
     if (rows.length < PAGE_SIZE) break;
   }
 
-  return ids;
+  return questions;
 }
 
 export async function getQuizSession(quizSessionId: string) {

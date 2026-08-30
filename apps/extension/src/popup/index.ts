@@ -17,7 +17,7 @@ async function render(): Promise<void> {
     return;
   }
 
-  const progress = progressOf(session.queue, session.answers);
+  const progress = progressOf(session.queue, session.answers, session.start.mainTarget);
   statusEl.textContent =
     `Bateria ${session.start.sessionNumber}: ${progress.answered} de ${progress.total} respondidas` +
     (session.finishedAt ? " · aguardando envio ao site." : ".");

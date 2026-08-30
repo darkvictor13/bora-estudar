@@ -480,6 +480,43 @@ Com `historyComplete:false` o painel mostra "Histórico incompleto: pode repetir
 questão." O site marca assim quando o teto de 50 páginas de `vw_seen_questions`
 é atingido.
 
+### Reforço correlato e rodada extra — F-FASE-01 a 06
+
+Spec: [`specs/21-fases-na-extensao.md`](specs/21-fases-na-extensao.md).
+**O protocolo é o 2**: `availableQuestions` carrega `{ id, topic }`.
+
+**A fila CRESCE durante a bateria.** Cada erro acrescenta uma correlata do
+mesmo tópico ao fim, então "N de M respondidas" tem o M subindo — todo teste
+que conta precisa somar os erros já cometidos. Foi o que quebrou três testes de
+F-BAT quando esta spec entrou.
+
+#### F-FASE-01 — Errar põe uma correlata na fila
+**Esperado** o total sobe de 2 para 3, e o painel passa a mostrar
+"N principais · N reforços · N extras".
+
+#### F-FASE-02 — A correlata é gravada com fase e origem
+**Esperado** `phase='reinforcement'`, `sourceQuestionId` da questão errada, e o
+`topic` da correlata igual ao da origem.
+
+#### F-FASE-03 — Rodada extra
+**Esperado** com todas as principais respondidas, "+ 5 questões extras"
+acrescenta 5 com `round = 1`. Com principal pendente, o botão **não existe**.
+
+#### F-FASE-04 — Tudo ou nada
+**Esperado** sem 5 inéditas, um `alert` diz "Não há 5 questões inéditas" e a
+fila não muda. O banco exige `mod(extras, 5) = 0`.
+
+#### F-FASE-05 — Finalização antecipada descarta o que não é principal
+**Esperado** o resultado leva só a principal respondida. Sem o descarte,
+`finish_quiz_session` recusaria a bateria inteira.
+
+#### F-FASE-06 — As fases chegam ao ledger
+Provado dentro da **volta completa**: 15 principais com 4 erros geram 4
+correlatas, o ledger fica com 19 linhas, nenhuma correlata sem
+`source_question_id`, a nota da meta continua **11/15** — porque
+`vw_goal_performance` conta só `main` — e `/aluno/estatisticas` passa a mostrar
+"4 reforços".
+
 ### F-BAT-19 — Bateria já enviada, reabrindo o TEC
 **Esperado** a extensão **não** pode reoferecer "Finalizar e enviar" para uma
 bateria que já foi entregue ao site.
@@ -792,7 +829,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 220 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 226 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -803,7 +840,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14, F-CONC-01 a 06, F-EXTRA-01 a 06 e F-RCIC-01 a 06 | 59 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
-| `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
+| `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19 e F-FASE-01 a 06, mais a volta completa | 15 |
 | `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05, F-TURMA-01 a 05 e F-PREV-01 a 06 | 71 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
@@ -838,19 +875,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 21 — fases na extensão
-
-Spec: [`specs/21-fases-na-extensao.md`](specs/21-fases-na-extensao.md). Migram
-para a §3 quando os testes existirem.
-
-- **F-FASE-01** — errar põe uma correlata do mesmo tópico no fim da fila.
-- **F-FASE-02** — a correlata é gravada com `phase='reinforcement'` e
-  `source_question_id` da errada.
-- **F-FASE-03** — com todas as principais respondidas, "+5 questões extras"
-  acrescenta 5 na rodada 1.
-- **F-FASE-04** — sem 5 inéditas, nada é acrescentado e a tela diz por quê.
-- **F-FASE-05** — finalizar antecipadamente descarta correlatas e extras.
-- **F-FASE-06** — o ledger recebe as três fases e as estatísticas mostram E e R.
 
 
 

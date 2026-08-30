@@ -1,6 +1,6 @@
 # 21 — Reforço correlato e rodada extra na extensão
 
-**Situação:** não implementada · **Comparativo:** §12 item 8 (segunda metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §10 · **Fluxos e2e:** F-FASE-01 a F-FASE-06
+**Situação:** implementada · **Comparativo:** §12 item 8 (segunda metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §10 · **Fluxos e2e:** F-FASE-01 a F-FASE-06
 
 ---
 
@@ -116,6 +116,11 @@ extensão: fila = 15 principais, rodada 0, depth 0
 | RPCs | **nenhuma nova** |
 | Migration | **nenhuma** — o banco já valida as três fases desde agosto |
 | Testes | `packages/protocol/src/codec.test.ts`, `apps/extension/src/content/engine.test.ts`, `apps/e2e/tests/extension.spec.ts` |
+
+**A composição aparece no painel assim que a FILA cresce**, não quando a
+primeira correlata é respondida. Condicioná-la às respostas a esconderia
+justamente no momento em que ela explica o que acabou de acontecer: o total
+subiu porque o aluno errou. *Ajustado em 30/08/2026, ao implementar.*
 
 **Esta é a única spec da fila que toca as duas pontas**, e é por isso que ela é
 separada da [20](20-execucao-do-reforco.md). Não há migration junto: o banco não

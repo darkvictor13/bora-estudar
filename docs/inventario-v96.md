@@ -40,14 +40,14 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 1. Autenticação e conta | 12 | 7 | 2 | 3 | 0 |
 | 2. Aluno — metas e execução | 12 | 7 | 2 | 0 | 3 |
 | 3. Aluno — bateria inteligente | 9 | 7 | 1 | 1 | 0 |
-| 4. Aluno — reforço e revisão | 10 | 5 | 0 | 5 | 0 |
+| 4. Aluno — reforço e revisão | 10 | 6 | 0 | 4 | 0 |
 | 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
 | 6. Professor — alunos e acesso | 12 | 12 | 0 | 0 | 0 |
 | 7. Professor — planejamento | 10 | 7 | 1 | 2 | 0 |
 | 8. Professor — geração de metas | 9 | 6 | 1 | 2 | 0 |
 | 9. Professor — acompanhamento | 8 | 2 | 2 | 4 | 0 |
-| 10. Extensão | 12 | 7 | 0 | 5 | 0 |
-| **Total** | **106** | **64** | **11** | **27** | **4** |
+| 10. Extensão | 12 | 9 | 0 | 3 | 0 |
+| **Total** | **106** | **67** | **11** | **24** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -183,7 +183,7 @@ importante deste inventário**, porque o §12 item 8 as trata como uma só.
 | Caderno de erros reúne as três fases | `obterErrosBloco` aluno.js:5509 | ✅ | 08 | — |
 | **Prioridade alta abaixo de 75%** | aluno.js:5590, badge :3800 | ✅ | 20 | implementada |
 | **Executar o reforço do ciclo** (site) | `iniciarReforcoCicloSmart` aluno.js:5658 | ✅ | 20 | implementada |
-| **Conduzir as fases `reinforcement` e `extra`** (extensão) | content.js:261 e :280 | ❌ | 21 | especificada |
+| **Conduzir as fases `reinforcement` e `extra`** (extensão) | content.js:261 e :280 | ✅ | 21 | implementada |
 | **Agendar reforço como meta futura** | `agendarReforco` aluno.js:2003 | ❌ | | pendente |
 | **Ignorar reforço sugerido** | `ignorarReforco` aluno.js:1986 | ❌ | | pendente |
 | **Cancelar reforço já agendado** | `cancelarReforcoDoRegistro` aluno.js:2668 | ❌ | | pendente |
@@ -378,8 +378,8 @@ confirma o GAP-03 como lacuna herdada. Aqui `updateProfile` exige
 | Guarda de questão já respondida | `armInitialGuard` content.js:811 | ✅ | 05 | — |
 | Finalização antecipada e cancelamento | content.js:758 e :775 | ✅ | 05 | — |
 | **Rodízio por tópico na seleção** (cobertura ascendente) | `selectBalanced` content.js:202 | ❌ | | pendente |
-| **Fase de reforço correlato** (1 do mesmo tópico por erro, profundidade 2) | `pickReinforcement` content.js:261 | ❌ | 21 | especificada |
-| **Rodada extra de +5, tudo ou nada** | `appendExtraRound` content.js:280 | ❌ | 21 | especificada |
+| **Fase de reforço correlato** (1 do mesmo tópico por erro, profundidade 2) | `pickReinforcement` content.js:261 | ✅ | 21 | implementada |
+| **Rodada extra de +5, tudo ou nada** | `appendExtraRound` content.js:280 | ✅ | 21 | implementada |
 | **Resumo por tópicos no painel** | `topicSummary` content.js:542 | ❌ | | pendente |
 | **Painel arrastável, posição persistida** | `PANEL_POS_KEY` content.js:530 | ❌ | | pendente |
 
@@ -433,7 +433,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
 | ~~9~~ | **Executar o reforço do ciclo** (site) — spec [20](specs/20-execucao-do-reforco.md), **implementada** | `record_reinforcement` pronta e sem chamador: a tela recomenda e não executa | 0 RPC, 0 migration, site |
-| 10 | **Conduzir `reinforcement` e `extra` no content script** — spec [21](specs/21-fases-na-extensao.md) | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
+| ~~10~~ | **Conduzir `reinforcement` e `extra` no content script** — spec [21](specs/21-fases-na-extensao.md), **implementada** | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
 | 11 | **Rodízio por tópico na seleção** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
 | 12 | **Dificuldades por tópico e histórico de baterias** | O professor vê o número, não vê a causa | 0 RPC, 1 view, site |
 | 13 | **Revisão espaçada** como conceito separado do reforço | Grade por matéria, 1ª e 2ª revisão | 1 migration, 1 RPC, site |

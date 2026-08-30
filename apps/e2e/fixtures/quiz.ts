@@ -26,7 +26,7 @@ import {
   type QuizStart,
 } from "@bora/protocol";
 
-import { pickQuestions } from "../../extension/src/content/engine.ts";
+import { pickQuestions, type QueueItem } from "../../extension/src/content/engine.ts";
 import { STUDENT_RETURN_URL } from "../support/app.ts";
 
 export const TEC_URL = "https://www.tecconcursos.com.br/questoes";
@@ -61,23 +61,23 @@ export interface AnswerPlan {
  * `executionOrder` é sequencial e sem colisão porque o banco tem
  * `unique(quiz_session_id, execution_order)`.
  */
-export function buildAnswers(queue: readonly number[], plan: AnswerPlan): QuestionAnswer[] {
+export function buildAnswers(queue: readonly QueueItem[], plan: AnswerPlan): QuestionAnswer[] {
   const total = plan.answer ?? queue.length;
-  return queue.slice(0, total).map((questionId, index) => ({
-    questionId,
+  return queue.slice(0, total).map((item, index) => ({
+    questionId: item.id,
     executionOrder: index + 1,
-    round: 0,
-    phase: "main" as const,
+    round: item.round,
+    phase: item.phase,
     outcome: index < plan.correct ? ("correct" as const) : ("incorrect" as const),
-    topic: null,
-    sourceQuestionId: null,
+    topic: item.topic,
+    sourceQuestionId: item.sourceQuestionId,
     answeredAt: new Date().toISOString(),
   }));
 }
 
 export interface SimulatedRun {
   readonly start: QuizStart;
-  readonly queue: readonly number[];
+  readonly queue: readonly QueueItem[];
   readonly result: QuizResult;
   /** URL de volta ao site, com o resultado no fragmento. */
   readonly returnUrl: string;
@@ -145,7 +145,13 @@ export function syntheticStart(overrides: Partial<QuizStart> = {}): QuizStart {
     blockId: "44444444-4444-4444-8444-444444444444",
     sessionNumber: 1,
     mainTarget: 3,
-    availableQuestions: [100001, 100002, 100003, 100004, 100005],
+    availableQuestions: [
+      { id: 100001, topic: "Local de crime" },
+      { id: 100002, topic: "Cadeia de custódia" },
+      { id: 100003, topic: "Local de crime" },
+      { id: 100004, topic: "Perícia papiloscópica" },
+      { id: 100005, topic: "Cadeia de custódia" },
+    ],
     history: [],
     historyComplete: true,
     ...overrides,

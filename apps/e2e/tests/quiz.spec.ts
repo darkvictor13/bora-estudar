@@ -356,5 +356,5 @@ test("F-BAT-17 · a segunda bateria não repete questão", async ({
   // …e o motor escolhe 15 inéditas: interseção vazia com a fila anterior.
   const run = simulateExtension(studentPage.url(), { correct: 15 });
   expect(run.queue).toHaveLength(MAIN_TARGET);
-  expect(run.queue.filter((id) => done.queue.includes(id))).toEqual([]);
+  expect(run.queue.filter((item) => done.queue.includes(item.id))).toEqual([]);
 });

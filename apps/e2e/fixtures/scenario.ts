@@ -16,6 +16,8 @@
  */
 import { randomUUID } from "node:crypto";
 
+import type { AvailableQuestion } from "@bora/protocol";
+
 import { asUser, query, value } from "./db.ts";
 
 /** Senha única de todo usuário de teste. Ambiente local, credencial pública. */
@@ -496,14 +498,19 @@ export async function goalStatus(goalId: string): Promise<string> {
   return value<string>("select status::text from public.goals where id = $1", [goalId]);
 }
 
-/** Questões do bloco do catálogo, na ordem em que o site as envia. */
-export async function catalogQuestions(catalogBlockId: string): Promise<number[]> {
-  const rows = await query<{ question_id: string }>(
-    `select question_id from public.catalog_questions
+/**
+ * Questões do bloco do catálogo, na ordem em que o site as envia.
+ *
+ * Traz o tópico desde o protocolo 2: é o que permite à extensão escolher a
+ * correlata do mesmo tópico.
+ */
+export async function catalogQuestions(catalogBlockId: string): Promise<AvailableQuestion[]> {
+  const rows = await query<{ question_id: string; topic: string }>(
+    `select question_id, topic from public.catalog_questions
       where block_id = $1 order by position`,
     [catalogBlockId],
   );
-  return rows.map((row) => Number(row.question_id));
+  return rows.map((row) => ({ id: Number(row.question_id), topic: row.topic }));
 }
 
 export async function ledgerCount(quizSessionId: string): Promise<number> {
