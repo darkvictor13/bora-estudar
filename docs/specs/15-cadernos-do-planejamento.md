@@ -1,6 +1,6 @@
 # 15 — Cadernos do planejamento
 
-**Situação:** não implementada · **Comparativo:** §12 item 4 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-CAD-01 a F-CAD-06
+**Situação:** implementada · **Comparativo:** §12 item 4 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-CAD-01 a F-CAD-06
 
 ---
 
@@ -110,11 +110,20 @@ professor abre /professor/cadernos?plano=<id>
 | Rota | `/professor/cadernos` — ganha os recortes, o resumo e as ações |
 | Componentes | `BlockActions`, `EditBlockForm` e `NewBlockForm`, em `components/teacher/` |
 | Actions | `setBlockActive`, `setSubjectActive`, `updateBlock`, `deleteBlock`, `restoreBlock`, `createBlock` |
+| Confirmação | todas devolvem `redirectTo` com `?plano=`, `?ver=` e `?feito=`; a página anuncia |
 | Leitura | os blocos do planejamento, sem filtro de `deleted_at`, mais a contagem de metas por bloco |
 | RPCs | **nenhuma nova** |
 | Migration | **nenhuma** |
 | Banco | `study_plan_blocks`, escrita direta já concedida; `goals`, leitura, para saber quem pode ser excluído |
 | Testes | `apps/e2e/tests/teacher.spec.ts` |
+
+**Todas as ações desta tela devolvem `redirectTo`, e nenhuma devolve `success`.**
+Excluir e restaurar movem a linha **entre recortes**, então o formulário que
+mostraria a mensagem some na revalidação e leva junto o `useActionState` dono
+dela. O redirecionamento carrega `?plano=` e `?ver=` para o professor voltar
+onde estava. Ativar e desativar poderiam usar `success` — o formulário
+sobrevive —, mas duas regras de confirmação na mesma tela é o tipo de
+inconsistência que ninguém lembra depois.
 
 **Por que não há teste novo em `supabase/tests/`.** As invariantes envolvidas —
 o grant por coluna, o `WITH CHECK`, a ausência de `DELETE` e o índice de ordem —

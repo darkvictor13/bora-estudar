@@ -43,11 +43,11 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 4. Aluno — reforço e revisão | 10 | 3 | 1 | 6 | 0 |
 | 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
 | 6. Professor — alunos e acesso | 12 | 7 | 0 | 5 | 0 |
-| 7. Professor — planejamento | 8 | 5 | 1 | 2 | 0 |
+| 7. Professor — planejamento | 10 | 7 | 1 | 2 | 0 |
 | 8. Professor — geração de metas | 9 | 3 | 2 | 4 | 0 |
 | 9. Professor — acompanhamento | 8 | 1 | 2 | 5 | 0 |
 | 10. Extensão | 12 | 7 | 0 | 5 | 0 |
-| **Total** | **104** | **49** | **13** | **38** | **4** |
+| **Total** | **106** | **51** | **13** | **38** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -289,6 +289,8 @@ com desempenho **< 70%** (havendo questões) **ou** progresso **< 0,55**;
 | **Arquivar planejamento** | `arquivarPlanejamentoSelecionadoAluno` professor.js:4588 | ✅ | 14 | implementada |
 | **Excluir planejamento sem histórico** | `excluirPlanejamentoSelecionadoAluno` professor.js:4718 | ❌ | | pendente |
 | **Materializar os blocos do catálogo no planejamento** | `registrosModeloParaPlano` professor.js:2741 | ✅ | 14 | implementada |
+| **Gerenciar cadernos: ativar, desativar, editar, incluir, excluir, restaurar** | `p-cadernos` professor.js:2863 | ✅ | 15 | implementada |
+| **Ativar ou desativar a disciplina inteira** | `alternarMateriaCadernos` professor.js:3036 | ✅ | 15 | implementada |
 | **Limpar metas pendentes do plano / de todos** | RPC `limpar_metas_pendentes_professor` 015:8 | 🟡 | 04 | — |
 | `/professor/planejamentos` lista os planejamentos | — | ✅ (aqui) | 03 | — |
 
@@ -420,7 +422,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
-| 4 | **Gerenciar blocos do planejamento** — spec [15](specs/15-cadernos-do-planejamento.md) | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
+| ~~4~~ | **Gerenciar blocos do planejamento** — spec [15](specs/15-cadernos-do-planejamento.md), **implementada** | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
 | 5 | **Anular bateria** | `void_quiz_session` pronta e sem chamador | 0 RPC, 0 migration, site |
 | 6 | **Ficha da turma** — KPIs, classificação, busca e filtros | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
 | 7 | **Prévia e distribuição por peso na geração da semana** | Hoje o professor gera às cegas | 0 RPC, 0 migration, site |

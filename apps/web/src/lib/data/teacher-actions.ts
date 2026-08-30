@@ -401,3 +401,245 @@ export async function archiveStudyPlan(_prev: FormState, data: FormData): Promis
 
   return { redirectTo: `${ROUTES.teacher.plans}?feito=arquivado` };
 }
+
+// ---------------------------------------------------------------------------
+// Cadernos do planejamento — spec docs/specs/15-cadernos-do-planejamento.md
+// ---------------------------------------------------------------------------
+
+function translateBlockError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("study_plan_block_order_uidx") || m.includes("duplicate key")) {
+    return "Já existe um caderno nessa posição. Atualize a página e tente de novo.";
+  }
+  if (m.includes("row-level security") || m.includes("violates row-level")) {
+    return "Este planejamento é de outro professor.";
+  }
+  if (m.includes("subject_target")) return "A meta da disciplina precisa ficar entre 0 e 100.";
+  return message;
+}
+
+/**
+ * Para onde voltar depois de mexer num caderno, preservando o recorte.
+ *
+ * As ações desta tela devolvem `redirectTo`, e não `success`: excluir e
+ * restaurar movem a linha ENTRE recortes, então o formulário que mostraria a
+ * mensagem some na revalidação e leva junto o `useActionState` dono dela. Quem
+ * sobrevive é a página. É o mesmo motivo de `registerQuizTime`, `completeGoal` e
+ * `activateStudyPlan` — e o padrão é uniforme aqui para não haver duas regras na
+ * mesma tela.
+ */
+function backToNotebooks(data: FormData, done: string): string {
+  const plano = String(data.get("planId") ?? "");
+  const ver = String(data.get("view") ?? "");
+  const params = new URLSearchParams();
+  if (plano) params.set("plano", plano);
+  if (ver) params.set("ver", ver);
+  params.set("feito", done);
+  return `${ROUTES.teacher.notebooks}?${params.toString()}`;
+}
+
+/** Só o `count` interessa: UPDATE filtra em silêncio quando a RLS não deixa. */
+async function applied(
+  promise: PromiseLike<{ error: { message: string } | null; count: number | null }>,
+  vazio: string,
+  data: FormData,
+  done: string,
+): Promise<FormState> {
+  const { error, count } = await promise;
+  if (error) return { error: translateBlockError(error.message) };
+  if (count === 0) return { error: vazio };
+  return { redirectTo: backToNotebooks(data, done) };
+}
+
+/** Tira do rodízio da geração, ou devolve. Nada do histórico muda (R-CAD-01). */
+export async function setBlockActive(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+  const blockId = String(data.get("blockId") ?? "");
+  const active = data.get("active") === "true";
+  if (!blockId) return { error: "Caderno não identificado." };
+
+  return applied(
+    supabase
+      .from("study_plan_blocks")
+      .update({ active }, { count: "exact" })
+      .eq("id", blockId)
+      .is("deleted_at", null),
+    "Caderno não encontrado ou de outro professor.",
+    data,
+    active ? "ativado" : "desativado",
+  );
+}
+
+/** O mesmo, para a disciplina inteira. É o que torna a tela usável com 92 blocos. */
+export async function setSubjectActive(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+  const studyPlanId = String(data.get("studyPlanId") ?? "");
+  const subject = String(data.get("subjectName") ?? "");
+  const active = data.get("active") === "true";
+  if (!studyPlanId || !subject) return { error: "Disciplina não identificada." };
+
+  return applied(
+    supabase
+      .from("study_plan_blocks")
+      .update({ active }, { count: "exact" })
+      .eq("study_plan_id", studyPlanId)
+      .eq("subject_name", subject)
+      .is("deleted_at", null),
+    "Nenhum caderno desta disciplina para alterar.",
+    data,
+    active ? "materia-ativada" : "materia-desativada",
+  );
+}
+
+/** A edição vale só para este planejamento — o bloco é cópia (R-GPLAN-14). */
+export async function updateBlock(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+  const blockId = String(data.get("blockId") ?? "");
+  const name = String(data.get("name") ?? "").trim();
+  const subjectName = String(data.get("subjectName") ?? "").trim();
+  const target = Number(data.get("subjectTarget"));
+  if (!blockId) return { error: "Caderno não identificado." };
+  if (name.length < 2) return { error: "Dê um nome ao caderno." };
+  if (subjectName.length < 2) return { error: "Informe a disciplina." };
+  if (!Number.isInteger(target) || target < 0 || target > 100) {
+    return { error: "A meta da disciplina precisa ficar entre 0 e 100." };
+  }
+
+  return applied(
+    supabase
+      .from("study_plan_blocks")
+      .update(
+        {
+          name,
+          subject_name: subjectName,
+          subject_target: target,
+          link: String(data.get("link") ?? "").trim() || null,
+        },
+        { count: "exact" },
+      )
+      .eq("id", blockId)
+      .is("deleted_at", null),
+    "Caderno não encontrado ou de outro professor.",
+    data,
+    "editado",
+  );
+}
+
+/**
+ * Exclui — `deleted_at`, nunca `DELETE`.
+ *
+ * O guarda de "só bloco sem meta" mora aqui e na tela, não no banco: impô-lo no
+ * banco exigiria um gatilho consultando `goals`, e a spec é zero-migration. É a
+ * suposição registrada em R-CAD-04.
+ */
+export async function deleteBlock(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+  const blockId = String(data.get("blockId") ?? "");
+  if (!blockId) return { error: "Caderno não identificado." };
+
+  const { count: goals } = await supabase
+    .from("goals")
+    .select("id", { count: "exact", head: true })
+    .eq("block_id", blockId)
+    .is("deleted_at", null);
+
+  if (goals && goals > 0) {
+    return {
+      error: `Este caderno tem ${goals} meta(s) e não pode ser excluído. Desative-o: ele sai da geração e o histórico fica.`,
+    };
+  }
+
+  return applied(
+    supabase
+      .from("study_plan_blocks")
+      .update({ deleted_at: new Date().toISOString(), active: false }, { count: "exact" })
+      .eq("id", blockId)
+      .is("deleted_at", null),
+    "Caderno não encontrado ou de outro professor.",
+    data,
+    "excluido",
+  );
+}
+
+/**
+ * Restaura, **recalculando `block_order`** (R-CAD-05).
+ *
+ * `study_plan_block_order_uidx` é único em (plano, subject_order, block_order)
+ * onde `deleted_at is null`: excluir liberou a posição, e outro bloco pode
+ * tê-la ocupado. Devolver o bloco com a ordem antiga colide.
+ */
+export async function restoreBlock(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+  const blockId = String(data.get("blockId") ?? "");
+  if (!blockId) return { error: "Caderno não identificado." };
+
+  const { data: block } = await supabase
+    .from("study_plan_blocks")
+    .select("study_plan_id,subject_order")
+    .eq("id", blockId)
+    .maybeSingle();
+  if (!block) return { error: "Caderno não encontrado." };
+
+  const { data: irmaos } = await supabase
+    .from("study_plan_blocks")
+    .select("block_order")
+    .eq("study_plan_id", block.study_plan_id)
+    .eq("subject_order", block.subject_order)
+    .is("deleted_at", null)
+    .order("block_order", { ascending: false })
+    .limit(1);
+
+  const proximo = (irmaos?.[0]?.block_order ?? -1) + 1;
+
+  return applied(
+    supabase
+      .from("study_plan_blocks")
+      .update({ deleted_at: null, active: true, block_order: proximo }, { count: "exact" })
+      .eq("id", blockId)
+      .not("deleted_at", "is", null),
+    "Caderno não encontrado ou já restaurado.",
+    data,
+    "restaurado",
+  );
+}
+
+/** Caderno avulso: nasce sem `catalog_block_id`, no fim da disciplina. */
+export async function createBlock(_prev: FormState, data: FormData): Promise<FormState> {
+  const session = await requireRole("teacher");
+  const studyPlanId = String(data.get("studyPlanId") ?? "");
+  const studentId = String(data.get("studentId") ?? "");
+  const name = String(data.get("name") ?? "").trim();
+  const subjectName = String(data.get("subjectName") ?? "").trim();
+  if (!studyPlanId || !studentId) return { error: "Planejamento não identificado." };
+  if (name.length < 2) return { error: "Dê um nome ao caderno." };
+  if (subjectName.length < 2) return { error: "Informe a disciplina." };
+
+  const { data: existentes } = await supabase
+    .from("study_plan_blocks")
+    .select("subject_name,subject_order,block_order")
+    .eq("study_plan_id", studyPlanId)
+    .is("deleted_at", null);
+
+  const lista = existentes ?? [];
+  const daDisciplina = lista.filter((b) => b.subject_name === subjectName);
+  const subjectOrder = daDisciplina.length
+    ? daDisciplina[0]!.subject_order
+    : Math.max(-1, ...lista.map((b) => b.subject_order)) + 1;
+  const blockOrder = Math.max(-1, ...daDisciplina.map((b) => b.block_order)) + 1;
+
+  const { error } = await supabase.from("study_plan_blocks").insert({
+    study_plan_id: studyPlanId,
+    student_id: studentId,
+    teacher_id: session.profileId,
+    subject_name: subjectName,
+    subject_target: 80,
+    name,
+    link: String(data.get("link") ?? "").trim() || null,
+    question_count: Number(data.get("questionCount")) || 0,
+    subject_order: subjectOrder,
+    block_order: blockOrder,
+  });
+
+  if (error) return { error: translateBlockError(error.message) };
+  return { redirectTo: backToNotebooks(data, "criado") };
+}

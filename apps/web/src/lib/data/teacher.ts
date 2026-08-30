@@ -188,3 +188,38 @@ export async function getCatalogBlocks(catalogKey: string) {
     .order("number");
   return data ?? [];
 }
+
+/**
+ * Todos os blocos do planejamento, **incluindo os excluídos**, com quantas
+ * metas cada um tem.
+ *
+ * Diferente de `getStudyPlanBlocks`, que filtra `deleted_at is null` porque
+ * serve às telas do aluno. Aqui os excluídos precisam aparecer no recorte
+ * "Excluídos", e a contagem de metas é o que decide se excluir é oferecido
+ * (R-CAD-04).
+ */
+export async function getPlanBlocksForManagement(studyPlanId: string) {
+  const [{ data: blocks }, { data: goals }] = await Promise.all([
+    supabase
+      .from("study_plan_blocks")
+      .select(
+        "id,name,subject_name,subject_color,subject_target,question_count,link,active,deleted_at,subject_order,block_order,catalog_block_id",
+      )
+      .eq("study_plan_id", studyPlanId)
+      .order("subject_order")
+      .order("block_order"),
+    supabase
+      .from("goals")
+      .select("block_id")
+      .eq("study_plan_id", studyPlanId)
+      .is("deleted_at", null)
+      .not("block_id", "is", null),
+  ]);
+
+  const goalsByBlock = new Map<string, number>();
+  for (const goal of goals ?? []) {
+    if (goal.block_id) goalsByBlock.set(goal.block_id, (goalsByBlock.get(goal.block_id) ?? 0) + 1);
+  }
+
+  return (blocks ?? []).map((block) => ({ ...block, goalCount: goalsByBlock.get(block.id) ?? 0 }));
+}
