@@ -75,7 +75,10 @@ Chromium de verdade, e o `global-setup` compila a extensão antes.
 ### Três armadilhas do harness
 
 1. **`button[type=submit]` também casa o "Sair" da sidebar.** Todo clique de
-   formulário precisa ser escopado em `.content`.
+   formulário precisa ser escopado em `.content` — e **`.content` deixou de
+   bastar** onde a tela tem dois formulários. `/aluno/lista-espera` sem acesso
+   liberado mostra o cadastro e o resgate de cupom, e o seletor por tipo casa os
+   dois. Com mais de um formulário na tela, clique pelo NOME do botão.
 2. **Voltar do TEC é navegação de documento.** Um `goto` para a mesma URL
    trocando só o fragmento é navegação *same-document*: o React não remonta e
    `QuizResultHandler` nunca roda. Passe por `about:blank` antes.
@@ -353,6 +356,34 @@ terminou, não o que o aluno escreveu.
 botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
+
+### F-CUP-01 — Resgatar um cupom
+**Esperado** o código é aceito **normalizado** — sem espaços, maiúsculas ou
+minúsculas tanto faz —, a assinatura nasce `active` com plano `cupom`, e as
+telas de estudo passam a abrir.
+
+**Cada teste cria o próprio cupom** (`createCoupon`). `current_uses` é um
+contador compartilhado: dois testes resgatando o mesmo código em paralelo leem
+um do outro.
+
+### F-CUP-02 — Código inválido
+**Esperado** inexistente, inativo, vencido e esgotado dão **a mesma** mensagem —
+"Cupom inválido ou expirado." Distinguir entregaria um oráculo para adivinhar
+códigos válidos.
+
+**Este é o único teste que submete o mesmo formulário quatro vezes**, e foi ele
+que expôs o reset do React 19: a action termina, o formulário reseta, e o campo
+solto perdia o que a pessoa digitou. Por isso o campo do cupom é controlado.
+
+### F-CUP-03 — Resgatar duas vezes
+**Esperado** uma única assinatura **ativa** e um único uso consumido. A linha
+`pending` que o cenário criou continua lá — o que não pode existir é uma segunda
+ativa, e `active_subscription_uidx` garante.
+
+### F-CUP-04 — O cupom não cria vínculo
+**Esperado** o aluno liberado por cupom vê "Nenhum planejamento ativo" e não tem
+`study_plans`. O cupom resolve o **acesso**; quem monta planejamento é o
+professor.
 
 ### F-UI-01 — Recolher a sidebar
 **Esperado** o botão recolhe, o conteúdo ganha a largura, e o **botão continua
@@ -1060,7 +1091,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 270 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 274 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -1103,15 +1134,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 30 — cupom de acesso
-
-Spec: [`specs/30-cupom-de-acesso.md`](specs/30-cupom-de-acesso.md).
-Migram para a §2 quando os testes existirem.
-
-- **F-CUP-01** — o aluno resgata e passa a ver as telas de estudo.
-- **F-CUP-02** — código inválido mostra a mensagem única.
-- **F-CUP-03** — resgatar duas vezes não concede dois acessos.
-- **F-CUP-04** — liberado por cupom continua sem planejamento e sem professor.
 
 
 

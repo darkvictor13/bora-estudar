@@ -108,6 +108,20 @@ where not exists (
 
 -- Acesso acadêmico vigente e sem expiração, para o aluno local nunca esbarrar
 -- em bloqueio durante o desenvolvimento.
+-- Cupons para uso local à mão — spec docs/specs/30-cupom-de-acesso.md.
+-- Servem para experimentar o resgate no navegador; o e2e NÃO os usa: cada teste
+-- cria o próprio código (`createCoupon`), porque `current_uses` é um contador
+-- compartilhado e dois testes em paralelo leriam um do outro.
+insert into public.coupons (id, code, months, max_uses, valid_until, active) values
+  ('c0d00000-0000-4000-8000-000000000001','CUPOM3MESES', 3, null, null, true),
+  ('c0d00000-0000-4000-8000-000000000002','CUPOMINATIVO', 3, null, null, false),
+  ('c0d00000-0000-4000-8000-000000000003','CUPOMVENCIDO', 3, null, current_date - 1, true),
+  ('c0d00000-0000-4000-8000-000000000004','CUPOMESGOTADO', 3, 1, null, true)
+on conflict (code) do nothing;
+
+-- O esgotado nasce no limite: `current_uses` já igual a `max_uses`.
+update public.coupons set current_uses = 1 where code = 'CUPOMESGOTADO';
+
 insert into public.subscriptions (student_id, status, plan, validity)
 select 'a1000000-0000-4000-8000-000000000001','active','desenvolvimento-local',
        daterange(current_date, null, '[)')

@@ -1791,6 +1791,25 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      redeem_coupon: {
+        Args: { p_code: string; p_request_id: string }
+        Returns: {
+          coupon_id: string | null
+          created_at: string
+          id: string
+          plan: string
+          status: Database["public"]["Enums"]["access_status"]
+          student_id: string
+          updated_at: string
+          validity: unknown
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subscriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reopen_goal: {
         Args: { p_goal_id: string; p_request_id: string }
         Returns: {

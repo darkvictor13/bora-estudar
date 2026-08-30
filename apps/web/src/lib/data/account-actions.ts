@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { requireRole, requireSession } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/actions";
+import { ROUTES } from "@/lib/routes";
 
 function text(data: FormData, field: string): string {
   return String(data.get(field) ?? "").trim();
@@ -62,4 +63,42 @@ export async function saveWaitlistEntry(_prev: FormState, data: FormData): Promi
   if (error) return { error: `Não foi possível salvar: ${error.message}` };
 
   return { success: "Cadastro salvo. Você está na lista de espera." };
+}
+
+/**
+ * Resgata um cupom de acesso — spec 30.
+ *
+ * O `request_id` vem do formulário, gerado UMA vez na carga da tela. Gerá-lo
+ * aqui transformaria a proteção do servidor em decoração: cada tentativa
+ * chegaria ao banco como resgate novo e consumiria outro uso do cupom.
+ */
+export async function redeemCoupon(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("student");
+
+  const code = text(data, "code");
+  const requestId = text(data, "requestId");
+  if (!code) return { error: "Informe o código do cupom." };
+  if (!requestId) return { error: "Recarregue a página e tente de novo." };
+
+  const { error } = await supabase.rpc("redeem_coupon", {
+    p_code: code,
+    p_request_id: requestId,
+  });
+
+  if (error) {
+    const m = error.message.toLowerCase();
+    // A mesma resposta para inexistente, inativo, vencido e esgotado: a RPC não
+    // distingue, e a tela não pode distinguir mais que ela.
+    if (m.includes("cupom invalido")) return { error: "Cupom inválido ou expirado." };
+    if (m.includes("ja tem acesso")) return { error: "Seu acesso já está liberado." };
+    if (m.includes("ja usou este cupom")) return { error: "Você já usou este cupom." };
+    if (m.includes("ja utilizado com outro payload")) {
+      return { error: "Recarregue a página antes de tentar outro código." };
+    }
+    return { error: error.message };
+  }
+
+  // O aviso de acesso e o formulário mudam com a revalidação, e levariam junto
+  // a mensagem: quem anuncia é a página.
+  return { redirectTo: `${ROUTES.student.waitlist}?feito=cupom` };
 }

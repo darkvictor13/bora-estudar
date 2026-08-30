@@ -85,7 +85,7 @@ linha 247.
 | Tema claro e escuro | `toggleTheme` index.js:1945 | ✅ | 11 | — |
 | **Entrar com Google (OAuth)** | `iniciarLoginGoogle` index.js:2029 | ❌ | | **bloqueada: provedor não configurado** |
 | **Mostrar/ocultar a senha digitada** | `alternarVisibilidadeSenha` index.js:2008 | ✅ | 29 | implementada |
-| Cupom de acesso concede 3 meses | `dadosCupomAcesso` aluno.js:3905, `CUPONS_ACESSO_TESTE` | 🟡 | 30 | especificada |
+| Cupom de acesso concede 3 meses | `dadosCupomAcesso` aluno.js:3905, `CUPONS_ACESSO_TESTE` | ✅ | 30 | implementada |
 | Vínculo automático ao professor padrão no cadastro | `garantirPerfilNovoAluno` index.js:2045 (`PROFESSOR_PADRAO_ID`) | 🟡 | | pendente |
 | **Sidebar recolhível, estado persistido** | `toggleSidebar` index.js:261 | ✅ | 29 | implementada |
 
@@ -454,7 +454,7 @@ condução dentro do TEC.
 | ~~17~~ | Painel arrastável e resumo por tópicos — spec [28](specs/28-painel-arrastavel-e-topicos.md) ✅ | extensão |
 | ~~18~~ | Sidebar recolhível; mostrar/ocultar senha — spec [29](specs/29-sidebar-e-senha-visivel.md) ✅ | site |
 | 19 | Login com Google | **bloqueada** — ver [Bloqueios](#bloqueios) |
-| 20 | Cupom de acesso — spec [30](specs/30-cupom-de-acesso.md) | 1 RPC, site |
+| ~~20~~ | Cupom de acesso — spec [30](specs/30-cupom-de-acesso.md) ✅ | 1 RPC, site |
 | 21 | Bateria livre por bloco, fora da meta | 1 RPC, site |
 
 ---

@@ -281,7 +281,9 @@ defeito conhecido, o número do bug.
   `fixtures/battery.ts` faz — se uma regra de negócio regredir, a
   pré-condição falha em vez de fabricar dado impossível.
 - **`button[type=submit]` também casa o "Sair" da sidebar.** Escope todo
-  clique de formulário em `.content`.
+  clique de formulário em `.content` — e `.content` não basta onde a tela tem
+  dois formulários. `/aluno/lista-espera` sem acesso liberado mostra o cadastro
+  e o resgate de cupom: ali, clique pelo nome do botão.
 - **Voltar do TEC é navegação de documento.** Um `goto` para a mesma URL
   trocando só o fragmento é *same-document*: o React não remonta e
   `QuizResultHandler` nunca roda. Use `returnToSite()`, que passa por

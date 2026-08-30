@@ -5,17 +5,27 @@ import { AuthForm } from "@/components/auth/AuthForm";
 import { requireRole } from "@/lib/auth/session";
 import { getWaitlistEntry } from "@/lib/data/student";
 import { saveWaitlistEntry } from "@/lib/data/account-actions";
+import { CouponForm } from "@/components/student/CouponForm";
 
-export async function waitlistLoader() {
+export async function waitlistLoader({ request }: { request: Request }) {
   const session = await requireRole("student");
   const entry = await getWaitlistEntry();
-  return { hasAccess: session.hasAccess, entry };
+  const feito = new URL(request.url).searchParams.get("feito");
+
+  return {
+    hasAccess: session.hasAccess,
+    entry,
+    redeemed: feito === "cupom",
+    // Gerado UMA vez por carga da tela, e reusado em todo reenvio: é o que faz
+    // a proteção do servidor valer alguma coisa (R-CUP-08).
+    requestId: crypto.randomUUID(),
+  };
 }
 
 type LoaderData = Awaited<ReturnType<typeof waitlistLoader>>;
 
 export function Waitlist() {
-  const { hasAccess, entry } = useLoaderData() as LoaderData;
+  const { hasAccess, entry, redeemed, requestId } = useLoaderData() as LoaderData;
 
   return (
     <>
@@ -23,6 +33,12 @@ export function Waitlist() {
         title="Lista de espera"
         description="Conte o que você está estudando para receber a oferta certa para o seu concurso."
       />
+
+      {redeemed && (
+        <Alert kind="success">
+          Cupom resgatado. Seu acesso está liberado — as telas de estudo já abrem.
+        </Alert>
+      )}
 
       {hasAccess ? (
         <Alert kind="success">Seu acesso já está liberado. Bons estudos.</Alert>
@@ -32,6 +48,8 @@ export function Waitlist() {
           seus dados abaixo a qualquer momento.
         </Alert>
       ) : null}
+
+      {!hasAccess && <CouponForm requestId={requestId} />}
 
       <Card>
         <AuthForm action={saveWaitlistEntry} submitLabel="Salvar cadastro" pendingLabel="Salvando…">
