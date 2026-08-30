@@ -46,8 +46,8 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 7. Professor — planejamento | 10 | 7 | 1 | 2 | 0 |
 | 8. Professor — geração de metas | 9 | 6 | 1 | 2 | 0 |
 | 9. Professor — acompanhamento | 8 | 2 | 2 | 4 | 0 |
-| 10. Extensão | 12 | 9 | 0 | 3 | 0 |
-| **Total** | **106** | **67** | **11** | **24** | **4** |
+| 10. Extensão | 12 | 10 | 0 | 2 | 0 |
+| **Total** | **106** | **68** | **11** | **23** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -377,7 +377,7 @@ confirma o GAP-03 como lacuna herdada. Aqui `updateProfile` exige
 | Histórico do servidor sobrepõe o local | `mergedHistory` content.js:83 | ✅ | 06 | — |
 | Guarda de questão já respondida | `armInitialGuard` content.js:811 | ✅ | 05 | — |
 | Finalização antecipada e cancelamento | content.js:758 e :775 | ✅ | 05 | — |
-| **Rodízio por tópico na seleção** (cobertura ascendente) | `selectBalanced` content.js:202 | ❌ | 22 | especificada |
+| **Rodízio por tópico na seleção** (cobertura ascendente) | `selectBalanced` content.js:202 | ✅ | 22 | implementada |
 | **Fase de reforço correlato** (1 do mesmo tópico por erro, profundidade 2) | `pickReinforcement` content.js:261 | ✅ | 21 | implementada |
 | **Rodada extra de +5, tudo ou nada** | `appendExtraRound` content.js:280 | ✅ | 21 | implementada |
 | **Resumo por tópicos no painel** | `topicSummary` content.js:542 | ❌ | | pendente |
@@ -434,7 +434,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 |---|---|---|---|
 | ~~9~~ | **Executar o reforço do ciclo** (site) — spec [20](specs/20-execucao-do-reforco.md), **implementada** | `record_reinforcement` pronta e sem chamador: a tela recomenda e não executa | 0 RPC, 0 migration, site |
 | ~~10~~ | **Conduzir `reinforcement` e `extra` no content script** — spec [21](specs/21-fases-na-extensao.md), **implementada** | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
-| 11 | **Rodízio por tópico na seleção** — spec [22](specs/22-rodizio-por-topico.md) | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
+| ~~11~~ | **Rodízio por tópico na seleção** — spec [22](specs/22-rodizio-por-topico.md), **implementada** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
 | 12 | **Dificuldades por tópico e histórico de baterias** | O professor vê o número, não vê a causa | 0 RPC, 1 view, site |
 | 13 | **Revisão espaçada** como conceito separado do reforço | Grade por matéria, 1ª e 2ª revisão | 1 migration, 1 RPC, site |
 

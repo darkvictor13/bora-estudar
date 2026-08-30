@@ -696,6 +696,21 @@ async function openCycle(scenario: Scenario, correct = 8) {
   return done;
 }
 
+/**
+ * Quantos ERROS ÚNICOS o ciclo tem.
+ *
+ * Não é um número fixo: depende de quais questões o motor escolheu, e o motor
+ * mudou quando o rodízio por tópico entrou (spec 22). Derivar do banco é o que
+ * mantém o teste medindo o comportamento em vez de um acidente do cenário.
+ */
+async function uniqueErrorsOf(sessionIds: readonly string[]): Promise<number> {
+  return count(
+    `select count(distinct question_id) from public.quiz_session_questions
+      where quiz_session_id = any($1::uuid[]) and phase = 'main' and outcome = 'incorrect'`,
+    [sessionIds],
+  );
+}
+
 /** As metas de uma semana já criada, na ordem. */
 async function addWeekGoalsOf(scenario: Scenario, week: number) {
   const rows = await query<{ id: string; type: string; title: string; weekday: number; block_id: string | null }>(
@@ -718,7 +733,7 @@ const cycleCard = (page: import("@playwright/test").Page, blockName: string) =>
 
 test.describe("F-RCIC-01 · o ciclo aberto aparece com os erros", () => {
   test("três baterias abaixo de 80% oferecem o reforço", async ({ studentPage, scenario }) => {
-    await openCycle(scenario, 8);
+    const feitas = await openCycle(scenario, 8);
     const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
 
     await studentPage.goto("/aluno/revisoes");
@@ -729,15 +744,18 @@ test.describe("F-RCIC-01 · o ciclo aberto aparece com os erros", () => {
     await expect(card.locator(".badge")).toHaveText("Prioridade alta");
     // 7 erradas por bateria, mas o bloco do catálogo tem 30 questões: a
     // terceira bateria já repete o que a primeira viu, então os ERROS ÚNICOS
-    // do ciclo são 15, não 21. É `getCycleErrors` deduplicando por questão.
-    await expect(card).toContainText("15 questão(ões) a revisar");
-    await expect(card.locator("tbody tr")).toHaveCount(15);
+    // são menos que 21. O número exato depende de quais questões o motor
+    // escolheu, então vem do banco.
+    const unicos = await uniqueErrorsOf(feitas.map((f) => f.sessionId));
+    await expect(card).toContainText(`${unicos} questão(ões) a revisar`);
+    await expect(card.locator("tbody tr")).toHaveCount(unicos);
   });
 });
 
 test.describe("F-RCIC-02 · concluir o reforço", () => {
   test("grava e o ciclo some da lista", async ({ studentPage, scenario }) => {
-    await openCycle(scenario, 8);
+    const feitas = await openCycle(scenario, 8);
+    const unicos = await uniqueErrorsOf(feitas.map((f) => f.sessionId));
     const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
 
     await studentPage.goto("/aluno/revisoes");
@@ -746,8 +764,8 @@ test.describe("F-RCIC-02 · concluir o reforço", () => {
     // `.all()` NÃO espera por nada. Numa SPA a tabela só existe depois de os
     // loaders da rota resolverem, o que é DEPOIS do `load` que o `goto`
     // aguarda — sem esta asserção a lista volta vazia, nenhum radio é marcado,
-    // e o teste falha dizendo que faltaram 15 quando na verdade nada foi lido.
-    await expect(card.locator("tbody tr")).toHaveCount(15);
+    // e o teste falha dizendo que faltaram todas quando nada foi lido.
+    await expect(card.locator("tbody tr")).toHaveCount(unicos);
     for (const radio of await card.locator('input[value="correct"]').all()) {
       await radio.check();
     }
@@ -775,20 +793,21 @@ test.describe("F-RCIC-02 · concluir o reforço", () => {
           where r.block_id = $1`,
         [block.id],
       ),
-    ).toBe(15);
+    ).toBe(unicos);
   });
 });
 
 test.describe("F-RCIC-03 · faltando marcar", () => {
   test("o envio é impedido, com a contagem do que falta", async ({ studentPage, scenario }) => {
-    await openCycle(scenario, 8);
+    const feitas = await openCycle(scenario, 8);
+    const unicos = await uniqueErrorsOf(feitas.map((f) => f.sessionId));
     const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
 
     await studentPage.goto("/aluno/revisoes");
     const card = cycleCard(studentPage, block.name);
 
     // Mesma razão do teste acima: `.all()` não espera.
-    await expect(card.locator("tbody tr")).toHaveCount(15);
+    await expect(card.locator("tbody tr")).toHaveCount(unicos);
     // Marca todas menos duas.
     const radios = await card.locator('input[value="correct"]').all();
     for (const radio of radios.slice(0, radios.length - 2)) await radio.check();
@@ -806,7 +825,8 @@ test.describe("F-RCIC-04 · o que muda depois", () => {
     studentPage,
     scenario,
   }) => {
-    await openCycle(scenario, 8);
+    const feitas = await openCycle(scenario, 8);
+    const unicos = await uniqueErrorsOf(feitas.map((f) => f.sessionId));
     const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
 
     await studentPage.goto("/aluno/revisoes");
@@ -814,7 +834,7 @@ test.describe("F-RCIC-04 · o que muda depois", () => {
     await expect(linha).toContainText("53%");
 
     const card = cycleCard(studentPage, block.name);
-    await expect(card.locator("tbody tr")).toHaveCount(15);
+    await expect(card.locator("tbody tr")).toHaveCount(unicos);
     for (const radio of await card.locator('input[value="incorrect"]').all()) await radio.check();
     await card.getByRole("button", { name: "Concluir reforço" }).click();
     await expect(studentPage.locator(".alert--success")).toBeVisible();

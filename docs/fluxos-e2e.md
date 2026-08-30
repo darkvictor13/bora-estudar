@@ -396,6 +396,16 @@ novo para outra meta levanta `ja existe uma bateria aberta neste planejamento`
 `location.hash` ser limpa; `queue.length === mainTarget`; `requestId === null`;
 `finishedAt === null`.
 
+### F-TOPI-01/02/03 — Rodízio por tópico
+Spec: [`specs/22-rodizio-por-topico.md`](specs/22-rodizio-por-topico.md).
+**Esperado** as 15 principais saem equilibradas entre os tópicos do bloco —
+nenhum tópico leva mais que um a mais que o menor —, a segunda bateria do bloco
+não repete questão, e a fila reproduzida pela fixture é a que o banco registrou.
+
+**Nenhum teste deve fixar quantas questões um ciclo tem.** Quais questões cada
+bateria pega é propriedade do motor, e ela mudou quando o rodízio entrou. Os
+testes de `F-RCIC` derivam esse número do banco.
+
 ### F-BAT-04 — Motor de seleção
 `pickQuestions` ordena por: inédita → mais erros → vista há mais tempo → vista
 menos vezes → id. Determinística: a mesma entrada dá sempre a mesma fila.
@@ -829,7 +839,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 226 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 227 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -875,14 +885,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 22 — rodízio por tópico
-
-Spec: [`specs/22-rodizio-por-topico.md`](specs/22-rodizio-por-topico.md).
-Migram para a §3 quando os testes existirem.
-
-- **F-TOPI-01** — a bateria do seed sai equilibrada entre os tópicos do bloco.
-- **F-TOPI-02** — a segunda bateria do bloco continua sem repetir questão.
-- **F-TOPI-03** — a fila que a extensão monta é a mesma que o e2e reproduz.
 
 
 

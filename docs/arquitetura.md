@@ -279,8 +279,9 @@ recarregar a página.
 - **`data_collection_permissions` no manifesto.** O `web-ext lint` avisa que a
   chave será obrigatória. Declarar o que a extensão coleta é decisão de
   política, não técnica, e precisa ser resolvida antes de publicar na AMO.
-- **Correlação de tópico na seleção.** `pickQuestions` já prioriza inéditas,
-  depois mais erradas, depois vistas há mais tempo. Falta agrupar por tópico
-  quando o aluno erra muito na mesma matéria.
-- **Reforços e extras na extensão.** O ledger e as RPCs aceitam as três fases;
-  o content script hoje só conduz a fase `main`.
+- ~~**Reforços e extras na extensão.**~~ Resolvido pela spec
+  [21](specs/21-fases-na-extensao.md): o content script conduz as três fases, e
+  o `PROTOCOL_VERSION` passou a 2 para o tópico viajar no payload.
+- ~~**Correlação de tópico na seleção.**~~ Resolvido pela spec
+  [22](specs/22-rodizio-por-topico.md): a fila é montada em rodízio por tópico,
+  pelo menos coberto.

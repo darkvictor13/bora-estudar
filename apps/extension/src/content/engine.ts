@@ -73,10 +73,82 @@ function best(
     .slice(0, count);
 }
 
-/** As `mainTarget` questões principais da bateria. */
+/** Chave do grupo. Questão sem tópico forma um grupo próprio (R-TOPI-05). */
+const groupKey = (question: AvailableQuestion) => question.topic ?? "";
+
+/**
+ * Escolhe `count` questões em **rodízio por tópico**.
+ *
+ * A cada vaga, o tópico **menos coberto** é o que cede a questão. Cobertura é
+ * `(vistas + já escolhidas nesta bateria) ÷ total do tópico`, então o rodízio
+ * respeita o histórico em vez de recomeçar do zero a cada bateria.
+ *
+ * Empate na cobertura resolve por **menos escolhidas**; persistindo, pelo
+ * **tópico maior** — que tem mais a cobrir, e deixá-lo para depois é o que
+ * produz o desequilíbrio no fim da fila.
+ *
+ * Dentro do tópico vencedor a escolha é a de sempre (`best`). Esta função muda
+ * QUAL TÓPICO, nunca qual questão dentro dele. Ver docs/specs/22-rodizio-por-topico.md.
+ */
+function pickBalanced(
+  available: readonly AvailableQuestion[],
+  history: Map<number, SeenQuestion>,
+  exclude: ReadonlySet<number>,
+  count: number,
+): AvailableQuestion[] {
+  const groups = new Map<string, AvailableQuestion[]>();
+  const order: string[] = [];
+  for (const question of available) {
+    const key = groupKey(question);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(question);
+  }
+
+  const taken = new Set(exclude);
+  const picked = new Map<string, number>();
+  const chosen: AvailableQuestion[] = [];
+
+  while (chosen.length < count) {
+    // Só tópicos que ainda têm candidata.
+    const disponiveis = order.filter((key) =>
+      groups.get(key)!.some((question) => !taken.has(question.id)),
+    );
+    if (!disponiveis.length) break;
+
+    const winner = disponiveis
+      .map((key) => {
+        const questions = groups.get(key)!;
+        const total = Math.max(1, questions.length);
+        const seen = questions.filter((question) => history.has(question.id)).length;
+        const already = picked.get(key) ?? 0;
+        return { key, coverage: (seen + already) / total, already, total };
+      })
+      .sort(
+        (a, b) =>
+          a.coverage - b.coverage || a.already - b.already || b.total - a.total,
+      )[0]!;
+
+    const question = best(groups.get(winner.key)!, history, taken, 1)[0]!;
+    chosen.push(question);
+    taken.add(question.id);
+    picked.set(winner.key, (picked.get(winner.key) ?? 0) + 1);
+  }
+
+  return chosen;
+}
+
+/**
+ * As `mainTarget` questões principais da bateria, em rodízio por tópico.
+ *
+ * Sem o rodízio, uma bateria de 15 num bloco de 30 com três assuntos podia sair
+ * inteira do mesmo — o que não é revisão do bloco, é treino de um tópico.
+ */
 export function pickQuestions(start: QuizStart): QueueItem[] {
   const history = historyOf(start);
-  return best(start.availableQuestions, history, new Set(), start.mainTarget).map((question) => ({
+  return pickBalanced(start.availableQuestions, history, new Set(), start.mainTarget).map((question) => ({
     id: question.id,
     topic: question.topic,
     phase: "main" as const,
@@ -141,7 +213,8 @@ export function appendExtraRound(
 ): QueueItem[] | null {
   const history = historyOf(start);
   const exclude = new Set(queue.map((item) => item.id));
-  const chosen = best(start.availableQuestions, history, exclude, EXTRA_ROUND_SIZE);
+  // A rodada extra também respeita o rodízio (R-TOPI-07).
+  const chosen = pickBalanced(start.availableQuestions, history, exclude, EXTRA_ROUND_SIZE);
   if (chosen.length < EXTRA_ROUND_SIZE) return null;
 
   const round = Math.max(0, ...queue.map((item) => item.round)) + 1;

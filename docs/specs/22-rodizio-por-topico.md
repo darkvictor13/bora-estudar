@@ -1,6 +1,6 @@
 # 22 — Rodízio por tópico na seleção
 
-**Situação:** não implementada · **Comparativo:** §12 item 8 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §10 · **Fluxos e2e:** F-TOPI-01 a F-TOPI-03
+**Situação:** implementada · **Comparativo:** §12 item 8 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §10 · **Fluxos e2e:** F-TOPI-01 a F-TOPI-03
 
 ---
 
@@ -72,6 +72,11 @@ para cada vaga da fila (15 principais, ou 5 extras):
 | RPCs | **nenhuma** |
 | Migration | **nenhuma** |
 | Testes | `apps/extension/src/content/engine.test.ts`, `apps/e2e/tests/quiz.spec.ts` |
+
+**O rodízio mudou quais questões cada bateria escolhe**, e com isso o número de
+erros únicos de um ciclo no cenário de teste. Os testes de `F-RCIC` passaram a
+derivar esse número do banco em vez de fixá-lo: ele é propriedade emergente do
+motor, não regra do produto.
 
 **É a menor spec da fila, e depende inteiramente da anterior.** Sem
 `AvailableQuestion.topic`, que a spec 21 trouxe, não haveria por onde agrupar.

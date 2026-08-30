@@ -572,7 +572,9 @@ test.describe("F-VINC-06 · suspender", () => {
       .getByRole("button", { name: "Suspender acesso" })
       .click();
 
-    await expect(teacherPage.locator(".alert--success")).toHaveText(
+    // Filho direto de `.content`: a confirmação é do nível da página, porque o
+    // formulário de suspender some quando o acesso deixa de estar ativo.
+    await expect(teacherPage.locator(".content > .alert--success")).toHaveText(
       "Acesso suspenso. O aluno volta para a lista de espera.",
     );
 
