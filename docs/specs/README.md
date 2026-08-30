@@ -37,7 +37,7 @@ de lá vira uma spec nova antes de virar código.
 | 13 | [Vínculo e liberação de acesso](13-vinculo-e-liberacao-de-acesso.md) | O professor encontra, vincula e libera o aluno |
 | 14 | [Gestão do planejamento](14-gestao-do-planejamento.md) | Criar, ativar e arquivar planejamento, com os blocos do catálogo |
 | 15 | [Cadernos do planejamento](15-cadernos-do-planejamento.md) | Ativar, desativar, editar, incluir, excluir e restaurar bloco |
-| 16 | [Histórico e anulação de bateria](16-historico-e-anulacao-de-bateria.md) | O professor vê as baterias do aluno e anula a que não conta — **não implementada** |
+| 16 | [Histórico e anulação de bateria](16-historico-e-anulacao-de-bateria.md) | O professor vê as baterias do aluno e anula a que não conta |
 
 ---
 

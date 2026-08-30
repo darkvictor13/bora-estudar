@@ -455,6 +455,35 @@ semana bloqueia os dois: `ha bateria aberta nesta semana`.
 `?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
 no planejamento ativo (ou no primeiro) sem quebrar.
 
+### Histórico de baterias e anulação — F-ANUL-01 a 05
+
+Spec: [`specs/16-historico-e-anulacao-de-bateria.md`](specs/16-historico-e-anulacao-de-bateria.md).
+O cartão "Baterias" fica na ficha do aluno. O botão "Anular" abre o campo de
+motivo; o submit é o segundo "Anular", então o clique precisa de
+`{ exact: true }` para não casar o que abriu o formulário.
+
+#### F-ANUL-01 — A ficha lista as baterias
+**Esperado** bloco, número, `acertos/principais` com o percentual, tempo e
+situação, da mais recente para a mais antiga.
+
+#### F-ANUL-02 — Anular preserva o ledger
+**Esperado** "Bateria anulada."; a situação vira "Anulada"; o motivo aparece na
+linha; `quiz_session_questions` **continua com as mesmas 15 linhas**.
+
+#### F-ANUL-03 — O desempenho desce e a meta volta
+**Esperado** "Desempenho oficial" sai de 73% para "—" — é
+`vw_quiz_session_performance` filtrando `status = 'completed'` — e a meta volta a
+"Pendente" na tela do aluno.
+
+#### F-ANUL-04 — As questões voltam a ser inéditas
+**Esperado** `vw_seen_questions` volta a zero para o bloco, e a bateria seguinte
+da mesma meta escolhe **exatamente a mesma fila**. É a consequência que a tela
+avisa antes de o professor clicar.
+
+#### F-ANUL-05 — O que não é anulável
+**Esperado** bateria `in_progress` não tem botão; motivo vazio grava
+`Anulação administrativa`.
+
 ### Cadernos do planejamento — F-CAD-01 a 06
 
 Spec: [`specs/15-cadernos-do-planejamento.md`](specs/15-cadernos-do-planejamento.md).
@@ -627,7 +656,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 185 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 191 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -639,7 +668,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07 e F-CAD-01 a 06 | 50 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06 e F-ANUL-01 a 05 | 56 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
@@ -675,21 +704,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 16 — histórico de baterias e anulação
-
-Spec: [`specs/16-historico-e-anulacao-de-bateria.md`](specs/16-historico-e-anulacao-de-bateria.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-ANUL-01** — a ficha do aluno lista as baterias dele com bloco, número,
-  situação e desempenho oficial, da mais recente para a mais antiga.
-- **F-ANUL-02** — anular muda a situação para "Anulada", mostra o motivo, e o
-  ledger continua com as mesmas linhas.
-- **F-ANUL-03** — depois de anular, o desempenho oficial desce e a meta volta a
-  "Pendente" para o aluno.
-- **F-ANUL-04** — as questões da bateria anulada voltam a ser inéditas para o
-  motor de seleção.
-- **F-ANUL-05** — bateria em andamento não oferece o botão; motivo vazio grava
-  "Anulação administrativa".
 
 
 
