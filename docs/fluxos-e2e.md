@@ -1103,6 +1103,16 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 30 — cupom de acesso
+
+Spec: [`specs/30-cupom-de-acesso.md`](specs/30-cupom-de-acesso.md).
+Migram para a §2 quando os testes existirem.
+
+- **F-CUP-01** — o aluno resgata e passa a ver as telas de estudo.
+- **F-CUP-02** — código inválido mostra a mensagem única.
+- **F-CUP-03** — resgatar duas vezes não concede dois acessos.
+- **F-CUP-04** — liberado por cupom continua sem planejamento e sem professor.
+
 
 
 
