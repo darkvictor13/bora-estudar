@@ -37,17 +37,29 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 
 | Área | Fluxos na v96 | ✅ | 🟡 | ❌ | 🚫 |
 |---|---:|---:|---:|---:|---:|
-| 1. Autenticação e conta | 12 | 7 | 2 | 3 | 0 |
+| 1. Autenticação e conta | 12 | 10 | 1 | 1 | 0 |
 | 2. Aluno — metas e execução | 12 | 7 | 2 | 0 | 3 |
-| 3. Aluno — bateria inteligente | 9 | 7 | 1 | 1 | 0 |
-| 4. Aluno — reforço e revisão | 10 | 6 | 0 | 4 | 0 |
-| 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
+| 3. Aluno — bateria inteligente | 9 | 8 | 1 | 0 | 0 |
+| 4. Aluno — reforço e revisão | 10 | 7 | 0 | 3 | 0 |
+| 5. Aluno — conteúdo e análise | 12 | 8 | 0 | 3 | 1 |
 | 6. Professor — alunos e acesso | 12 | 12 | 0 | 0 | 0 |
 | 7. Professor — planejamento | 10 | 7 | 1 | 2 | 0 |
 | 8. Professor — geração de metas | 9 | 6 | 1 | 2 | 0 |
-| 9. Professor — acompanhamento | 8 | 2 | 2 | 4 | 0 |
-| 10. Extensão | 12 | 10 | 0 | 2 | 0 |
-| **Total** | **106** | **68** | **11** | **23** | **4** |
+| 9. Professor — acompanhamento | 8 | 6 | 1 | 1 | 0 |
+| 10. Extensão | 12 | 12 | 0 | 0 | 0 |
+| **Total** | **106** | **83** | **7** | **12** | **4** |
+
+**As contagens acima são de 31/08/2026, com a fila encerrada.** Quando o
+inventário foi escrito eram 68 ✅, 11 🟡, 23 ❌; vinte specs depois, são 83 ✅ e
+12 ❌. As duas áreas que estavam mais vazias — extensão e acompanhamento do
+professor — fecharam.
+
+O que a v96 tinha e ainda falta está listado nas tabelas de cada área, e o que
+sobrou tem um motivo escrito: ou é 🚫 deliberado, ou é o bloqueio do login com
+Google, ou é uma pendência menor que nenhuma spec da fila cobriu.
+
+O texto abaixo é o diagnóstico original, de 30/08/2026, e fica como registro do
+ponto de partida.
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
