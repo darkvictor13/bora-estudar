@@ -1,13 +1,18 @@
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { ROUTES } from "@/lib/routes";
 import {
   getActiveStudyPlan,
   getBlockPerformance,
   getBlockTopics,
+  getOpenQuizSession,
+  getPendingQuizGoals,
   getStudyPlanBlocks,
 } from "@/lib/data/student";
+import { StartQuizButton } from "@/components/student/StartQuizButton";
+import { oldestPendingGoalOf } from "@/lib/domain/goals";
 import { BlockTopics } from "@/components/SessionTopics";
 
 export async function studentNotebooksLoader() {
@@ -16,15 +21,24 @@ export async function studentNotebooksLoader() {
   const plan = await getActiveStudyPlan();
   if (!plan) return { plan: null } as const;
 
-  const [blocks, performance] = await Promise.all([
+  const [blocks, performance, pendingGoals, openSession] = await Promise.all([
     getStudyPlanBlocks(plan.id),
     getBlockPerformance(plan.id),
+    getPendingQuizGoals(plan.id),
+    getOpenQuizSession(plan.id),
   ]);
   const topics = await getBlockTopics(
     blocks.map((b) => b.catalog_block_id).filter((id) => id !== null),
   );
   // O Map não sobrevive à serialização do loader; a lista de pares, sim.
-  return { plan, blocks, performance, topics: [...topics.entries()] } as const;
+  return {
+    plan,
+    blocks,
+    performance,
+    topics: [...topics.entries()],
+    pendingGoals,
+    openSession,
+  } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentNotebooksLoader>>;
@@ -41,7 +55,7 @@ export function StudentNotebooks() {
     );
   }
 
-  const { blocks } = data;
+  const { blocks, pendingGoals, openSession } = data;
   const perfById = new Map(data.performance.map((p) => [p.block_id, p]));
   const topicsByCatalog = new Map(data.topics);
 
@@ -74,11 +88,13 @@ export function StudentNotebooks() {
                       <th className="num">Meta</th>
                       <th className="num">Desempenho</th>
                       <th>Situação</th>
+                      <th>Bateria</th>
                     </tr>
                   </thead>
                   <tbody>
                     {list.map((block) => {
                       const perf = perfById.get(block.id);
+                      const proximaMeta = oldestPendingGoalOf(pendingGoals, block.id);
                       const pct = perf?.official_score_pct ?? null;
                       const reachedTarget = pct !== null && pct >= block.subject_target;
                       return (
@@ -109,6 +125,29 @@ export function StudentNotebooks() {
                               <Badge tone="green">Na meta</Badge>
                             ) : (
                               <Badge tone="amber">Abaixo da meta</Badge>
+                            )}
+                          </td>
+                          <td className="acao">
+                            {/* Só existe UMA bateria aberta por planejamento, e
+                                `start_quiz_session` recusa a segunda: com uma
+                                aberta, todo bloco aponta para ela. Esconder isso
+                                deixaria o aluno clicando num botão que só
+                                levanta erro. */}
+                            {openSession ? (
+                              openSession.status === "awaiting_time" ? (
+                                <Link to={ROUTES.student.overview}>Registrar tempo</Link>
+                              ) : openSession.goal_id ? (
+                                <StartQuizButton
+                                  goalId={openSession.goal_id}
+                                  label="Continuar no TEC"
+                                />
+                              ) : null
+                            ) : !block.active ? (
+                              <span className="muted">Bloco desativado</span>
+                            ) : proximaMeta ? (
+                              <StartQuizButton goalId={proximaMeta.id} />
+                            ) : (
+                              <span className="muted">Sem meta pendente</span>
                             )}
                           </td>
                         </tr>

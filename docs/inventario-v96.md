@@ -156,7 +156,7 @@ resultado é imutável, "correções administrativas em fluxo próprio" — que 
 | Finalização antecipada: 1 a 15 principais | 017:103, changelog v89 | ✅ | 05 | — |
 | Extras em blocos de 5, e só após todas as principais | 017:120, `mod(extras,5)=0` | ✅ | 05 | — |
 | **Trocar de bateria em um passo** (cancelar a atual e já iniciar a nova) | `escolherAcaoBateriaAberta` aluno.js:5296 | 🟡 | | pendente |
-| **Iniciar a bateria pelo caderno** | `htmlAcaoBateriaLivre` aluno.js:1525 | ❌ | 31 | especificada |
+| **Iniciar a bateria pelo caderno** | `htmlAcaoBateriaLivre` aluno.js:1525 | ✅ | 31 | implementada |
 
 **A linha acima dizia "bateria livre por bloco, FORA da meta da semana", e
 estava errada.** `htmlAcaoBateriaLivre` chama `metasPendentesSemanaDoBloco`, que
@@ -463,7 +463,7 @@ condução dentro do TEC.
 | ~~18~~ | Sidebar recolhível; mostrar/ocultar senha — spec [29](specs/29-sidebar-e-senha-visivel.md) ✅ | site |
 | 19 | Login com Google | **bloqueada** — ver [Bloqueios](#bloqueios) |
 | ~~20~~ | Cupom de acesso — spec [30](specs/30-cupom-de-acesso.md) ✅ | 1 RPC, site |
-| 21 | Iniciar a bateria pelo caderno — spec [31](specs/31-iniciar-bateria-pelo-caderno.md) | site, sem RPC |
+| ~~21~~ | Iniciar a bateria pelo caderno — spec [31](specs/31-iniciar-bateria-pelo-caderno.md) ✅ | site, sem RPC |
 
 ---
 

@@ -366,3 +366,21 @@ export async function getSessionTopics(quizSessionId: string) {
     .order("answered", { ascending: false });
   return data ?? [];
 }
+
+/**
+ * Metas de bateria pendentes do planejamento — spec 31.
+ *
+ * Todas as semanas, não só a corrente: a lista de cadernos não tem seletor de
+ * semana, e quem abre "Bloco 3" quer começar o Bloco 3, não descobrir em que
+ * semana ele caiu.
+ */
+export async function getPendingQuizGoals(studyPlanId: string) {
+  const { data } = await supabase
+    .from("goals")
+    .select("id,block_id,type,status,week_number,weekday,day_order")
+    .eq("study_plan_id", studyPlanId)
+    .eq("type", "question_block")
+    .eq("status", "pending")
+    .is("deleted_at", null);
+  return data ?? [];
+}

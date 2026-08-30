@@ -92,3 +92,40 @@ export const EXTRA_ACTIVITY_LABEL: Record<Enum<"extra_activity_kind">, string> =
 };
 
 export const EXTRA_ACTIVITIES = Object.keys(EXTRA_ACTIVITY_LABEL) as Enum<"extra_activity_kind">[];
+
+/**
+ * Meta pendente de bateria de um bloco, a mais antiga primeiro.
+ *
+ * A ordenação é a de `metasPendentesSemanaDoBloco` da v96 — dia e ordem no dia
+ * —, com a **semana na frente**: lá havia uma semana selecionada na tela, e
+ * aqui não há. A lista de cadernos não tem seletor de semana, e exigir que o
+ * aluno adivinhasse a semana da meta é o problema que a spec 31 resolve.
+ */
+export interface PendingGoal {
+  readonly id: string;
+  readonly block_id: string | null;
+  readonly type: Enum<"goal_type">;
+  readonly status: Enum<"goal_status">;
+  readonly week_number: number;
+  readonly weekday: number;
+  readonly day_order: number;
+}
+
+export function oldestPendingGoalOf(
+  goals: readonly PendingGoal[],
+  blockId: string,
+): PendingGoal | null {
+  const candidates = goals.filter(
+    (goal) =>
+      goal.block_id === blockId && goal.type === "question_block" && goal.status === "pending",
+  );
+
+  if (candidates.length === 0) return null;
+
+  return candidates
+    .slice()
+    .sort(
+      (a, b) =>
+        a.week_number - b.week_number || a.weekday - b.weekday || a.day_order - b.day_order,
+    )[0]!;
+}
