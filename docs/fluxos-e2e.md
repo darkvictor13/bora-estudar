@@ -734,6 +734,19 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 18 — prévia e distribuição da semana
+
+Spec: [`specs/18-previa-e-distribuicao-da-semana.md`](specs/18-previa-e-distribuicao-da-semana.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-PREV-01** — a prévia mostra as metas agrupadas por dia e o total, sem
+  gravar nada.
+- **F-PREV-02** — o que a prévia mostrou é o que a semana recebe.
+- **F-PREV-03** — peso maior numa disciplina faz ela receber mais metas.
+- **F-PREV-04** — peso 0 tira a disciplina da semana gerada.
+- **F-PREV-05** — total fora de 1–80 e peso fora de 0–20 são recusados.
+- **F-PREV-06** — mudar um peso e reenviar não é replay: a semana muda.
+
 
 
 
