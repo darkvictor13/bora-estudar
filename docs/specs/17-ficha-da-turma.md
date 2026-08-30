@@ -1,6 +1,6 @@
 # 17 — Ficha da turma
 
-**Situação:** não implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-TURMA-01 a F-TURMA-05
+**Situação:** implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-TURMA-01 a F-TURMA-05
 
 ---
 
@@ -91,6 +91,11 @@ professor abre /professor
 | RPCs | **nenhuma nova** |
 | Migration | **nenhuma** |
 | Testes | `apps/web/src/lib/domain/students.test.ts`, `apps/e2e/tests/teacher.spec.ts` |
+
+**A linha passou a ter dois badges**, situação de estudo e situação de acesso, e
+as duas células levam classe — `td.situacao` e `td.acesso`. Sem isso,
+`tr .badge` vira violação de modo estrito, e foi o que quebrou cinco testes de
+`F-PROF-02` e dois de `F-VINC` quando a coluna nova entrou.
 
 **A classificação é função pura e ganha teste de unidade.** São quatro faixas com
 cinco limiares e uma ordem de avaliação que importa — exatamente o tipo de coisa

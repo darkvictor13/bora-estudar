@@ -272,3 +272,71 @@ export async function getStudentSessions(studentId: string) {
     mainCorrect: perfById.get(session.id)?.main_correct ?? 0,
   }));
 }
+
+/**
+ * Os alunos do professor, com progresso e desempenho — spec 17.
+ *
+ * **Duas consultas para todos, nunca duas por aluno.** Com trinta alunos, uma
+ * consulta por aluno seriam sessenta idas ao servidor por carga de página. As
+ * metas e o desempenho de todos os planejamentos ativos vêm de uma vez e são
+ * casados em memória.
+ */
+export async function getMyStudentsWithProgress(teacherId: string) {
+  const students = await getMyStudents(teacherId);
+  if (!students.length) return [];
+
+  const planIds = students.map((s) => s.activePlan?.id).filter((id): id is string => !!id);
+
+  const [{ data: goals }, { data: performance }] = planIds.length
+    ? await Promise.all([
+        supabase
+          .from("goals")
+          .select("study_plan_id,status")
+          .in("study_plan_id", planIds)
+          .is("deleted_at", null),
+        supabase
+          .from("vw_block_performance")
+          .select("study_plan_id,main_count,main_correct")
+          .in("study_plan_id", planIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const byPlan = new Map<string, { goalCount: number; completed: number; mainCount: number; mainCorrect: number }>();
+  const of = (planId: string) => {
+    const current = byPlan.get(planId) ?? {
+      goalCount: 0,
+      completed: 0,
+      mainCount: 0,
+      mainCorrect: 0,
+    };
+    byPlan.set(planId, current);
+    return current;
+  };
+
+  for (const goal of goals ?? []) {
+    const entry = of(goal.study_plan_id);
+    entry.goalCount += 1;
+    if (goal.status === "completed") entry.completed += 1;
+  }
+  for (const row of performance ?? []) {
+    // `study_plan_id` da view é nullable no tipo gerado — a view sai de um
+    // left join —, mas toda linha que a consulta devolve tem plano, porque o
+    // filtro é `in (planIds)`.
+    if (!row.study_plan_id) continue;
+    const entry = of(row.study_plan_id);
+    entry.mainCount += row.main_count ?? 0;
+    entry.mainCorrect += row.main_correct ?? 0;
+  }
+
+  return students.map((student) => ({
+    ...student,
+    progress: student.activePlan
+      ? (byPlan.get(student.activePlan.id) ?? {
+          goalCount: 0,
+          completed: 0,
+          mainCount: 0,
+          mainCorrect: 0,
+        })
+      : { goalCount: 0, completed: 0, mainCount: 0, mainCorrect: 0 },
+  }));
+}
