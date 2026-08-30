@@ -913,6 +913,19 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 24 — revisão espaçada
+
+Spec: [`specs/24-revisao-espacada.md`](specs/24-revisao-espacada.md).
+Migram para a §2 e a §4 quando os testes existirem.
+
+- **F-REVE-01** — o professor define o espaçamento e a grade do aluno o reflete.
+- **F-REVE-02** — o aluno marca uma revisão como feita, e ela permanece.
+- **F-REVE-03** — desmarcar volta a célula ao pendente.
+- **F-REVE-04** — disciplina sem espaçamento não entra na grade do aluno.
+- **F-REVE-05** — espaçamento fora de 0..60 é recusado.
+- **F-REVE-06** — mudar o espaçamento não perde a marcação já feita.
+- **F-REVE-07** — professor sem vínculo não vê nem escreve o espaçamento alheio.
+
 
 
 
