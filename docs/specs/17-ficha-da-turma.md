@@ -84,7 +84,7 @@ professor abre /professor
 | Camada | Item |
 |---|---|
 | Rota | `/professor` — ganha resumo, colunas de KPI, filtros e ordenação |
-| Componentes | `StudentFilters`, em `components/teacher/` |
+| Componentes | o formulário de filtro fica **inline** em `routes/teacher/Students.tsx` — é um `<form method="get">` sem estado, e extraí-lo para um componente só acrescentaria um arquivo |
 | Actions | **nenhuma** — a tela é só leitura |
 | Leitura | `getMyStudentsWithProgress`, em `lib/data/teacher.ts` |
 | Domínio | `classifyStudent` e os limiares, em `lib/domain/students.ts`, com teste de unidade |
