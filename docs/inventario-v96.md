@@ -181,8 +181,8 @@ importante deste inventário**, porque o §12 item 8 as trata como uma só.
 | Ciclo de 3 baterias, abaixo de 80% libera | `getBoraCiclosSmartReforco` aluno.js:5558 | ✅ | 09 | — |
 | Ver erros acumulados do bloco | `abrirErrosBloco` aluno.js:5667 | ✅ | 09 | — |
 | Caderno de erros reúne as três fases | `obterErrosBloco` aluno.js:5509 | ✅ | 08 | — |
-| **Prioridade alta abaixo de 75%** | aluno.js:5590, badge :3800 | ❌ | | pendente |
-| **Executar o reforço do ciclo** (site) | `iniciarReforcoCicloSmart` aluno.js:5658 | 🟡 | | pendente |
+| **Prioridade alta abaixo de 75%** | aluno.js:5590, badge :3800 | ❌ | 20 | especificada |
+| **Executar o reforço do ciclo** (site) | `iniciarReforcoCicloSmart` aluno.js:5658 | 🟡 | 20 | especificada |
 | **Conduzir as fases `reinforcement` e `extra`** (extensão) | content.js:261 e :280 | ❌ | | pendente |
 | **Agendar reforço como meta futura** | `agendarReforco` aluno.js:2003 | ❌ | | pendente |
 | **Ignorar reforço sugerido** | `ignorarReforco` aluno.js:1986 | ❌ | | pendente |
@@ -432,7 +432,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
-| 9 | **Executar o reforço do ciclo** (site) | `record_reinforcement` pronta e sem chamador | 0 RPC, 0 migration, site |
+| 9 | **Executar o reforço do ciclo** (site) — spec [20](specs/20-execucao-do-reforco.md) | `record_reinforcement` pronta e sem chamador: a tela recomenda e não executa | 0 RPC, 0 migration, site |
 | 10 | **Conduzir `reinforcement` e `extra` no content script** | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
 | 11 | **Rodízio por tópico na seleção** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
 | 12 | **Dificuldades por tópico e histórico de baterias** | O professor vê o número, não vê a causa | 0 RPC, 1 view, site |

@@ -794,13 +794,27 @@ quem escreve teste — cada uma virou uma peça da suíte:
 
 Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
 
-- **Reforço de ciclo.** `record_reinforcement` existe; as telas de Revisões só
-  recomendam, não executam. O content script também só conduz a fase `main`.
+- **Fases `reinforcement` e `extra` no content script.** O `QuestionPhase` do
+  protocolo já as tem; o content script só conduz `main`.
 - **Editar os próprios dados como professor.** `updateProfile` exige
   `requireRole("student")`.
 
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
+
+### Reservados pela spec 20 — execução do reforço de ciclo
+
+Spec: [`specs/20-execucao-do-reforco.md`](specs/20-execucao-do-reforco.md).
+Migram para a §2 quando os testes existirem.
+
+- **F-RCIC-01** — com três baterias abaixo de 80%, a tela oferece o reforço e
+  lista as questões erradas únicas.
+- **F-RCIC-02** — marcar todas e enviar grava o reforço, e o ciclo some.
+- **F-RCIC-03** — deixar uma sem marcar impede o envio, com a contagem.
+- **F-RCIC-04** — "Ciclos revisados" sobe e o desempenho das três baterias não
+  muda.
+- **F-RCIC-05** — com menos de três baterias, ou com 80% ou mais, não há reforço.
+- **F-RCIC-06** — o professor vê o ciclo com a prioridade e não o executa.
 
 
 
