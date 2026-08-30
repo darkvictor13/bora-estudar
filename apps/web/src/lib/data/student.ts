@@ -85,7 +85,7 @@ export async function getBlockPerformance(studyPlanId: string) {
 export async function getStudyPlanBlocks(studyPlanId: string) {
   const { data } = await supabase
     .from("study_plan_blocks")
-    .select("id,name,subject_name,subject_color,subject_target,question_count,link,active")
+    .select("id,name,subject_name,subject_color,subject_target,question_count,link,active,block_order")
     .eq("study_plan_id", studyPlanId)
     .is("deleted_at", null)
     .order("subject_order")
@@ -222,4 +222,35 @@ export async function getTopicDifficulty(studyPlanId: string) {
     ...row,
     recurrent: (row.sessions_with_error ?? 0) >= RECURRENT_SESSIONS,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Revisão espaçada — spec docs/specs/24-revisao-espacada.md
+// ---------------------------------------------------------------------------
+
+/** O espaçamento por disciplina, definido pelo professor. */
+export async function getReviewSpacings(studyPlanId: string) {
+  const { data } = await supabase
+    .from("review_spacings")
+    .select("id,subject_name,first_interval,second_interval")
+    .eq("study_plan_id", studyPlanId)
+    .is("deleted_at", null)
+    .order("subject_name");
+  return data ?? [];
+}
+
+/**
+ * As marcações vivas, na forma que a grade consome.
+ *
+ * Só as vivas: desmarcar escreve `deleted_at`, e a linha morta é histórico do
+ * `audit_log`, não estado da tela.
+ */
+export async function getReviewCompletions(studyPlanId: string): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("review_completions")
+    .select("study_plan_block_id,ordinal")
+    .eq("study_plan_id", studyPlanId)
+    .is("deleted_at", null);
+
+  return new Set((data ?? []).map((row) => `${row.study_plan_block_id}:${row.ordinal}`));
 }

@@ -560,3 +560,80 @@ export async function goalCount(planId: string): Promise<number> {
     ),
   );
 }
+
+/**
+ * Cadernos extras numa disciplina do planejamento.
+ *
+ * A grade de revisão espaçada só tem o que mostrar com vários cadernos na mesma
+ * disciplina, e o cenário padrão cria um por disciplina. Os novos entram DEPOIS
+ * do que já existe, em `block_order` crescente, que é a ordem que a grade usa.
+ */
+export async function addBlocks(
+  scenario: Scenario,
+  subjectName: string,
+  count: number,
+): Promise<readonly string[]> {
+  const base = await query<{ max: string | null }>(
+    `select max(block_order)::text as max from public.study_plan_blocks
+      where study_plan_id = $1 and subject_name = $2 and deleted_at is null`,
+    [scenario.planId, subjectName],
+  );
+  const start = Number(base[0]?.max ?? -1) + 1;
+
+  const order = await query<{ subject_order: number }>(
+    `select subject_order from public.study_plan_blocks
+      where study_plan_id = $1 and subject_name = $2 limit 1`,
+    [scenario.planId, subjectName],
+  );
+  const subjectOrder = order[0]?.subject_order ?? 0;
+
+  const ids: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const id = randomUUID();
+    await query(
+      `insert into public.study_plan_blocks
+         (id, study_plan_id, student_id, teacher_id, subject_name, name,
+          subject_order, block_order)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        id,
+        scenario.planId,
+        scenario.student.id,
+        scenario.teacher.id,
+        subjectName,
+        `Aula ${start + i + 1}`,
+        subjectOrder,
+        start + i,
+      ],
+    );
+    ids.push(id);
+  }
+  return ids;
+}
+
+/** Espaçamento definido pelo professor, pelo caminho real: escrita com RLS. */
+export async function setSpacing(
+  scenario: Scenario,
+  subjectName: string,
+  first: number,
+  second: number,
+): Promise<void> {
+  await asUser(scenario.teacher.id, (client) =>
+    client.query(
+      `insert into public.review_spacings
+         (study_plan_id, student_id, teacher_id, subject_name, first_interval, second_interval)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [scenario.planId, scenario.student.id, scenario.teacher.id, subjectName, first, second],
+    ),
+  );
+}
+
+/** Marcações vivas do planejamento, na forma `${blockId}:${ordinal}`. */
+export async function reviewsDone(planId: string): Promise<readonly string[]> {
+  const rows = await query<{ study_plan_block_id: string; ordinal: number }>(
+    `select study_plan_block_id, ordinal from public.review_completions
+      where study_plan_id = $1 and deleted_at is null`,
+    [planId],
+  );
+  return rows.map((row) => `${row.study_plan_block_id}:${row.ordinal}`);
+}

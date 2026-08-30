@@ -295,3 +295,50 @@ export async function recordReinforcement(_prev: FormState, data: FormData): Pro
 
   return { redirectTo: `${ROUTES.student.reviews}?feito=reforco` };
 }
+
+// ---------------------------------------------------------------------------
+// Revisão espaçada — spec docs/specs/24-revisao-espacada.md
+// ---------------------------------------------------------------------------
+
+/**
+ * Marca ou desmarca uma revisão.
+ *
+ * Não gera `request_id`: `set_review_done` é idempotente por natureza — leva o
+ * par (bloco, ordinal) a um estado e não acumula. Ver R-REVE-13.
+ *
+ * A action serve aluno e professor, e por isso não chama `requireRole`: quem
+ * decide é a RPC, que aceita o aluno dono ou o professor com vínculo vigente e
+ * recusa qualquer outro com `42501`.
+ */
+export async function setReviewDone(_prev: FormState, data: FormData): Promise<FormState> {
+  const studyPlanId = String(data.get("studyPlanId") ?? "");
+  const blockId = String(data.get("blockId") ?? "");
+  const ordinal = Number(data.get("ordinal") ?? 0);
+  const done = String(data.get("done") ?? "") === "true";
+  const redirectTo = String(data.get("redirectTo") ?? "");
+
+  if (!studyPlanId || !blockId) return { error: "Revisão não identificada." };
+  if (ordinal !== 1 && ordinal !== 2) return { error: "Revisão inválida." };
+
+  const { error } = await supabase.rpc("set_review_done", {
+    p_study_plan_id: studyPlanId,
+    p_block_id: blockId,
+    p_ordinal: ordinal,
+    p_done: done,
+  });
+
+  if (error) {
+    const m = error.message.toLowerCase();
+    if (m.includes("sem permissao")) return { error: "Esta revisão é de outro aluno." };
+    if (m.includes("bloco nao encontrado")) {
+      return { error: "Este caderno saiu do planejamento." };
+    }
+    return { error: error.message };
+  }
+
+  // A célula troca de estado com a revalidação e leva junto o formulário dono
+  // da mensagem. Quem anuncia é a página.
+  return redirectTo
+    ? { redirectTo: `${redirectTo}?feito=${done ? "revisao" : "revisao-desfeita"}` }
+    : { success: done ? "Revisão marcada." : "Revisão desmarcada." };
+}

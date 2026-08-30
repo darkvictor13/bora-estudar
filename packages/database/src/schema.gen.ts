@@ -670,6 +670,67 @@ export type Database = {
           },
         ]
       }
+      review_completions: {
+        Row: {
+          completed_at: string
+          completed_by: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          ordinal: number
+          student_id: string
+          study_plan_block_id: string
+          study_plan_id: string
+          teacher_id: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_by: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          ordinal: number
+          student_id: string
+          study_plan_block_id: string
+          study_plan_id: string
+          teacher_id: string
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          ordinal?: number
+          student_id?: string
+          study_plan_block_id?: string
+          study_plan_id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_completion_block_fk"
+            columns: ["study_plan_block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+          {
+            foreignKeyName: "review_completion_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "review_completions_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       review_cycles: {
         Row: {
           block_id: string
@@ -716,6 +777,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_spacings: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          first_interval: number
+          id: string
+          second_interval: number
+          student_id: string
+          study_plan_id: string
+          subject_name: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          first_interval?: number
+          id?: string
+          second_interval?: number
+          student_id: string
+          study_plan_id: string
+          subject_name: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          first_interval?: number
+          id?: string
+          second_interval?: number
+          student_id?: string
+          study_plan_id?: string
+          subject_name?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_spacing_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
           },
         ]
       }
@@ -1625,6 +1733,32 @@ export type Database = {
           p_target_id: string
         }
         Returns: Record<string, unknown>
+      }
+      set_review_done: {
+        Args: {
+          p_block_id: string
+          p_done: boolean
+          p_ordinal: number
+          p_study_plan_id: string
+        }
+        Returns: {
+          completed_at: string
+          completed_by: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          ordinal: number
+          student_id: string
+          study_plan_block_id: string
+          study_plan_id: string
+          teacher_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "review_completions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       start_quiz_session: {
         Args: { p_block_id: string; p_goal_id: string; p_study_plan_id: string }

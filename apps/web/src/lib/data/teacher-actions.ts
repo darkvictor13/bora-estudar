@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/week-planner";
 import { countGoalsPerBlock, getCatalogBlocks } from "@/lib/data/teacher";
 import { ROUTES } from "@/lib/routes";
+import { MAX_INTERVAL, MIN_INTERVAL } from "@/lib/domain/spacing";
 
 /**
  * Id do lote, derivado do próprio lote.
@@ -751,4 +752,79 @@ export async function voidQuizSession(_prev: FormState, data: FormData): Promise
   // A linha muda de situação e o botão some com a revalidação, levando junto o
   // `useActionState` dono da mensagem. Quem sobrevive é a página.
   return { redirectTo: `${ROUTES.teacher.student(studentId)}?feito=anulada` };
+}
+
+// ---------------------------------------------------------------------------
+// Revisão espaçada — spec docs/specs/24-revisao-espacada.md
+// ---------------------------------------------------------------------------
+
+/**
+ * Define o espaçamento de uma disciplina.
+ *
+ * Escrita DIRETA, não RPC: é planejamento, e fica do mesmo lado da fronteira
+ * que `study_plan_blocks`. As três defesas do banco continuam valendo — o
+ * `with check` amarra a linha ao professor e ao aluno com vínculo, as colunas
+ * de contexto estão fora do `grant update`, e não há `delete`.
+ *
+ * `upsert` pela chave natural (plano, disciplina), que é o índice parcial:
+ * definir duas vezes a mesma disciplina é alterar, não duplicar.
+ */
+export async function setReviewSpacing(_prev: FormState, data: FormData): Promise<FormState> {
+  await requireRole("teacher");
+
+  const studyPlanId = String(data.get("studyPlanId") ?? "");
+  const studentId = String(data.get("studentId") ?? "");
+  const teacherId = String(data.get("teacherId") ?? "");
+  const subjectName = String(data.get("subjectName") ?? "").trim();
+  const first = Number(data.get("firstInterval") ?? 0);
+  const second = Number(data.get("secondInterval") ?? 0);
+
+  if (!studyPlanId || !subjectName) return { error: "Disciplina não identificada." };
+
+  // A faixa é a mesma da constraint. Validar aqui é para dar mensagem; quem
+  // garante é o banco, e é por isso que a `check` existe.
+  for (const [label, value] of [
+    ["primeira", first],
+    ["segunda", second],
+  ] as const) {
+    if (!Number.isInteger(value) || value < MIN_INTERVAL || value > MAX_INTERVAL) {
+      return {
+        error: `A ${label} revisão precisa ser um número entre ${MIN_INTERVAL} e ${MAX_INTERVAL}.`,
+      };
+    }
+  }
+
+  const existing = await supabase
+    .from("review_spacings")
+    .select("id")
+    .eq("study_plan_id", studyPlanId)
+    .eq("subject_name", subjectName)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  const { error } = existing.data
+    ? await supabase
+        .from("review_spacings")
+        .update({ first_interval: first, second_interval: second })
+        .eq("id", existing.data.id)
+    : await supabase.from("review_spacings").insert({
+        study_plan_id: studyPlanId,
+        student_id: studentId,
+        teacher_id: teacherId,
+        subject_name: subjectName,
+        first_interval: first,
+        second_interval: second,
+      });
+
+  if (error) {
+    if (error.code === "42501") return { error: "Este aluno não é seu." };
+    if (error.code === "23514") {
+      return { error: `Os intervalos vão de ${MIN_INTERVAL} a ${MAX_INTERVAL}.` };
+    }
+    return { error: error.message };
+  }
+
+  // A linha se reordena e o formulário se refaz com a revalidação: quem
+  // anuncia é a página.
+  return { redirectTo: `${ROUTES.teacher.student(studentId)}?feito=espacamento` };
 }

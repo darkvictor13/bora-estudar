@@ -8,10 +8,14 @@ import {
   getBlockPerformance,
   getCompletedSessions,
   getCycleErrors,
+  getReviewCompletions,
   getReviewCycles,
+  getReviewSpacings,
   getStudyPlanBlocks,
   getUsedSessions,
 } from "@/lib/data/student";
+import { ReviewGrid } from "@/components/ReviewGrid";
+import { buildGrid } from "@/lib/domain/spacing";
 import { ReinforcementForm } from "@/components/student/ReinforcementForm";
 import { buildCycles } from "@/lib/domain/reinforcement";
 import { ROUTES } from "@/lib/routes";
@@ -25,6 +29,8 @@ const PHASE_LABEL: Record<string, string> = {
 /** Confirmação por query string: o ciclo some da lista com a revalidação. */
 const DONE_MESSAGE: Record<string, string> = {
   reforco: "Reforço concluído. O ciclo foi revisado e saiu da lista.",
+  revisao: "Revisão marcada como feita.",
+  "revisao-desfeita": "Revisão desmarcada.",
 };
 
 export async function studentReviewsLoader({ request }: { request: Request }) {
@@ -33,9 +39,11 @@ export async function studentReviewsLoader({ request }: { request: Request }) {
   const plan = await getActiveStudyPlan();
   if (!plan) return { plan: null } as const;
 
-  const [blocks, performance] = await Promise.all([
+  const [blocks, performance, spacings, reviewsDone] = await Promise.all([
     getStudyPlanBlocks(plan.id),
     getBlockPerformance(plan.id),
+    getReviewSpacings(plan.id),
+    getReviewCompletions(plan.id),
   ]);
   const blockIds = blocks.map((b) => b.id);
   const [cycles, used] = await Promise.all([getReviewCycles(blockIds), getUsedSessions(blockIds)]);
@@ -75,6 +83,9 @@ export async function studentReviewsLoader({ request }: { request: Request }) {
     selectedId,
     errors,
     openCycles: openCycles.filter((c) => c !== null),
+    // A grade é derivada aqui, no loader, pelo mesmo módulo que os testes de
+    // domínio exercitam. Nada dela está gravado.
+    grids: buildGrid(spacings, blocks, reviewsDone),
     doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
     // Gerado UMA vez por carga da tela, e não a cada submissão: é o que faz o
     // reenvio devolver o reforço já gravado (R-RCIC-11).
@@ -96,7 +107,7 @@ export function StudentReviews() {
     );
   }
 
-  const { blocks, selectedId, errors, openCycles, doneMessage, requestId } = data;
+  const { blocks, selectedId, errors, openCycles, doneMessage, requestId, grids } = data;
   const perfById = new Map(data.performance.map((p) => [p.block_id, p]));
 
   const cyclesByBlock = new Map<string, number>();
@@ -144,6 +155,13 @@ export function StudentReviews() {
             />
           </Card>
         ))}
+
+        <ReviewGrid
+          grids={grids}
+          studyPlanId={data.plan.id}
+          redirectTo={ROUTES.student.reviews}
+          emptyHint="Seu professor ainda não programou revisão espaçada. Ela diz de quantos em quantos cadernos cada disciplina volta."
+        />
 
         <Card title="Blocos" sub="Selecione um bloco para ver os erros acumulados">
           {blocks.length === 0 ? (
