@@ -1,6 +1,6 @@
 # 26 — Tópicos do bloco e resumo da bateria
 
-**Situação:** não implementada · **Comparativo:** §12 item 11 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 · **Fluxos e2e:** F-RESU-01 a F-RESU-06
+**Situação:** implementada · **Comparativo:** §12 item 11 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 · **Fluxos e2e:** F-RESU-01 a F-RESU-06
 
 ---
 
