@@ -641,3 +641,214 @@ test.describe("F-VINC-07 · vincular duas vezes", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — gestão do planejamento. Spec docs/specs/14-gestao-do-planejamento.md
+// ---------------------------------------------------------------------------
+
+const newPlanCard = (page: import("@playwright/test").Page) =>
+  cardByTitle(page, "Novo planejamento");
+
+/** Preenche e envia o formulário de criação. */
+async function createPlan(
+  page: import("@playwright/test").Page,
+  { name, catalog = "pcpr26" }: { name: string; catalog?: string },
+) {
+  const card = newPlanCard(page);
+  await card.locator("#field-catalogKey").selectOption(catalog);
+  await card.locator("#field-name").fill(name);
+  await card.locator("#field-targetExam").fill("PCPR — Investigador");
+  await card.getByRole("button", { name: "Criar planejamento" }).click();
+}
+
+test.describe("F-GPLAN-01 · criar planejamento", () => {
+  test("nasce rascunho e materializa os blocos do catálogo", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto("/professor/planejamentos");
+    await createPlan(teacherPage, { name: `Plano novo ${scenario.planId.slice(0, 8)}` });
+
+    await expect(newPlanCard(teacherPage).locator(".alert--success")).toContainText(
+      "criado como rascunho",
+    );
+
+    const plan = await one<{ id: string; status: string }>(
+      `select id, status::text from public.study_plans
+        where student_id = $1 and name like 'Plano novo%' and deleted_at is null`,
+      [scenario.student.id],
+    );
+    expect(plan.status).toBe("draft");
+
+    // Os blocos vieram do catálogo, com subject_order/block_order coerentes.
+    const blocks = await query<{ subject_name: string; subject_order: number; block_order: number }>(
+      `select subject_name, subject_order, block_order from public.study_plan_blocks
+        where study_plan_id = $1 order by subject_order, block_order`,
+      [plan.id],
+    );
+    expect(blocks.length).toBeGreaterThan(0);
+    // Uma disciplina por subject_order, e block_order começa em 0 em cada uma.
+    const porDisciplina = new Map<string, number[]>();
+    for (const b of blocks) {
+      porDisciplina.set(b.subject_name, [...(porDisciplina.get(b.subject_name) ?? []), b.block_order]);
+    }
+    for (const ordens of porDisciplina.values()) {
+      expect(ordens).toEqual(ordens.map((_, i) => i));
+    }
+  });
+});
+
+test.describe("F-GPLAN-02 · o rascunho não é visível para o aluno", () => {
+  test.use({ scenarioOptions: { withPlan: false } });
+
+  test("o aluno continua no estado vazio até alguém ativar", async ({
+    page,
+    scenario,
+    signIn,
+  }) => {
+    await signIn(scenario.teacher);
+    await page.goto("/professor/planejamentos");
+    await createPlan(page, { name: "Plano em rascunho" });
+    await expect(newPlanCard(page).locator(".alert--success")).toBeVisible();
+
+    await expect(page.locator("tbody tr", { hasText: "Plano em rascunho" }).locator(".badge"))
+      .toHaveText("Rascunho");
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(page.locator(".alert")).toContainText("Nenhum planejamento ativo");
+  });
+});
+
+test.describe("F-GPLAN-03 · ativar", () => {
+  test("arquiva o anterior do mesmo aluno e o aluno passa a ver o novo", async ({
+    page,
+    scenario,
+    signIn,
+  }) => {
+    await signIn(scenario.teacher);
+    await page.goto("/professor/planejamentos");
+    await createPlan(page, { name: "Plano da virada" });
+    await expect(newPlanCard(page).locator(".alert--success")).toBeVisible();
+
+    await page
+      .locator("tbody tr", { hasText: "Plano da virada" })
+      .getByRole("button", { name: "Ativar" })
+      .click();
+
+    // Filho direto de `.content`: o alerta do formulário de criação continua na
+    // tela, dentro do cartão, e `.alert--success` sozinho casaria os dois.
+    await expect(page.locator(".content > .alert--success")).toContainText("Planejamento ativado");
+
+    // active_study_plan_uidx torna "dois ativos" inexprimível; a asserção prova
+    // que a troca aconteceu na mesma transação, sem passar por zero ativos.
+    const ativos = await query<{ name: string }>(
+      `select name from public.study_plans
+        where student_id = $1 and status = 'active' and deleted_at is null`,
+      [scenario.student.id],
+    );
+    expect(ativos.map((p) => p.name)).toEqual(["Plano da virada"]);
+
+    // E o de antes ficou arquivado, não apagado.
+    expect(
+      await count(
+        `select count(*) from public.study_plans
+          where id = $1 and status = 'archived' and deleted_at is null`,
+        [scenario.planId],
+      ),
+    ).toBe(1);
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(page.locator(".content__header p")).toContainText("Plano da virada");
+  });
+});
+
+test.describe("F-GPLAN-04 · gerar metas usa os blocos materializados", () => {
+  test.use({ scenarioOptions: { withPlan: false } });
+
+  test("depois de ativar, /professor/metas aceita gerar a semana", async ({
+    teacherPage,
+  }) => {
+    await teacherPage.goto("/professor/planejamentos");
+    await createPlan(teacherPage, { name: "Plano para metas" });
+    await expect(newPlanCard(teacherPage).locator(".alert--success")).toBeVisible();
+
+    await teacherPage
+      .locator("tbody tr", { hasText: "Plano para metas" })
+      .getByRole("button", { name: "Ativar" })
+      .click();
+    await expect(teacherPage.locator(".content > .alert--success")).toContainText(
+      "Planejamento ativado",
+    );
+
+    await teacherPage.goto("/professor/metas");
+    // Sem blocos materializados a tela diria "não tem blocos ativos".
+    await expect(teacherPage.locator(".content")).not.toContainText("não tem blocos ativos");
+    await expect(teacherPage.locator('.content input[name="blocks"]').first()).toBeVisible();
+  });
+});
+
+test.describe("F-GPLAN-05 · arquivar", () => {
+  test("preserva metas e baterias, e o aluno volta ao estado vazio", async ({
+    page,
+    scenario,
+    signIn,
+  }) => {
+    const metasAntes = await goalCount(scenario.planId);
+
+    await signIn(scenario.teacher);
+    await page.goto("/professor/planejamentos");
+    await page
+      .locator("tbody tr", { hasText: scenario.planName })
+      .getByRole("button", { name: "Arquivar" })
+      .click();
+
+    await expect(page.locator(".content > .alert--success")).toContainText("Planejamento arquivado");
+    expect(await goalCount(scenario.planId)).toBe(metasAntes);
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await expect(page.locator(".alert")).toContainText("Nenhum planejamento ativo");
+  });
+});
+
+test.describe("F-GPLAN-06 · nome repetido", () => {
+  test("é recusado com mensagem em português e nada é gravado", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const antes = await count(
+      "select count(*) from public.study_plans where student_id = $1 and deleted_at is null",
+      [scenario.student.id],
+    );
+
+    await teacherPage.goto("/professor/planejamentos");
+    await createPlan(teacherPage, { name: scenario.planName });
+
+    await expect(newPlanCard(teacherPage).locator(".alert--error")).toHaveText(
+      "Este aluno já tem um planejamento com esse nome. Escolha outro.",
+    );
+    expect(
+      await count(
+        "select count(*) from public.study_plans where student_id = $1 and deleted_at is null",
+        [scenario.student.id],
+      ),
+    ).toBe(antes);
+  });
+});
+
+test.describe("F-GPLAN-07 · professor sem aluno vinculado", () => {
+  test("a tela explica em vez de mostrar um formulário inútil", async ({ page, signIn }) => {
+    const sozinho = await createUser("teacher", "Professor Sem Aluno", "prof");
+    try {
+      await signIn(sozinho);
+      await page.goto("/professor/planejamentos");
+
+      await expect(newPlanCard(page)).toContainText("Vincule um aluno a você");
+      await expect(newPlanCard(page).locator("#field-studentId")).toHaveCount(0);
+    } finally {
+      await deleteUser(sozinho.id);
+    }
+  });
+});
