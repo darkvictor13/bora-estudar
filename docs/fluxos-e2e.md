@@ -509,6 +509,27 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 - **Editar os próprios dados como professor.** `updateProfile` exige
   `requireRole("student")`.
 
+O catálogo completo do que a versão anterior fazia e ainda não existe está em
+[`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
+
+### Reservados pela spec 12 — conclusão de meta sem bateria
+
+Spec: [`specs/12-conclusao-de-meta.md`](specs/12-conclusao-de-meta.md). Migram
+para a §2 quando os testes existirem.
+
+- **F-CONC-01** — concluir meta de teoria com tempo grava `completed`,
+  `completed_at` e `spent_minutes`, e a linha vira "Concluída" sem recarregar.
+- **F-CONC-02** — a contagem "X de Y metas concluídas" da semana e o número da
+  ficha do professor sobem junto, sem contador escrito à mão.
+- **F-CONC-03** — o tempo aceita `80` e `1:20`; `0`, `241` e texto sem número
+  são recusados com mensagem em português e nada é gravado.
+- **F-CONC-04** — a observação do aluno é gravada, aparece na linha e sobrevive
+  a desfazer.
+- **F-CONC-05** — desfazer volta a meta a `pending`, zera tempo e
+  `completed_at`, e a contagem da semana desce.
+- **F-CONC-06** — meta de bateria não oferece o formulário de conclusão, e a
+  RPC recusa uma meta `question_block`.
+
 
 ---
 

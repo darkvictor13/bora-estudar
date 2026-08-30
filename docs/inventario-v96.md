@@ -38,7 +38,7 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | Área | Fluxos na v96 | ✅ | 🟡 | ❌ | 🚫 |
 |---|---:|---:|---:|---:|---:|
 | 1. Autenticação e conta | 12 | 7 | 2 | 3 | 0 |
-| 2. Aluno — metas e execução | 11 | 2 | 2 | 4 | 3 |
+| 2. Aluno — metas e execução | 12 | 2 | 2 | 5 | 3 |
 | 3. Aluno — bateria inteligente | 9 | 7 | 1 | 1 | 0 |
 | 4. Aluno — reforço e revisão | 10 | 3 | 1 | 6 | 0 |
 | 5. Aluno — conteúdo e análise | 12 | 4 | 2 | 5 | 1 |
@@ -47,7 +47,7 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 | 8. Professor — geração de metas | 9 | 3 | 2 | 4 | 0 |
 | 9. Professor — acompanhamento | 8 | 1 | 2 | 5 | 0 |
 | 10. Extensão | 12 | 7 | 0 | 5 | 0 |
-| **Total** | **103** | **38** | **14** | **47** | **4** |
+| **Total** | **104** | **38** | **14** | **48** | **4** |
 
 Em uma frase: a versão atual reconstruiu **a espinha do produto e o banco
 inteiro** — a máquina de estados da bateria da v96 está implementada linha por
@@ -109,10 +109,11 @@ código morto. A versão atual barra no loader com `requireStudentAccess`.
 |---|---|---|---|---|
 | Painel da semana agrupado por dia | `renderDashWeek` aluno.js:1406 | ✅ | 03 | — |
 | Seletor de semana | `#dash-sem-sel` aluno.js:1359 | ✅ | 03 | — |
-| **Concluir meta de teoria** (sem exigir questões) | `salvarRegistroMeta` aluno.js:2815, ramo :2824 | ❌ | | pendente |
-| **Registrar estudo extra** (7 tipos fechados) | `salvarEstudoExtra` aluno.js:2367 | ❌ | | pendente |
+| **Concluir meta de teoria** (sem exigir questões) | `salvarRegistroMeta` aluno.js:2815, ramo :2824 | ❌ | 12 | especificada |
+| **Concluir meta de estudo extra planejada pelo professor** | idem | ❌ | 12 | especificada |
+| **Registrar estudo extra avulso** (7 tipos fechados) | `salvarEstudoExtra` aluno.js:2367 | ❌ | | pendente |
 | **Editar e excluir estudo extra** | `excluirEstudoExtra` aluno.js:2503 | ❌ | | pendente |
-| **Desfazer conclusão / voltar a pendente** | `desfazerRegistroMeta` aluno.js:2907 | ❌ | | pendente |
+| **Desfazer conclusão / voltar a pendente** | `desfazerRegistroMeta` aluno.js:2907 | ❌ | 12 | especificada |
 | Tempo aceito em `80`, `1:20`, `1h20`, `40min` | `interpretarTempoRegistro` aluno.js:2717 | 🟡 | 05 | — |
 | Abas Metas / Reforços no painel | `ensureDashboardTabs` aluno.js:1297 | 🟡 | | pendente |
 | Aluno apaga metas filtradas / todas | `deleteFilteredMetas` aluno.js:1604 | 🚫 | — | — |
@@ -404,7 +405,7 @@ faixa, primeiro o que não tem dependência.
 
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
-| 1 | **Concluir meta sem bateria** — teoria e estudo extra | 3 das 5 metas semanais do seed são impossíveis de fechar hoje | 2 RPCs, 1 migration (enum `extra_activity`, `spent_minutes`), site |
+| 1 | **Conclusão de meta sem bateria** — spec [12](specs/12-conclusao-de-meta.md) | 3 das 5 metas semanais do seed são impossíveis de fechar hoje | 2 RPCs (`complete_goal`, `reopen_goal`), 1 migration (`goals.spent_minutes`), site |
 | 2 | **Vincular aluno e liberar acesso** | Quem se cadastra fica na lista de espera para sempre; e o professor não enxerga quem vincular | 1 RPC, 1 migration (policy da lista de espera), site |
 | 3 | **Criar, ativar e arquivar planejamento** | Fora do seed, um professor novo não tem por onde começar | 0 RPC nova (`activate_study_plan` existe), 0 migration, site |
 
@@ -419,35 +420,36 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 | 5 | **Anular bateria** | `void_quiz_session` pronta e sem chamador | 0 RPC, 0 migration, site |
 | 6 | **Ficha da turma** — KPIs, classificação, busca e filtros | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
 | 7 | **Prévia e distribuição por peso na geração da semana** | Hoje o professor gera às cegas | 0 RPC, 0 migration, site |
+| 8 | **Registrar estudo extra avulso** — a metade que saiu da spec 12 | Separada pelo portão do Passo 4: seria a terceira RPC nova, e ela **cria** meta em vez de concluir. Vem depois da spec 12 porque a semana do professor já traz meta de estudo extra, e concluí-la é o que destrava o seed hoje | 1 RPC (`record_extra_study`), 1 migration (enum `extra_activity_kind`, 7 valores), site |
 
 ### Fecha o ciclo de estudo
 
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
-| 8 | **Executar o reforço do ciclo** (site) | `record_reinforcement` pronta e sem chamador | 0 RPC, 0 migration, site |
-| 9 | **Conduzir `reinforcement` e `extra` no content script** | A outra metade do item 8 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
-| 10 | **Rodízio por tópico na seleção** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
-| 11 | **Dificuldades por tópico e histórico de baterias** | O professor vê o número, não vê a causa | 0 RPC, 1 view, site |
-| 12 | **Revisão espaçada** como conceito separado do reforço | Grade por matéria, 1ª e 2ª revisão | 1 migration, 1 RPC, site |
+| 9 | **Executar o reforço do ciclo** (site) | `record_reinforcement` pronta e sem chamador | 0 RPC, 0 migration, site |
+| 10 | **Conduzir `reinforcement` e `extra` no content script** | A outra metade do item 9 — separada porque toca extensão e `PROTOCOL_VERSION` | protocolo + extensão |
+| 11 | **Rodízio por tópico na seleção** | Decisão pendente registrada em `arquitetura.md` | extensão, função pura |
+| 12 | **Dificuldades por tópico e histórico de baterias** | O professor vê o número, não vê a causa | 0 RPC, 1 view, site |
+| 13 | **Revisão espaçada** como conceito separado do reforço | Grade por matéria, 1ª e 2ª revisão | 1 migration, 1 RPC, site |
 
-Os itens 8 e 9 são as duas metades do mesmo fluxo e estão separados **pelo portão
+Os itens 9 e 10 são as duas metades do mesmo fluxo e estão separados **pelo portão
 do Passo 4 da skill**: entregar junto significaria uma migration e um
-`PROTOCOL_VERSION` no mesmo commit. O 8 vem primeiro porque a RPC já existe e o
-site pode executar o reforço com a fila montada por ele mesmo; o 9 melhora a
+`PROTOCOL_VERSION` no mesmo commit. O 9 vem primeiro porque a RPC já existe e o
+site pode executar o reforço com a fila montada por ele mesmo; o 10 melhora a
 condução dentro do TEC.
 
 ### Conforto
 
 | # | Feature | Superfície prevista |
 |---|---|---|
-| 13 | Tempo de estudo, séries temporais e sequência de dias | site |
-| 14 | Resumo por tópicos da bateria concluída | site |
-| 15 | Professor edita os próprios dados | site |
-| 16 | Painel arrastável na extensão | extensão |
-| 17 | Sidebar recolhível; mostrar/ocultar senha | site |
-| 18 | Login com Google | site, exige configuração de provedor |
-| 19 | Cupom de acesso | 1 RPC, site |
-| 20 | Bateria livre por bloco, fora da meta | 1 RPC, site |
+| 14 | Tempo de estudo, séries temporais e sequência de dias | site |
+| 15 | Resumo por tópicos da bateria concluída | site |
+| 16 | Professor edita os próprios dados | site |
+| 17 | Painel arrastável na extensão | extensão |
+| 18 | Sidebar recolhível; mostrar/ocultar senha | site |
+| 19 | Login com Google | site, exige configuração de provedor |
+| 20 | Cupom de acesso | 1 RPC, site |
+| 21 | Bateria livre por bloco, fora da meta | 1 RPC, site |
 
 ---
 

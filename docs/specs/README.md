@@ -11,8 +11,10 @@ para a regra morar quando ela não cabe num comentário, permitir revisar
 comportamento sem ler SQL, e ser o molde das specs das features que faltam.
 
 O que **não** existe está catalogado em
-[`../comparativo-fluxos-v2.md`](../comparativo-fluxos-v2.md) §12; cada item de
-lá vira uma spec nova antes de virar código.
+[`../comparativo-fluxos-v2.md`](../comparativo-fluxos-v2.md) §12 e, contra a
+versão v96 do produto, em [`../inventario-v96.md`](../inventario-v96.md) — que
+traz a fila de reconstrução e é onde o estado de cada item é mantido. Cada item
+de lá vira uma spec nova antes de virar código.
 
 ---
 
@@ -31,6 +33,7 @@ lá vira uma spec nova antes de virar código.
 | 09 | [Reforço e revisões](09-reforco-e-revisoes.md) | Ciclo de 3 baterias, caderno de erros, o que ainda só recomenda |
 | 10 | [Conta e lista de espera](10-conta-e-lista-de-espera.md) | Dados do aluno, inscrição, preferências |
 | 11 | [Tema claro e escuro](11-tema-claro-escuro.md) | Preferência de interface da conta, para os três papéis |
+| 12 | [Conclusão de meta sem bateria](12-conclusao-de-meta.md) | O aluno fecha meta de teoria, estudo extra e reforço — **não implementada** |
 
 ---
 
