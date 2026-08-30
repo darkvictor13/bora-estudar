@@ -420,7 +420,7 @@ antes dos dois porque não depende de nada e destrava o seed que já existe.
 
 | # | Feature | Por que aqui | Superfície prevista |
 |---|---|---|---|
-| 4 | **Gerenciar blocos do planejamento** — ativar, desativar, editar, incluir, excluir, restaurar | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
+| 4 | **Gerenciar blocos do planejamento** — spec [15](specs/15-cadernos-do-planejamento.md) | Sem isso o planejamento nasce e não muda mais | 0 RPC, 0 migration, site |
 | 5 | **Anular bateria** | `void_quiz_session` pronta e sem chamador | 0 RPC, 0 migration, site |
 | 6 | **Ficha da turma** — KPIs, classificação, busca e filtros | O professor tem a lista, não tem o diagnóstico | 0 RPC, 0 migration, site |
 | 7 | **Prévia e distribuição por peso na geração da semana** | Hoje o professor gera às cegas | 0 RPC, 0 migration, site |

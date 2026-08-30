@@ -639,6 +639,22 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 15 — cadernos do planejamento
+
+Spec: [`specs/15-cadernos-do-planejamento.md`](specs/15-cadernos-do-planejamento.md).
+Migram para a §4 quando os testes existirem.
+
+- **F-CAD-01** — desativar um bloco tira-o da lista de `/professor/metas` e não
+  muda meta nem número de desempenho já existente.
+- **F-CAD-02** — bloco desativado não abre bateria; o aluno recebe a mensagem
+  traduzida e a meta continua pendente.
+- **F-CAD-03** — editar nome, meta e cor vale só para este planejamento.
+- **F-CAD-04** — excluir um bloco sem metas move-o para o recorte Excluídos;
+  restaurar recalcula `block_order` e não viola o índice.
+- **F-CAD-05** — bloco com meta não oferece excluir, e a tela diz por quê.
+- **F-CAD-06** — caderno avulso nasce sem `catalog_block_id`, no fim da
+  disciplina, e passa a ser oferecido na geração da semana.
+
 
 
 
