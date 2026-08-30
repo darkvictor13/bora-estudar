@@ -1675,3 +1675,28 @@ test.describe("F-REVE-07 · isolamento do espaçamento", () => {
     await expect(page.locator("body")).not.toContainText(scenario.student.name);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4 — tempo de estudo na ficha do aluno.
+// Spec docs/specs/25-tempo-de-estudo-e-series.md
+// ---------------------------------------------------------------------------
+
+test.describe("F-TEMP-06 · o professor vê as três leituras", () => {
+  test("tempo, sequência e série na ficha do aluno", async ({ teacherPage, scenario }) => {
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 12, minutes: 85 });
+    await addWeek(scenario, 2);
+
+    await teacherPage.goto(studentPageOf(scenario.student.id));
+
+    await expect(
+      cardByTitle(teacherPage, "Tempo de estudo").locator(".study-total"),
+    ).toContainText("1h25");
+    await expect(
+      cardByTitle(teacherPage, "Sequência").locator(".streak-value strong"),
+    ).toHaveText("1");
+
+    const serie = cardByTitle(teacherPage, "Semana a semana");
+    await expect(serie.locator("tbody tr")).toHaveCount(2);
+    await expect(serie.locator("tbody tr", { hasText: "Semana 1" })).toContainText("80%");
+  });
+});

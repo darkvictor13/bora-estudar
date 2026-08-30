@@ -345,3 +345,26 @@ tbody tr:last-child td { border-bottom: none; }
    o bastante para as três caberem sem rolagem no desktop. */
 .review-cell { display: grid; gap: 6px; justify-items: start; }
 .review-table td { vertical-align: top; }
+
+/* Tempo de estudo — spec docs/specs/25-tempo-de-estudo-e-series.md */
+.period-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.period-tab {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-label);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 0.78rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.period-tab:hover { background: var(--surface-raised); }
+/* Os papéis `info` já existem nos dois temas e passam no contraste AA que o
+   F-TEMA-07 verifica. Inventar token novo aqui exigiria refazer a escala. */
+.period-tab.is-active {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: var(--info-text);
+}
+.study-total strong, .streak-value strong { font-size: 1.8rem; font-weight: 700; }
+.streak-value { margin-bottom: 6px; }

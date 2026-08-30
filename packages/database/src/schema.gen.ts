@@ -312,6 +312,13 @@ export type Database = {
             referencedRelation: "vw_goal_performance"
             referencedColumns: ["goal_id"]
           },
+          {
+            foreignKeyName: "goals_source_goal_id_fkey"
+            columns: ["source_goal_id"]
+            isOneToOne: false
+            referencedRelation: "vw_study_time"
+            referencedColumns: ["goal_id"]
+          },
         ]
       }
       operations: {
@@ -536,6 +543,13 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "vw_goal_performance"
+            referencedColumns: ["goal_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "vw_study_time"
             referencedColumns: ["goal_id"]
           },
           {
@@ -1349,6 +1363,13 @@ export type Database = {
             referencedRelation: "vw_goal_performance"
             referencedColumns: ["goal_id"]
           },
+          {
+            foreignKeyName: "quiz_sessions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "vw_study_time"
+            referencedColumns: ["goal_id"]
+          },
         ]
       }
       vw_seen_questions: {
@@ -1369,6 +1390,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "study_plan_blocks"
             referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+        ]
+      }
+      vw_study_time: {
+        Row: {
+          block_id: string | null
+          completed_on: string | null
+          correct_answers: number | null
+          extra_activity:
+            | Database["public"]["Enums"]["extra_activity_kind"]
+            | null
+          goal_id: string | null
+          goal_type: Database["public"]["Enums"]["goal_type"] | null
+          minutes_spent: number | null
+          questions_answered: number | null
+          student_id: string | null
+          study_plan_id: string | null
+          subject_name: string | null
+          teacher_id: string | null
+          week_number: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_block_fk"
+            columns: ["block_id", "study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plan_blocks"
+            referencedColumns: ["id", "study_plan_id", "student_id"]
+          },
+          {
+            foreignKeyName: "goal_context_fk"
+            columns: ["study_plan_id", "student_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id", "teacher_id"]
           },
         ]
       }

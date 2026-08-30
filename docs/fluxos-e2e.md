@@ -338,6 +338,35 @@ botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
 `meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
 mora no banco, não na ausência do botão.
 
+### F-TEMP-01 — Tempo do período, por disciplina e por atividade
+**Esperado** o cartão soma o tempo das metas concluídas e divide em uma linha
+por grupo: meta **com bloco** vai pela disciplina, meta **sem bloco** pela
+atividade. Nunca pelos dois — misturar os eixos produziria fatias que se
+sobrepõem.
+
+### F-TEMP-02 — Trocar o período
+**Esperado** as abas hoje/semana/mês/ano/total trocam os números **sem buscar
+nada**: a view devolveu o planejamento inteiro e o recorte é função pura. A aba
+ativa carrega `aria-pressed="true"`.
+
+### F-TEMP-03 — Período sem tempo
+**Esperado** "Nenhum tempo registrado neste período" e **nenhuma linha** — não
+um total de zero. Zero e "não registrou" são coisas diferentes.
+
+### F-TEMP-04 — Série semana a semana
+**Esperado** uma linha por semana **planejada**, incluindo a semana intocada,
+que aparece com `0min` e desempenho `—`. Sumir com ela esconderia justamente a
+semana em que o aluno parou; e `—` não é 0%, porque não responder não é errar.
+
+### F-TEMP-05 — Sequência de dias
+**Esperado** zero antes de qualquer conclusão, e 1 depois da primeira. A
+sequência conta dias distintos para trás, tolera **hoje** vazio se ontem tem, e
+zera quando ontem também não teve.
+
+### F-TEMP-07 — Reabrir uma meta
+**Esperado** o tempo dela sai das **três** leituras no mesmo instante:
+`vw_study_time` filtra `status = 'completed'`, e reabrir é mudar o status.
+
 ### F-REVE-02 — O aluno marca uma revisão
 **Esperado** a célula da revisão vira "Feita", a mensagem aparece no nível da
 página, e recarregar mantém a marcação. Uma linha viva em `review_completions`.
@@ -823,6 +852,11 @@ Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
 acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
 somente as questões `main`.
 
+### F-TEMP-06 — As três leituras na ficha do aluno
+**Esperado** o professor vê tempo, sequência e série do aluno, com os mesmos
+números que o aluno vê. Nenhuma policy nova: `vw_study_time` tem
+`security_invoker` e as tabelas base já passam por `can_view_context`.
+
 ### F-REVE-01 — O professor define o espaçamento
 **Esperado** a disciplina aparece com "sem revisão programada"; preenchidos os
 dois campos e salvo, a página anuncia "Espaçamento salvo" e a grade do aluno
@@ -913,7 +947,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 239 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 246 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -959,19 +993,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 25 — tempo de estudo e séries
-
-Spec: [`specs/25-tempo-de-estudo-e-series.md`](specs/25-tempo-de-estudo-e-series.md).
-Migram para a §2 e a §4 quando os testes existirem.
-
-- **F-TEMP-01** — o aluno vê o tempo do período dividido por disciplina.
-- **F-TEMP-02** — trocar o período troca os números.
-- **F-TEMP-03** — período sem tempo mostra o estado vazio, não zero.
-- **F-TEMP-04** — a série traz uma linha por semana, com metas, questões e tempo.
-- **F-TEMP-05** — a sequência de dias aparece e conta.
-- **F-TEMP-06** — meta concluída sem tempo conta como meta e não como tempo.
-- **F-TEMP-07** — o professor vê as três leituras na ficha do aluno.
-- **F-TEMP-08** — reabrir uma meta tira o tempo dela das três.
 
 
 

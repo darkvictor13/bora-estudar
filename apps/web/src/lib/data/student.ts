@@ -254,3 +254,42 @@ export async function getReviewCompletions(studyPlanId: string): Promise<Set<str
 
   return new Set((data ?? []).map((row) => `${row.study_plan_block_id}:${row.ordinal}`));
 }
+
+/**
+ * Linhas de tempo de estudo do planejamento — spec 25.
+ *
+ * A view devolve o planejamento inteiro e o recorte por período é feito na
+ * tela, por função pura: é o que permite os casos de borda de calendário serem
+ * teste de unidade, sem Docker.
+ */
+export async function getStudyTime(studyPlanId: string) {
+  const { data } = await supabase
+    .from("vw_study_time")
+    .select(
+      "goal_id,week_number,goal_type,extra_activity,subject_name,completed_on,minutes_spent,questions_answered,correct_answers",
+    )
+    .eq("study_plan_id", studyPlanId)
+    .order("completed_on", { ascending: false });
+
+  // O Postgres não prova `not null` através de uma view, então o gerador marca
+  // toda coluna como anulável. Normalizar aqui é a validação de fronteira: o
+  // módulo de domínio recebe o tipo estreito e não precisa defender-se de nulo
+  // que a view não produz.
+  return (data ?? []).flatMap((row) =>
+    row.goal_id && row.completed_on
+      ? [
+          {
+            goal_id: row.goal_id,
+            week_number: row.week_number ?? 0,
+            goal_type: row.goal_type ?? "theory",
+            extra_activity: row.extra_activity,
+            subject_name: row.subject_name,
+            completed_on: row.completed_on,
+            minutes_spent: row.minutes_spent,
+            questions_answered: row.questions_answered ?? 0,
+            correct_answers: row.correct_answers ?? 0,
+          },
+        ]
+      : [],
+  );
+}

@@ -637,3 +637,23 @@ export async function reviewsDone(planId: string): Promise<readonly string[]> {
   );
   return rows.map((row) => `${row.study_plan_block_id}:${row.ordinal}`);
 }
+
+/**
+ * Conclui uma meta sem bateria, pela RPC real.
+ *
+ * `complete_goal` exige o tempo: não existe meta concluída sem minuto neste
+ * schema, e é o que a suíte 12 assegura. Ver R-TEMP-09.
+ */
+export async function completeGoal(
+  scenario: Scenario,
+  goalId: string,
+  minutes: number,
+): Promise<void> {
+  await asUser(scenario.student.id, (client) =>
+    client.query("select public.complete_goal($1::uuid, $2::uuid, $3::integer, null)", [
+      goalId,
+      randomUUID(),
+      minutes,
+    ]),
+  );
+}

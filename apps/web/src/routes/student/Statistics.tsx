@@ -5,9 +5,12 @@ import { requireStudentAccess } from "@/lib/auth/session";
 import {
   getActiveStudyPlan,
   getBlockPerformance,
+  getPlanWeeks,
   getStudyPlanBlocks,
+  getStudyTime,
   getTopicDifficulty,
 } from "@/lib/data/student";
+import { StudyStreak, StudyTime, WeeklySeries } from "@/components/StudyTime";
 import { TopicDifficulty } from "@/components/TopicDifficulty";
 import { scorePercent } from "@/lib/domain/goals";
 
@@ -17,12 +20,14 @@ export async function studentStatisticsLoader() {
   const plan = await getActiveStudyPlan();
   if (!plan) return { plan: null } as const;
 
-  const [performance, blocks, topics] = await Promise.all([
+  const [performance, blocks, topics, studyTime, weeks] = await Promise.all([
     getBlockPerformance(plan.id),
     getStudyPlanBlocks(plan.id),
     getTopicDifficulty(plan.id),
+    getStudyTime(plan.id),
+    getPlanWeeks(plan.id),
   ]);
-  return { plan, performance, blocks, topics } as const;
+  return { plan, performance, blocks, topics, studyTime, weeks } as const;
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentStatisticsLoader>>;
@@ -39,7 +44,11 @@ export function StudentStatistics() {
     );
   }
 
-  const { performance, topics } = data;
+  const { performance, topics, studyTime, weeks } = data;
+  // `new Date()` no render, e não no loader: o loader é serializado e uma Date
+  // atravessaria como string. O dia de hoje é do navegador, que é onde o aluno
+  // está.
+  const today = new Date();
   const blockById = new Map(data.blocks.map((b) => [b.id, b]));
 
   const totals = performance.reduce(
@@ -87,6 +96,13 @@ export function StudentStatistics() {
             </p>
           </Card>
         </div>
+
+        <div className="grid-cards">
+          <StudyTime rows={studyTime} today={today} />
+          <StudyStreak rows={studyTime} today={today} />
+        </div>
+
+        <WeeklySeries rows={studyTime} plannedWeeks={weeks} />
 
         <TopicDifficulty
           rows={topics}
