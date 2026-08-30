@@ -1134,6 +1134,17 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
+### Reservados pela spec 31 — iniciar a bateria pelo caderno
+
+Spec: [`specs/31-iniciar-bateria-pelo-caderno.md`](specs/31-iniciar-bateria-pelo-caderno.md).
+Migram para a §2 quando os testes existirem.
+
+- **F-LIVR-01** — o aluno inicia a bateria pelo caderno e chega ao TEC.
+- **F-LIVR-02** — bloco sem meta pendente diz que não tem.
+- **F-LIVR-03** — com bateria aberta, todo bloco aponta para ela.
+- **F-LIVR-04** — é a mesma bateria da visão geral: uma sessão, uma meta.
+- **F-LIVR-05** — bloco desativado não oferece início.
+
 
 
 

@@ -156,7 +156,15 @@ resultado é imutável, "correções administrativas em fluxo próprio" — que 
 | Finalização antecipada: 1 a 15 principais | 017:103, changelog v89 | ✅ | 05 | — |
 | Extras em blocos de 5, e só após todas as principais | 017:120, `mod(extras,5)=0` | ✅ | 05 | — |
 | **Trocar de bateria em um passo** (cancelar a atual e já iniciar a nova) | `escolherAcaoBateriaAberta` aluno.js:5296 | 🟡 | | pendente |
-| **Bateria livre por bloco**, fora da meta da semana | `htmlAcaoBateriaLivre` aluno.js:1525 | ❌ | | pendente |
+| **Iniciar a bateria pelo caderno** | `htmlAcaoBateriaLivre` aluno.js:1525 | ❌ | 31 | especificada |
+
+**A linha acima dizia "bateria livre por bloco, FORA da meta da semana", e
+estava errada.** `htmlAcaoBateriaLivre` chama `metasPendentesSemanaDoBloco`, que
+filtra `Number(m.semana)===Number(sem)` e devolve `'—'` quando não há meta
+pendente; o clique vai para `iniciarBateriaMeta(alvo.id)`, a bateria de uma
+META. "Livre" é a ORDEM, que já existe aqui. O que falta é o ponto de partida —
+o botão na lista de cadernos. *Corrigido em 31/08/2026, ao especificar: a
+leitura errada previa 1 RPC, um valor novo de enum e `PROTOCOL_VERSION` 3.*
 
 A máquina de estados da v96 (`013:43`, `017:10`) e a daqui são **a mesma**:
 cinco estados, os mesmos marcos temporais por estado, e os dois índices parciais
@@ -455,7 +463,7 @@ condução dentro do TEC.
 | ~~18~~ | Sidebar recolhível; mostrar/ocultar senha — spec [29](specs/29-sidebar-e-senha-visivel.md) ✅ | site |
 | 19 | Login com Google | **bloqueada** — ver [Bloqueios](#bloqueios) |
 | ~~20~~ | Cupom de acesso — spec [30](specs/30-cupom-de-acesso.md) ✅ | 1 RPC, site |
-| 21 | Bateria livre por bloco, fora da meta | 1 RPC, site |
+| 21 | Iniciar a bateria pelo caderno — spec [31](specs/31-iniciar-bateria-pelo-caderno.md) | site, sem RPC |
 
 ---
 
