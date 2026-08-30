@@ -2,9 +2,9 @@
  * §2 do `docs/fluxos-e2e.md` — telas do aluno.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { addWeek } from "../fixtures/scenario.ts";
+import { addWeek, goalStatus } from "../fixtures/scenario.ts";
 import { completeQuiz } from "../fixtures/battery.ts";
-import { count, one } from "../fixtures/db.ts";
+import { asUser, count, one } from "../fixtures/db.ts";
 import { PAGE_TITLES, STUDENT_ROUTES, STUDENT_STUDY_ROUTES } from "../support/routes.ts";
 import { cardByTitle } from "../support/ui.ts";
 
@@ -309,5 +309,192 @@ test.describe("F-ALU-01 · o badge compara com a meta do professor", () => {
     await expect(
       studentPage.locator("tbody tr", { hasText: block.name }).locator(".badge"),
     ).toHaveText("Na meta");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §2 — conclusão de meta sem bateria. Spec docs/specs/12-conclusao-de-meta.md
+// ---------------------------------------------------------------------------
+
+/**
+ * A meta de teoria da semana 1 do cenário, que é a primeira do dia 1.
+ *
+ * `createScenario` monta a semana pela RPC real, então o título carrega o
+ * sufixo do planejamento — casar por `type` é o que sobrevive a isso.
+ */
+function theoryGoalOf(scenario: { goals: readonly { type: string; title: string; id: string }[] }) {
+  const goal = scenario.goals.find((g) => g.type === "theory");
+  if (!goal) throw new Error("este cenário não tem meta de teoria");
+  return goal;
+}
+
+/** Linha da tabela da semana, pela meta. */
+function goalRow(page: import("@playwright/test").Page, title: string) {
+  return page.locator("tbody tr", { hasText: title });
+}
+
+test.describe("F-CONC-01 · concluir meta de teoria", () => {
+  test("grava status, tempo e observação, e a linha vira Concluída", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const goal = theoryGoalOf(scenario);
+
+    await studentPage.goto("/aluno");
+    const row = goalRow(studentPage, goal.title);
+    await expect(row.locator(".badge")).toHaveText("Pendente");
+
+    await row.getByRole("button", { name: "Concluir" }).click();
+    await row.locator('input[name="minutes"]').fill("45");
+    await row.locator('textarea[name="note"]').fill("Li o capítulo 1.");
+    await row.getByRole("button", { name: "Concluir meta" }).click();
+
+    await expect(studentPage.locator(".alert--success")).toHaveText("Meta concluída.");
+    await expect(goalRow(studentPage, goal.title).locator(".badge")).toHaveText("Concluída");
+    await expect(goalRow(studentPage, goal.title)).toContainText("Você anotou:");
+    await expect(goalRow(studentPage, goal.title)).toContainText("45min");
+
+    const saved = await one<{
+      status: string;
+      spent_minutes: number;
+      student_note: string;
+      completed_at: string | null;
+    }>(
+      "select status::text, spent_minutes, student_note, completed_at from public.goals where id = $1",
+      [goal.id],
+    );
+    expect(saved).toMatchObject({
+      status: "completed",
+      spent_minutes: 45,
+      student_note: "Li o capítulo 1.",
+    });
+    expect(saved.completed_at).not.toBeNull();
+  });
+});
+
+test.describe("F-CONC-02 · a contagem da semana e a ficha do professor sobem junto", () => {
+  test("nenhum dos dois números é escrito à mão", async ({ studentPage, page, scenario, signIn }) => {
+    const goal = theoryGoalOf(scenario);
+
+    await studentPage.goto("/aluno");
+    // O cenário tem 5 metas na semana 1 e nenhuma concluída.
+    await expect(studentPage.locator(".card__sub").first()).toHaveText("0 de 5 metas concluídas");
+
+    await goalRow(studentPage, goal.title).getByRole("button", { name: "Concluir" }).click();
+    await goalRow(studentPage, goal.title).locator('input[name="minutes"]').fill("1:20");
+    await goalRow(studentPage, goal.title)
+      .getByRole("button", { name: "Concluir meta" })
+      .click();
+
+    await expect(studentPage.locator(".card__sub").first()).toHaveText("1 de 5 metas concluídas");
+    // "1:20" é 80 minutos — o mesmo parseDuration do registro de tempo.
+    await expect(goalRow(studentPage, goal.title)).toContainText("1h20");
+
+    // O mesmo número, do outro lado: a ficha do professor lê goals.status.
+    await signIn(scenario.teacher);
+    await page.goto(`/professor/alunos/${scenario.student.id}`);
+    await expect(cardByTitle(page, "Metas").locator("p:not(.card__sub)").first()).toHaveText("1 / 5");
+  });
+});
+
+test.describe("F-CONC-03 · validação do tempo", () => {
+  for (const [label, value, message] of [
+    ["vazio de números", "abacaxi", "Informe o tempo em minutos ou no formato hora:minuto. Ex.: 80 ou 1:20."],
+    ["zero", "0", "Informe o tempo em minutos ou no formato hora:minuto. Ex.: 80 ou 1:20."],
+    ["acima do teto", "241", "O tempo de uma meta não passa de 240 minutos (4 horas)."],
+  ] as const) {
+    test(`${label} é recusado e nada é gravado`, async ({ studentPage, scenario }) => {
+      const goal = theoryGoalOf(scenario);
+
+      await studentPage.goto("/aluno");
+      const row = goalRow(studentPage, goal.title);
+      await row.getByRole("button", { name: "Concluir" }).click();
+      await row.locator('input[name="minutes"]').fill(value);
+      await row.getByRole("button", { name: "Concluir meta" }).click();
+
+      await expect(row.locator(".alert--error")).toHaveText(message);
+
+      const saved = await one<{ status: string; spent_minutes: number | null }>(
+        "select status::text, spent_minutes from public.goals where id = $1",
+        [goal.id],
+      );
+      expect(saved).toMatchObject({ status: "pending", spent_minutes: null });
+    });
+  }
+});
+
+test.describe("F-CONC-04 · a observação sobrevive a desfazer", () => {
+  test("o que o aluno escreveu continua valendo", async ({ studentPage, scenario }) => {
+    const goal = theoryGoalOf(scenario);
+
+    await studentPage.goto("/aluno");
+    let row = goalRow(studentPage, goal.title);
+    await row.getByRole("button", { name: "Concluir" }).click();
+    await row.locator('input[name="minutes"]').fill("30");
+    await row.locator('textarea[name="note"]').fill("Anotação que sobrevive.");
+    await row.getByRole("button", { name: "Concluir meta" }).click();
+
+    await expect(goalRow(studentPage, goal.title)).toContainText("Anotação que sobrevive.");
+
+    row = goalRow(studentPage, goal.title);
+    await row.getByRole("button", { name: "Desfazer" }).click();
+
+    // R-CONC-13: reabrir zera o tempo e PRESERVA a observação.
+    await expect(goalRow(studentPage, goal.title).locator(".badge")).toHaveText("Pendente");
+    await expect(goalRow(studentPage, goal.title)).toContainText("Anotação que sobrevive.");
+
+    const saved = await one<{ spent_minutes: number | null; student_note: string }>(
+      "select spent_minutes, student_note from public.goals where id = $1",
+      [goal.id],
+    );
+    expect(saved).toMatchObject({ spent_minutes: null, student_note: "Anotação que sobrevive." });
+  });
+});
+
+test.describe("F-CONC-05 · desfazer derruba a contagem", () => {
+  test("volta a pendente e o número da semana desce", async ({ studentPage, scenario }) => {
+    const goal = theoryGoalOf(scenario);
+
+    await studentPage.goto("/aluno");
+    const row = goalRow(studentPage, goal.title);
+    await row.getByRole("button", { name: "Concluir" }).click();
+    await row.locator('input[name="minutes"]').fill("45");
+    await row.getByRole("button", { name: "Concluir meta" }).click();
+    await expect(studentPage.locator(".card__sub").first()).toHaveText("1 de 5 metas concluídas");
+
+    await goalRow(studentPage, goal.title).getByRole("button", { name: "Desfazer" }).click();
+
+    await expect(studentPage.locator(".alert--success")).toHaveText(
+      "Meta reaberta. Ela voltou para pendente.",
+    );
+    await expect(studentPage.locator(".card__sub").first()).toHaveText("0 de 5 metas concluídas");
+    expect(await goalStatus(goal.id)).toBe("pending");
+  });
+});
+
+test.describe("F-CONC-06 · meta de bateria não conclui por aqui", () => {
+  test("a linha oferece a bateria, não o formulário de conclusão", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno");
+    const row = goalRow(studentPage, scenario.quizGoal.title);
+
+    await expect(row.getByRole("button", { name: "Iniciar bateria" })).toBeVisible();
+    await expect(row.getByRole("button", { name: "Concluir", exact: true })).toHaveCount(0);
+  });
+
+  test("a RPC recusa a meta de bateria mesmo chamada direto", async ({ scenario }) => {
+    // A tela nunca oferece este caminho; a asserção prova que a regra mora no
+    // banco, e não na ausência do botão.
+    await expect(
+      asUser(scenario.student.id, (client) =>
+        client.query("select public.complete_goal($1::uuid, gen_random_uuid(), 60, null)", [
+          scenario.quizGoal.id,
+        ]),
+      ),
+    ).rejects.toThrow(/meta de bateria conclui-se pela bateria/);
+
+    expect(await goalStatus(scenario.quizGoal.id)).toBe("pending");
   });
 });

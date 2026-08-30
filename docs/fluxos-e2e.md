@@ -223,6 +223,49 @@ outro aluno.
 `/aluno/conta` e `/aluno/lista-espera` continuam abrindo; os itens de estudo da
 sidebar vêm com `aria-disabled="true"`.
 
+### Conclusão de meta sem bateria — F-CONC-01 a 06
+
+Spec: [`specs/12-conclusao-de-meta.md`](specs/12-conclusao-de-meta.md). Meta de
+teoria, de estudo extra e de reforço concluem por `complete_goal`; meta de
+bateria continua concluindo por `record_quiz_session_time`, e a RPC recusa
+`question_block` — a tela nunca oferece um caminho que o banco recusa.
+
+O formulário abre sob demanda: o botão "Concluir" é `type="button"` e o único
+submit da linha é o "Concluir meta". Campos `input[name="minutes"]` e
+`textarea[name="note"]`.
+
+#### F-CONC-01 — Concluir meta de teoria
+**Passos** abrir o formulário, preencher tempo e observação, enviar.
+**Esperado** "Meta concluída."; a linha vira "Concluída"; aparece "Você anotou:"
+e o tempo realizado; `goals` fica com `status='completed'`, `completed_at` não
+nulo, `spent_minutes` e `student_note` gravados.
+
+#### F-CONC-02 — A contagem sobe dos dois lados
+**Esperado** "0 de 5 metas concluídas" vira "1 de 5"; `1:20` é lido como 80
+minutos e exibido como "1h20"; a ficha do professor mostra "1 / 5" para o mesmo
+aluno. Nenhum dos dois números é contador escrito à mão — os dois derivam de
+`goals.status`.
+
+#### F-CONC-03 — Validação do tempo
+Texto sem número e `0` → "Informe o tempo em minutos ou no formato hora:minuto.
+Ex.: 80 ou 1:20." `241` → "O tempo de uma meta não passa de 240 minutos (4
+horas)." Em qualquer um deles a meta continua `pending` e `spent_minutes` nulo.
+
+#### F-CONC-04 — A observação sobrevive a desfazer
+**Esperado** depois de desfazer, `spent_minutes` é nulo e `student_note`
+continua como estava. É `R-CONC-13`: o que se desfaz é a afirmação de que
+terminou, não o que o aluno escreveu.
+
+#### F-CONC-05 — Desfazer derruba a contagem
+**Esperado** "Meta reaberta. Ela voltou para pendente."; "1 de 5" volta a "0 de
+5"; o status no banco volta a `pending`.
+
+#### F-CONC-06 — Meta de bateria não conclui por aqui
+**Esperado** a linha da meta de bateria oferece "Iniciar bateria" e **não** tem
+botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
+`meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
+mora no banco, não na ausência do botão.
+
 ---
 
 ## 3. Bateria — a volta completa
@@ -453,10 +496,10 @@ e `05_teacher_writes.sql`.
 
 | Comando | Cobertura |
 |---|---|
-| `npm run db:test` | 72 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface |
+| `npm run db:test` | 96 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 155 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 164 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -465,7 +508,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | Arquivo | Fluxos | Testes |
 |---|---|---|
 | `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
-| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 | 36 |
+| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
 | `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09 | 29 |
@@ -512,23 +555,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 12 — conclusão de meta sem bateria
-
-Spec: [`specs/12-conclusao-de-meta.md`](specs/12-conclusao-de-meta.md). Migram
-para a §2 quando os testes existirem.
-
-- **F-CONC-01** — concluir meta de teoria com tempo grava `completed`,
-  `completed_at` e `spent_minutes`, e a linha vira "Concluída" sem recarregar.
-- **F-CONC-02** — a contagem "X de Y metas concluídas" da semana e o número da
-  ficha do professor sobem junto, sem contador escrito à mão.
-- **F-CONC-03** — o tempo aceita `80` e `1:20`; `0`, `241` e texto sem número
-  são recusados com mensagem em português e nada é gravado.
-- **F-CONC-04** — a observação do aluno é gravada, aparece na linha e sobrevive
-  a desfazer.
-- **F-CONC-05** — desfazer volta a meta a `pending`, zera tempo e
-  `completed_at`, e a contagem da semana desce.
-- **F-CONC-06** — meta de bateria não oferece o formulário de conclusão, e a
-  RPC recusa uma meta `question_block`.
 
 
 ---

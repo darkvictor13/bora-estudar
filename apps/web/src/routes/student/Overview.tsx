@@ -4,6 +4,7 @@ import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { QuizResultHandler } from "@/components/student/QuizResultHandler";
 import { StartQuizButton } from "@/components/student/StartQuizButton";
 import { CancelSessionForm, RegisterTimeForm } from "@/components/student/QuizSessionPanel";
+import { CompleteGoalForm, ReopenGoalForm } from "@/components/student/GoalCompletion";
 import { requireStudentAccess } from "@/lib/auth/session";
 import {
   getActiveStudyPlan,
@@ -34,6 +35,8 @@ import { ROUTES } from "@/lib/routes";
 const DONE_MESSAGE: Record<string, string> = {
   tempo: "Tempo registrado. Meta concluída.",
   cancelada: "Bateria cancelada. Ela não conta no desempenho nem como questão vista.",
+  meta: "Meta concluída.",
+  reaberta: "Meta reaberta. Ela voltou para pendente.",
 };
 
 export async function overviewLoader({ request }: { request: Request }) {
@@ -191,6 +194,11 @@ export function Overview() {
                                   {goal.teacher_note && (
                                     <div className="muted">{goal.teacher_note}</div>
                                   )}
+                                  {goal.student_note && (
+                                    <div className="muted">
+                                      <em>Você anotou:</em> {goal.student_note}
+                                    </div>
+                                  )}
                                 </td>
                                 <td>{GOAL_TYPE_LABEL[goal.type]}</td>
                                 <td>
@@ -202,7 +210,14 @@ export function Overview() {
                                     <span className="muted">—</span>
                                   )}
                                 </td>
-                                <td className="num">{formatMinutes(goal.planned_minutes)}</td>
+                                <td className="num">
+                                  {formatMinutes(goal.planned_minutes)}
+                                  {goal.spent_minutes ? (
+                                    <div className="muted">
+                                      feito: {formatMinutes(goal.spent_minutes)}
+                                    </div>
+                                  ) : null}
+                                </td>
                                 <td className="num">
                                   {perf && perf.questions_answered ? (
                                     <>
@@ -219,9 +234,20 @@ export function Overview() {
                                   </Badge>
                                 </td>
                                 <td>
-                                  {goal.type === "question_block" &&
+                                  {/*
+                                    Meta de bateria segue pela bateria; as demais
+                                    concluem por complete_goal. É a mesma divisão
+                                    que a RPC impõe (R-CONC-02), então a tela
+                                    nunca oferece um caminho que o banco recusa.
+                                  */}
+                                  {goal.type === "question_block" ? (
                                     goal.status === "pending" &&
-                                    !openSession && <StartQuizButton goalId={goal.id} />}
+                                    !openSession && <StartQuizButton goalId={goal.id} />
+                                  ) : goal.status === "pending" ? (
+                                    <CompleteGoalForm goalId={goal.id} week={week} />
+                                  ) : goal.status === "completed" ? (
+                                    <ReopenGoalForm goalId={goal.id} week={week} />
+                                  ) : null}
                                 </td>
                               </tr>
                             );
