@@ -1,48 +1,111 @@
 import { Link, useLoaderData } from "react-router";
 
-import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
+import {
+  DeleteBlockForm,
+  EditBlockForm,
+  NewBlockForm,
+  RestoreBlockForm,
+  ToggleBlockForm,
+  ToggleSubjectForm,
+} from "@/components/teacher/BlockForms";
 import { requireRole } from "@/lib/auth/session";
-import { getAllTeacherPlans } from "@/lib/data/teacher";
-import { supabase } from "@/lib/supabase/client";
+import { getAllTeacherPlans, getPlanBlocksForManagement } from "@/lib/data/teacher";
 import { ROUTES } from "@/lib/routes";
+
+/**
+ * Os quatro recortes da v96, com "Ativos" como padrão (R-CAD-13).
+ *
+ * Sem eles, um catálogo de 92 blocos vira uma parede — que é exatamente o que a
+ * tela anterior era.
+ */
+const VIEWS = {
+  ativos: { label: "Ativos", keep: (b: Block) => b.active && !b.deleted_at },
+  desativados: { label: "Desativados", keep: (b: Block) => !b.active && !b.deleted_at },
+  excluidos: { label: "Excluídos", keep: (b: Block) => !!b.deleted_at },
+  todos: { label: "Todos", keep: () => true },
+} as const;
+
+type ViewKey = keyof typeof VIEWS;
+
+/**
+ * Confirmações por query string.
+ *
+ * Excluir e restaurar movem a linha entre recortes, então o formulário que
+ * mostraria a mensagem some na revalidação. Quem sobrevive é a página.
+ */
+const DONE_MESSAGE: Record<string, string> = {
+  ativado: "Caderno ativado. Ele volta a entrar na geração de metas.",
+  desativado:
+    "Caderno desativado. Metas concluídas e estatísticas antigas foram preservadas.",
+  "materia-ativada": "Disciplina ativada.",
+  "materia-desativada": "Disciplina desativada.",
+  editado: "Caderno atualizado. A mudança vale só para este planejamento.",
+  excluido: "Caderno excluído. Ele continua em Excluídos e pode ser restaurado.",
+  restaurado: "Caderno restaurado e ativado.",
+  criado: "Caderno avulso criado.",
+};
+type Block = Awaited<ReturnType<typeof getPlanBlocksForManagement>>[number];
 
 export async function teacherNotebooksLoader({ request }: { request: Request }) {
   const session = await requireRole("teacher");
   const plans = await getAllTeacherPlans(session.profileId);
 
-  const requested = new URL(request.url).searchParams.get("plano");
+  const params = new URL(request.url).searchParams;
+  const requested = params.get("plano");
   const selectedId =
     requested && plans.some((p) => p.id === requested)
       ? requested
       : (plans.find((p) => p.status === "active")?.id ?? plans[0]?.id ?? null);
 
-  const { data: blocks } = selectedId
-    ? await supabase
-        .from("study_plan_blocks")
-        .select(
-          "id,name,subject_name,subject_color,subject_target,question_count,link,active,subject_order,block_order",
-        )
-        .eq("study_plan_id", selectedId)
-        .is("deleted_at", null)
-        .order("subject_order")
-        .order("block_order")
-    : { data: [] };
+  const rawView = params.get("ver");
+  const view: ViewKey = rawView && rawView in VIEWS ? (rawView as ViewKey) : "ativos";
 
-  return { plans, selectedId, blocks: blocks ?? [] };
+  const blocks = selectedId ? await getPlanBlocksForManagement(selectedId) : [];
+  const feito = params.get("feito");
+
+  return {
+    plans,
+    selectedId,
+    view,
+    blocks,
+    doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
+  };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherNotebooksLoader>>;
 
 export function TeacherNotebooks() {
-  const { plans, selectedId, blocks } = useLoaderData() as LoaderData;
+  const { plans, selectedId, view, blocks, doneMessage } = useLoaderData() as LoaderData;
   const selected = plans.find((p) => p.id === selectedId) ?? null;
+  const ctx = { planId: selectedId ?? "", view };
+
+  // Todos os contadores derivam da lista. Nenhum é mantido à mão (R-CAD-14).
+  const totals = {
+    cadernos: blocks.filter((b) => !b.deleted_at).length,
+    ativos: blocks.filter((b) => b.active && !b.deleted_at).length,
+    desativados: blocks.filter((b) => !b.active && !b.deleted_at).length,
+    excluidos: blocks.filter((b) => b.deleted_at).length,
+  };
+
+  const visible = blocks.filter(VIEWS[view].keep);
+
+  const bySubject = new Map<string, Block[]>();
+  for (const block of visible) {
+    bySubject.set(block.subject_name, [...(bySubject.get(block.subject_name) ?? []), block]);
+  }
 
   return (
     <>
-      <PageHeader title="Cadernos" description="Blocos configurados em cada planejamento." />
+      <PageHeader
+        title="Cadernos"
+        description="Desativar impede o uso na geração de novas metas. Metas concluídas e estatísticas antigas são preservadas."
+      />
+
+      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
 
       {plans.length === 0 ? (
-        <Empty>Nenhum planejamento criado.</Empty>
+        <Empty>Nenhum planejamento criado. Crie um em Planejamentos.</Empty>
       ) : (
         <div className="stack">
           <Card title="Planejamento">
@@ -59,53 +122,143 @@ export function TeacherNotebooks() {
             </nav>
           </Card>
 
-          <Card
-            title={selected ? `${selected.studentName} — ${selected.name}` : "Blocos"}
-            sub={`${blocks.length} bloco(s)`}
-          >
-            {blocks.length === 0 ? (
-              <Empty>Nenhum bloco neste planejamento.</Empty>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Disciplina</th>
-                      <th>Bloco</th>
-                      <th className="num">Questões</th>
-                      <th className="num">Meta</th>
-                      <th>Situação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {blocks.map((block) => (
-                      <tr key={block.id}>
-                        <td style={{ color: block.subject_color }}>{block.subject_name}</td>
-                        <td>
-                          {block.link ? (
-                            <a href={block.link} target="_blank" rel="noreferrer">
-                              {block.name}
-                            </a>
-                          ) : (
-                            block.name
-                          )}
-                        </td>
-                        <td className="num">{block.question_count || "—"}</td>
-                        <td className="num">{block.subject_target}%</td>
-                        <td>
-                          {block.active ? (
-                            <Badge tone="green">Ativo</Badge>
-                          ) : (
-                            <Badge>Desativado</Badge>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {selected && (
+            <>
+              <div className="grid-cards">
+                <Card title="Cadernos">
+                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.cadernos}</p>
+                </Card>
+                <Card title="Ativos">
+                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.ativos}</p>
+                </Card>
+                <Card title="Desativados">
+                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.desativados}</p>
+                </Card>
+                <Card title="Excluídos">
+                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.excluidos}</p>
+                </Card>
               </div>
-            )}
-          </Card>
+
+              <Card
+                title={`${selected.studentName} — ${selected.name}`}
+                sub={`${visible.length} caderno(s) neste recorte`}
+                action={
+                  <nav className="row" aria-label="Recortes">
+                    {(Object.keys(VIEWS) as ViewKey[]).map((key) => (
+                      <Link
+                        key={key}
+                        to={`${ROUTES.teacher.notebooks}?plano=${selectedId}&ver=${key}`}
+                        className={`btn btn--sm ${key === view ? "btn--primary" : "btn--ghost"}`}
+                        aria-current={key === view ? "true" : undefined}
+                      >
+                        {VIEWS[key].label}
+                      </Link>
+                    ))}
+                  </nav>
+                }
+              >
+                {visible.length === 0 ? (
+                  <Empty>Nenhum caderno neste recorte.</Empty>
+                ) : (
+                  <div className="stack">
+                    {[...bySubject.entries()].map(([subject, list]) => (
+                      <div key={subject}>
+                        <div className="row" style={{ alignItems: "center", marginBottom: 8 }}>
+                          <h3 style={{ margin: 0, color: list[0]?.subject_color }}>{subject}</h3>
+                          {view !== "excluidos" && (
+                            <ToggleSubjectForm
+                              studyPlanId={selectedId!}
+                              subjectName={subject}
+                              anyActive={list.some((b) => b.active && !b.deleted_at)}
+                              ctx={ctx}
+                            />
+                          )}
+                        </div>
+                        <div className="table-wrap">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Caderno</th>
+                                <th className="num">Questões</th>
+                                <th className="num">Meta</th>
+                                <th>Origem</th>
+                                <th>Situação</th>
+                                <th />
+                                <th />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {list.map((block) => (
+                                <tr key={block.id}>
+                                  <td>
+                                    {block.link ? (
+                                      <a href={block.link} target="_blank" rel="noreferrer">
+                                        {block.name}
+                                      </a>
+                                    ) : (
+                                      block.name
+                                    )}
+                                  </td>
+                                  <td className="num">{block.question_count || "—"}</td>
+                                  <td className="num">{block.subject_target}%</td>
+                                  <td className="muted">
+                                    {block.catalog_block_id ? "Catálogo" : "Avulso"}
+                                  </td>
+                                  <td>
+                                    {block.deleted_at ? (
+                                      <Badge tone="red">Excluído</Badge>
+                                    ) : block.active ? (
+                                      <Badge tone="green">Ativo</Badge>
+                                    ) : (
+                                      <Badge tone="amber">Desativado</Badge>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {block.deleted_at ? (
+                                      <RestoreBlockForm blockId={block.id} ctx={ctx} />
+                                    ) : (
+                                      <div className="row">
+                                        <ToggleBlockForm
+                                          blockId={block.id}
+                                          active={block.active}
+                                          ctx={ctx}
+                                        />
+                                        <EditBlockForm block={block} ctx={ctx} />
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {!block.deleted_at && (
+                                      <DeleteBlockForm
+                                        blockId={block.id}
+                                        goalCount={block.goalCount}
+                                        ctx={ctx}
+                                      />
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card
+                title="Caderno avulso"
+                sub="Para material que não está no catálogo. Nasce ativo, no fim da disciplina."
+              >
+                <NewBlockForm
+                  studyPlanId={selectedId!}
+                  studentId={selected.student_id}
+                  ctx={ctx}
+                />
+              </Card>
+            </>
+          )}
         </div>
       )}
     </>

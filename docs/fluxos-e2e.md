@@ -455,6 +455,43 @@ semana bloqueia os dois: `ha bateria aberta nesta semana`.
 `?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
 no planejamento ativo (ou no primeiro) sem quebrar.
 
+### Cadernos do planejamento — F-CAD-01 a 06
+
+Spec: [`specs/15-cadernos-do-planejamento.md`](specs/15-cadernos-do-planejamento.md).
+`/professor/cadernos?plano=<id>&ver=<recorte>`, com os recortes `ativos`
+(padrão), `desativados`, `excluidos` e `todos`.
+
+**Duas armadilhas.** Desativar ou excluir **tira a linha do recorte atual** — a
+conferência do badge tem de ser feita em outro `ver=`, não na mesma tela. E a
+confirmação é do nível da página, nunca do formulário: todas as ações devolvem
+`redirectTo` com `?feito=`.
+
+#### F-CAD-01 — Desativar tira do rodízio sem mexer no histórico
+**Esperado** "Metas concluídas e estatísticas antigas foram preservadas"; a
+linha sai de `ativos` e aparece em `desativados`; o bloco some de
+`/professor/metas`; o ledger continua com as 15 linhas da bateria concluída.
+
+#### F-CAD-02 — Bloco desativado não abre bateria
+**Esperado** "Este bloco não está disponível no seu planejamento." na linha da
+meta, e a meta continua `pending`. É `start_quiz_session` exigindo
+`active and deleted_at is null`, traduzida.
+
+#### F-CAD-03 — Editar vale só para este planejamento
+**Esperado** o nome e a meta mudam na tela; `catalog_blocks` — compartilhado
+entre alunos — fica intacto.
+
+#### F-CAD-04 — Excluir e restaurar
+**Esperado** o bloco sai de `ativos`, aparece em `excluidos` com badge
+"Excluído", e restaurar devolve `deleted_at = null`, `active = true` e um
+`block_order` recalculado, sem violar `study_plan_block_order_uidx`.
+
+#### F-CAD-05 — Bloco com meta não oferece excluir
+**Esperado** a coluna mostra "N meta(s)" no lugar do botão.
+
+#### F-CAD-06 — Caderno avulso
+**Esperado** "Caderno avulso criado."; a linha nasce com `catalog_block_id`
+nulo e `active = true`, e passa a aparecer em `/professor/metas`.
+
 ### Gestão do planejamento — F-GPLAN-01 a 07
 
 Spec: [`specs/14-gestao-do-planejamento.md`](specs/14-gestao-do-planejamento.md).
@@ -590,7 +627,7 @@ e `05_teacher_writes.sql`.
 | `npm run db:test` | 124 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso |
 | `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
 | `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` |
-| `npm run e2e` | 179 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run e2e` | 185 testes num Chromium de verdade — este catálogo, implementado |
 
 O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
@@ -602,7 +639,7 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14 e F-CONC-01 a 06 | 45 |
 | `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
 | `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19, mais a volta completa site → extensão → site | 9 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07 e F-GPLAN-01 a 07 | 44 |
+| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07 e F-CAD-01 a 06 | 50 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
@@ -639,21 +676,6 @@ Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles
 O catálogo completo do que a versão anterior fazia e ainda não existe está em
 [`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
 
-### Reservados pela spec 15 — cadernos do planejamento
-
-Spec: [`specs/15-cadernos-do-planejamento.md`](specs/15-cadernos-do-planejamento.md).
-Migram para a §4 quando os testes existirem.
-
-- **F-CAD-01** — desativar um bloco tira-o da lista de `/professor/metas` e não
-  muda meta nem número de desempenho já existente.
-- **F-CAD-02** — bloco desativado não abre bateria; o aluno recebe a mensagem
-  traduzida e a meta continua pendente.
-- **F-CAD-03** — editar nome, meta e cor vale só para este planejamento.
-- **F-CAD-04** — excluir um bloco sem metas move-o para o recorte Excluídos;
-  restaurar recalcula `block_order` e não viola o índice.
-- **F-CAD-05** — bloco com meta não oferece excluir, e a tela diz por quê.
-- **F-CAD-06** — caderno avulso nasce sem `catalog_block_id`, no fim da
-  disciplina, e passa a ser oferecido na geração da semana.
 
 
 

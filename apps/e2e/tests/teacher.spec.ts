@@ -8,6 +8,7 @@ import {
   createUser,
   deleteUser,
   goalCount,
+  goalStatus,
   planWeeks,
   setAccess,
 } from "../fixtures/scenario.ts";
@@ -850,5 +851,188 @@ test.describe("F-GPLAN-07 · professor sem aluno vinculado", () => {
     } finally {
       await deleteUser(sozinho.id);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §4 — cadernos do planejamento.
+// Spec docs/specs/15-cadernos-do-planejamento.md
+// ---------------------------------------------------------------------------
+
+const blockRow = (page: import("@playwright/test").Page, name: string) =>
+  page.locator("tbody tr", { hasText: name });
+
+test.describe("F-CAD-01 · desativar tira do rodízio sem mexer no histórico", () => {
+  test("some de /professor/metas e o desempenho já registrado não muda", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    // Uma bateria concluída dá o número que não pode se mover.
+    await completeQuiz(scenario, scenario.quizGoal, { correct: 11, minutes: 85 });
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}`);
+    await blockRow(teacherPage, block.name).getByRole("button", { name: "Desativar" }).click();
+
+    await expect(teacherPage.locator(".alert--success")).toContainText(
+      "Metas concluídas e estatísticas antigas foram preservadas",
+    );
+    // O bloco SAI do recorte "Ativos" — é o efeito desejado —, então o badge só
+    // pode ser conferido em outro recorte.
+    await expect(blockRow(teacherPage, block.name)).toHaveCount(0);
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}&ver=desativados`);
+    await expect(blockRow(teacherPage, block.name).locator(".badge")).toHaveText("Desativado");
+
+    // Saiu da geração...
+    await teacherPage.goto(`/professor/metas?plano=${scenario.planId}`);
+    await expect(teacherPage.locator(".content")).not.toContainText(block.name);
+
+    // ...e o ledger continua inteiro.
+    expect(
+      await count(
+        `select count(*) from public.quiz_session_questions q
+           join public.quiz_sessions s on s.id = q.quiz_session_id
+          where s.block_id = $1`,
+        [block.id],
+      ),
+    ).toBe(15);
+  });
+});
+
+test.describe("F-CAD-02 · bloco desativado não abre bateria", () => {
+  test("o aluno recebe a mensagem traduzida e a meta continua pendente", async ({
+    page,
+    scenario,
+    signIn,
+  }) => {
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await signIn(scenario.teacher);
+    await page.goto(`/professor/cadernos?plano=${scenario.planId}`);
+    await blockRow(page, block.name).getByRole("button", { name: "Desativar" }).click();
+    await expect(page.locator(".alert--success")).toBeVisible();
+
+    await signIn(scenario.student);
+    await page.goto("/aluno");
+    await page
+      .locator("tbody tr", { hasText: scenario.quizGoal.title })
+      .getByRole("button", { name: "Iniciar bateria" })
+      .click();
+
+    // start_quiz_session exige `active and deleted_at is null`; a tela traduz.
+    await expect(page.locator("tbody tr", { hasText: scenario.quizGoal.title })).toContainText(
+      "Este bloco não está disponível no seu planejamento.",
+    );
+    expect(await goalStatus(scenario.quizGoal.id)).toBe("pending");
+  });
+});
+
+test.describe("F-CAD-03 · editar vale só para este planejamento", () => {
+  test("o catálogo de origem fica intacto", async ({ teacherPage, scenario }) => {
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+    const catalogAntes = await one<{ name: string }>(
+      "select name from public.catalog_blocks where id = $1",
+      [block.catalogBlockId],
+    );
+
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}`);
+    const row = blockRow(teacherPage, block.name);
+    await row.getByRole("button", { name: "Editar" }).click();
+    await row.locator('input[name="name"]').fill("Caderno renomeado E2E");
+    await row.locator('input[name="subjectTarget"]').fill("65");
+    await row.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(teacherPage.locator(".alert--success")).toContainText(
+      "vale só para este planejamento",
+    );
+    await expect(blockRow(teacherPage, "Caderno renomeado E2E")).toContainText("65%");
+
+    // O bloco do catálogo, compartilhado entre alunos, não mudou.
+    const catalogDepois = await one<{ name: string }>(
+      "select name from public.catalog_blocks where id = $1",
+      [block.catalogBlockId],
+    );
+    expect(catalogDepois.name).toBe(catalogAntes.name);
+  });
+});
+
+test.describe("F-CAD-04 · excluir e restaurar", () => {
+  test.use({ scenarioOptions: { withGoals: false } });
+
+  test("sai para Excluídos e volta com block_order recalculado", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const [primeiro, segundo] = scenario.blocks;
+
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}`);
+    await blockRow(teacherPage, primeiro!.name).getByRole("button", { name: "Excluir" }).click();
+    await expect(teacherPage.locator(".alert--success")).toContainText("pode ser restaurado");
+
+    // Sumiu de Ativos e aparece em Excluídos.
+    await expect(blockRow(teacherPage, primeiro!.name)).toHaveCount(0);
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}&ver=excluidos`);
+    await expect(blockRow(teacherPage, primeiro!.name).locator(".badge")).toHaveText("Excluído");
+
+    await blockRow(teacherPage, primeiro!.name).getByRole("button", { name: "Restaurar" }).click();
+    await expect(teacherPage.locator(".alert--success")).toContainText("restaurado e ativado");
+
+    // R-CAD-05: a ordem foi recalculada, e o índice parcial continua satisfeito.
+    const restored = await one<{ deleted_at: string | null; active: boolean }>(
+      "select deleted_at, active from public.study_plan_blocks where id = $1",
+      [primeiro!.id],
+    );
+    expect(restored.deleted_at).toBeNull();
+    expect(restored.active).toBe(true);
+    expect(
+      await count(
+        `select count(*) from public.study_plan_blocks
+          where study_plan_id = $1 and deleted_at is null`,
+        [scenario.planId],
+      ),
+    ).toBe(2);
+    void segundo;
+  });
+});
+
+test.describe("F-CAD-05 · bloco com meta não oferece excluir", () => {
+  test("mostra a contagem de metas no lugar do botão", async ({ teacherPage, scenario }) => {
+    const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
+
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}`);
+    const row = blockRow(teacherPage, block.name);
+
+    await expect(row.getByRole("button", { name: "Excluir" })).toHaveCount(0);
+    await expect(row).toContainText("meta(s)");
+  });
+});
+
+test.describe("F-CAD-06 · caderno avulso", () => {
+  test("nasce sem catalog_block_id e passa a ser oferecido na geração", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}`);
+
+    const card = cardByTitle(teacherPage, "Caderno avulso");
+    await card.locator('input[name="subjectName"]').fill("Material próprio");
+    await card.locator('input[name="name"]').fill("Apostila do aluno");
+    await card.locator('input[name="questionCount"]').fill("40");
+    await card.getByRole("button", { name: "Adicionar caderno" }).click();
+
+    // A confirmação é do nível da página: as ações desta tela devolvem
+    // redirectTo com ?feito=, porque excluir e restaurar movem a linha entre
+    // recortes e o formulário some na revalidação.
+    await expect(teacherPage.locator(".alert--success")).toHaveText("Caderno avulso criado.");
+
+    const criado = await one<{ catalog_block_id: string | null; active: boolean }>(
+      "select catalog_block_id, active from public.study_plan_blocks where name = $1 and study_plan_id = $2",
+      ["Apostila do aluno", scenario.planId],
+    );
+    expect(criado.catalog_block_id).toBeNull();
+    expect(criado.active).toBe(true);
+
+    await teacherPage.goto(`/professor/metas?plano=${scenario.planId}`);
+    await expect(teacherPage.locator(".content")).toContainText("Apostila do aluno");
   });
 });
