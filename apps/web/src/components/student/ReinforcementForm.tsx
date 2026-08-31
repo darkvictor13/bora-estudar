@@ -86,7 +86,7 @@ export function ReinforcementForm({
                 <td className="muted">{error.topic ?? "Tópico não identificado"}</td>
                 <td>
                   <div className="row">
-                    <label className="row" style={{ gap: 6 }}>
+                    <label className="check">
                       <input
                         type="radio"
                         name={`outcome:${error.questionId}`}
@@ -94,7 +94,7 @@ export function ReinforcementForm({
                       />
                       Acertei
                     </label>
-                    <label className="row" style={{ gap: 6 }}>
+                    <label className="check">
                       <input
                         type="radio"
                         name={`outcome:${error.questionId}`}

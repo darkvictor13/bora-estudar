@@ -8,8 +8,10 @@ import { ROUTES } from "@/lib/routes";
 export function ForgotPassword() {
   return (
     <div className="auth__card">
-      <p className="auth__brand">Recuperar senha</p>
-      <p className="auth__sub">Enviamos um link para você definir uma nova senha.</p>
+      <header className="auth__head">
+        <p className="auth__brand">Recuperar senha</p>
+        <p className="auth__sub">Enviamos um link para você definir uma nova senha.</p>
+      </header>
 
       {/*
         Não há mais campo escondido com a origem. Ela vinha do cabeçalho Host

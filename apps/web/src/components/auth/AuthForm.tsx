@@ -64,7 +64,7 @@ export function AuthForm({
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} noValidate>
+    <form ref={formRef} action={formAction} className="form" noValidate>
       {state.error && <Alert kind="error">{state.error}</Alert>}
       {state.success && <Alert kind="success">{state.success}</Alert>}
       {children}

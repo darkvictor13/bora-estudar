@@ -80,6 +80,56 @@
   --info-bg: var(--blue-50);
   --info-border: #c7d7fe;
   --info-text: var(--blue-700);
+
+  /* ---------------------------------------------------------------------
+     ESPAÇO
+
+     Mesma disciplina da cor, acima: uma ESCALA e uma camada de PAPÉIS sobre
+     ela. Número é escala, palavra é papel — o discriminador de R-TEMA-16.
+     Ao contrário dos papéis de cor, estes NÃO são redefinidos por tema:
+     espaço não muda entre claro e escuro.
+
+     Chama-se `gap` e não `spacing` de propósito. "Espaçamento" já é palavra
+     de domínio neste produto — é o intervalo da revisão espaçada, em
+     `review_spacings` e em `lib/domain/spacing.ts`. Ver a tabela de palavras
+     ambíguas no CLAUDE.md, seção Idioma. Aqui o erro é SILENCIOSO: um
+     `var(--spacing-16)` digitado de memória não é erro de sintaxe, o valor
+     não resolve, o gap vira `normal`, e nada aparece no console.
+
+     A escala é nomeada pelo VALOR porque em espaço o número é a medida —
+     diferente de `--ink-500`, em que 500 é posição perceptual e não mede nada.
+     --------------------------------------------------------------------- */
+  --gap-2: 2px;
+  --gap-4: 4px;
+  --gap-6: 6px;
+  --gap-8: 8px;
+  --gap-12: 12px;
+  --gap-16: 16px;
+  --gap-24: 24px;
+  --gap-32: 32px;
+  --gap-48: 48px;
+
+  /* Os papéis, do maior para o menor — esta ordem É a hierarquia.
+
+     Texto contra texto usa 4, porque o `line-height: 1.6` já entrega leading.
+     Texto contra borda de caixa usa 6, porque ali não há leading nenhum.
+
+     `--gap-label` (6, vertical) ser menor que `--gap-control` (8, horizontal)
+     não é inversão: 6px entre um rótulo e a caixa parecem mais que 8px entre
+     um ícone e um texto, porque o par vertical carrega leading dos dois lados.
+     A hierarquia vale por eixo. */
+  --gap-page: var(--gap-24);    /* entre seções de uma página */
+  --gap-section: var(--gap-16); /* entre blocos dentro de uma seção */
+  --gap-item: var(--gap-12);    /* entre campos e controles irmãos */
+  --gap-control: var(--gap-8);  /* dentro de um controle, e em lista densa */
+  --gap-label: var(--gap-6);    /* rótulo → caixa */
+  --gap-text: var(--gap-4);     /* título → descrição */
+
+  /* O único papel de padding, e por um motivo: é o único com duas definições
+     que precisam andar juntas — a segunda está no @media do fim do arquivo.
+     Padding de componente é propriedade dele e sai direto da escala, como
+     `.card` já faz com `var(--radius-lg)` em vez de um `--radius-card`. */
+  --pad-page: var(--gap-24) var(--gap-32) var(--gap-48);
 }
 
 /* ---------------------------------------------------------------------------
@@ -145,11 +195,18 @@ html, body {
   line-height: 1.6;
 }
 
-h1, h2, h3 { margin: 0; line-height: 1.25; font-weight: 650; letter-spacing: -0.01em; }
+/* Quem separa é o pai (CLAUDE.md § Espaço na interface): nenhum componente
+   declara margin com comprimento. O reset precisa cobrir TUDO que o agente do
+   usuário margeia por conta própria, senão a primeira margem que sobra volta a
+   competir com o gap do contêiner. `fieldset` e `ul` faltavam, e era isso que
+   GenerateWeekForm combatia à mão em quatro lugares. */
+h1, h2, h3, p, ul, ol, fieldset, legend, figure, blockquote { margin: 0; }
+fieldset { border: 0; padding: 0; min-inline-size: 0; }
+
+h1, h2, h3 { line-height: 1.25; font-weight: 650; letter-spacing: -0.01em; }
 h1 { font-size: 1.6rem; }
 h2 { font-size: 1.15rem; }
 h3 { font-size: 1rem; }
-p  { margin: 0; }
 a  { color: var(--accent-text); }
 
 /* --------------------------------------------------------------------------
@@ -159,8 +216,8 @@ a  { color: var(--accent-text); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 9px 16px;
+  gap: var(--gap-control);
+  padding: var(--gap-8) var(--gap-16);
   border: 1px solid transparent;
   border-radius: var(--radius);
   background: var(--surface-raised);
@@ -180,21 +237,26 @@ a  { color: var(--accent-text); }
 .btn--danger { background: transparent; border-color: var(--border-strong); color: var(--danger-text); }
 .btn--danger:hover:not(:disabled) { background: var(--danger-bg); }
 .btn--block { width: 100%; }
-.btn--sm { padding: 6px 11px; font-size: 0.85rem; }
+.btn--sm { padding: var(--gap-6) var(--gap-12); font-size: 0.85rem; }
 
 /* --------------------------------------------------------------------------
    Formulários
    -------------------------------------------------------------------------- */
-.field { display: grid; gap: 6px; margin-bottom: 14px; }
+.field { display: grid; gap: var(--gap-label); }
 .field__label { font-size: 0.85rem; font-weight: 550; color: var(--text-label); }
 .field__hint { font-size: 0.8rem; color: var(--text-muted); }
+/* `line-height` explícito, e não o 1.6 herdado do body: com `font: inherit` o
+   <select> calcula a altura da caixa de linha por conta própria e fica 3px
+   mais baixo que o <input> de mesmo padding. Medido em /professor e
+   /professor/metas, onde um select convive com inputs na mesma linha. */
 .field input, .field select, .field textarea {
   width: 100%;
-  padding: 9px 12px;
+  padding: var(--gap-8) var(--gap-12);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
   font: inherit;
+  line-height: 1.5;
   color: var(--text);
 }
 .field input:focus, .field select:focus, .field textarea:focus {
@@ -207,11 +269,10 @@ a  { color: var(--accent-text); }
    Avisos
    -------------------------------------------------------------------------- */
 .alert {
-  padding: 11px 14px;
+  padding: var(--gap-12) var(--gap-16);
   border-radius: var(--radius);
   border: 1px solid;
   font-size: 0.9rem;
-  margin-bottom: 14px;
 }
 .alert--error   { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
 .alert--success { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--ok-text); }
@@ -226,21 +287,27 @@ a  { color: var(--accent-text); }
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: 20px;
+  padding: var(--gap-24);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* Dentro de .grid-cards os cartões são esticados para altura igual. Sem
+     align-content o filho único acompanha o esticão e se deforma. */
+  align-content: start;
+  gap: var(--gap-section);
 }
-.card__header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.card__header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-item); }
 .card__sub { font-size: 0.85rem; color: var(--text-muted); }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th, td { padding: var(--gap-8) var(--gap-12); text-align: left; border-bottom: 1px solid var(--border); }
 th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; }
 tbody tr:last-child td { border-bottom: none; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .badge {
   display: inline-block;
-  padding: 2px 9px;
+  padding: var(--gap-2) var(--gap-8);
   border-radius: 999px;
   font-size: 0.76rem;
   font-weight: 600;
@@ -253,7 +320,7 @@ tbody tr:last-child td { border-bottom: none; }
 .badge--blue    { background: var(--info-bg);   border-color: var(--info-border);   color: var(--info-text); }
 
 .empty {
-  padding: 32px 20px;
+  padding: var(--gap-32) var(--gap-24);
   text-align: center;
   color: var(--text-muted);
   font-size: 0.9rem;
@@ -261,12 +328,70 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: var(--radius);
 }
 
-.stack   { display: grid; gap: 16px; }
-.stack-sm{ display: grid; gap: 8px; }
-.row     { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.spread  { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.stack   { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-section); }
+.stack-sm{ display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-control); }
+.row     { display: flex; align-items: center; gap: var(--gap-item); flex-wrap: wrap; }
+.spread  { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-item); flex-wrap: wrap; }
 .muted   { color: var(--text-muted); font-size: 0.87rem; }
-.grid-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid-cards { display: grid; gap: var(--gap-section); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+/* A classe vai no próprio <form>, nunca num <div> em volta: a e2e escopa
+   cliques em `.content` e conta seletores de descendência. */
+.form { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-item); }
+.stack-xs{ display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-text); }
+
+/* Caixa de marcação e seu rótulo são UM controle, e a distância entre eles é
+   `--gap-control`. Antes eram `.row` com gap 6 num lugar e 8 noutro. */
+.check { display: inline-flex; align-items: center; gap: var(--gap-control); }
+
+/* Uma linha de campos alinha as CAIXAS, não as bordas externas do campo.
+   Um campo com texto de apoio é ~25px mais alto que os vizinhos, e alinhar por
+   fora — `center` ou `end` — sobe ou desce a caixa dele: eram 13px em
+   /professor/planejamentos, medidos com Playwright. Nenhum valor de
+   `align-items` resolve, porque a informação que falta é onde começa a caixa
+   DENTRO de cada campo.
+
+   `subgrid` faz rótulo, caixa e apoio caírem nas MESMAS três faixas para todos
+   os campos da linha. É exatamente o problema para o qual subgrid existe.
+
+   `row-gap` é `--gap-label` porque as faixas são as de dentro do campo
+   (rótulo→caixa→apoio); `column-gap` é `--gap-item` porque entre campos
+   irmãos vale o papel de item. */
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  grid-template-rows: auto auto auto;
+  align-items: start;
+  row-gap: var(--gap-label);
+  column-gap: var(--gap-item);
+}
+.field-row > .field {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+}
+/* Controle solto na linha — um "Filtrar" ao lado dos campos — entra na faixa
+   da CAIXA, não na do rótulo. É o que o `align-items: end` tentava fazer e
+   errava quando havia texto de apoio. */
+.field-row > :not(.field) { grid-row: 2; }
+
+/* Para linha de controles COMPLETOS (dois formulários lado a lado, cada um
+   terminando em botão), onde não há caixa a alinhar. */
+.row--end { align-items: end; }
+
+/* O reset zera a margem de <ul>, não o recuo: quem quer marcador visível pede
+   a classe, e o recuo sai da escala em vez dos 40px do agente do usuário. */
+.list { padding-left: var(--gap-16); display: grid; gap: var(--gap-2); }
+
+/* O número grande dos painéis de resumo. Era `style={{fontSize:"2rem"}}`
+   copiado em 13 lugares; com o cartão virando pilha, os irmãos precisavam de
+   um contêiner próprio para não herdarem o gap de seção. */
+.stat { display: grid; gap: var(--gap-text); }
+.stat__value { font-size: 2rem; font-weight: 700; line-height: 1.15; }
+
+/* Usada desde a spec 24 e sem regra nenhuma até aqui: a mensagem de erro vinha
+   na cor de texto normal. O teste passava porque compara texto. */
+.field__error { color: var(--danger-text); font-size: 0.8rem; }
 
 /* --------------------------------------------------------------------------
    Layout autenticado
@@ -276,23 +401,27 @@ tbody tr:last-child td { border-bottom: none; }
 .sidebar {
   background: var(--surface-sidebar);
   color: var(--sidebar-text-strong);
-  padding: 22px 14px;
+  padding: var(--gap-24) var(--gap-16);
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: var(--gap-page);
   position: sticky;
   top: 0;
   height: 100vh;
   overflow-y: auto;
 }
-.sidebar__brand { font-weight: 700; letter-spacing: 0.02em; padding: 0 8px; }
+.sidebar__brand { font-weight: 700; letter-spacing: 0.02em; padding: 0 var(--gap-12); }
 .sidebar__brand span { display: block; font-size: 0.7rem; font-weight: 500; opacity: 0.6; letter-spacing: 0.14em; }
-.sidebar__group { display: grid; gap: 2px; }
-.sidebar__title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5; padding: 0 8px; margin-bottom: 6px; }
+/* O título quer 6 abaixo de si e os links querem 2 entre si — duas
+   distâncias diferentes entre irmãos significam que falta um contêiner, não
+   que sobra uma margem. Daí .sidebar__links. */
+.sidebar__group { display: grid; gap: var(--gap-label); }
+.sidebar__links { display: grid; gap: var(--gap-2); }
+.sidebar__title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5; padding: 0 var(--gap-12); }
 .sidebar__link {
   display: block;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: var(--gap-8) var(--gap-12);
+  border-radius: var(--radius);
   color: var(--sidebar-text);
   text-decoration: none;
   font-size: 0.9rem;
@@ -300,19 +429,33 @@ tbody tr:last-child td { border-bottom: none; }
 .sidebar__link:hover { background: rgb(255 255 255 / 8%); color: var(--sidebar-text-strong); }
 .sidebar__link[aria-current="page"] { background: var(--accent); color: var(--on-accent); font-weight: 550; }
 .sidebar__link[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
-.sidebar__foot { margin-top: auto; border-top: 1px solid rgb(255 255 255 / 12%); padding-top: 14px; }
-.sidebar__theme { margin-bottom: 12px; }
+/* `margin-top: auto` fica: é alinhamento, não espaço. Ver as exceções em
+   CLAUDE.md § Quem separa é o pai. */
+.sidebar__foot { margin-top: auto; border-top: 1px solid rgb(255 255 255 / 12%); padding-top: var(--gap-16); display: grid; gap: var(--gap-item); }
+.sidebar__theme { display: grid; gap: var(--gap-label); }
 /* 40% e não menos: sobre o fundo da sidebar, 22% de branco dá 1,9:1 e o
    limite do botão deixa de ser identificável. Medido por F-TEMA-07. */
 .sidebar__theme .btn { color: var(--sidebar-text); border-color: rgb(255 255 255 / 40%); }
 .sidebar__theme .btn:hover:not(:disabled) { background: rgb(255 255 255 / 8%); color: var(--sidebar-text-strong); }
-.sidebar__note { margin-top: 6px; font-size: 0.76rem; line-height: 1.4; color: var(--warn-text); }
-.sidebar__user { font-size: 0.85rem; padding: 0 8px 10px; }
+.sidebar__note { font-size: 0.76rem; line-height: 1.4; color: var(--warn-text); }
+.sidebar__user { font-size: 0.85rem; padding: 0 var(--gap-12); }
 .sidebar__user span { display: block; opacity: 0.55; font-size: 0.76rem; }
 
-.content { padding: 28px 32px 64px; max-width: 1180px; }
-.content__header { margin-bottom: 22px; }
-.content__header p { color: var(--text-muted); font-size: 0.92rem; margin-top: 4px; }
+/* A pilha É o .content, e não um <div> dentro dele: 12 asserções da e2e
+   casam `.content > .alert--success`, e um nó intermediário quebraria as 12.
+   O minmax(0,1fr) não é enfeite — item de grid tem min-width:auto e recusa
+   encolher abaixo do min-content, o que com tabela larga dentro vira overflow
+   silencioso. */
+.content {
+  padding: var(--pad-page);
+  max-width: 1180px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--gap-page);
+}
+.content__header { display: grid; gap: var(--gap-text); }
+.content__header p { color: var(--text-muted); font-size: 0.92rem; }
 
 /* --------------------------------------------------------------------------
    Telas públicas
@@ -321,39 +464,46 @@ tbody tr:last-child td { border-bottom: none; }
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--gap-24);
   background: linear-gradient(160deg, var(--ink-900) 0%, #1e293b 55%, var(--blue-700) 100%);
 }
-.auth__card { width: 100%; max-width: 420px; background: var(--surface); border-radius: 16px; padding: 30px; box-shadow: 0 18px 44px rgb(15 23 42 / 32%); }
-.auth__brand { font-weight: 700; font-size: 1.3rem; margin-bottom: 4px; }
-.auth__sub { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 22px; }
-.auth__foot { margin-top: 18px; font-size: 0.87rem; color: var(--text-muted); display: grid; gap: 6px; }
+.auth__card { width: 100%; max-width: 420px; background: var(--surface); border-radius: var(--radius-lg); padding: var(--gap-32); box-shadow: 0 18px 44px rgb(15 23 42 / 32%); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-page); }
+.auth__head { display: grid; gap: var(--gap-text); }
+.auth__brand { font-weight: 700; font-size: 1.3rem; }
+.auth__sub { color: var(--text-muted); font-size: 0.9rem; }
+.auth__foot { font-size: 0.87rem; color: var(--text-muted); display: grid; gap: var(--gap-text); }
 
 @media (max-width: 860px) {
+  /* A moldura da página encolhe redefinindo o TOKEN, não a regra — o mesmo
+     movimento que o tema escuro faz com cor. Quem consome `--pad-page` não
+     precisa saber que existe um breakpoint. */
+  :root { --pad-page: var(--gap-16) var(--gap-16) var(--gap-48); }
+
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; }
-  .content { padding: 20px 16px 48px; }
 }
 
 /* Revisão espaçada — spec docs/specs/24-revisao-espacada.md */
-.field--inline { display: grid; gap: 4px; margin-bottom: 0; }
-.field--inline input { width: 84px; }
+/* Renomeada de `--inline`: o que o modificador fazia era anular a margem do
+   .field e apertar o gap. Sem margem em .field, só a largura sobrou — e o
+   nome antigo passou a mentir sobre o que a classe faz. */
+.field--narrow input { width: 84px; }
 
-.spacing-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.spacing-form { display: flex; align-items: end; gap: var(--gap-item); flex-wrap: wrap; }
 
 /* A grade tem uma célula com nome e botão. Empilhar mantém a coluna estreita
    o bastante para as três caberem sem rolagem no desktop. */
-.review-cell { display: grid; gap: 6px; justify-items: start; }
+.review-cell { display: grid; gap: var(--gap-label); justify-items: start; }
 .review-table td { vertical-align: top; }
 
 /* Tempo de estudo — spec docs/specs/25-tempo-de-estudo-e-series.md */
-.period-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.period-tabs { display: flex; gap: var(--gap-control); flex-wrap: wrap; }
 .period-tab {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-label);
   border-radius: 999px;
-  padding: 3px 11px;
+  padding: var(--gap-4) var(--gap-12);
   font-size: 0.78rem;
   font-weight: 550;
   cursor: pointer;
@@ -367,13 +517,13 @@ tbody tr:last-child td { border-bottom: none; }
   color: var(--info-text);
 }
 .study-total strong, .streak-value strong { font-size: 1.8rem; font-weight: 700; }
-.streak-value { margin-bottom: 6px; }
+
 
 /* Tópicos do bloco — spec docs/specs/26-topicos-do-bloco-e-da-bateria.md */
-.block-topics { margin-top: 6px; font-size: 0.85rem; }
+.block-topics { font-size: 0.85rem; }
 .block-topics > summary { cursor: pointer; color: var(--accent-text); }
-.block-topics__list { margin: 6px 0 0; padding-left: 18px; color: var(--text-label); }
-.block-topics__list li { margin-bottom: 2px; }
+.block-topics__list { color: var(--text-label); }
+
 
 /* Sidebar recolhível — spec docs/specs/29-sidebar-e-senha-visivel.md */
 .sidebar__nav { display: contents; }
@@ -382,8 +532,8 @@ tbody tr:last-child td { border-bottom: none; }
   border: 1px solid rgb(255 255 255 / 18%);
   background: transparent;
   color: var(--sidebar-text);
-  border-radius: 8px;
-  padding: 5px 8px;
+  border-radius: var(--radius);
+  padding: var(--gap-4) var(--gap-8);
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
@@ -396,7 +546,7 @@ tbody tr:last-child td { border-bottom: none; }
    leem o nome nela continuam valendo (R-UI-06). O botão fica — uma sidebar
    recolhida sem como expandir é uma sidebar perdida. */
 .shell[data-collapsed="true"] { grid-template-columns: 64px 1fr; }
-.shell[data-collapsed="true"] .sidebar { padding: 22px 8px; }
+.shell[data-collapsed="true"] .sidebar { padding: var(--gap-24) var(--gap-8); }
 .shell[data-collapsed="true"] .sidebar__nav,
 .shell[data-collapsed="true"] .sidebar__foot,
 .shell[data-collapsed="true"] .sidebar__brand span { display: none; }
@@ -406,10 +556,13 @@ tbody tr:last-child td { border-bottom: none; }
   text-align: center;
   overflow: hidden;
 }
-.shell[data-collapsed="true"] .sidebar__collapse { padding: 5px 4px; font-size: 0.68rem; }
+.shell[data-collapsed="true"] .sidebar__collapse { padding: var(--gap-4); font-size: 0.68rem; }
 
 /* Senha visível — spec docs/specs/29-sidebar-e-senha-visivel.md */
 .field__control { position: relative; display: block; }
+/* Único padding em px do arquivo, e de propósito: não é espaço entre coisas,
+   é a reserva de largura para o botão posicionado por cima do campo. Sai da
+   largura do botão, não da escala. */
 .field__control input { padding-right: 88px; }
 .field__reveal {
   position: absolute;
@@ -422,7 +575,7 @@ tbody tr:last-child td { border-bottom: none; }
   font: inherit;
   font-size: 0.8rem;
   font-weight: 550;
-  padding: 4px 8px;
+  padding: var(--gap-4) var(--gap-8);
   border-radius: 6px;
   cursor: pointer;
 }

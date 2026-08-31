@@ -55,7 +55,7 @@ export function VoidSessionForm({
         próximas baterias.
       </p>
 
-      <div className="field" style={{ marginBottom: 0 }}>
+      <div className="field">
         <label className="field__label" htmlFor={`reason-${quizSessionId}`}>
           Motivo
         </label>

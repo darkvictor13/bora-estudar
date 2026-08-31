@@ -100,21 +100,21 @@ export function GenerateWeekForm({
       envio com uma tooltip própria — a action nunca rodaria, e a regra do
       teto viveria em dois lugares.
     */
-    <form action={formAction} ref={formRef} noValidate>
+    <form action={formAction} ref={formRef} className="form" noValidate>
       {state.error && <Alert kind="error">{state.error}</Alert>}
       {state.success && <Alert kind="success">{state.success}</Alert>}
 
       <input type="hidden" name="studyPlanId" value={studyPlanId} />
 
-      <div className="row" style={{ alignItems: "flex-start", gap: 20 }}>
-        <div className="field" style={{ minWidth: 120 }}>
+      <div className="field-row">
+        <div className="field">
           <label className="field__label" htmlFor="week">
             Semana
           </label>
           <input id="week" name="week" type="number" min={1} max={200} defaultValue={nextWeek} required />
         </div>
 
-        <div className="field" style={{ minWidth: 150 }}>
+        <div className="field">
           <label className="field__label" htmlFor="total">
             Total de baterias
           </label>
@@ -129,14 +129,14 @@ export function GenerateWeekForm({
           <span className="field__hint">Repartido entre as disciplinas pelo peso.</span>
         </div>
 
-        <div className="field" style={{ minWidth: 170 }}>
+        <div className="field">
           <label className="field__label" htmlFor="minutes">
             Tempo por meta (min)
           </label>
           <input id="minutes" name="minutes" type="number" min={5} max={480} defaultValue={60} />
         </div>
 
-        <div className="field" style={{ minWidth: 230 }}>
+        <div className="field">
           <label className="field__label" htmlFor="mode">
             Se a semana já existir
           </label>
@@ -148,17 +148,17 @@ export function GenerateWeekForm({
         </div>
       </div>
 
-      <fieldset style={{ border: 0, padding: 0, margin: "0 0 14px" }}>
-        <legend className="field__label" style={{ marginBottom: 6 }}>
+      <fieldset className="stack-sm">
+        <legend className="field__label">
           Peso por disciplina
         </legend>
-        <p className="muted" style={{ marginTop: 0 }}>
+        <p className="muted">
           Quanto maior o peso, mais baterias da disciplina na semana. Peso <strong>0</strong> tira
           a disciplina desta semana sem desativar os cadernos dela.
         </p>
-        <div className="row">
+        <div className="field-row">
           {subjectNames.map((subject, index) => (
-            <div key={subject} className="field" style={{ minWidth: 160, marginBottom: 0 }}>
+            <div key={subject} className="field">
               {/*
                 O `id` é por índice, não pelo nome da disciplina: "Ciências
                 Forenses" tem espaço e acento, e `#peso-Ciências Forenses` não é
@@ -181,13 +181,13 @@ export function GenerateWeekForm({
         </div>
       </fieldset>
 
-      <fieldset style={{ border: 0, padding: 0, margin: "0 0 14px" }}>
-        <legend className="field__label" style={{ marginBottom: 6 }}>
+      <fieldset className="stack-sm">
+        <legend className="field__label">
           Dias de estudo
         </legend>
         <div className="row">
           {WEEKDAY_NAMES.map((name, index) => (
-            <label key={name} className="row" style={{ gap: 6 }}>
+            <label key={name} className="check">
               <input
                 type="checkbox"
                 name="weekdays"
@@ -200,13 +200,13 @@ export function GenerateWeekForm({
         </div>
       </fieldset>
 
-      <fieldset style={{ border: 0, padding: 0, margin: "0 0 14px" }}>
-        <legend className="field__label" style={{ marginBottom: 6 }}>
+      <fieldset className="stack-sm">
+        <legend className="field__label">
           Blocos ({blocks.length} disponíveis)
         </legend>
         <div className="stack-sm" style={{ maxHeight: 220, overflowY: "auto" }}>
           {blocks.map((block) => (
-            <label key={block.id} className="row" style={{ gap: 8 }}>
+            <label key={block.id} className="check">
               <input type="checkbox" name="blocks" value={block.id} defaultChecked />
               <span>
                 <strong>{block.subjectName}</strong> · {block.name}
@@ -216,7 +216,7 @@ export function GenerateWeekForm({
         </div>
       </fieldset>
 
-      <label className="row" style={{ gap: 8, marginBottom: 16 }}>
+      <label className="check">
         <input type="checkbox" name="withTheory" defaultChecked />
         Criar uma meta de teoria antes de cada bateria
       </label>
@@ -236,7 +236,7 @@ export function GenerateWeekForm({
       {previewError && <Alert kind="error">{previewError}</Alert>}
 
       {preview && (
-        <section className="preview" style={{ marginTop: 20 }}>
+        <section className="preview stack-sm">
           <h3>
             Prévia — {preview.length} meta(s)
             <span className="muted" style={{ fontWeight: 400 }}>
@@ -251,9 +251,9 @@ export function GenerateWeekForm({
               {[...byWeekday.entries()]
                 .sort(([a], [b]) => a - b)
                 .map(([weekday, drafts]) => (
-                  <div key={weekday}>
+                  <div key={weekday} className="stack-xs">
                     <strong>{weekdayName(weekday)}</strong>
-                    <ul className="muted" style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                    <ul className="muted list">
                       {drafts.map((draft) => (
                         <li key={`${draft.weekday}-${draft.position}`}>{draft.title}</li>
                       ))}

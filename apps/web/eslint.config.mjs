@@ -26,6 +26,22 @@ export default defineConfig([
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+
+      // Espaçamento inline é erro, não escolha de gosto: quem separa é o pai,
+      // com `gap` no contêiner. Ver CLAUDE.md § Espaço na interface.
+      //
+      // `no-restricted-syntax` é regra do core e já enxerga o AST de JSX pelo
+      // typescript-eslint — não precisa de `eslint-plugin-react`, que não está
+      // instalado. Pega a próxima `style={{ marginBottom: 8 }}` onde ela nasce.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "JSXAttribute[name.name='style'] Property[key.name=/^(margin|padding|gap|rowGap|columnGap)$|^(margin|padding)(Top|Right|Bottom|Left)$/]",
+          message:
+            "Espaçamento inline não entra. A distância entre irmãos é `gap` no contêiner; se dois irmãos precisam de distâncias diferentes, falta um contêiner. Ver CLAUDE.md § Espaço na interface.",
+        },
+      ],
     },
   },
 ]);

@@ -24,15 +24,11 @@ export function StartQuizButton({ goalId, label = "Iniciar bateria" }: { goalId:
   }
 
   return (
-    <>
+    <div className="stack-xs">
       <button type="button" className="btn btn--primary btn--sm" onClick={handleClick} disabled={pending}>
         {pending ? "Abrindo…" : label}
       </button>
-      {error && (
-        <div className="muted" style={{ color: "var(--red-600)", marginTop: 4 }}>
-          {error}
-        </div>
-      )}
-    </>
+      {error && <div className="field__error">{error}</div>}
+    </div>
   );
 }

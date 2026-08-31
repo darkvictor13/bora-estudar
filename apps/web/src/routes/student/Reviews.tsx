@@ -136,7 +136,7 @@ export function StudentReviews() {
 
       {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
 
-      <div className="stack">
+      <>
         {openCycles.map((cycle) => (
           <Card
             key={cycle.blockId}
@@ -272,7 +272,7 @@ export function StudentReviews() {
             )}
           </Card>
         )}
-      </div>
+      </>
     </>
   );
 }

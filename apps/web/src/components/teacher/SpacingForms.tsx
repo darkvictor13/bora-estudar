@@ -57,7 +57,7 @@ function SpacingRow({
           <input type="hidden" name="teacherId" value={teacherId} />
           <input type="hidden" name="subjectName" value={spacing.subject} />
 
-          <label className="field field--inline" htmlFor={`r1-${id}`}>
+          <label className="field field--narrow" htmlFor={`r1-${id}`}>
             <span className="field__label">1ª revisão</span>
             <input
               id={`r1-${id}`}
@@ -69,7 +69,7 @@ function SpacingRow({
             />
           </label>
 
-          <label className="field field--inline" htmlFor={`r2-${id}`}>
+          <label className="field field--narrow" htmlFor={`r2-${id}`}>
             <span className="field__label">2ª revisão</span>
             <input
               id={`r2-${id}`}

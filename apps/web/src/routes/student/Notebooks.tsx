@@ -76,7 +76,7 @@ export function StudentNotebooks() {
       {blocks.length === 0 ? (
         <Empty>Nenhum caderno configurado neste planejamento.</Empty>
       ) : (
-        <div className="stack">
+        <>
           {[...bySubject.entries()].map(([subject, list]) => (
             <Card key={subject} title={subject} sub={`${list.length} bloco(s)`}>
               <div className="table-wrap">
@@ -158,7 +158,7 @@ export function StudentNotebooks() {
               </div>
             </Card>
           ))}
-        </div>
+        </>
       )}
     </>
   );

@@ -147,19 +147,21 @@ export function TeacherStudents() {
       {total > 0 && (
         <div className="grid-cards">
           <Card title="Alunos">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.alunos}</p>
+            <p className="stat__value">{totals.alunos}</p>
           </Card>
           <Card title="Em ritmo">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.ritmo}</p>
+            <p className="stat__value">{totals.ritmo}</p>
           </Card>
           <Card title="Precisam de atenção" sub="Atenção e atrasados">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.atencao}</p>
+            <p className="stat__value">{totals.atencao}</p>
           </Card>
           <Card title="Questões da turma" sub="Somente principais">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.questoes}</p>
-            <p className="muted">
-              {mediaTurma === null ? "sem questões ainda" : `${mediaTurma}% de acerto`}
-            </p>
+            <div className="stat">
+              <p className="stat__value">{totals.questoes}</p>
+              <p className="muted">
+                {mediaTurma === null ? "sem questões ainda" : `${mediaTurma}% de acerto`}
+              </p>
+            </div>
           </Card>
         </div>
       )}
@@ -172,14 +174,14 @@ export function TeacherStudents() {
             existir, e o estado não morre a cada render — que é o que acontecia
             na v96, filtrando em memória.
           */}
-          <form method="get" action={ROUTES.teacher.students} className="row" style={{ alignItems: "flex-end" }}>
-            <div className="field" style={{ minWidth: 220, marginBottom: 0 }}>
+          <form method="get" action={ROUTES.teacher.students} className="field-row">
+            <div className="field">
               <label className="field__label" htmlFor="field-busca">
                 Nome ou e-mail
               </label>
               <input id="field-busca" name="busca" type="search" defaultValue={busca} />
             </div>
-            <div className="field" style={{ minWidth: 180, marginBottom: 0 }}>
+            <div className="field">
               <label className="field__label" htmlFor="field-situacao">
                 Situação
               </label>
@@ -192,7 +194,7 @@ export function TeacherStudents() {
                 ))}
               </select>
             </div>
-            <div className="field" style={{ minWidth: 200, marginBottom: 0 }}>
+            <div className="field">
               <label className="field__label" htmlFor="field-plano">
                 Planejamento
               </label>

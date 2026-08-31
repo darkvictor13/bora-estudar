@@ -17,7 +17,7 @@ export function BlockTopics({ topics }: { topics: readonly BlockTopic[] }) {
   return (
     <details className="block-topics">
       <summary>Ver o que será estudado ({topics.length} tópicos)</summary>
-      <ul className="block-topics__list">
+      <ul className="list block-topics__list">
         {topics.map((item) => (
           <li key={item.topic}>
             {item.topic} <span className="muted">· {item.questions} questão(ões)</span>

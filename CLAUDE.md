@@ -22,12 +22,85 @@ O produto é para concurseiros brasileiros e o time é brasileiro: o que a pesso
 lê fica em português. O que o compilador lê fica em inglês.
 
 Cuidado com palavras que traduzem para duas coisas diferentes conforme o
-contexto. Já aconteceu duas vezes:
+contexto. As duas primeiras já queimaram o time; a terceira foi vista antes de
+queimar, ao criar os tokens de espaço:
 
 - `fase` → `stage` (fase do concurso, em `study_plans`) mas `phase` (fase da
   questão, no ledger);
 - `resultado` → `outcome` (acerto/erro, no ledger) mas `result` (retorno
-  guardado da RPC, em `operations`).
+  guardado da RPC, em `operations`);
+- `espaçamento` → `spacing` (intervalo da revisão espaçada, em
+  `review_spacings`) mas `gap` (distância entre elementos na interface).
+
+---
+
+## Espaço na interface
+
+**Escala nomeada pelo valor, papel nomeado pela função.** É a mesma disciplina
+que `R-TEMA-16` instituiu para cor, e o mesmo discriminador: número é escala,
+palavra é papel. Tudo vive em `apps/web/src/styles/globals.css`.
+
+A escala tem nove degraus — `--gap-2`, `-4`, `-6`, `-8`, `-12`, `-16`, `-24`,
+`-32`, `-48`. Grade de 4 a partir do 8; 2 e 6 existem abaixo dela porque padding
+de badge dentro de célula e o par rótulo→caixa não cabem em 4. **Valor fora
+dessa lista não entra**: a versão anterior tinha 19 valores distintos, com 9,
+11, 14, 18, 22 e 30 quebrando qualquer grade, e ninguém conseguia dizer qual era
+o certo.
+
+Os seis papéis, do maior para o menor — esta ordem **é** a hierarquia:
+
+| Papel | Valor | Separa |
+|---|---|---|
+| `--gap-page` | 24 | seções de uma página |
+| `--gap-section` | 16 | blocos dentro de uma seção |
+| `--gap-item` | 12 | campos e controles irmãos |
+| `--gap-control` | 8 | partes de um controle, e itens de lista densa |
+| `--gap-label` | 6 | rótulo e caixa |
+| `--gap-text` | 4 | título e descrição |
+
+**Nunca use a escala direto onde existe papel.** `gap: var(--gap-16)` num
+contêiner de seção compila igual a `var(--gap-section)` e perde a única
+informação que importava — em que nível aquilo está. A escala crua é para
+padding de componente, que é propriedade dele, como `.card` já faz com
+`var(--radius-lg)` em vez de um `--radius-card`.
+
+**A hierarquia vale por eixo.** `--gap-label` (6, vertical) ser menor que
+`--gap-control` (8, horizontal) não é inversão: o par vertical carrega leading
+dos dois lados, então 6px ali parecem mais que 8px entre um ícone e um texto.
+Pelo mesmo motivo texto contra texto usa 4 e texto contra borda de caixa usa 6.
+
+### Quem separa é o pai
+
+**Nenhum componente declara `margin` com comprimento.** A distância entre dois
+irmãos é `gap` no contêiner que os contém; a distância entre um filho e a borda
+do contêiner é `padding` no contêiner.
+
+Se dois irmãos precisam de distâncias diferentes entre si, **falta um
+contêiner** — não sobra uma margem.
+
+Não é preferência de estilo: com margem, a distância efetiva entre dois irmãos
+é `max(margin-bottom, margin-top)` decidida por duas regras que não se conhecem,
+e nenhuma hierarquia sobrevive a isso. Com `gap`, exatamente uma regra é dona de
+cada distância, e é a do contêiner — o único que sabe em que nível semântico
+está. Foi um `margin-bottom` no `.field` que produziu 13 `style={{ marginBottom:
+0 }}` espalhados pelas telas só para cancelá-lo.
+
+As exceções, e são só estas:
+
+1. **`margin: auto` é alinhamento, não espaço.** `.sidebar__foot` usa
+   `margin-top: auto` e continua usando. Margem com comprimento é espaço e está
+   proibida; margem `auto` empurra para a extremidade e está liberada.
+2. **Margem negativa para compensação óptica**, com comentário dizendo o que
+   compensa. Zero casos hoje; a exceção existe para ninguém precisar mentir.
+3. **`th` e `td` continuam com `padding`.** `gap` não existe em `display: table`.
+4. **A extensão está fora, e continua fora.**
+   `apps/extension/src/content/panel.ts` monta o painel com `cssText` na página
+   do TEC e não enxerga custom property nenhuma do site. Não tente sincronizar
+   os números: o painel tem outra tipografia base e outro fundo, e igualar as
+   medidas seria coincidência, não consistência.
+
+**Espaçamento inline em TSX é erro de lint**, não escolha de gosto. Se um caso
+parece exigir, o que falta é um contêiner.
 
 ---
 

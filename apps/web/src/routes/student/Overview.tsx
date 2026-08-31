@@ -149,7 +149,7 @@ export function Overview() {
         </Card>
       )}
 
-      <div className="stack">
+      <>
         <Card
           title={`Semana ${week}`}
           sub={`${done} de ${goals.length} metas concluídas`}
@@ -185,8 +185,8 @@ export function Overview() {
               {[...byWeekday.entries()]
                 .sort(([a], [b]) => a - b)
                 .map(([weekday, dayGoals]) => (
-                  <div key={weekday}>
-                    <h3 style={{ marginBottom: 8 }}>{weekdayName(weekday)}</h3>
+                  <div key={weekday} className="stack-sm">
+                    <h3>{weekdayName(weekday)}</h3>
                     <div className="table-wrap">
                       <table>
                         <thead>
@@ -293,7 +293,7 @@ export function Overview() {
             </div>
           )}
         </Card>
-      </div>
+      </>
     </>
   );
 }

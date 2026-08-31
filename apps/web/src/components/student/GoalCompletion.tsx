@@ -58,7 +58,7 @@ export function CompleteGoalForm({ goalId, week }: { goalId: string; week: numbe
       <input type="hidden" name="goalId" value={goalId} />
       <input type="hidden" name="week" value={week} />
 
-      <div className="field" style={{ marginBottom: 0 }}>
+      <div className="field">
         <label className="field__label" htmlFor={`minutes-${goalId}`}>
           Tempo estudado
         </label>
@@ -81,7 +81,7 @@ export function CompleteGoalForm({ goalId, week }: { goalId: string; week: numbe
         </span>
       </div>
 
-      <div className="field" style={{ marginBottom: 0 }}>
+      <div className="field">
         <label className="field__label" htmlFor={`note-${goalId}`}>
           Observação <span className="muted">(opcional)</span>
         </label>
@@ -150,8 +150,8 @@ export function ExtraStudyForm({
       <input type="hidden" name="studyPlanId" value={studyPlanId} />
       <input type="hidden" name="week" value={week} />
 
-      <div className="row" style={{ alignItems: "flex-end" }}>
-        <div className="field" style={{ minWidth: 170, marginBottom: 0 }}>
+      <div className="field-row">
+        <div className="field">
           <label className="field__label" htmlFor="extra-activity">
             O que você estudou
           </label>
@@ -164,7 +164,7 @@ export function ExtraStudyForm({
           </select>
         </div>
 
-        <div className="field" style={{ minWidth: 140, marginBottom: 0 }}>
+        <div className="field">
           <label className="field__label" htmlFor="extra-weekday">
             Dia
           </label>
@@ -177,7 +177,7 @@ export function ExtraStudyForm({
           </select>
         </div>
 
-        <div className="field" style={{ minWidth: 130, marginBottom: 0 }}>
+        <div className="field">
           <label className="field__label" htmlFor="extra-minutes">
             Tempo
           </label>
@@ -192,7 +192,7 @@ export function ExtraStudyForm({
         </div>
       </div>
 
-      <div className="field" style={{ marginBottom: 0 }}>
+      <div className="field">
         <label className="field__label" htmlFor="extra-note">
           Observação <span className="muted">(opcional)</span>
         </label>

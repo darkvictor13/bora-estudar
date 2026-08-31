@@ -18,8 +18,10 @@ export function ResetPassword() {
 
   return (
     <div className="auth__card">
-      <p className="auth__brand">Nova senha</p>
-      <p className="auth__sub">Escolha uma senha para voltar a acessar sua conta.</p>
+      <header className="auth__head">
+        <p className="auth__brand">Nova senha</p>
+        <p className="auth__sub">Escolha uma senha para voltar a acessar sua conta.</p>
+      </header>
 
       {!hasSession ? (
         <Alert kind="warning">

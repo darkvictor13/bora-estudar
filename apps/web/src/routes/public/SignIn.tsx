@@ -15,8 +15,10 @@ export async function signInLoader() {
 export function SignIn() {
   return (
     <div className="auth__card">
-      <p className="auth__brand">Bora Estudar</p>
-      <p className="auth__sub">Entre para continuar seus estudos.</p>
+      <header className="auth__head">
+        <p className="auth__brand">Bora Estudar</p>
+        <p className="auth__sub">Entre para continuar seus estudos.</p>
+      </header>
 
       <AuthForm action={signIn} submitLabel="Entrar" pendingLabel="Entrando…">
         <Field label="E-mail" name="email" type="email" autoComplete="email" required />

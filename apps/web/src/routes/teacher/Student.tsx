@@ -203,7 +203,7 @@ export function TeacherStudent() {
 
       {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
 
-      <div className="stack">
+      <>
         <Card
           title="Acesso"
           sub={
@@ -214,7 +214,7 @@ export function TeacherStudent() {
                 : "Este aluno nunca teve acesso liberado"
           }
         >
-          <div className="row" style={{ alignItems: "flex-end", gap: 16 }}>
+          <div className="row row--end">
             <GrantAccessForm studentId={studentId} hasActive={hasActive} />
             {hasActive && <SuspendAccessForm studentId={studentId} />}
           </div>
@@ -384,7 +384,7 @@ export function TeacherStudent() {
         {progress && (
           <div className="grid-cards">
             <Card title="Metas" sub={activePlan?.name}>
-              <p style={{ fontSize: "2rem", fontWeight: 700 }}>
+              <p className="stat__value">
                 {progress.completed}
                 <span className="muted" style={{ fontSize: "1rem" }}>
                   {" "}
@@ -395,7 +395,7 @@ export function TeacherStudent() {
             </Card>
 
             <Card title="Desempenho oficial" sub="Somente questões principais">
-              <p style={{ fontSize: "2rem", fontWeight: 700 }}>
+              <p className="stat__value">
                 {progress.officialPct === null ? "—" : `${progress.officialPct}%`}
               </p>
               <p className="muted">
@@ -404,14 +404,16 @@ export function TeacherStudent() {
             </Card>
 
             <Card title="Semanas planejadas">
-              <p style={{ fontSize: "2rem", fontWeight: 700 }}>{progress.weeks.length}</p>
-              <p className="muted">
-                {progress.weeks.length ? `semanas ${progress.weeks.join(", ")}` : "nenhuma"}
-              </p>
+              <div className="stat">
+                <p className="stat__value">{progress.weeks.length}</p>
+                <p className="muted">
+                  {progress.weeks.length ? `semanas ${progress.weeks.join(", ")}` : "nenhuma"}
+                </p>
+              </div>
             </Card>
           </div>
         )}
-      </div>
+      </>
     </>
   );
 }

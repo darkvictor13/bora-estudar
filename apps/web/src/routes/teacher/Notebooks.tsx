@@ -107,7 +107,7 @@ export function TeacherNotebooks() {
       {plans.length === 0 ? (
         <Empty>Nenhum planejamento criado. Crie um em Planejamentos.</Empty>
       ) : (
-        <div className="stack">
+        <>
           <Card title="Planejamento">
             <nav className="row" aria-label="Planejamentos">
               {plans.map((plan) => (
@@ -126,16 +126,16 @@ export function TeacherNotebooks() {
             <>
               <div className="grid-cards">
                 <Card title="Cadernos">
-                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.cadernos}</p>
+                  <p className="stat__value">{totals.cadernos}</p>
                 </Card>
                 <Card title="Ativos">
-                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.ativos}</p>
+                  <p className="stat__value">{totals.ativos}</p>
                 </Card>
                 <Card title="Desativados">
-                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.desativados}</p>
+                  <p className="stat__value">{totals.desativados}</p>
                 </Card>
                 <Card title="Excluídos">
-                  <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.excluidos}</p>
+                  <p className="stat__value">{totals.excluidos}</p>
                 </Card>
               </div>
 
@@ -162,9 +162,9 @@ export function TeacherNotebooks() {
                 ) : (
                   <div className="stack">
                     {[...bySubject.entries()].map(([subject, list]) => (
-                      <div key={subject}>
-                        <div className="row" style={{ alignItems: "center", marginBottom: 8 }}>
-                          <h3 style={{ margin: 0, color: list[0]?.subject_color }}>{subject}</h3>
+                      <div key={subject} className="stack-sm">
+                        <div className="row">
+                          <h3 style={{ color: list[0]?.subject_color }}>{subject}</h3>
                           {view !== "excluidos" && (
                             <ToggleSubjectForm
                               studyPlanId={selectedId!}
@@ -259,7 +259,7 @@ export function TeacherNotebooks() {
               </Card>
             </>
           )}
-        </div>
+        </>
       )}
     </>
   );

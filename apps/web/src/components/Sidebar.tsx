@@ -69,31 +69,36 @@ export function Sidebar({
       {groups.map((group) => (
         <div key={group.title} className="sidebar__group">
           <p className="sidebar__title">{group.title}</p>
-          {group.items.map((item) => {
-            const disabled = item.enabled === false;
+          {/* Os links moram num contêiner próprio porque querem 2px entre si
+              enquanto o título quer 6px abaixo — duas distâncias diferentes
+              entre irmãos significam que falta um contêiner. */}
+          <div className="sidebar__links">
+            {group.items.map((item) => {
+              const disabled = item.enabled === false;
 
-            // Sem destino, e não um <Link> com aria-disabled: o Link continua
-            // navegando no clique, o loader redireciona de volta, e a pessoa
-            // dá a volta inteira para não sair do lugar.
-            if (disabled) {
+              // Sem destino, e não um <Link> com aria-disabled: o Link continua
+              // navegando no clique, o loader redireciona de volta, e a pessoa
+              // dá a volta inteira para não sair do lugar.
+              if (disabled) {
+                return (
+                  <span key={item.href} className="sidebar__link" aria-disabled="true">
+                    {item.label}
+                  </span>
+                );
+              }
+
               return (
-                <span key={item.href} className="sidebar__link" aria-disabled="true">
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  className="sidebar__link"
+                  aria-current={item.href === currentHref ? "page" : undefined}
+                >
                   {item.label}
-                </span>
+                </Link>
               );
-            }
-
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className="sidebar__link"
-                aria-current={item.href === currentHref ? "page" : undefined}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+            })}
+          </div>
         </div>
       ))}
 

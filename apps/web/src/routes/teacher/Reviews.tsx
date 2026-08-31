@@ -61,7 +61,7 @@ export function TeacherReviews() {
           <Empty>Nenhum bloco exigindo reforço no momento.</Empty>
         </Card>
       ) : (
-        <div className="stack">
+        <>
           {withPending.map(({ profile, planName, needing }) => (
             <Card
               key={profile.id}
@@ -105,7 +105,7 @@ export function TeacherReviews() {
               </div>
             </Card>
           ))}
-        </div>
+        </>
       )}
     </>
   );

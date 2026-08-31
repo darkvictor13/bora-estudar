@@ -67,7 +67,7 @@ export function TeacherGoals() {
         description="Distribui os blocos escolhidos pelos dias marcados, em rodízio. Reenviar o mesmo lote não duplica a semana."
       />
 
-      <div className="stack">
+      <>
         <Card title="Planejamento">
           <nav className="row" aria-label="Planejamentos">
             {plans.map((plan) => (
@@ -105,7 +105,7 @@ export function TeacherGoals() {
             />
           )}
         </Card>
-      </div>
+      </>
     </>
   );
 }

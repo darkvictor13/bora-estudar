@@ -56,8 +56,8 @@ export function NewPlanForm({
       {state.error && <Alert kind="error">{state.error}</Alert>}
       {state.success && <Alert kind="success">{state.success}</Alert>}
 
-      <div className="row">
-        <div className="field" style={{ minWidth: 220 }}>
+      <div className="field-row">
+        <div className="field">
           <label className="field__label" htmlFor="field-studentId">
             Aluno
           </label>
@@ -70,7 +70,7 @@ export function NewPlanForm({
           </select>
         </div>
 
-        <div className="field" style={{ minWidth: 220 }}>
+        <div className="field">
           <label className="field__label" htmlFor="field-catalogKey">
             Catálogo
           </label>
@@ -85,12 +85,12 @@ export function NewPlanForm({
         </div>
       </div>
 
-      <div className="row">
+      <div className="field-row">
         <Field label="Nome do planejamento" name="name" required minLength={3} />
         <Field label="Concurso alvo" name="targetExam" />
       </div>
 
-      <div className="row">
+      <div className="field-row">
         <Field label="Área" name="area" />
         <Field label="Fase" name="stage" hint="Pré-edital, pós-edital, reta final…" />
         <Field label="Modelo de estudo" name="studyModel" />

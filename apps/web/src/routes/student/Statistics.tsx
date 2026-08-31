@@ -102,10 +102,10 @@ export function StudentStatistics() {
         description="O desempenho oficial conta só as questões principais. O aproveitamento total inclui extras e reforços."
       />
 
-      <div className="stack">
+      <>
         <div className="grid-cards">
           <Card title="Desempenho oficial" sub="Somente questões principais">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>
+            <p className="stat__value">
               {officialPct === null ? "—" : `${officialPct}%`}
             </p>
             <p className="muted">
@@ -114,7 +114,7 @@ export function StudentStatistics() {
           </Card>
 
           <Card title="Aproveitamento total" sub="Principais, extras e reforços">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>
+            <p className="stat__value">
               {totalPct === null ? "—" : `${totalPct}%`}
             </p>
             <p className="muted">
@@ -239,7 +239,7 @@ export function StudentStatistics() {
             </div>
           )}
         </Card>
-      </div>
+      </>
     </>
   );
 }

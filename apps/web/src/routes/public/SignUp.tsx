@@ -15,10 +15,12 @@ export async function signUpLoader() {
 export function SignUp() {
   return (
     <div className="auth__card">
-      <p className="auth__brand">Criar conta</p>
-      <p className="auth__sub">
-        O acesso é liberado pelo professor. Depois do cadastro você entra na lista de espera.
-      </p>
+      <header className="auth__head">
+        <p className="auth__brand">Criar conta</p>
+        <p className="auth__sub">
+          O acesso é liberado pelo professor. Depois do cadastro você entra na lista de espera.
+        </p>
+      </header>
 
       <AuthForm action={signUp} submitLabel="Criar conta" pendingLabel="Criando…">
         <Field label="Nome completo" name="name" autoComplete="name" required minLength={3} />

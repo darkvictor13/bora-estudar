@@ -26,8 +26,8 @@ export function RegisterTimeForm({ quizSessionId }: { quizSessionId: string }) {
       {state.error && <Alert kind="error">{state.error}</Alert>}
       {state.success && <Alert kind="success">{state.success}</Alert>}
       <input type="hidden" name="quizSessionId" value={quizSessionId} />
-      <div className="row" style={{ alignItems: "flex-end" }}>
-        <div className="field" style={{ minWidth: 200, marginBottom: 0 }}>
+      <div className="field-row">
+        <div className="field">
           <label className="field__label" htmlFor="minutes">
             Tempo gasto
           </label>
