@@ -738,6 +738,11 @@ create index goals_notebook_block_idx
 create unique index goals_one_per_slot_idx
   on public.goals (study_plan_id, week_number, weekday, day_position);
 
+-- Um planejamento por aluno com o mesmo nome. Estava no banco de origem como
+-- `planejamentos_unico_por_aluno_nome_idx`.
+create unique index study_plans_name_per_student_uidx
+  on public.study_plans (teacher_id, student_id, name);
+
 create index study_plans_teacher_idx on public.study_plans (teacher_id);
 create index study_plans_student_idx on public.study_plans (student_id);
 create index study_plans_class_idx   on public.study_plans (class_id);
@@ -772,6 +777,12 @@ create index quiz_session_questions_student_question_idx
   on public.quiz_session_questions (student_id, question_id, answered_at desc);
 create index quiz_session_questions_session_phase_idx
   on public.quiz_session_questions (quiz_session_id, round, phase, outcome);
+-- Uma correlata por questão de origem, dentro da mesma bateria. Estava no
+-- banco de origem como `questoes_resultados_um_reforco_por_origem_uidx`.
+create unique index quiz_session_questions_one_reinforcement_per_source_uidx
+  on public.quiz_session_questions (quiz_session_id, source_question_id)
+  where phase = 'reinforcement' and source_question_id is not null;
+
 create index quiz_session_questions_errors_idx
   on public.quiz_session_questions (student_id, study_plan_id, block_id, answered_at desc)
   where outcome = 'incorrect';
