@@ -140,11 +140,26 @@ composta garante que a cópia nunca diverge do pai.
 
 ### Migrations
 
-**O schema já está implantado.** `20260822163557_initial_schema.sql` foi
-aplicado em staging em 23/08/2026 e está **congelado**: migration nova sempre,
-nunca reescreva um arquivo já aplicado em qualquer ambiente. A regra anterior —
-editar a migration única no lugar enquanto nada estivesse no ar — deixou de
-valer.
+**O schema já está implantado.** `20260914150000_initial_schema.sql` é a
+migration única desta reimplementação, aplicada em staging em 14/09/2026, e
+está **congelada**: migration nova sempre, nunca reescreva um arquivo já
+aplicado em qualquer ambiente. A regra anterior — editar a migration única no
+lugar enquanto nada estivesse no ar — deixou de valer.
+
+**O congelamento já foi quebrado uma vez, de propósito.** O commit `7c597cc`
+apagou as doze migrations de 22/08 a 31/08 — todas já aplicadas em staging — e
+as substituiu por este arquivo único. Era a reimplementação inteira do schema
+em inglês, com a auditoria do banco de origem aplicada, e isso não cabe em
+migration incremental. A conciliação foi recriar o banco de staging do zero,
+com `supabase db reset --linked --no-seed`.
+
+**Isso não abre precedente, e o motivo é o custo do acerto.** O reset apagou
+tudo, inclusive o schema `auth`: staging saiu sem nenhum usuário, e quem for
+usar o ambiente precisa cadastrar um professor de novo. Foi aceitável porque
+staging é descartável e o que havia lá era dado de teste. O mesmo movimento em
+produção exigiria um script de migração de dados, que não existe — o que existe
+é o de-para em [`docs/de-para-schema.md`](docs/de-para-schema.md), que é insumo
+para escrevê-lo, não substituto.
 
 - Rode `npm run db:types` depois de **toda** alteração de schema. O arquivo
   gerado é versionado: o CI precisa dele sem subir um Supabase, e o diff mostra
@@ -156,10 +171,11 @@ valer.
   revogar dos dois papéis não tira nada, porque o privilégio vem do grantee
   vazio que ambos herdam. Foi assim que `reserve_operation` ficou chamável por
   qualquer autenticado apesar do `revoke` e do comentário dizendo o contrário —
-  BUG-14. Depois do revoke, conceda nominalmente só às funções que são API.
+  BUG-14. A função era do schema anterior e não existe mais; a regra que ela
+  custou, sim. Depois do revoke, conceda nominalmente só às funções que são API.
 - **Toda função precisa de `set search_path = ''`**, inclusive as de gatilho.
-  Duas escaparam disso na migration inicial, e uma delas era a que sustenta o
-  ledger append-only.
+  Duas escaparam disso na primeira migration inicial, e uma delas era a que
+  sustentava o ledger append-only. Em `20260914150000` as oito têm.
 
 **`gen types --linked` e `--local` não produzem arquivos idênticos, e isso não
 é drift.** O gerador contra a nuvem emite um bloco `__InternalSupabase` com
