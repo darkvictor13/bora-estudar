@@ -14,7 +14,9 @@ import { ForgotPassword } from "@/routes/public/ForgotPassword";
 import { ResetPassword, resetPasswordLoader } from "@/routes/public/ResetPassword";
 
 import { Overview, overviewLoader } from "@/routes/student/Overview";
+import { Planning, planningLoader } from "@/routes/student/Planning";
 import { Subjects, subjectsLoader } from "@/routes/student/Subjects";
+import { Theory, theoryLoader } from "@/routes/student/Theory";
 import { StudentNotebooks, studentNotebooksLoader } from "@/routes/student/Notebooks";
 import { StudentStatistics, studentStatisticsLoader } from "@/routes/student/Statistics";
 import { StudentReviews, studentReviewsLoader } from "@/routes/student/Reviews";
@@ -26,6 +28,7 @@ import { TeacherStudent, teacherStudentLoader } from "@/routes/teacher/Student";
 import { TeacherPlans, teacherPlansLoader } from "@/routes/teacher/Plans";
 import { TeacherGoals, teacherGoalsLoader } from "@/routes/teacher/Goals";
 import { TeacherNotebooks, teacherNotebooksLoader } from "@/routes/teacher/Notebooks";
+import { TeacherTheory, teacherTheoryLoader } from "@/routes/teacher/Theory";
 import { TeacherReviews, teacherReviewsLoader } from "@/routes/teacher/Reviews";
 import { TeacherStatistics, teacherStatisticsLoader } from "@/routes/teacher/Statistics";
 
@@ -44,9 +47,15 @@ import { ROUTES } from "@/lib/routes";
  * O `handle.title` substitui o `export const metadata` de cada página; quem o
  * aplica é o efeito em RootLayout.
  *
- * `ErrorBoundary` fica na raiz e nas duas áreas: um erro de loader dentro da
- * área do aluno renderiza a mensagem COM a sidebar em volta, em vez de trocar a
- * aplicação inteira por uma tela de erro.
+ * `ErrorBoundary` fica na raiz e, DENTRO de cada área, numa rota sem caminho
+ * que só existe para segurar o erro.
+ *
+ * A camada a mais não é enfeite. O React Router substitui pelo boundary o
+ * elemento da ROTA QUE O DECLARA — não o da rota que falhou. Com o boundary no
+ * próprio layout da área, um erro no loader de uma tela apagava a sidebar
+ * junto, e a pessoa perdia a navegação justamente no momento em que mais
+ * precisa dela: para sair dali. Numa rota sem caminho aninhada, o layout
+ * continua montado e o erro ocupa só o espaço do conteúdo.
  */
 export const router = createBrowserRouter([
   {
@@ -94,49 +103,65 @@ export const router = createBrowserRouter([
       {
         loader: studentLayoutLoader,
         Component: StudentLayout,
-        ErrorBoundary: RouteError,
         children: [
           {
-            path: ROUTES.student.overview,
-            loader: overviewLoader,
-            Component: Overview,
-            handle: { title: "Visão geral · Bora Estudar" },
-          },
-          {
-            path: ROUTES.student.subjects,
-            loader: subjectsLoader,
-            Component: Subjects,
-            handle: { title: "Disciplinas · Bora Estudar" },
-          },
-          {
-            path: ROUTES.student.notebooks,
-            loader: studentNotebooksLoader,
-            Component: StudentNotebooks,
-            handle: { title: "Cadernos TEC · Bora Estudar" },
-          },
-          {
-            path: ROUTES.student.statistics,
-            loader: studentStatisticsLoader,
-            Component: StudentStatistics,
-            handle: { title: "Estatísticas · Bora Estudar" },
-          },
-          {
-            path: ROUTES.student.reviews,
-            loader: studentReviewsLoader,
-            Component: StudentReviews,
-            handle: { title: "Revisões · Bora Estudar" },
-          },
-          {
-            path: ROUTES.student.account,
-            loader: accountLoader,
-            Component: Account,
-            handle: { title: "Meus dados · Bora Estudar" },
-          },
-          {
-            path: ROUTES.student.waitlist,
-            loader: waitlistLoader,
-            Component: Waitlist,
-            handle: { title: "Lista de espera · Bora Estudar" },
+            ErrorBoundary: RouteError,
+            children: [
+              {
+                path: ROUTES.student.overview,
+                loader: overviewLoader,
+                Component: Overview,
+                handle: { title: "Metas da semana · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.planning,
+                loader: planningLoader,
+                Component: Planning,
+                handle: { title: "Planejamento · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.theory,
+                loader: theoryLoader,
+                Component: Theory,
+                handle: { title: "Estudo da teoria · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.subjects,
+                loader: subjectsLoader,
+                Component: Subjects,
+                handle: { title: "Disciplinas · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.notebooks,
+                loader: studentNotebooksLoader,
+                Component: StudentNotebooks,
+                handle: { title: "Cadernos TEC · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.statistics,
+                loader: studentStatisticsLoader,
+                Component: StudentStatistics,
+                handle: { title: "Estatísticas · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.reviews,
+                loader: studentReviewsLoader,
+                Component: StudentReviews,
+                handle: { title: "Revisões · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.account,
+                loader: accountLoader,
+                Component: Account,
+                handle: { title: "Meus dados · Bora Estudar" },
+              },
+              {
+                path: ROUTES.student.waitlist,
+                loader: waitlistLoader,
+                Component: Waitlist,
+                handle: { title: "Lista de espera · Bora Estudar" },
+              },
+        ],
           },
         ],
       },
@@ -144,56 +169,66 @@ export const router = createBrowserRouter([
       {
         loader: teacherLayoutLoader,
         Component: TeacherLayout,
-        ErrorBoundary: RouteError,
         children: [
           {
-            path: ROUTES.teacher.students,
-            loader: teacherStudentsLoader,
-            Component: TeacherStudents,
-            handle: { title: "Meus alunos · Bora Estudar" },
-          },
-          {
-            path: "/professor/alunos/:studentId",
-            loader: teacherStudentLoader,
-            Component: TeacherStudent,
-            handle: { title: "Aluno · Bora Estudar" },
-          },
-          {
-            path: ROUTES.teacher.plans,
-            loader: teacherPlansLoader,
-            Component: TeacherPlans,
-            handle: { title: "Planejamentos · Bora Estudar" },
-          },
-          {
-            path: ROUTES.teacher.goals,
-            loader: teacherGoalsLoader,
-            Component: TeacherGoals,
-            handle: { title: "Gerar metas · Bora Estudar" },
-          },
-          {
-            path: ROUTES.teacher.notebooks,
-            loader: teacherNotebooksLoader,
-            Component: TeacherNotebooks,
-            handle: { title: "Cadernos · Bora Estudar" },
-          },
-          {
-            path: ROUTES.teacher.reviews,
-            loader: teacherReviewsLoader,
-            Component: TeacherReviews,
-            handle: { title: "Revisões · Bora Estudar" },
-          },
-          {
-            path: ROUTES.teacher.statistics,
-            loader: teacherStatisticsLoader,
-            Component: TeacherStatistics,
-            handle: { title: "Estatísticas · Bora Estudar" },
-          },
-          {
-            // A mesma tela de `/aluno/conta`: mesmos campos, mesmo action.
-            path: ROUTES.teacher.account,
-            loader: accountLoader,
-            Component: Account,
-            handle: { title: "Meus dados · Bora Estudar" },
+            ErrorBoundary: RouteError,
+            children: [
+              {
+                path: ROUTES.teacher.students,
+                loader: teacherStudentsLoader,
+                Component: TeacherStudents,
+                handle: { title: "Meus alunos · Bora Estudar" },
+              },
+              {
+                path: "/professor/alunos/:studentId",
+                loader: teacherStudentLoader,
+                Component: TeacherStudent,
+                handle: { title: "Aluno · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.plans,
+                loader: teacherPlansLoader,
+                Component: TeacherPlans,
+                handle: { title: "Planejamentos · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.goals,
+                loader: teacherGoalsLoader,
+                Component: TeacherGoals,
+                handle: { title: "Gerar metas · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.theory,
+                loader: teacherTheoryLoader,
+                Component: TeacherTheory,
+                handle: { title: "Catálogo de teoria · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.notebooks,
+                loader: teacherNotebooksLoader,
+                Component: TeacherNotebooks,
+                handle: { title: "Cadernos · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.reviews,
+                loader: teacherReviewsLoader,
+                Component: TeacherReviews,
+                handle: { title: "Revisões · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.statistics,
+                loader: teacherStatisticsLoader,
+                Component: TeacherStatistics,
+                handle: { title: "Estatísticas · Bora Estudar" },
+              },
+              {
+                // A mesma tela de `/aluno/conta`: mesmos campos, mesmo action.
+                path: ROUTES.teacher.account,
+                loader: accountLoader,
+                Component: Account,
+                handle: { title: "Meus dados · Bora Estudar" },
+              },
+        ],
           },
         ],
       },

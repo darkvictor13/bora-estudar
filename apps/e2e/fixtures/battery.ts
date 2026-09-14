@@ -4,20 +4,21 @@
  * Várias telas só têm o que mostrar depois de uma bateria: estatísticas,
  * caderno de erros, "Reforço recomendado", os números do professor. Levar cada
  * uma dessas telas até lá pela interface custaria uma bateria inteira por
- * teste, e o que se está testando é a tela, não a bateria — essa tem o
- * `quiz.spec.ts` inteiro dedicado a ela.
+ * teste, e o que se está testando é a tela, não a bateria.
  *
  * O caminho aqui passa pelas MESMAS RPCs que o site chama, impersonando o
  * aluno: `start_quiz_session`, `finish_quiz_session` e
  * `record_quiz_session_time`. Nada é inserido no ledger por fora — se uma regra
  * de negócio regredir, a pré-condição falha em vez de fabricar dado impossível.
+ *
+ * A fila sai de `questions.ts`, da própria suíte. Saiu do motor da extensão
+ * quando ela foi removida; o que estes testes pedem da fila continua sendo só
+ * não repetir questão entre baterias do mesmo bloco.
  */
 import { randomUUID } from "node:crypto";
-import type { QuestionAnswer } from "@bora/protocol";
 
-import { pickQuestions } from "../../extension/src/content/engine.ts";
-import { STUDENT_RETURN_URL } from "../support/app.ts";
 import { asUser, query } from "./db.ts";
+import { pickQuestions, type Answer } from "./questions.ts";
 import { catalogQuestions, type Scenario, type ScenarioGoal } from "./scenario.ts";
 
 interface OpenedSession {
@@ -26,7 +27,7 @@ interface OpenedSession {
   readonly main_target: number;
 }
 
-/** Histórico do bloco, na forma que o site envia para a extensão. */
+/** Histórico do bloco, na forma que o seletor da fila consome. */
 async function historyOf(planId: string, blockId: string) {
   const rows = await query<{
     question_id: string;
@@ -64,9 +65,8 @@ export interface CompleteQuizOptions {
   /**
    * Erra exatamente as questões destes tópicos, e acerta o resto.
    *
-   * Existe porque a fila é montada pelo rodízio por tópico, e "as N últimas"
-   * não diz em que assunto o aluno errou. Um teste de dificuldade por tópico
-   * precisa dizer o assunto, não a posição.
+   * Existe porque "as N últimas da fila" não diz em que assunto o aluno errou.
+   * Um teste de dificuldade por tópico precisa dizer o assunto, não a posição.
    */
   readonly incorrectTopics?: readonly string[];
   /** Quantas questões são respondidas. Padrão: `main_target` inteiro. */
@@ -78,8 +78,8 @@ export interface CompleteQuizOptions {
 /**
  * Abre, responde e conclui uma bateria da meta informada.
  *
- * A fila sai do motor real da extensão, alimentado pelo histórico real do
- * bloco: duas baterias seguidas no mesmo bloco não repetem questão, que é a
+ * A fila sai do seletor da suíte, alimentado pelo histórico real do bloco:
+ * duas baterias seguidas no mesmo bloco não repetem questão, que é a
  * propriedade de que os testes de "segunda bateria" dependem.
  */
 export async function completeQuiz(
@@ -100,33 +100,25 @@ export async function completeQuiz(
     return rows[0];
   });
 
-  const queue = pickQuestions({
-    returnUrl: STUDENT_RETURN_URL,
-    quizSessionId: session.id,
-    goalId: goal.id,
-    studyPlanId: scenario.planId,
-    blockId: block.id,
-    sessionNumber: session.session_number,
-    mainTarget: session.main_target,
-    availableQuestions: await catalogQuestions(block.catalogBlockId),
-    history: await historyOf(scenario.planId, block.id),
-    historyComplete: true,
-  });
+  const queue = pickQuestions(
+    await catalogQuestions(block.catalogBlockId),
+    await historyOf(scenario.planId, block.id),
+    session.main_target,
+  );
 
   const answered = options.answer ?? queue.length;
   const wrongTopics = options.incorrectTopics;
   const isWrong = (item: { topic: string | null }, index: number) =>
     wrongTopics ? wrongTopics.includes(item.topic ?? "") : index >= (options.correct ?? 0);
 
-  const answers: QuestionAnswer[] = queue.slice(0, answered).map((item, index) => ({
+  const answers: Answer[] = queue.slice(0, answered).map((item, index) => ({
     questionId: item.id,
     executionOrder: index + 1,
     round: 0,
     phase: "main",
     outcome: isWrong(item, index) ? "incorrect" : "correct",
-    // O tópico vai porque a extensão o envia (content/index.ts): ele sai do
-    // item da fila, que o traz do catálogo. Mandar null aqui deixaria toda
-    // bateria de teste agregada como "Tópico não identificado".
+    // O tópico sai do item da fila, que o traz do catálogo. Mandar null aqui
+    // deixaria toda bateria de teste agregada como "Tópico não identificado".
     topic: item.topic,
     sourceQuestionId: null,
     answeredAt: new Date().toISOString(),

@@ -1,112 +1,233 @@
-import { Link, useLoaderData } from "react-router";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { Alert, Badge, Card, Empty, Field, Metric, PageHeader } from "@bora/ui";
+import { useState } from "react";
+import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 
-import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { ContentBody } from "@/components/AppShell";
+import { api, type ApiError, type Reinforcement, type ReviewGridRow } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
-import { getMyStudents, getPlanProgress } from "@/lib/data/teacher";
-import { supabase } from "@/lib/supabase/client";
-import { ROUTES } from "@/lib/routes";
 
-export async function teacherReviewsLoader() {
-  const session = await requireRole("teacher");
-  const students = await getMyStudents(session.profileId);
+/**
+ * Revisões, do lado do professor — controle manual e reforços.
+ *
+ * É AQUI QUE O ESPAÇAMENTO SE CONFIGURA. Na tela do aluno a grade é leitura:
+ * `theory_review_rules` tem policy `teacher_id = auth.uid()`, e quem decide de
+ * quantas em quantas aulas a matéria volta é quem montou o plano.
+ *
+ * REVISÃO E REFORÇO CONTINUAM SEPARADOS, como na v2: calendário de um lado,
+ * reação a desempenho baixo do outro.
+ */
+export async function teacherReviewsLoader({ request }: { request: Request }) {
+  await requireRole("teacher");
 
-  const rows = await Promise.all(
-    students
-      .filter((s) => s.activePlan)
-      .map(async ({ profile, activePlan }) => {
-        const progress = await getPlanProgress(activePlan!.id);
-        const blockIds = progress.blocks.map((b) => b.block_id).filter(Boolean) as string[];
+  const plans = (await api.listPlans()).filter((plan) => plan.status === "active");
+  const planId = new URL(request.url).searchParams.get("plano") ?? plans[0]?.id ?? null;
 
-        const { data: blocks } = blockIds.length
-          ? await supabase
-              .from("study_plan_blocks")
-              .select("id,name,subject_name,subject_color")
-              .in("id", blockIds)
-          : { data: [] };
-        const blockById = new Map((blocks ?? []).map((b) => [b.id, b]));
+  if (!planId) {
+    return {
+      plans,
+      planId: null,
+      grid: [] as readonly ReviewGridRow[],
+      reinforcements: [] as readonly Reinforcement[],
+    };
+  }
 
-        // Mesma regra do reforço automático: três baterias válidas no bloco e
-        // acumulado abaixo de 80% nas principais.
-        const needing = progress.blocks
-          .filter((b) => (b.session_count ?? 0) >= 3 && (b.official_score_pct ?? 100) < 80)
-          .map((b) => ({
-            block: b.block_id ? (blockById.get(b.block_id) ?? null) : null,
-            sessions: b.session_count ?? 0,
-            pct: b.official_score_pct,
-          }));
+  const [grid, reinforcements] = await Promise.all([
+    api.loadReviewGrid(planId),
+    api.listReinforcements(planId),
+  ]);
 
-        return { profile, planName: activePlan!.name, needing };
-      }),
-  );
-
-  return { studentCount: students.length, withPending: rows.filter((r) => r.needing.length > 0) };
+  return { plans, planId, grid, reinforcements };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherReviewsLoader>>;
 
 export function TeacherReviews() {
-  const { studentCount, withPending } = useLoaderData() as LoaderData;
+  const { plans, planId, grid, reinforcements } = useLoaderData() as LoaderData;
+  const { revalidate } = useRevalidator();
+  const [params, setParams] = useSearchParams();
+  const [error, setError] = useState<ApiError | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  async function save(row: ReviewGridRow, spacing: number, minimum: number) {
+    if (!planId) return;
+    const result = await api.saveReviewSpacing({
+      studyPlanId: planId,
+      subjectKey: row.subjectKey,
+      reviewNumber: 1,
+      lessonSpacing: spacing,
+      minimumQuestions: minimum,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    setSaved(`Espaçamento de ${row.subject} salvo.`);
+    await revalidate();
+  }
+
+  const due = grid.flatMap((row) => row.reviews.filter((review) => review.due)).length;
 
   return (
     <>
       <PageHeader
         title="Revisões"
-        description="Blocos em que o aluno acumulou três baterias abaixo de 80% nas questões principais."
+        description="O ritmo de releitura, por disciplina"
+        actions={
+          <TextField
+            select
+            size="small"
+            label="Planejamento"
+            value={planId ?? ""}
+            slotProps={{ select: { inputProps: { "data-testid": "reviews-plan" } } }}
+            onChange={(event) => {
+              params.set("plano", event.target.value);
+              setParams(params);
+            }}
+            sx={{ minWidth: 260 }}
+          >
+            {plans.map((plan) => (
+              <MenuItem key={plan.id} value={plan.id}>
+                {plan.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        }
       />
 
-      {studentCount === 0 ? (
-        <Empty>Nenhum aluno vinculado.</Empty>
-      ) : withPending.length === 0 ? (
-        <Card>
-          <Empty>Nenhum bloco exigindo reforço no momento.</Empty>
-        </Card>
-      ) : (
-        <div className="stack">
-          {withPending.map(({ profile, planName, needing }) => (
+      <ContentBody>
+        {error && <Alert status="error">{error.message}</Alert>}
+        {saved && <Alert status="success">{saved}</Alert>}
+
+        {!planId && (
+          <Empty icon="🔁">
+            Nenhum planejamento ativo. A grade de revisão pertence a um planejamento.
+          </Empty>
+        )}
+
+        {planId && (
+          <Box
+            sx={(theme) => ({
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 1.25,
+              mb: 1.75,
+              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+            })}
+          >
+            <Metric label="Disciplinas" value={grid.length} />
+            <Metric label="Revisões vencidas" value={due} />
+            <Metric label="Reforços" value={reinforcements.length} />
+          </Box>
+        )}
+
+        {planId && grid.length === 0 && (
+          <Empty icon="📚">
+            Este planejamento ainda não tem catálogo de teoria vinculado. Vincule um no catálogo
+            antes de configurar as revisões.
+          </Empty>
+        )}
+
+        {grid.map((row) => (
+          <Box key={row.subjectKey} sx={{ mb: 1.5 }}>
             <Card
-              key={profile.id}
-              title={profile.name}
-              sub={planName}
+              title={row.subject}
+              sub={`${row.reviews.filter((review) => review.status === "completed").length} de ${row.reviews.length} feitas`}
               action={
-                <Link className="btn btn--ghost btn--sm" to={ROUTES.teacher.student(profile.id)}>
-                  Abrir aluno
-                </Link>
+                <Badge tone={row.reviews.some((review) => review.due) ? "warning" : "neutral"}>
+                  {row.reviews.filter((review) => review.due).length} vencidas
+                </Badge>
               }
             >
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Disciplina</th>
-                      <th>Bloco</th>
-                      <th className="num">Baterias</th>
-                      <th className="num">Oficial</th>
-                      <th>Situação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {needing.map((item, index) => (
-                      <tr key={item.block?.id ?? index}>
-                        <td style={{ color: item.block?.subject_color }}>
-                          {item.block?.subject_name ?? "—"}
-                        </td>
-                        <td>{item.block?.name ?? "—"}</td>
-                        <td className="num">{item.sessions}</td>
-                        <td className="num">
-                          <strong>{item.pct === null ? "—" : `${item.pct}%`}</strong>
-                        </td>
-                        <td>
-                          <Badge tone="red">Reforço recomendado</Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Box
+                component="form"
+                noValidate
+                data-testid="spacing-form"
+                data-subject={row.subjectKey}
+                sx={{ display: "flex", gap: 1.5, alignItems: "flex-end", flexWrap: "wrap" }}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const data = new FormData(event.currentTarget);
+                  void save(
+                    row,
+                    Number(data.get("lessonSpacing") ?? 2),
+                    Number(data.get("minimumQuestions") ?? 15),
+                  );
+                }}
+              >
+                <Field
+                  label="A cada N aulas"
+                  name="lessonSpacing"
+                  type="number"
+                  min={1}
+                  max={200}
+                  defaultValue={row.lessonSpacing || 2}
+                  invalid={error?.field === "lessonSpacing"}
+                />
+                <Field
+                  label="Mínimo de questões"
+                  name="minimumQuestions"
+                  type="number"
+                  min={1}
+                  max={200}
+                  defaultValue={row.minimumQuestions || 15}
+                  invalid={error?.field === "minimumQuestions"}
+                />
+                <Button type="submit" size="small" variant="contained" sx={{ mb: 2.5 }}>
+                  Salvar ritmo
+                </Button>
+              </Box>
+
+              {row.reviews.length === 0 ? (
+                <Typography variant="caption" component="p">
+                  Nenhuma revisão criada. Elas nascem quando o aluno fecha a aula.
+                </Typography>
+              ) : (
+                <Typography variant="caption" component="p">
+                  {row.reviews.filter((review) => review.due).length} vencidas de{" "}
+                  {row.reviews.length} criadas.
+                </Typography>
+              )}
             </Card>
-          ))}
-        </div>
-      )}
+          </Box>
+        ))}
+
+        {planId && (
+          <Card title="Reforços sugeridos" sub="Nascem de desempenho baixo numa bateria">
+            {reinforcements.length === 0 ? (
+              <Typography variant="body2">
+                Nenhum reforço. Eles dependem do motor de baterias, que saiu com a extensão e está
+                sendo reescrito.
+              </Typography>
+            ) : (
+              reinforcements.map((reinforcement) => (
+                <Box
+                  key={reinforcement.id}
+                  data-testid="reinforcement-row"
+                  sx={(theme) => ({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    py: 1.125,
+                    borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+                    "&:last-of-type": { borderBottom: "none" },
+                  })}
+                >
+                  <Typography sx={{ flex: 1, fontSize: "0.8125rem" }}>
+                    {reinforcement.blockName}
+                  </Typography>
+                  <Badge tone="warning">{reinforcement.sourceScore}%</Badge>
+                </Box>
+              ))
+            )}
+          </Card>
+        )}
+      </ContentBody>
     </>
   );
 }

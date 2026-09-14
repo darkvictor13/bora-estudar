@@ -1,16 +1,20 @@
 # Bora Estudar
 
-Plataforma de estudos para concursos. Um repositório, três entregáveis: o site,
-a extensão de navegador e o banco.
+Plataforma de estudos para concursos. Um repositório, dois entregáveis: o site
+e o banco.
 
 | Pacote | O que é |
 |---|---|
 | `apps/web` | SPA em React + Vite — painéis de aluno e professor |
-| `apps/extension` | Extensão MV3 — conduz a bateria no TEC Concursos |
-| `apps/e2e` | Suíte Playwright — site e extensão, num navegador de verdade |
-| `packages/protocol` | Contrato site ↔ extensão |
+| `apps/e2e` | Suíte Playwright — o site num navegador de verdade |
 | `packages/database` | Tipos gerados do schema Supabase |
 | `supabase` | Migrations e seed |
+
+> **A extensão de navegador foi removida.** Ela conduzia a bateria de questões
+> no TEC Concursos, e com ela saíram o pacote `packages/protocol` e o caminho de
+> execução de bateria no site. O banco continua com as tabelas e RPCs do fluxo
+> (`quiz_sessions`, `start_quiz_session`, `finish_quiz_session`): quem for
+> desenhar a execução nova encontra o ledger intacto.
 
 A arquitetura e as razões por trás de cada limite estão em
 [`docs/arquitetura.md`](docs/arquitetura.md). Os fluxos da aplicação, no
@@ -51,12 +55,9 @@ Credenciais públicas, exclusivas do ambiente local.
 | `npm run check` | `typecheck` + `lint` + `test` em todos os pacotes |
 | `npm run db:reset` | Recria o banco: migrations + seed |
 | `npm run db:test` | Recria o banco e roda as checagens de invariante |
-| `npm run test:e2e` | Volta completa do fluxo da extensão, sem navegador |
 | `npm run e2e` | Suíte Playwright completa, no modo mais rápido |
 | `npm run e2e:video` | A mesma suíte, gravando um `.webm` por teste |
 | `npm run db:types` | Regenera `packages/database` a partir do schema local |
-| `npm run ext:build` | Compila a extensão em `apps/extension/dist` |
-| `npm run ext:watch` | Recompila a extensão a cada alteração |
 
 Rode `npm run db:types` depois de **toda** migration; o arquivo gerado é
 versionado.
@@ -64,15 +65,14 @@ versionado.
 ## Testes ponta a ponta
 
 `apps/e2e` exercita o produto num Chromium de verdade: as telas de aluno e
-professor, a volta completa da bateria e a extensão instalada. Cobre o que
-`npm run check`, `npm run db:test` e `npm run test:e2e` não alcançam — a
+professor. Cobre o que `npm run check` e `npm run db:test` não alcançam — a
 camada de interface e de fluxo, onde viviam todos os bugs de
 [`docs/bugs-encontrados.md`](docs/bugs-encontrados.md).
 
 ```bash
 npm run db:start          # exige Docker
 npm run dev               # opcional: se já estiver no ar, a suíte reaproveita
-npm run e2e               # ~45 s, 142 testes
+npm run e2e               # a suíte do site
 npm run e2e:video         # a mesma suíte, com vídeo
 ```
 
@@ -104,24 +104,10 @@ Duas consequências práticas:
   próprio cenário, e limpar exigiria desligar o gatilho append-only do ledger.
   `npm run db:reset` continua sendo o botão de faxina.
 
-Nenhuma requisição sai para `tecconcursos.com.br`: o domínio é interceptado e
-respondido por uma página sintética — automaticamente, em todo teste, para que
-um teste novo não escape disso por esquecimento.
-
-## Carregando a extensão
-
-**Firefox** — `about:debugging#/runtime/this-firefox` → "Carregar extensão
-temporária" → selecione `apps/extension/dist/manifest.json` (o arquivo, não a
-pasta).
-
-**Chrome** — `chrome://extensions` → modo desenvolvedor → "Carregar sem
-compactação" → selecione a pasta `apps/extension/dist`.
-
-Um único código-fonte atende os dois: `src/shared/browser.ts` resolve
-`browser.*` no Firefox e `chrome.*` no Chrome, ambos com promises.
-
-O que falta para submeter a extensão à revisão da Mozilla está em
-[`docs/publicacao-extensao.md`](docs/publicacao-extensao.md).
+Nenhuma requisição sai para `tecconcursos.com.br`: o site ainda linka para lá
+no caderno de erros e no reforço, e o domínio é interceptado e respondido
+localmente — automaticamente, em todo teste, para que um teste novo não escape
+disso por esquecimento.
 
 ## Serviços locais
 

@@ -43,15 +43,9 @@ jobs:
           cache: npm
 
       # `npm ci` na raiz: são workspaces do npm, e instalar dentro de apps/web
-      # não resolve @bora/protocol nem @bora/database.
+      # não resolve @bora/database.
       - name: Instalar
         run: npm ci
-
-      # Antes do check, SEMPRE: o lint da extensão é `web-ext lint --source-dir
-      # dist`, que sai com código 1 quando o diretório não existe — e o
-      # .gitignore garante que não exista num clone limpo.
-      - name: Compilar a extensão
-        run: npm run ext:build
 
       - name: Typecheck, lint e testes
         run: npm run check

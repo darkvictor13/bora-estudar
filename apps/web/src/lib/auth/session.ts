@@ -1,66 +1,25 @@
 import { redirect } from "react-router";
-import type { User } from "@supabase/supabase-js";
 
-import { supabase } from "@/lib/supabase/client";
+import { api, type Role, type Session } from "@/lib/api";
 import { ROUTES, homeForRole } from "@/lib/routes";
-import { DEFAULT_THEME, forgetTheme, type Theme } from "@/lib/theme";
-import type { Enum } from "@bora/database";
+import { forgetTheme } from "@/lib/theme";
 
-export type UserRole = Enum<"user_role">;
+export type UserRole = Role;
 
-export interface SessionContext {
-  readonly user: User;
-  readonly profileId: string;
-  readonly name: string;
-  readonly role: UserRole;
-  /** `true` quando o aluno tem assinatura ativa. Professor e admin: sempre. */
+/**
+ * A sessão, mais o que a casca precisa decidir com ela.
+ *
+ * `Session` vem do contrato e traz `access` — o estado bruto. `hasAccess` é a
+ * pergunta que a interface realmente faz, derivada aqui para não nascer
+ * repetida em cada layout com uma regra ligeiramente diferente.
+ */
+export interface SessionContext extends Session {
+  /** `true` quando o aluno tem acesso liberado. Professor: sempre. */
   readonly hasAccess: boolean;
-  /** Preferência de interface da conta. Sem linha em `user_preferences`, `light`. */
-  readonly theme: Theme;
 }
 
-async function load(): Promise<SessionContext | null> {
-  // `getUser()` valida o token no servidor de auth. `getSession()` lê o cookie
-  // sem validar e não serve para decisão de acesso.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  // O tema vem embutido no mesmo select, e não numa segunda consulta: a FK de
-  // `user_preferences` é a própria chave primária, então o PostgREST resolve o
-  // vínculo como um-para-um e devolve um objeto — ou `null`, para quem nunca
-  // escolheu. Uma consulta a mais aqui custaria uma ida ao servidor em CADA
-  // navegação, porque todo loader pede o contexto da sessão.
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id,name,role,user_preferences(theme)")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  // Sem perfil o gatilho de auth falhou. Tratar como não autenticado é mais
-  // seguro do que assumir um papel.
-  if (!profile) return null;
-
-  let hasAccess = profile.role !== "student";
-  if (profile.role === "student") {
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("student_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-    hasAccess = !!subscription;
-  }
-
-  return {
-    user,
-    profileId: profile.id,
-    name: profile.name,
-    role: profile.role,
-    hasAccess,
-    theme: profile.user_preferences?.theme ?? DEFAULT_THEME,
-  };
+function withAccess(session: Session): SessionContext {
+  return { ...session, hasAccess: session.role !== "student" || session.access === "active" };
 }
 
 let inFlight: Promise<SessionContext | null> | null = null;
@@ -69,18 +28,18 @@ let inFlight: Promise<SessionContext | null> | null = null;
  * Contexto da sessão, ou `null` se não houver ninguém autenticado.
  *
  * Memoiza a consulta EM VOO, e só ela. O React Router dispara os loaders de
- * todas as rotas casadas em paralelo, então o layout da área e a página
- * pedem o contexto no mesmo instante; sem isso seriam duas idas ao servidor de
- * auth e quatro consultas por navegação.
+ * todas as rotas casadas em paralelo, então o layout da área e a página pedem
+ * o contexto no mesmo instante; sem isso seriam duas idas ao servidor de auth
+ * e quatro consultas por navegação.
  *
  * A memoização é liberada quando a consulta termina, de propósito. Guardar o
  * contexto entre navegações deixaria `hasAccess` velho: o professor libera o
  * acesso e o aluno continuaria empurrado para a lista de espera até recarregar
- * a página. Cada navegação volta a perguntar — que é o que o Next fazia.
+ * a página. Cada navegação volta a perguntar.
  */
 export function getSessionContext(): Promise<SessionContext | null> {
   if (!inFlight) {
-    const pending = load();
+    const pending = api.loadSession().then((session) => (session ? withAccess(session) : null));
     inFlight = pending;
     void pending.finally(() => {
       if (inFlight === pending) inFlight = null;
@@ -97,13 +56,10 @@ export function getSessionContext(): Promise<SessionContext | null> {
  * um `return` aqui viraria o valor de retorno desta função, e o loader
  * seguiria em frente com uma sessão inexistente.
  *
- * O FRAGMENTO VAI JUNTO, e isso não é detalhe. Quem volta do TEC chega em
- * `/aluno#boraQuizResult=…`, e esse fragmento é a única cópia do resultado da
- * bateria neste navegador — a primeira das três ordenações do CLAUDE.md. Um
- * redirecionamento HTTP preserva o fragmento por conta do navegador; o
- * `redirect` do router monta a URL nova só com o caminho e o joga fora. Sem
- * esta concatenação, uma sessão expirada na volta do TEC apagaria uma hora de
- * estudo já respondida, sem deixar de onde recuperar.
+ * O FRAGMENTO VAI JUNTO. Um redirecionamento HTTP preserva o `#` por conta do
+ * navegador; o `redirect` do router monta a URL nova só com o caminho e o joga
+ * fora. Descartar fragmento num redirecionamento de login é perda de estado em
+ * qualquer rota que venha a usá-lo.
  */
 export async function requireSession(): Promise<SessionContext> {
   const session = await getSessionContext();
@@ -117,23 +73,10 @@ export async function requireSession(): Promise<SessionContext> {
   return session;
 }
 
-/**
- * Papéis que atendem a uma exigência.
- *
- * Admin conta como professor, espelhando `is_teacher()` no banco, que é
- * `role in ('teacher','admin')`. Sem isso o admin entra num loop: a home dele
- * é a área do professor, e o layout dessa área o mandava de volta para a
- * própria home. A RLS continua valendo — `can_view_context` não reconhece
- * admin, então ele vê a área vazia em vez de dado de aluno.
- */
-function satisfies(actual: UserRole, required: UserRole): boolean {
-  return actual === required || (required === "teacher" && actual === "admin");
-}
-
 /** Exige um papel específico. Manda para a home do papel real se não bater. */
 export async function requireRole(role: UserRole): Promise<SessionContext> {
   const session = await requireSession();
-  if (satisfies(session.role, role)) return session;
+  if (session.role === role) return session;
 
   // Nunca redirecione para a rota que acabou de recusar a pessoa: é assim que
   // nasce um loop, e o navegador só mostra uma página em branco.

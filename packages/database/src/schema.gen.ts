@@ -9,350 +9,346 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      audit_log: {
-        Row: {
-          action: string
-          actor_id: string | null
-          id: number
-          new_value: Json | null
-          occurred_at: string
-          old_value: Json | null
-          reason: string | null
-          record_id: string
-          table_name: string
-        }
-        Insert: {
-          action: string
-          actor_id?: string | null
-          id?: never
-          new_value?: Json | null
-          occurred_at?: string
-          old_value?: Json | null
-          reason?: string | null
-          record_id: string
-          table_name: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string | null
-          id?: never
-          new_value?: Json | null
-          occurred_at?: string
-          old_value?: Json | null
-          reason?: string | null
-          record_id?: string
-          table_name?: string
-        }
-        Relationships: []
-      }
       catalog_blocks: {
         Row: {
           active: boolean
-          block_key: string
+          active_questions: number
+          block_name: string
+          block_number: number
+          catalog_id: string
           catalog_key: string
+          catalog_subject_key: string
           created_at: string
-          id: string
-          name: string
-          number: number
-          question_count: number
-          subject_key: string
+          description: string | null
+          question_slots: number
           subject_name: string
+          topics: number
           updated_at: string
         }
         Insert: {
           active?: boolean
-          block_key: string
+          active_questions: number
+          block_name: string
+          block_number: number
+          catalog_id: string
           catalog_key: string
+          catalog_subject_key: string
           created_at?: string
-          id?: string
-          name: string
-          number: number
-          question_count?: number
-          subject_key: string
+          description?: string | null
+          question_slots: number
           subject_name: string
+          topics: number
           updated_at?: string
         }
         Update: {
           active?: boolean
-          block_key?: string
+          active_questions?: number
+          block_name?: string
+          block_number?: number
+          catalog_id?: string
           catalog_key?: string
+          catalog_subject_key?: string
           created_at?: string
-          id?: string
-          name?: string
-          number?: number
-          question_count?: number
-          subject_key?: string
+          description?: string | null
+          question_slots?: number
           subject_name?: string
+          topics?: number
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "catalog_blocks_catalog_key_fkey"
-            columns: ["catalog_key"]
-            isOneToOne: false
-            referencedRelation: "catalogs"
-            referencedColumns: ["key"]
-          },
-        ]
+        Relationships: []
       }
-      catalog_questions: {
+      class_students: {
         Row: {
-          block_id: string
-          position: number
-          question_id: number
-          topic: string
+          class_id: string
+          created_at: string
+          student_id: string
+          teacher_id: string
         }
         Insert: {
-          block_id: string
-          position: number
-          question_id: number
-          topic: string
+          class_id: string
+          created_at?: string
+          student_id: string
+          teacher_id: string
         }
         Update: {
-          block_id?: string
-          position?: number
-          question_id?: number
-          topic?: string
+          class_id?: string
+          created_at?: string
+          student_id?: string
+          teacher_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "catalog_questions_block_id_fkey"
-            columns: ["block_id"]
+            foreignKeyName: "class_students_class_fk"
+            columns: ["class_id", "teacher_id"]
             isOneToOne: false
-            referencedRelation: "catalog_blocks"
+            referencedRelation: "classes"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "class_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_students_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
-      catalogs: {
+      classes: {
         Row: {
-          active: boolean
           created_at: string
-          key: string
+          description: string | null
+          id: string
           name: string
+          teacher_id: string
+          updated_at: string
         }
         Insert: {
-          active?: boolean
           created_at?: string
-          key: string
+          description?: string | null
+          id?: string
           name: string
+          teacher_id: string
+          updated_at?: string
         }
         Update: {
-          active?: boolean
           created_at?: string
-          key?: string
+          description?: string | null
+          id?: string
           name?: string
+          teacher_id?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "classes_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       coupons: {
         Row: {
           active: boolean
           code: string
           created_at: string
-          current_uses: number
+          description: string | null
           id: string
-          max_uses: number | null
-          months: number
-          valid_until: string | null
+          months_granted: number
+          updated_at: string
         }
         Insert: {
           active?: boolean
           code: string
           created_at?: string
-          current_uses?: number
+          description?: string | null
           id?: string
-          max_uses?: number | null
-          months: number
-          valid_until?: string | null
+          months_granted?: number
+          updated_at?: string
         }
         Update: {
           active?: boolean
           code?: string
           created_at?: string
-          current_uses?: number
+          description?: string | null
           id?: string
-          max_uses?: number | null
-          months?: number
-          valid_until?: string | null
+          months_granted?: number
+          updated_at?: string
         }
         Relationships: []
       }
-      goals: {
+      goal_entries: {
         Row: {
-          batch_id: string | null
-          block_id: string | null
-          completed_at: string | null
+          correct_answers: number
           created_at: string
-          created_by: string
-          day_order: number
-          deleted_at: string | null
-          external_link: string | null
-          extra_activity:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
+          goal_id: string
           id: string
-          planned_minutes: number | null
-          reinforcement_skipped: boolean
-          source_goal_id: string | null
-          source_week: number | null
-          spent_minutes: number | null
-          status: Database["public"]["Enums"]["goal_status"]
+          manual_lesson: string | null
+          minutes: number
+          note: string | null
+          questions: number
+          score: number | null
           student_id: string
-          student_note: string | null
-          study_plan_id: string
           teacher_id: string
-          teacher_note: string | null
-          title: string
-          type: Database["public"]["Enums"]["goal_type"]
-          updated_at: string
-          week_number: number
-          weekday: number
+          theory_stage: Database["public"]["Enums"]["theory_stage"] | null
+          wrong_answers: number | null
         }
         Insert: {
-          batch_id?: string | null
-          block_id?: string | null
-          completed_at?: string | null
+          correct_answers?: number
           created_at?: string
-          created_by: string
-          day_order: number
-          deleted_at?: string | null
-          external_link?: string | null
-          extra_activity?:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
+          goal_id: string
           id?: string
-          planned_minutes?: number | null
-          reinforcement_skipped?: boolean
-          source_goal_id?: string | null
-          source_week?: number | null
-          spent_minutes?: number | null
-          status?: Database["public"]["Enums"]["goal_status"]
+          manual_lesson?: string | null
+          minutes?: number
+          note?: string | null
+          questions?: number
+          score?: number | null
           student_id: string
-          student_note?: string | null
-          study_plan_id: string
           teacher_id: string
-          teacher_note?: string | null
-          title: string
-          type: Database["public"]["Enums"]["goal_type"]
-          updated_at?: string
-          week_number: number
-          weekday: number
+          theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
+          wrong_answers?: number | null
         }
         Update: {
-          batch_id?: string | null
-          block_id?: string | null
-          completed_at?: string | null
+          correct_answers?: number
           created_at?: string
-          created_by?: string
-          day_order?: number
-          deleted_at?: string | null
-          external_link?: string | null
-          extra_activity?:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
+          goal_id?: string
           id?: string
-          planned_minutes?: number | null
-          reinforcement_skipped?: boolean
-          source_goal_id?: string | null
-          source_week?: number | null
-          spent_minutes?: number | null
-          status?: Database["public"]["Enums"]["goal_status"]
+          manual_lesson?: string | null
+          minutes?: number
+          note?: string | null
+          questions?: number
+          score?: number | null
           student_id?: string
-          student_note?: string | null
-          study_plan_id?: string
           teacher_id?: string
-          teacher_note?: string | null
-          title?: string
-          type?: Database["public"]["Enums"]["goal_type"]
-          updated_at?: string
-          week_number?: number
-          weekday?: number
+          theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
+          wrong_answers?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "goal_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
+            foreignKeyName: "goal_entries_goal_fk"
+            columns: ["goal_id", "teacher_id", "student_id"]
             isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
+            referencedRelation: "goals"
+            referencedColumns: ["id", "teacher_id", "student_id"]
           },
           {
-            foreignKeyName: "goal_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
-            isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-          {
-            foreignKeyName: "goals_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "goals_created_by_fkey"
-            columns: ["created_by"]
+            foreignKeyName: "goal_entries_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "goals_source_goal_id_fkey"
-            columns: ["source_goal_id"]
+            foreignKeyName: "goal_entries_teacher_id_fkey"
+            columns: ["teacher_id"]
             isOneToOne: false
-            referencedRelation: "goals"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "goals_source_goal_id_fkey"
-            columns: ["source_goal_id"]
-            isOneToOne: false
-            referencedRelation: "vw_goal_performance"
-            referencedColumns: ["goal_id"]
-          },
-          {
-            foreignKeyName: "goals_source_goal_id_fkey"
-            columns: ["source_goal_id"]
-            isOneToOne: false
-            referencedRelation: "vw_study_time"
-            referencedColumns: ["goal_id"]
           },
         ]
       }
-      operations: {
+      goals: {
         Row: {
-          actor_id: string
+          block: string | null
+          completed_at: string | null
+          correct_answers: number | null
           created_at: string
-          operation: string
-          payload_hash: string
-          request_id: string
-          result: Json | null
-          target_id: string | null
+          day_position: number
+          description: string | null
+          due_on: string | null
+          id: string
+          lesson: string | null
+          notebook_block_id: string | null
+          planned_minutes: number
+          questions_answered: number | null
+          spent_minutes: number | null
+          status: Database["public"]["Enums"]["goal_status"]
+          student_id: string
+          study_plan_id: string
+          subject: string
+          teacher_id: string
+          title: string
+          type: Database["public"]["Enums"]["goal_type"]
+          updated_at: string
+          week_number: number
+          weekday: number
+          weekday_name: string
         }
         Insert: {
-          actor_id: string
+          block?: string | null
+          completed_at?: string | null
+          correct_answers?: number | null
           created_at?: string
-          operation: string
-          payload_hash: string
-          request_id: string
-          result?: Json | null
-          target_id?: string | null
+          day_position?: number
+          description?: string | null
+          due_on?: string | null
+          id?: string
+          lesson?: string | null
+          notebook_block_id?: string | null
+          planned_minutes?: number
+          questions_answered?: number | null
+          spent_minutes?: number | null
+          status?: Database["public"]["Enums"]["goal_status"]
+          student_id: string
+          study_plan_id: string
+          subject: string
+          teacher_id: string
+          title: string
+          type: Database["public"]["Enums"]["goal_type"]
+          updated_at?: string
+          week_number?: number
+          weekday: number
+          weekday_name: string
         }
         Update: {
-          actor_id?: string
+          block?: string | null
+          completed_at?: string | null
+          correct_answers?: number | null
           created_at?: string
-          operation?: string
-          payload_hash?: string
-          request_id?: string
-          result?: Json | null
-          target_id?: string | null
+          day_position?: number
+          description?: string | null
+          due_on?: string | null
+          id?: string
+          lesson?: string | null
+          notebook_block_id?: string | null
+          planned_minutes?: number
+          questions_answered?: number | null
+          spent_minutes?: number | null
+          status?: Database["public"]["Enums"]["goal_status"]
+          student_id?: string
+          study_plan_id?: string
+          subject?: string
+          teacher_id?: string
+          title?: string
+          type?: Database["public"]["Enums"]["goal_type"]
+          updated_at?: string
+          week_number?: number
+          weekday?: number
+          weekday_name?: string
         }
         Relationships: [
           {
-            foreignKeyName: "operations_actor_id_fkey"
-            columns: ["actor_id"]
+            foreignKeyName: "goals_notebook_block_fk"
+            columns: [
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "notebook_block_id",
+            ]
+            isOneToOne: false
+            referencedRelation: "study_plan_notebooks"
+            referencedColumns: [
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+            ]
+          },
+          {
+            foreignKeyName: "goals_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goals_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "teacher_id", "student_id"]
+          },
+          {
+            foreignKeyName: "goals_teacher_id_fkey"
+            columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -361,95 +357,148 @@ export type Database = {
       }
       profiles: {
         Row: {
-          contact_email: string | null
+          access_expires_at: string | null
+          access_origin: string | null
+          access_status: Database["public"]["Enums"]["access_status"]
+          coupon_used: string | null
           created_at: string
           id: string
-          name: string
-          phone: string | null
+          name: string | null
+          plan: string | null
           role: Database["public"]["Enums"]["user_role"]
+          teacher_id: string | null
           updated_at: string
         }
         Insert: {
-          contact_email?: string | null
+          access_expires_at?: string | null
+          access_origin?: string | null
+          access_status?: Database["public"]["Enums"]["access_status"]
+          coupon_used?: string | null
           created_at?: string
           id: string
-          name: string
-          phone?: string | null
+          name?: string | null
+          plan?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          teacher_id?: string | null
           updated_at?: string
         }
         Update: {
-          contact_email?: string | null
+          access_expires_at?: string | null
+          access_origin?: string | null
+          access_status?: Database["public"]["Enums"]["access_status"]
+          coupon_used?: string | null
           created_at?: string
           id?: string
-          name?: string
-          phone?: string | null
+          name?: string | null
+          plan?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          teacher_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quiz_session_questions: {
         Row: {
           answered_at: string
+          block_id: string
+          created_at: string
           execution_order: number
           id: string
           outcome: Database["public"]["Enums"]["question_outcome"]
           phase: Database["public"]["Enums"]["question_phase"]
           question_id: number
           quiz_session_id: string
-          recorded_at: string
           round: number
           source_question_id: number | null
-          topic: string | null
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
         }
         Insert: {
-          answered_at: string
+          answered_at?: string
+          block_id: string
+          created_at?: string
           execution_order: number
           id?: string
           outcome: Database["public"]["Enums"]["question_outcome"]
           phase: Database["public"]["Enums"]["question_phase"]
           question_id: number
           quiz_session_id: string
-          recorded_at?: string
           round?: number
           source_question_id?: number | null
-          topic?: string | null
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
         }
         Update: {
           answered_at?: string
+          block_id?: string
+          created_at?: string
           execution_order?: number
           id?: string
           outcome?: Database["public"]["Enums"]["question_outcome"]
           phase?: Database["public"]["Enums"]["question_phase"]
           question_id?: number
           quiz_session_id?: string
-          recorded_at?: string
           round?: number
           source_question_id?: number | null
-          topic?: string | null
+          student_id?: string
+          study_plan_id?: string
+          teacher_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
-            columns: ["quiz_session_id"]
+            foreignKeyName: "quiz_session_questions_session_fk"
+            columns: [
+              "quiz_session_id",
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+            ]
             isOneToOne: false
             referencedRelation: "quiz_sessions"
-            referencedColumns: ["id"]
+            referencedColumns: [
+              "id",
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+            ]
           },
           {
-            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
-            columns: ["quiz_session_id"]
+            foreignKeyName: "quiz_session_questions_session_fk"
+            columns: [
+              "quiz_session_id",
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+            ]
             isOneToOne: false
             referencedRelation: "vw_quiz_session_performance"
-            referencedColumns: ["quiz_session_id"]
+            referencedColumns: [
+              "quiz_session_id",
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+            ]
           },
           {
-            foreignKeyName: "quiz_session_questions_quiz_session_id_fkey"
-            columns: ["quiz_session_id"]
+            foreignKeyName: "quiz_session_questions_source_fk"
+            columns: ["quiz_session_id", "source_question_id"]
             isOneToOne: false
-            referencedRelation: "vw_session_topics"
-            referencedColumns: ["quiz_session_id"]
+            referencedRelation: "quiz_session_questions"
+            referencedColumns: ["quiz_session_id", "question_id"]
           },
         ]
       }
@@ -457,20 +506,25 @@ export type Database = {
         Row: {
           block_id: string
           cancelled_at: string | null
+          catalog_key: string
           completed_at: string | null
-          completion_id: string | null
+          created_at: string
           duration_minutes: number | null
-          execution_sequence: number
+          execution_order: number
+          finish_payload: Json | null
+          finish_request_id: string | null
           finished_at: string | null
           goal_id: string | null
           id: string
           main_target: number
           origin: Database["public"]["Enums"]["quiz_session_origin"]
+          origin_goal_id: string | null
           session_number: number | null
           started_at: string
           status: Database["public"]["Enums"]["quiz_session_status"]
           student_id: string
           study_plan_id: string
+          subject_key: string
           teacher_id: string
           updated_at: string
           void_reason: string | null
@@ -480,20 +534,25 @@ export type Database = {
         Insert: {
           block_id: string
           cancelled_at?: string | null
+          catalog_key: string
           completed_at?: string | null
-          completion_id?: string | null
+          created_at?: string
           duration_minutes?: number | null
-          execution_sequence: number
+          execution_order: number
+          finish_payload?: Json | null
+          finish_request_id?: string | null
           finished_at?: string | null
           goal_id?: string | null
           id?: string
           main_target?: number
           origin?: Database["public"]["Enums"]["quiz_session_origin"]
+          origin_goal_id?: string | null
           session_number?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["quiz_session_status"]
           student_id: string
           study_plan_id: string
+          subject_key: string
           teacher_id: string
           updated_at?: string
           void_reason?: string | null
@@ -503,20 +562,25 @@ export type Database = {
         Update: {
           block_id?: string
           cancelled_at?: string | null
+          catalog_key?: string
           completed_at?: string | null
-          completion_id?: string | null
+          created_at?: string
           duration_minutes?: number | null
-          execution_sequence?: number
+          execution_order?: number
+          finish_payload?: Json | null
+          finish_request_id?: string | null
           finished_at?: string | null
           goal_id?: string | null
           id?: string
           main_target?: number
           origin?: Database["public"]["Enums"]["quiz_session_origin"]
+          origin_goal_id?: string | null
           session_number?: number | null
           started_at?: string
           status?: Database["public"]["Enums"]["quiz_session_status"]
           student_id?: string
           study_plan_id?: string
+          subject_key?: string
           teacher_id?: string
           updated_at?: string
           void_reason?: string | null
@@ -525,20 +589,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-          {
-            foreignKeyName: "quiz_session_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
-            isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-          {
             foreignKeyName: "quiz_sessions_goal_id_fkey"
             columns: ["goal_id"]
             isOneToOne: false
@@ -546,18 +596,46 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "quiz_sessions_goal_id_fkey"
-            columns: ["goal_id"]
+            foreignKeyName: "quiz_sessions_notebook_fk"
+            columns: [
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+              "subject_key",
+              "catalog_key",
+            ]
             isOneToOne: false
-            referencedRelation: "vw_goal_performance"
-            referencedColumns: ["goal_id"]
+            referencedRelation: "study_plan_notebooks"
+            referencedColumns: [
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+              "subject_key",
+              "catalog_key",
+            ]
           },
           {
-            foreignKeyName: "quiz_sessions_goal_id_fkey"
-            columns: ["goal_id"]
+            foreignKeyName: "quiz_sessions_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: false
-            referencedRelation: "vw_study_time"
-            referencedColumns: ["goal_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "teacher_id", "student_id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "quiz_sessions_voided_by_fkey"
@@ -568,357 +646,189 @@ export type Database = {
           },
         ]
       }
-      reinforcement_questions: {
-        Row: {
-          outcome: Database["public"]["Enums"]["question_outcome"]
-          phase: Database["public"]["Enums"]["question_phase"]
-          question_id: number
-          reinforcement_id: string
-          topic: string | null
-        }
-        Insert: {
-          outcome: Database["public"]["Enums"]["question_outcome"]
-          phase: Database["public"]["Enums"]["question_phase"]
-          question_id: number
-          reinforcement_id: string
-          topic?: string | null
-        }
-        Update: {
-          outcome?: Database["public"]["Enums"]["question_outcome"]
-          phase?: Database["public"]["Enums"]["question_phase"]
-          question_id?: number
-          reinforcement_id?: string
-          topic?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reinforcement_questions_reinforcement_id_fkey"
-            columns: ["reinforcement_id"]
-            isOneToOne: false
-            referencedRelation: "reinforcements"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reinforcement_sessions: {
-        Row: {
-          quiz_session_id: string
-          reinforcement_id: string
-        }
-        Insert: {
-          quiz_session_id: string
-          reinforcement_id: string
-        }
-        Update: {
-          quiz_session_id?: string
-          reinforcement_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reinforcement_sessions_quiz_session_id_fkey"
-            columns: ["quiz_session_id"]
-            isOneToOne: true
-            referencedRelation: "quiz_sessions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reinforcement_sessions_quiz_session_id_fkey"
-            columns: ["quiz_session_id"]
-            isOneToOne: true
-            referencedRelation: "vw_quiz_session_performance"
-            referencedColumns: ["quiz_session_id"]
-          },
-          {
-            foreignKeyName: "reinforcement_sessions_quiz_session_id_fkey"
-            columns: ["quiz_session_id"]
-            isOneToOne: true
-            referencedRelation: "vw_session_topics"
-            referencedColumns: ["quiz_session_id"]
-          },
-          {
-            foreignKeyName: "reinforcement_sessions_reinforcement_id_fkey"
-            columns: ["reinforcement_id"]
-            isOneToOne: false
-            referencedRelation: "reinforcements"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reinforcements: {
+      reinforcement_cycles: {
         Row: {
           block_id: string
+          catalog_key: string
           completed_at: string
           created_at: string
           cutoff: string
+          cycle_key: string
           id: string
+          main_questions: number
+          reinforcement_result: Json
           request_id: string
+          source_errors: number
           source_score: number
+          source_session_ids: string[]
           student_id: string
           study_plan_id: string
+          subject_key: string
           teacher_id: string
+          unique_questions: number
         }
         Insert: {
           block_id: string
+          catalog_key: string
           completed_at?: string
           created_at?: string
           cutoff: string
+          cycle_key: string
           id?: string
+          main_questions: number
+          reinforcement_result: Json
           request_id: string
+          source_errors: number
           source_score: number
+          source_session_ids: string[]
           student_id: string
           study_plan_id: string
+          subject_key: string
           teacher_id: string
+          unique_questions: number
         }
         Update: {
           block_id?: string
+          catalog_key?: string
           completed_at?: string
           created_at?: string
           cutoff?: string
+          cycle_key?: string
           id?: string
+          main_questions?: number
+          reinforcement_result?: Json
           request_id?: string
+          source_errors?: number
           source_score?: number
+          source_session_ids?: string[]
           student_id?: string
           study_plan_id?: string
+          subject_key?: string
           teacher_id?: string
+          unique_questions?: number
         }
         Relationships: [
           {
-            foreignKeyName: "reinforcement_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
+            foreignKeyName: "reinforcement_cycles_notebook_fk"
+            columns: [
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+              "subject_key",
+              "catalog_key",
+            ]
             isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
+            referencedRelation: "study_plan_notebooks"
+            referencedColumns: [
+              "teacher_id",
+              "student_id",
+              "study_plan_id",
+              "block_id",
+              "subject_key",
+              "catalog_key",
+            ]
           },
           {
-            foreignKeyName: "reinforcement_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
+            foreignKeyName: "reinforcement_cycles_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
             isOneToOne: false
             referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
+            referencedColumns: ["id", "teacher_id", "student_id"]
           },
         ]
       }
-      review_completions: {
+      study_plan_notebooks: {
         Row: {
-          completed_at: string
-          completed_by: string
+          active: boolean
+          block_id: string
+          catalog_key: string | null
           created_at: string
-          deleted_at: string | null
+          deleted: boolean
           id: string
-          ordinal: number
+          notebook_key: string
+          notebook_link: string
+          notebook_name: string
+          notebook_position: number
           student_id: string
-          study_plan_block_id: string
           study_plan_id: string
+          subject_color: string
+          subject_key: string
+          subject_name: string
+          subject_position: number
+          subject_target: number
           teacher_id: string
+          total_questions: number
+          updated_at: string
         }
         Insert: {
-          completed_at?: string
-          completed_by: string
-          created_at?: string
-          deleted_at?: string | null
-          id?: string
-          ordinal: number
-          student_id: string
-          study_plan_block_id: string
-          study_plan_id: string
-          teacher_id: string
-        }
-        Update: {
-          completed_at?: string
-          completed_by?: string
-          created_at?: string
-          deleted_at?: string | null
-          id?: string
-          ordinal?: number
-          student_id?: string
-          study_plan_block_id?: string
-          study_plan_id?: string
-          teacher_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "review_completion_block_fk"
-            columns: ["study_plan_block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-          {
-            foreignKeyName: "review_completion_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
-            isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-          {
-            foreignKeyName: "review_completions_completed_by_fkey"
-            columns: ["completed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      review_cycles: {
-        Row: {
-          block_id: string
-          completed_at: string
-          cutoff: string
-          id: string
-          reinforcement_id: string | null
-          student_id: string
-        }
-        Insert: {
-          block_id: string
-          completed_at?: string
-          cutoff: string
-          id?: string
-          reinforcement_id?: string | null
-          student_id: string
-        }
-        Update: {
+          active?: boolean
           block_id?: string
-          completed_at?: string
-          cutoff?: string
-          id?: string
-          reinforcement_id?: string | null
-          student_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "review_cycles_block_id_fkey"
-            columns: ["block_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "review_cycles_reinforcement_id_fkey"
-            columns: ["reinforcement_id"]
-            isOneToOne: false
-            referencedRelation: "reinforcements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "review_cycles_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      review_spacings: {
-        Row: {
-          created_at: string
-          deleted_at: string | null
-          first_interval: number
-          id: string
-          second_interval: number
-          student_id: string
-          study_plan_id: string
-          subject_name: string
-          teacher_id: string
-          updated_at: string
-        }
-        Insert: {
+          catalog_key?: string | null
           created_at?: string
-          deleted_at?: string | null
-          first_interval?: number
+          deleted?: boolean
           id?: string
-          second_interval?: number
+          notebook_key: string
+          notebook_link?: string
+          notebook_name: string
+          notebook_position?: number
           student_id: string
           study_plan_id: string
+          subject_color?: string
+          subject_key: string
           subject_name: string
+          subject_position?: number
+          subject_target?: number
           teacher_id: string
+          total_questions?: number
           updated_at?: string
         }
         Update: {
+          active?: boolean
+          block_id?: string
+          catalog_key?: string | null
           created_at?: string
-          deleted_at?: string | null
-          first_interval?: number
+          deleted?: boolean
           id?: string
-          second_interval?: number
+          notebook_key?: string
+          notebook_link?: string
+          notebook_name?: string
+          notebook_position?: number
           student_id?: string
           study_plan_id?: string
+          subject_color?: string
+          subject_key?: string
           subject_name?: string
+          subject_position?: number
+          subject_target?: number
           teacher_id?: string
+          total_questions?: number
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "review_spacing_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
+            foreignKeyName: "study_plan_notebooks_catalog_key_fkey"
+            columns: ["catalog_key"]
+            isOneToOne: false
+            referencedRelation: "catalog_blocks"
+            referencedColumns: ["catalog_key"]
+          },
+          {
+            foreignKeyName: "study_plan_notebooks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_plan_notebooks_study_plan_id_fkey"
+            columns: ["study_plan_id"]
             isOneToOne: false
             referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-        ]
-      }
-      student_preferences: {
-        Row: {
-          cycle_config: Json
-          review_config: Json
-          student_id: string
-          updated_at: string
-        }
-        Insert: {
-          cycle_config?: Json
-          review_config?: Json
-          student_id: string
-          updated_at?: string
-        }
-        Update: {
-          cycle_config?: Json
-          review_config?: Json
-          student_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "student_preferences_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      student_teacher_links: {
-        Row: {
-          created_at: string
-          ended_at: string | null
-          id: string
-          started_at: string
-          student_id: string
-          teacher_id: string
-        }
-        Insert: {
-          created_at?: string
-          ended_at?: string | null
-          id?: string
-          started_at?: string
-          student_id: string
-          teacher_id: string
-        }
-        Update: {
-          created_at?: string
-          ended_at?: string | null
-          id?: string
-          started_at?: string
-          student_id?: string
-          teacher_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "student_teacher_links_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "student_teacher_links_teacher_id_fkey"
+            foreignKeyName: "study_plan_notebooks_teacher_id_fkey"
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -926,176 +836,125 @@ export type Database = {
           },
         ]
       }
-      study_plan_batches: {
+      study_plan_theory_catalogs: {
         Row: {
-          applied_at: string
-          applied_by: string
-          goal_count: number
-          id: string
-          mode: Database["public"]["Enums"]["batch_mode"]
-          study_plan_id: string
-          week_number: number
-        }
-        Insert: {
-          applied_at?: string
-          applied_by: string
-          goal_count: number
-          id: string
-          mode: Database["public"]["Enums"]["batch_mode"]
-          study_plan_id: string
-          week_number: number
-        }
-        Update: {
-          applied_at?: string
-          applied_by?: string
-          goal_count?: number
-          id?: string
-          mode?: Database["public"]["Enums"]["batch_mode"]
-          study_plan_id?: string
-          week_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "study_plan_batches_applied_by_fkey"
-            columns: ["applied_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "study_plan_batches_study_plan_id_fkey"
-            columns: ["study_plan_id"]
-            isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      study_plan_blocks: {
-        Row: {
-          active: boolean
-          block_order: number
-          catalog_block_id: string | null
+          catalog_id: string
           created_at: string
-          deleted_at: string | null
           id: string
-          link: string | null
-          name: string
-          question_count: number
           student_id: string
           study_plan_id: string
-          subject_color: string
-          subject_name: string
-          subject_order: number
-          subject_target: number
           teacher_id: string
           updated_at: string
         }
         Insert: {
-          active?: boolean
-          block_order: number
-          catalog_block_id?: string | null
+          catalog_id: string
           created_at?: string
-          deleted_at?: string | null
           id?: string
-          link?: string | null
-          name: string
-          question_count?: number
           student_id: string
           study_plan_id: string
-          subject_color?: string
-          subject_name: string
-          subject_order: number
-          subject_target?: number
           teacher_id: string
           updated_at?: string
         }
         Update: {
-          active?: boolean
-          block_order?: number
-          catalog_block_id?: string | null
+          catalog_id?: string
           created_at?: string
-          deleted_at?: string | null
           id?: string
-          link?: string | null
-          name?: string
-          question_count?: number
           student_id?: string
           study_plan_id?: string
-          subject_color?: string
-          subject_name?: string
-          subject_order?: number
-          subject_target?: number
           teacher_id?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "study_plan_block_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
+            foreignKeyName: "study_plan_theory_catalogs_catalog_fk"
+            columns: ["catalog_id", "teacher_id"]
             isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
+            referencedRelation: "theory_catalogs"
+            referencedColumns: ["id", "teacher_id"]
           },
           {
-            foreignKeyName: "study_plan_blocks_catalog_block_id_fkey"
-            columns: ["catalog_block_id"]
+            foreignKeyName: "study_plan_theory_catalogs_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: false
-            referencedRelation: "catalog_blocks"
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_plan_theory_catalogs_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "teacher_id", "student_id"]
+          },
+          {
+            foreignKeyName: "study_plan_theory_catalogs_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
       study_plans: {
         Row: {
-          area: string | null
+          area: string
+          class_id: string | null
           created_at: string
-          deleted_at: string | null
+          exam_date: string | null
           id: string
           name: string
-          stage: string | null
-          start_date: string
+          stage: string
+          starts_on: string
           status: Database["public"]["Enums"]["study_plan_status"]
           student_id: string
-          study_model: string | null
+          study_model: string
           target_exam: string | null
           teacher_id: string
           updated_at: string
           weekly_goals: number
         }
         Insert: {
-          area?: string | null
+          area?: string
+          class_id?: string | null
           created_at?: string
-          deleted_at?: string | null
+          exam_date?: string | null
           id?: string
           name: string
-          stage?: string | null
-          start_date?: string
+          stage?: string
+          starts_on?: string
           status?: Database["public"]["Enums"]["study_plan_status"]
           student_id: string
-          study_model?: string | null
+          study_model?: string
           target_exam?: string | null
           teacher_id: string
           updated_at?: string
           weekly_goals?: number
         }
         Update: {
-          area?: string | null
+          area?: string
+          class_id?: string | null
           created_at?: string
-          deleted_at?: string | null
+          exam_date?: string | null
           id?: string
           name?: string
-          stage?: string | null
-          start_date?: string
+          stage?: string
+          starts_on?: string
           status?: Database["public"]["Enums"]["study_plan_status"]
           student_id?: string
-          study_model?: string | null
+          study_model?: string
           target_exam?: string | null
           teacher_id?: string
           updated_at?: string
           weekly_goals?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "study_plans_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "study_plans_student_id_fkey"
             columns: ["student_id"]
@@ -1112,75 +971,532 @@ export type Database = {
           },
         ]
       }
-      subscriptions: {
+      subject_blocks: {
         Row: {
-          coupon_id: string | null
           created_at: string
           id: string
-          plan: string
-          status: Database["public"]["Enums"]["access_status"]
-          student_id: string
+          link: string | null
+          name: string
+          position: number | null
+          subject_id: string
           updated_at: string
-          validity: unknown
         }
         Insert: {
-          coupon_id?: string | null
           created_at?: string
           id?: string
-          plan?: string
-          status?: Database["public"]["Enums"]["access_status"]
-          student_id: string
+          link?: string | null
+          name: string
+          position?: number | null
+          subject_id: string
           updated_at?: string
-          validity?: unknown
         }
         Update: {
-          coupon_id?: string | null
           created_at?: string
           id?: string
-          plan?: string
-          status?: Database["public"]["Enums"]["access_status"]
-          student_id?: string
+          link?: string | null
+          name?: string
+          position?: number | null
+          subject_id?: string
           updated_at?: string
-          validity?: unknown
         }
         Relationships: [
           {
-            foreignKeyName: "subscriptions_coupon_id_fkey"
-            columns: ["coupon_id"]
+            foreignKeyName: "subject_blocks_subject_id_fkey"
+            columns: ["subject_id"]
             isOneToOne: false
-            referencedRelation: "coupons"
+            referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      subject_lessons: {
+        Row: {
+          created_at: string
+          id: string
+          link: string | null
+          name: string
+          position: number | null
+          subject_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          name: string
+          position?: number | null
+          subject_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          name?: string
+          position?: number | null
+          subject_id?: string
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "subscriptions_student_id_fkey"
-            columns: ["student_id"]
+            foreignKeyName: "subject_lessons_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subjects: {
+        Row: {
+          active: boolean
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          target_score: number
+          teacher_id: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          active?: boolean
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          target_score?: number
+          teacher_id: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          active?: boolean
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          target_score?: number
+          teacher_id?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subjects_teacher_id_fkey"
+            columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
-      user_preferences: {
+      theory_catalog_subject_rules: {
         Row: {
-          profile_id: string
-          theme: Database["public"]["Enums"]["theme_preference"]
+          active: boolean
+          catalog_id: string
+          created_at: string
+          id: string
+          initial_questions: number
+          subject: string
+          subject_key: string
+          teacher_id: string
           updated_at: string
         }
         Insert: {
-          profile_id: string
-          theme?: Database["public"]["Enums"]["theme_preference"]
+          active?: boolean
+          catalog_id: string
+          created_at?: string
+          id?: string
+          initial_questions?: number
+          subject: string
+          subject_key: string
+          teacher_id: string
           updated_at?: string
         }
         Update: {
-          profile_id?: string
-          theme?: Database["public"]["Enums"]["theme_preference"]
+          active?: boolean
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          initial_questions?: number
+          subject?: string
+          subject_key?: string
+          teacher_id?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "user_preferences_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: true
+            foreignKeyName: "theory_catalog_subject_rules_catalog_fk"
+            columns: ["catalog_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_catalogs"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "theory_catalog_subject_rules_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_catalogs: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          name: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          name: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          name?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_catalogs_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_lessons: {
+        Row: {
+          active: boolean
+          catalog_id: string | null
+          created_at: string
+          final_questions_start: number | null
+          has_theory: boolean
+          id: string
+          lesson_code: string
+          note: string | null
+          pdf_file: string
+          pdf_total_pages: number | null
+          position: number
+          subject: string
+          subject_key: string
+          teacher_id: string
+          tec_notebooks: Json
+          theory_end_page: number | null
+          theory_start_page: number | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          catalog_id?: string | null
+          created_at?: string
+          final_questions_start?: number | null
+          has_theory?: boolean
+          id?: string
+          lesson_code: string
+          note?: string | null
+          pdf_file: string
+          pdf_total_pages?: number | null
+          position?: number
+          subject: string
+          subject_key: string
+          teacher_id: string
+          tec_notebooks?: Json
+          theory_end_page?: number | null
+          theory_start_page?: number | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          catalog_id?: string | null
+          created_at?: string
+          final_questions_start?: number | null
+          has_theory?: boolean
+          id?: string
+          lesson_code?: string
+          note?: string | null
+          pdf_file?: string
+          pdf_total_pages?: number | null
+          position?: number
+          subject?: string
+          subject_key?: string
+          teacher_id?: string
+          tec_notebooks?: Json
+          theory_end_page?: number | null
+          theory_start_page?: number | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_lessons_catalog_fk"
+            columns: ["catalog_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_catalogs"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "theory_lessons_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_progress: {
+        Row: {
+          created_at: string
+          current_page: number
+          id: string
+          initial_questions_complete: boolean
+          initial_questions_complete_at: string | null
+          initial_questions_done: number
+          lesson_done: boolean
+          lesson_done_at: string | null
+          student_id: string
+          study_plan_id: string
+          theory_done: boolean
+          theory_done_at: string | null
+          theory_lesson_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_page?: number
+          id?: string
+          initial_questions_complete?: boolean
+          initial_questions_complete_at?: string | null
+          initial_questions_done?: number
+          lesson_done?: boolean
+          lesson_done_at?: string | null
+          student_id: string
+          study_plan_id: string
+          theory_done?: boolean
+          theory_done_at?: string | null
+          theory_lesson_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_page?: number
+          id?: string
+          initial_questions_complete?: boolean
+          initial_questions_complete_at?: string | null
+          initial_questions_done?: number
+          lesson_done?: boolean
+          lesson_done_at?: string | null
+          student_id?: string
+          study_plan_id?: string
+          theory_done?: boolean
+          theory_done_at?: string | null
+          theory_lesson_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_progress_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_progress_study_plan_fk"
+            columns: ["study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id"]
+          },
+          {
+            foreignKeyName: "theory_progress_theory_lesson_id_fkey"
+            columns: ["theory_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_review_rules: {
+        Row: {
+          active: boolean
+          catalog_id: string
+          created_at: string
+          id: string
+          lesson_spacing: number
+          minimum_questions: number
+          review_number: number
+          subject: string
+          subject_key: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          catalog_id: string
+          created_at?: string
+          id?: string
+          lesson_spacing: number
+          minimum_questions?: number
+          review_number: number
+          subject: string
+          subject_key: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          lesson_spacing?: number
+          minimum_questions?: number
+          review_number?: number
+          subject?: string
+          subject_key?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_review_rules_catalog_fk"
+            columns: ["catalog_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_catalogs"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "theory_review_rules_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_reviews: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          minimum_questions: number
+          questions_answered: number
+          review_number: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["theory_review_status"]
+          student_id: string
+          study_plan_id: string
+          theory_lesson_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          minimum_questions?: number
+          questions_answered?: number
+          review_number: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["theory_review_status"]
+          student_id: string
+          study_plan_id: string
+          theory_lesson_id: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          minimum_questions?: number
+          questions_answered?: number
+          review_number?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["theory_review_status"]
+          student_id?: string
+          study_plan_id?: string
+          theory_lesson_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_reviews_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "theory_reviews_study_plan_fk"
+            columns: ["study_plan_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "student_id"]
+          },
+          {
+            foreignKeyName: "theory_reviews_theory_lesson_id_fkey"
+            columns: ["theory_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      theory_subject_rules: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          initial_questions: number
+          subject: string
+          subject_key: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          initial_questions?: number
+          subject: string
+          subject_key: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          initial_questions?: number
+          subject?: string
+          subject_key?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_subject_rules_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1191,43 +1507,43 @@ export type Database = {
           birth_date: string | null
           created_at: string
           email: string
-          focus_exam: string | null
-          interest_area: string | null
+          interest_area: string
           name: string
-          status: string
+          status: Database["public"]["Enums"]["waitlist_status"]
           student_id: string
-          teacher_id: string | null
-          timezone: string | null
+          target_exam: string
+          teacher_id: string
+          timezone: string
           updated_at: string
-          whatsapp: string | null
+          whatsapp: string
         }
         Insert: {
           birth_date?: string | null
           created_at?: string
           email: string
-          focus_exam?: string | null
-          interest_area?: string | null
+          interest_area: string
           name: string
-          status?: string
+          status?: Database["public"]["Enums"]["waitlist_status"]
           student_id: string
-          teacher_id?: string | null
-          timezone?: string | null
+          target_exam: string
+          teacher_id: string
+          timezone?: string
           updated_at?: string
-          whatsapp?: string | null
+          whatsapp: string
         }
         Update: {
           birth_date?: string | null
           created_at?: string
           email?: string
-          focus_exam?: string | null
-          interest_area?: string | null
+          interest_area?: string
           name?: string
-          status?: string
+          status?: Database["public"]["Enums"]["waitlist_status"]
           student_id?: string
-          teacher_id?: string | null
-          timezone?: string | null
+          target_exam?: string
+          teacher_id?: string
+          timezone?: string
           updated_at?: string
-          whatsapp?: string | null
+          whatsapp?: string
         }
         Relationships: [
           {
@@ -1248,730 +1564,73 @@ export type Database = {
       }
     }
     Views: {
-      vw_block_errors: {
-        Row: {
-          block_id: string | null
-          error_count: number | null
-          extra_errors: number | null
-          last_error_at: string | null
-          last_error_phase: Database["public"]["Enums"]["question_phase"] | null
-          main_errors: number | null
-          question_id: number | null
-          reinforcement_errors: number | null
-          student_id: string | null
-          study_plan_id: string | null
-          topic: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-        ]
-      }
-      vw_block_performance: {
-        Row: {
-          block_id: string | null
-          extra_correct: number | null
-          extra_count: number | null
-          extra_incorrect: number | null
-          main_correct: number | null
-          main_count: number | null
-          main_incorrect: number | null
-          official_score_pct: number | null
-          reinforcement_correct: number | null
-          reinforcement_count: number | null
-          reinforcement_incorrect: number | null
-          session_count: number | null
-          student_id: string | null
-          study_plan_id: string | null
-          total_correct: number | null
-          total_count: number | null
-          total_incorrect: number | null
-          total_score_pct: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-        ]
-      }
-      vw_goal_performance: {
-        Row: {
-          correct_answers: number | null
-          goal_id: string | null
-          minutes_spent: number | null
-          questions_answered: number | null
-          status: Database["public"]["Enums"]["goal_status"] | null
-          student_id: string | null
-          study_plan_id: string | null
-          teacher_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "goal_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
-            isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-        ]
-      }
       vw_quiz_session_performance: {
         Row: {
           block_id: string | null
-          duration_minutes: number | null
           extra_correct: number | null
-          extra_count: number | null
           extra_incorrect: number | null
-          goal_id: string | null
+          extra_total: number | null
           main_correct: number | null
-          main_count: number | null
           main_incorrect: number | null
           main_target: number | null
+          main_total: number | null
           quiz_session_id: string | null
           reinforcement_correct: number | null
-          reinforcement_count: number | null
           reinforcement_incorrect: number | null
+          reinforcement_total: number | null
           status: Database["public"]["Enums"]["quiz_session_status"] | null
           student_id: string | null
           study_plan_id: string | null
           teacher_id: string | null
-          total_correct: number | null
-          total_count: number | null
-          total_incorrect: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
+            foreignKeyName: "quiz_sessions_student_id_fkey"
+            columns: ["student_id"]
             isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-          {
-            foreignKeyName: "quiz_session_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
-            isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-          {
-            foreignKeyName: "quiz_sessions_goal_id_fkey"
-            columns: ["goal_id"]
-            isOneToOne: false
-            referencedRelation: "goals"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "quiz_sessions_goal_id_fkey"
-            columns: ["goal_id"]
-            isOneToOne: false
-            referencedRelation: "vw_goal_performance"
-            referencedColumns: ["goal_id"]
-          },
-          {
-            foreignKeyName: "quiz_sessions_goal_id_fkey"
-            columns: ["goal_id"]
-            isOneToOne: false
-            referencedRelation: "vw_study_time"
-            referencedColumns: ["goal_id"]
-          },
-        ]
-      }
-      vw_seen_questions: {
-        Row: {
-          block_id: string | null
-          correct_answers: number | null
-          incorrect_answers: number | null
-          last_seen_at: string | null
-          question_id: number | null
-          student_id: string | null
-          study_plan_id: string | null
-          times_seen: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-        ]
-      }
-      vw_session_topics: {
-        Row: {
-          answered: number | null
-          block_id: string | null
-          correct: number | null
-          extra_correct: number | null
-          extra_count: number | null
-          incorrect: number | null
-          main_correct: number | null
-          main_count: number | null
-          quiz_session_id: string | null
-          reinforcement_correct: number | null
-          reinforcement_count: number | null
-          student_id: string | null
-          study_plan_id: string | null
-          teacher_id: string | null
-          topic: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
-          },
-          {
-            foreignKeyName: "quiz_session_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
+            foreignKeyName: "quiz_sessions_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
             isOneToOne: false
             referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-        ]
-      }
-      vw_study_time: {
-        Row: {
-          block_id: string | null
-          completed_on: string | null
-          correct_answers: number | null
-          extra_activity:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
-          goal_id: string | null
-          goal_type: Database["public"]["Enums"]["goal_type"] | null
-          minutes_spent: number | null
-          questions_answered: number | null
-          student_id: string | null
-          study_plan_id: string | null
-          subject_name: string | null
-          teacher_id: string | null
-          week_number: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "goal_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
+            referencedColumns: ["id", "teacher_id", "student_id"]
           },
           {
-            foreignKeyName: "goal_context_fk"
-            columns: ["study_plan_id", "student_id", "teacher_id"]
+            foreignKeyName: "quiz_sessions_teacher_id_fkey"
+            columns: ["teacher_id"]
             isOneToOne: false
-            referencedRelation: "study_plans"
-            referencedColumns: ["id", "student_id", "teacher_id"]
-          },
-        ]
-      }
-      vw_topic_difficulty: {
-        Row: {
-          answered: number | null
-          block_id: string | null
-          correct: number | null
-          distinct_wrong: number | null
-          incorrect: number | null
-          score_pct: number | null
-          sessions_with_error: number | null
-          student_id: string | null
-          study_plan_id: string | null
-          topic: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quiz_session_block_fk"
-            columns: ["block_id", "study_plan_id", "student_id"]
-            isOneToOne: false
-            referencedRelation: "study_plan_blocks"
-            referencedColumns: ["id", "study_plan_id", "student_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
     }
     Functions: {
-      activate_study_plan: {
-        Args: { p_study_plan_id: string }
+      can_access_teacher: { Args: { p_teacher: string }; Returns: boolean }
+      has_active_access: { Args: never; Returns: boolean }
+      is_teacher: { Args: never; Returns: boolean }
+      is_teacher_of: { Args: { p_student: string }; Returns: boolean }
+      my_teacher: {
+        Args: never
         Returns: {
-          area: string | null
-          created_at: string
-          deleted_at: string | null
           id: string
           name: string
-          stage: string | null
-          start_date: string
-          status: Database["public"]["Enums"]["study_plan_status"]
-          student_id: string
-          study_model: string | null
-          target_exam: string | null
-          teacher_id: string
-          updated_at: string
-          weekly_goals: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "study_plans"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      apply_study_plan_batch: {
-        Args: {
-          p_batch_id: string
-          p_goals: Json
-          p_mode: Database["public"]["Enums"]["batch_mode"]
-          p_study_plan_id: string
-          p_week: number
-        }
-        Returns: Json
-      }
-      can_view_context: {
-        Args: { p_professor_id: string; p_student_id: string }
-        Returns: boolean
-      }
-      complete_goal: {
-        Args: {
-          p_goal_id: string
-          p_note?: string
-          p_request_id: string
-          p_spent_minutes: number
-        }
-        Returns: {
-          batch_id: string | null
-          block_id: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string
-          day_order: number
-          deleted_at: string | null
-          external_link: string | null
-          extra_activity:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
-          id: string
-          planned_minutes: number | null
-          reinforcement_skipped: boolean
-          source_goal_id: string | null
-          source_week: number | null
-          spent_minutes: number | null
-          status: Database["public"]["Enums"]["goal_status"]
-          student_id: string
-          student_note: string | null
-          study_plan_id: string
-          teacher_id: string
-          teacher_note: string | null
-          title: string
-          type: Database["public"]["Enums"]["goal_type"]
-          updated_at: string
-          week_number: number
-          weekday: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "goals"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      delete_extra_study: {
-        Args: { p_goal_id: string; p_request_id: string }
-        Returns: {
-          batch_id: string | null
-          block_id: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string
-          day_order: number
-          deleted_at: string | null
-          external_link: string | null
-          extra_activity:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
-          id: string
-          planned_minutes: number | null
-          reinforcement_skipped: boolean
-          source_goal_id: string | null
-          source_week: number | null
-          spent_minutes: number | null
-          status: Database["public"]["Enums"]["goal_status"]
-          student_id: string
-          student_note: string | null
-          study_plan_id: string
-          teacher_id: string
-          teacher_note: string | null
-          title: string
-          type: Database["public"]["Enums"]["goal_type"]
-          updated_at: string
-          week_number: number
-          weekday: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "goals"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      finish_quiz_session: {
-        Args: {
-          p_cancel?: boolean
-          p_outcomes: Json
-          p_quiz_session_id: string
-          p_request_id: string
-        }
-        Returns: {
-          block_id: string
-          cancelled_at: string | null
-          completed_at: string | null
-          completion_id: string | null
-          duration_minutes: number | null
-          execution_sequence: number
-          finished_at: string | null
-          goal_id: string | null
-          id: string
-          main_target: number
-          origin: Database["public"]["Enums"]["quiz_session_origin"]
-          session_number: number | null
-          started_at: string
-          status: Database["public"]["Enums"]["quiz_session_status"]
-          student_id: string
-          study_plan_id: string
-          teacher_id: string
-          updated_at: string
-          void_reason: string | null
-          voided_at: string | null
-          voided_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "quiz_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      is_admin: { Args: never; Returns: boolean }
-      is_teacher: { Args: never; Returns: boolean }
-      is_teacher_of: { Args: { p_student_id: string }; Returns: boolean }
-      link_student: {
-        Args: { p_request_id: string; p_student_id: string }
-        Returns: {
-          created_at: string
-          ended_at: string | null
-          id: string
-          started_at: string
-          student_id: string
-          teacher_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "student_teacher_links"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      record_extra_study: {
-        Args: {
-          p_activity: Database["public"]["Enums"]["extra_activity_kind"]
-          p_note?: string
-          p_request_id: string
-          p_spent_minutes: number
-          p_study_plan_id: string
-          p_week: number
-          p_weekday: number
-        }
-        Returns: {
-          batch_id: string | null
-          block_id: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string
-          day_order: number
-          deleted_at: string | null
-          external_link: string | null
-          extra_activity:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
-          id: string
-          planned_minutes: number | null
-          reinforcement_skipped: boolean
-          source_goal_id: string | null
-          source_week: number | null
-          spent_minutes: number | null
-          status: Database["public"]["Enums"]["goal_status"]
-          student_id: string
-          student_note: string | null
-          study_plan_id: string
-          teacher_id: string
-          teacher_note: string | null
-          title: string
-          type: Database["public"]["Enums"]["goal_type"]
-          updated_at: string
-          week_number: number
-          weekday: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "goals"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      record_quiz_session_time: {
-        Args: {
-          p_duration_minutes: number
-          p_quiz_session_id: string
-          p_request_id: string
-        }
-        Returns: {
-          block_id: string
-          cancelled_at: string | null
-          completed_at: string | null
-          completion_id: string | null
-          duration_minutes: number | null
-          execution_sequence: number
-          finished_at: string | null
-          goal_id: string | null
-          id: string
-          main_target: number
-          origin: Database["public"]["Enums"]["quiz_session_origin"]
-          session_number: number | null
-          started_at: string
-          status: Database["public"]["Enums"]["quiz_session_status"]
-          student_id: string
-          study_plan_id: string
-          teacher_id: string
-          updated_at: string
-          void_reason: string | null
-          voided_at: string | null
-          voided_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "quiz_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      record_reinforcement: {
-        Args: {
-          p_block_id: string
-          p_outcomes: Json
-          p_quiz_session_ids: string[]
-          p_request_id: string
-          p_study_plan_id: string
-        }
-        Returns: {
-          block_id: string
-          completed_at: string
-          created_at: string
-          cutoff: string
-          id: string
-          request_id: string
-          source_score: number
-          student_id: string
-          study_plan_id: string
-          teacher_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "reinforcements"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      redeem_coupon: {
-        Args: { p_code: string; p_request_id: string }
-        Returns: {
-          coupon_id: string | null
-          created_at: string
-          id: string
-          plan: string
-          status: Database["public"]["Enums"]["access_status"]
-          student_id: string
-          updated_at: string
-          validity: unknown
-        }
-        SetofOptions: {
-          from: "*"
-          to: "subscriptions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      reopen_goal: {
-        Args: { p_goal_id: string; p_request_id: string }
-        Returns: {
-          batch_id: string | null
-          block_id: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string
-          day_order: number
-          deleted_at: string | null
-          external_link: string | null
-          extra_activity:
-            | Database["public"]["Enums"]["extra_activity_kind"]
-            | null
-          id: string
-          planned_minutes: number | null
-          reinforcement_skipped: boolean
-          source_goal_id: string | null
-          source_week: number | null
-          spent_minutes: number | null
-          status: Database["public"]["Enums"]["goal_status"]
-          student_id: string
-          student_note: string | null
-          study_plan_id: string
-          teacher_id: string
-          teacher_note: string | null
-          title: string
-          type: Database["public"]["Enums"]["goal_type"]
-          updated_at: string
-          week_number: number
-          weekday: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "goals"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      reserve_operation: {
-        Args: {
-          p_operation: string
-          p_payload: string
-          p_request_id: string
-          p_target_id: string
-        }
-        Returns: Record<string, unknown>
-      }
-      set_review_done: {
-        Args: {
-          p_block_id: string
-          p_done: boolean
-          p_ordinal: number
-          p_study_plan_id: string
-        }
-        Returns: {
-          completed_at: string
-          completed_by: string
-          created_at: string
-          deleted_at: string | null
-          id: string
-          ordinal: number
-          student_id: string
-          study_plan_block_id: string
-          study_plan_id: string
-          teacher_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "review_completions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      start_quiz_session: {
-        Args: { p_block_id: string; p_goal_id: string; p_study_plan_id: string }
-        Returns: {
-          block_id: string
-          cancelled_at: string | null
-          completed_at: string | null
-          completion_id: string | null
-          duration_minutes: number | null
-          execution_sequence: number
-          finished_at: string | null
-          goal_id: string | null
-          id: string
-          main_target: number
-          origin: Database["public"]["Enums"]["quiz_session_origin"]
-          session_number: number | null
-          started_at: string
-          status: Database["public"]["Enums"]["quiz_session_status"]
-          student_id: string
-          study_plan_id: string
-          teacher_id: string
-          updated_at: string
-          void_reason: string | null
-          voided_at: string | null
-          voided_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "quiz_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      student_has_teacher: { Args: { p_student_id: string }; Returns: boolean }
-      void_quiz_session: {
-        Args: {
-          p_quiz_session_id: string
-          p_reason?: string
-          p_request_id: string
-        }
-        Returns: {
-          block_id: string
-          cancelled_at: string | null
-          completed_at: string | null
-          completion_id: string | null
-          duration_minutes: number | null
-          execution_sequence: number
-          finished_at: string | null
-          goal_id: string | null
-          id: string
-          main_target: number
-          origin: Database["public"]["Enums"]["quiz_session_origin"]
-          session_number: number | null
-          started_at: string
-          status: Database["public"]["Enums"]["quiz_session_status"]
-          student_id: string
-          study_plan_id: string
-          teacher_id: string
-          updated_at: string
-          void_reason: string | null
-          voided_at: string | null
-          voided_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "quiz_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        }[]
       }
     }
     Enums: {
       access_status: "pending" | "active" | "suspended" | "expired"
-      batch_mode: "append" | "replace" | "replan"
-      extra_activity_kind:
-        | "statute"
-        | "flashcards"
-        | "mock_exam"
+      goal_status: "pending" | "in_progress" | "completed" | "skipped"
+      goal_type:
+        | "theory"
+        | "question_block"
         | "review"
-        | "extra_questions"
-        | "video_lesson"
-        | "other"
-      goal_status:
-        | "pending"
-        | "in_progress"
-        | "completed"
-        | "skipped"
-        | "cancelled"
-      goal_type: "theory" | "question_block" | "reinforcement" | "extra_study"
+        | "reinforcement"
+        | "mock_exam"
+        | "extra"
       question_outcome: "correct" | "incorrect"
       question_phase: "main" | "reinforcement" | "extra"
       quiz_session_origin: "goal" | "error_notebook"
@@ -1981,9 +1640,15 @@ export type Database = {
         | "completed"
         | "cancelled"
         | "voided"
-      study_plan_status: "draft" | "active" | "paused" | "archived"
-      theme_preference: "light" | "dark"
-      user_role: "student" | "teacher" | "admin"
+      study_plan_status: "active" | "paused" | "completed" | "archived"
+      theory_review_status: "pending" | "in_progress" | "completed"
+      theory_stage:
+        | "reading"
+        | "pdf_done"
+        | "questions_in_progress"
+        | "questions_done"
+      user_role: "teacher" | "student"
+      waitlist_status: "waiting" | "released" | "declined"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2112,24 +1777,15 @@ export const Constants = {
   public: {
     Enums: {
       access_status: ["pending", "active", "suspended", "expired"],
-      batch_mode: ["append", "replace", "replan"],
-      extra_activity_kind: [
-        "statute",
-        "flashcards",
-        "mock_exam",
+      goal_status: ["pending", "in_progress", "completed", "skipped"],
+      goal_type: [
+        "theory",
+        "question_block",
         "review",
-        "extra_questions",
-        "video_lesson",
-        "other",
+        "reinforcement",
+        "mock_exam",
+        "extra",
       ],
-      goal_status: [
-        "pending",
-        "in_progress",
-        "completed",
-        "skipped",
-        "cancelled",
-      ],
-      goal_type: ["theory", "question_block", "reinforcement", "extra_study"],
       question_outcome: ["correct", "incorrect"],
       question_phase: ["main", "reinforcement", "extra"],
       quiz_session_origin: ["goal", "error_notebook"],
@@ -2140,9 +1796,16 @@ export const Constants = {
         "cancelled",
         "voided",
       ],
-      study_plan_status: ["draft", "active", "paused", "archived"],
-      theme_preference: ["light", "dark"],
-      user_role: ["student", "teacher", "admin"],
+      study_plan_status: ["active", "paused", "completed", "archived"],
+      theory_review_status: ["pending", "in_progress", "completed"],
+      theory_stage: [
+        "reading",
+        "pdf_done",
+        "questions_in_progress",
+        "questions_done",
+      ],
+      user_role: ["teacher", "student"],
+      waitlist_status: ["waiting", "released", "declined"],
     },
   },
 } as const

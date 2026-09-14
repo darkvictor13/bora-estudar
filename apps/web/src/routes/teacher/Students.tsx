@@ -1,308 +1,212 @@
-import { Link, useLoaderData } from "react-router";
+import Box from "@mui/material/Box";
+import LinearProgress from "@mui/material/LinearProgress";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { Badge, Empty, Metric, PageHeader, type BadgeTone } from "@bora/ui";
+import { Link as RouterLink, useLoaderData, useSearchParams } from "react-router";
 
-import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { ContentBody } from "@/components/AppShell";
+import { api, type StudentCard, type StudentPace } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
-import { getMyStudentsWithProgress, getWaitlistCandidates } from "@/lib/data/teacher";
-import { LinkStudentForm } from "@/components/teacher/AccessForms";
-import {
-  BAND_LABEL,
-  BAND_TONE,
-  bandRank,
-  classifyStudent,
-  normalize,
-  officialPctOf,
-  progressOf,
-  type StudentBand,
-} from "@/lib/domain/students";
 import { ROUTES } from "@/lib/routes";
+import { formatMinutes } from "@/lib/domain/week";
 
-const ACCESS_LABEL: Record<string, { text: string; tone: "green" | "amber" | "red" | "neutral" }> = {
-  active: { text: "Acesso ativo", tone: "green" },
-  pending: { text: "Aguardando liberação", tone: "amber" },
-  suspended: { text: "Suspenso", tone: "red" },
-  expired: { text: "Expirado", tone: "red" },
-};
-
-const BANDS: readonly StudentBand[] = ["atrasado", "atencao", "sem-dados", "ritmo"];
-
+/**
+ * Meus alunos — o `p-meusAlunos` da v2.
+ *
+ * A LISTA ABRE PELOS ATRASADOS, e não em ordem alfabética. Ela existe para o
+ * professor achar quem precisa dele; o alfabeto esconde isso atrás de uma
+ * ordem que não diz nada.
+ *
+ * Os filtros moram na URL pelo mesmo motivo do seletor de semana: o endereço
+ * fica compartilhável, o botão voltar funciona, e recarregar não perde o
+ * recorte que o professor acabou de montar.
+ */
 export async function teacherStudentsLoader({ request }: { request: Request }) {
-  const session = await requireRole("teacher");
-  const [students, candidates] = await Promise.all([
-    getMyStudentsWithProgress(session.profileId),
-    getWaitlistCandidates(),
-  ]);
+  await requireRole("teacher");
 
   const params = new URL(request.url).searchParams;
-  const rawBand = params.get("situacao");
-  const rawPlan = params.get("plano");
+  const search = params.get("busca") ?? "";
+  const pace = params.get("ritmo") as StudentPace | null;
 
-  const rows = students
-    .map((student) => {
-      const band = classifyStudent(student.progress);
-      return {
-        ...student,
-        band,
-        planName: student.activePlan?.name ?? "Sem planejamento ativo",
-        progressPct: progressOf(student.progress),
-        officialPct: officialPctOf(student.progress),
-      };
-    })
-    // R-TURMA-11: quem precisa de atenção primeiro. É a ordenação que
-    // transforma a lista em diagnóstico.
-    .sort((a, b) => bandRank(a.band) - bandRank(b.band) || a.profile.name.localeCompare(b.profile.name, "pt-BR"));
-
-  const planNames = [...new Set(rows.map((r) => r.planName))].sort((a, b) =>
-    a.localeCompare(b, "pt-BR"),
-  );
-
-  // R-TURMA-10: valor inválido é ignorado, e a lista volta inteira.
-  const busca = params.get("busca") ?? "";
-  const situacao = rawBand && BANDS.includes(rawBand as StudentBand) ? (rawBand as StudentBand) : null;
-  const plano = rawPlan && planNames.includes(rawPlan) ? rawPlan : null;
-
-  const termo = normalize(busca);
-  const filtered = rows.filter((row) => {
-    if (situacao && row.band !== situacao) return false;
-    if (plano && row.planName !== plano) return false;
-    if (!termo) return true;
-    // R-TURMA-08: nome e e-mail, que é o que o rótulo promete.
-    return (
-      normalize(row.profile.name).includes(termo) ||
-      normalize(row.profile.contact_email ?? "").includes(termo)
-    );
+  const students = await api.listStudents({
+    ...(search ? { search } : {}),
+    ...(pace ? { pace } : {}),
   });
 
-  const totals = {
-    alunos: rows.length,
-    ritmo: rows.filter((r) => r.band === "ritmo").length,
-    // "Precisam de atenção" soma Atenção E Atrasado: as duas pedem a mesma ação.
-    atencao: rows.filter((r) => r.band === "atencao" || r.band === "atrasado").length,
-    questoes: rows.reduce((sum, r) => sum + r.progress.mainCount, 0),
-    acertos: rows.reduce((sum, r) => sum + r.progress.mainCorrect, 0),
-  };
-
-  return { students: filtered, total: rows.length, candidates, totals, planNames, busca, situacao, plano };
+  return { students, search, pace: pace ?? "" };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentsLoader>>;
 
+const PACE: Record<StudentPace, { label: string; tone: BadgeTone }> = {
+  on_track: { label: "Em ritmo", tone: "success" },
+  attention: { label: "Atenção", tone: "warning" },
+  behind: { label: "Atrasado", tone: "error" },
+};
+
+const ACCESS: Record<StudentCard["access"], { label: string; tone: BadgeTone }> = {
+  active: { label: "Liberado", tone: "success" },
+  pending: { label: "Aguardando", tone: "warning" },
+  suspended: { label: "Suspenso", tone: "error" },
+  expired: { label: "Vencido", tone: "error" },
+};
+
+function StudentTile({ student }: { student: StudentCard }) {
+  return (
+    <Box
+      component={RouterLink}
+      to={ROUTES.teacher.student(student.studentId)}
+      data-testid="student-card"
+      data-student-id={student.studentId}
+      data-pace={student.pace}
+      sx={(theme) => ({
+        display: "block",
+        p: 2,
+        textDecoration: "none",
+        color: "inherit",
+        borderRadius: `${theme.brand.radius.lg}px`,
+        border: `1px solid ${theme.vars.palette.surface.border}`,
+        backgroundColor: theme.vars.palette.surface.raised,
+        transition: theme.transitions.create(["border-color", "transform"]),
+        "&:hover": {
+          borderColor: theme.vars.palette.surface.controlBorder,
+          transform: "translateY(-1px)",
+        },
+        ...theme.applyStyles("light", { boxShadow: theme.vars.palette.elevation.sm }),
+      })}
+    >
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: "0.875rem", fontWeight: 600 }} noWrap>
+            {student.name ?? "Sem nome"}
+          </Typography>
+          <Typography variant="caption" component="p" noWrap>
+            {student.planName ?? "Sem planejamento ativo"}
+            {student.className ? ` · ${student.className}` : ""}
+          </Typography>
+        </Box>
+        <Badge tone={PACE[student.pace].tone}>{PACE[student.pace].label}</Badge>
+      </Box>
+
+      <LinearProgress
+        variant="determinate"
+        value={student.progress}
+        aria-label={`${student.progress}% das metas devidas concluídas`}
+        sx={{ height: 6, borderRadius: 999, mb: 1.25 }}
+      />
+
+      <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+        {(
+          [
+            ["Progresso", `${student.progress}%`],
+            ["Desempenho", student.score === null ? "—" : `${student.score}%`],
+            ["Questões", String(student.questionsAnswered)],
+            ["Tempo", formatMinutes(student.studiedMinutes)],
+          ] as const
+        ).map(([label, value]) => (
+          <Box key={label}>
+            <Typography variant="metricLabel" component="p">
+              {label}
+            </Typography>
+            <Typography variant="numeric" component="p">
+              {value}
+            </Typography>
+          </Box>
+        ))}
+        <Box sx={{ ml: "auto" }}>
+          <Badge tone={ACCESS[student.access].tone}>{ACCESS[student.access].label}</Badge>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 export function TeacherStudents() {
-  const { students, total, candidates, totals, planNames, busca, situacao, plano } =
-    useLoaderData() as LoaderData;
-  const mediaTurma = totals.questoes ? Math.round((totals.acertos / totals.questoes) * 100) : null;
+  const { students, search, pace } = useLoaderData() as LoaderData;
+  const [params, setParams] = useSearchParams();
+
+  function setParam(key: string, value: string) {
+    if (value) params.set(key, value);
+    else params.delete(key);
+    setParams(params);
+  }
+
+  const behind = students.filter((student) => student.pace === "behind").length;
 
   return (
     <>
       <PageHeader
         title="Meus alunos"
-        description={`${total} aluno(s) com vínculo vigente.`}
+        description="Quem precisa de você aparece primeiro"
+        actions={
+          <>
+            <TextField
+              size="small"
+              label="Buscar por nome"
+              defaultValue={search}
+              slotProps={{ htmlInput: { "data-testid": "student-search" } }}
+              onChange={(event) => setParam("busca", event.target.value)}
+              sx={{ minWidth: 220 }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Ritmo"
+              value={pace}
+              slotProps={{ select: { inputProps: { "data-testid": "pace-filter" } } }}
+              onChange={(event) => setParam("ritmo", event.target.value)}
+              sx={{ minWidth: 160 }}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="behind">Atrasado</MenuItem>
+              <MenuItem value="attention">Atenção</MenuItem>
+              <MenuItem value="on_track">Em ritmo</MenuItem>
+            </TextField>
+          </>
+        }
       />
 
-      {/*
-        A fila de candidatos vem antes da lista: quem se cadastrou e ainda não
-        tem professor é a única coisa nesta tela que exige ação. Ela só é
-        visível por causa da policy `waitlist_teacher_read` — sem ela,
-        `waitlist_own` passa por `is_teacher_of` e a consulta volta vazia.
-      */}
-      {candidates.length > 0 && (
-        <Card
-          title="Candidatos"
-          sub={`${candidates.length} pessoa(s) na lista de espera, ainda sem professor`}
+      <ContentBody>
+        <Box
+          sx={(theme) => ({
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 1.25,
+            mb: 1.75,
+            [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+          })}
         >
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Contato</th>
-                  <th>Concurso em foco</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.map((candidate) => (
-                  <tr key={candidate.student_id}>
-                    <td>
-                      <strong>{candidate.name}</strong>
-                      {candidate.interest_area && (
-                        <div className="muted">{candidate.interest_area}</div>
-                      )}
-                    </td>
-                    <td className="muted">
-                      {candidate.email}
-                      {candidate.whatsapp && <div>{candidate.whatsapp}</div>}
-                    </td>
-                    <td>{candidate.focus_exam ?? "—"}</td>
-                    <td>
-                      <LinkStudentForm studentId={candidate.student_id} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+          <Metric label="Alunos" value={students.length} />
+          <Metric label="Atrasados" value={behind} />
+          <Metric
+            label="Sem planejamento"
+            value={students.filter((student) => student.planName === null).length}
+          />
+        </Box>
 
-      {total > 0 && (
-        <div className="grid-cards">
-          <Card title="Alunos">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.alunos}</p>
-          </Card>
-          <Card title="Em ritmo">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.ritmo}</p>
-          </Card>
-          <Card title="Precisam de atenção" sub="Atenção e atrasados">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.atencao}</p>
-          </Card>
-          <Card title="Questões da turma" sub="Somente principais">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>{totals.questoes}</p>
-            <p className="muted">
-              {mediaTurma === null ? "sem questões ainda" : `${mediaTurma}% de acerto`}
-            </p>
-          </Card>
-        </div>
-      )}
-
-      {total > 0 && (
-        <Card title="Filtrar">
-          {/*
-            `method="get"`: busca e filtros vivem na query string, como
-            `?semana=` e `?ver=`. Um link para "meus alunos atrasados" passa a
-            existir, e o estado não morre a cada render — que é o que acontecia
-            na v96, filtrando em memória.
-          */}
-          <form method="get" action={ROUTES.teacher.students} className="row" style={{ alignItems: "flex-end" }}>
-            <div className="field" style={{ minWidth: 220, marginBottom: 0 }}>
-              <label className="field__label" htmlFor="field-busca">
-                Nome ou e-mail
-              </label>
-              <input id="field-busca" name="busca" type="search" defaultValue={busca} />
-            </div>
-            <div className="field" style={{ minWidth: 180, marginBottom: 0 }}>
-              <label className="field__label" htmlFor="field-situacao">
-                Situação
-              </label>
-              <select id="field-situacao" name="situacao" defaultValue={situacao ?? ""}>
-                <option value="">Todas</option>
-                {BANDS.map((band) => (
-                  <option key={band} value={band}>
-                    {BAND_LABEL[band]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field" style={{ minWidth: 200, marginBottom: 0 }}>
-              <label className="field__label" htmlFor="field-plano">
-                Planejamento
-              </label>
-              <select id="field-plano" name="plano" defaultValue={plano ?? ""}>
-                <option value="">Todos</option>
-                {planNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button type="submit" className="btn btn--primary btn--sm">
-              Filtrar
-            </button>
-          </form>
-        </Card>
-      )}
-
-      {students.length === 0 ? (
-        <Empty>
-          {total === 0 ? "Nenhum aluno vinculado ainda." : "Nenhum aluno neste filtro."}
-        </Empty>
-      ) : (
-        <Card>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Aluno</th>
-                  <th>Contato</th>
-                  <th>Planejamento ativo</th>
-                  <th className="num">Metas</th>
-                  <th className="num">Oficial</th>
-                  <th>Situação</th>
-                  <th>Acesso</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {students.map(({ profile, subscription, activePlan, band, progress, progressPct, officialPct }) => {
-                  const access = ACCESS_LABEL[subscription?.status ?? "pending"] ?? {
-                    text: "Sem assinatura",
-                    tone: "neutral" as const,
-                  };
-                  return (
-                    <tr key={profile.id}>
-                      <td>
-                        <strong>{profile.name}</strong>
-                      </td>
-                      <td className="muted">
-                        {profile.contact_email}
-                        {profile.phone && <div>{profile.phone}</div>}
-                      </td>
-                      <td>
-                        {activePlan ? (
-                          <>
-                            {activePlan.name}
-                            {activePlan.target_exam && (
-                              <div className="muted">{activePlan.target_exam}</div>
-                            )}
-                          </>
-                        ) : (
-                          <span className="muted">Nenhum</span>
-                        )}
-                      </td>
-                      <td className="num">
-                        {progress.goalCount ? (
-                          <>
-                            {progress.completed}/{progress.goalCount}
-                            {progressPct !== null && (
-                              <span className="muted"> · {Math.round(progressPct * 100)}%</span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                      <td className="num">
-                        {officialPct === null ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          <strong>{officialPct}%</strong>
-                        )}
-                      </td>
-                      {/*
-                        As duas células levam classe porque a linha passou a ter
-                        DOIS badges — situação de estudo e situação de acesso —,
-                        e `tr .badge` sozinho vira violação de modo estrito no
-                        teste. A classe é o endereço estável de cada um.
-                      */}
-                      <td className="situacao">
-                        <Badge tone={BAND_TONE[band]}>{BAND_LABEL[band]}</Badge>
-                      </td>
-                      <td className="acesso">
-                        <Badge tone={access.tone}>{access.text}</Badge>
-                      </td>
-                      <td>
-                        <Link className="btn btn--ghost btn--sm" to={ROUTES.teacher.student(profile.id)}>
-                          Abrir
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+        {students.length === 0 ? (
+          <Empty icon="🧑‍🎓">
+            {search || pace
+              ? "Nenhum aluno com esse recorte."
+              : "Nenhum aluno vinculado a você ainda."}
+          </Empty>
+        ) : (
+          <Box
+            sx={(theme) => ({
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+              gap: 1.5,
+              [theme.breakpoints.down("md")]: { gridTemplateColumns: "1fr" },
+            })}
+          >
+            {students.map((student) => (
+              <StudentTile key={student.studentId} student={student} />
+            ))}
+          </Box>
+        )}
+      </ContentBody>
     </>
   );
 }

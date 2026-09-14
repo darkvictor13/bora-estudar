@@ -26,8 +26,6 @@ apps/e2e/playwright-report/
 apps/e2e/blob-report/
 apps/e2e/.playwright-cache/
 
-# Artefatos de empacotamento da extensão
-web-ext-artifacts/
 
 # Sistema operacional
 .DS_Store

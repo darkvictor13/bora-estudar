@@ -9,6 +9,8 @@
 
 export const STUDENT_STUDY_ROUTES = [
   "/aluno",
+  "/aluno/planejamento",
+  "/aluno/teoria",
   "/aluno/disciplinas",
   "/aluno/cadernos",
   "/aluno/estatisticas",
@@ -24,6 +26,7 @@ export const TEACHER_ROUTES = [
   "/professor",
   "/professor/planejamentos",
   "/professor/metas",
+  "/professor/teoria",
   "/professor/cadernos",
   "/professor/revisoes",
   "/professor/estatisticas",
@@ -34,17 +37,20 @@ export const PROTECTED_ROUTES = [...STUDENT_ROUTES, ...TEACHER_ROUTES] as const;
 
 /** Título esperado no `<h1>` de cada tela. */
 export const PAGE_TITLES: Record<string, string> = {
-  "/aluno": "Visão geral",
+  "/aluno": "Metas da semana",
+  "/aluno/planejamento": "Planejamento",
+  "/aluno/teoria": "Estudo da teoria",
   "/aluno/disciplinas": "Disciplinas",
   "/aluno/cadernos": "Cadernos TEC",
   "/aluno/estatisticas": "Estatísticas",
-  "/aluno/revisoes": "Revisões",
+  "/aluno/revisoes": "Controle de revisões",
   "/aluno/conta": "Meus dados",
   "/aluno/lista-espera": "Lista de espera",
   "/professor": "Meus alunos",
   "/professor/planejamentos": "Planejamentos",
   "/professor/metas": "Gerar metas",
-  "/professor/cadernos": "Cadernos",
+  "/professor/teoria": "Catálogo de teoria",
+  "/professor/cadernos": "Cadernos TEC",
   "/professor/revisoes": "Revisões",
   "/professor/estatisticas": "Estatísticas",
   "/professor/conta": "Meus dados",

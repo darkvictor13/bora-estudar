@@ -1,417 +1,188 @@
-import { Link, useLoaderData } from "react-router";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import { Alert, Badge, Card, Empty, Metric, PageHeader, RankedBars, type BadgeTone } from "@bora/ui";
+import { useLoaderData, useParams } from "react-router";
 
-import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { ContentBody } from "@/components/AppShell";
+import { api, type QuizSessionSummary, type StudentCard } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
-import {
-  getPlanProgress,
-  getStudentSessions,
-  getStudentSubscription,
-  getStudentSummary,
-} from "@/lib/data/teacher";
-import {
-  getPlanWeeks,
-  getReviewCompletions,
-  getSessionTopics,
-  getReviewSpacings,
-  getStudyPlanBlocks,
-  getStudyTime,
-  getTopicDifficulty,
-} from "@/lib/data/student";
-import { StudyStreak, StudyTime, WeeklySeries } from "@/components/StudyTime";
-import { SessionTopics } from "@/components/SessionTopics";
-import { SpacingForms } from "@/components/teacher/SpacingForms";
-import { ReviewGrid } from "@/components/ReviewGrid";
-import { buildGrid } from "@/lib/domain/spacing";
-import { GrantAccessForm, SuspendAccessForm } from "@/components/teacher/AccessForms";
-import { VoidSessionForm } from "@/components/teacher/VoidSessionForm";
-import { TopicDifficulty } from "@/components/TopicDifficulty";
-import { QUIZ_STATUS_LABEL, formatMinutes, scorePercent } from "@/lib/domain/goals";
-import { ROUTES } from "@/lib/routes";
-
-/** Confirmação por query string: a linha muda de situação e o botão some. */
-const DONE_MESSAGE: Record<string, string> = {
-  anulada: "Bateria anulada. A meta voltou a pendente e as questões voltaram a ser inéditas.",
-  suspenso: "Acesso suspenso. O aluno volta para a lista de espera.",
-  espacamento: "Espaçamento salvo. A grade de revisão do aluno já reflete a mudança.",
-  revisao: "Revisão marcada como feita.",
-  "revisao-desfeita": "Revisão desmarcada.",
-};
-
-/** Só bateria finalizada é anulável — espelha R-ANUL-03, que a RPC impõe. */
-const VOIDABLE = new Set(["completed", "awaiting_time"]);
-
-const QUIZ_TONE: Record<string, "green" | "amber" | "blue" | "neutral" | "red"> = {
-  completed: "green",
-  awaiting_time: "amber",
-  in_progress: "blue",
-  cancelled: "neutral",
-  voided: "red",
-};
-
-const ACCESS_LABEL: Record<string, string> = {
-  active: "ativa",
-  pending: "aguardando liberação",
-  suspended: "suspensa",
-  expired: "expirada",
-};
+import { formatMinutes } from "@/lib/domain/week";
 
 /**
- * `daterange` chega como texto do PostgREST: `[2026-08-30,2026-11-30)`.
- * Mostrar a data final é o que a v96 fazia no badge "Acesso ativo · até
- * DD/MM/AAAA", e é o que responde "até quando" sem abrir o banco.
+ * A ficha do aluno — era o `aluno-modal` da v2, agora é rota.
  *
- * O parâmetro é `unknown` porque é assim que `supabase gen types` mapeia
- * `daterange` — não existe tipo TypeScript para ele. A checagem em runtime é o
- * que transforma isso em algo seguro de renderizar.
+ * Virar rota resolve de graça o que o modal não tinha: endereço para mandar a
+ * alguém, botão voltar, e título de aba dizendo de quem é a ficha.
+ *
+ * DUAS AÇÕES DA v2 NÃO ESTÃO AQUI, e a ausência é do banco, não da tela:
+ * liberar/bloquear acesso e anular bateria precisam nascer como RPC —
+ * `access_status` fica fora do GRANT UPDATE de `profiles`, e `quiz_sessions` é
+ * SELECT e nada mais. Um botão que sempre falha é pior do que botão nenhum; a
+ * tela diz o que falta.
  */
-function formatValidity(validity: unknown): string {
-  if (typeof validity !== "string") return "";
-  const match = validity.match(/^[[(]([^,]*),([^)\]]*)[)\]]$/);
-  if (!match) return validity;
-  const [, inicio, fim] = match;
-  const br = (iso: string) =>
-    iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR") : "sem fim";
-  return `${br(inicio ?? "")} até ${br(fim ?? "")}`;
-}
-
-const PLAN_STATUS: Record<string, { text: string; tone: "green" | "amber" | "neutral" }> = {
-  active: { text: "Ativo", tone: "green" },
-  draft: { text: "Rascunho", tone: "amber" },
-  paused: { text: "Pausado", tone: "amber" },
-  archived: { text: "Arquivado", tone: "neutral" },
-};
-
-export async function teacherStudentLoader({
-  params,
-  request,
-}: {
-  params: { studentId?: string };
-  request: Request;
-}) {
-  const session = await requireRole("teacher");
-  const studentId = params.studentId ?? "";
-
-  const summary = await getStudentSummary(session.profileId, studentId);
-  // Era `notFound()` do Next. Aqui é uma Response lançada, que o
-  // `ErrorBoundary` da rota transforma em tela — ver routes/RouteError.tsx.
-  if (!summary) throw new Response(null, { status: 404, statusText: "Aluno não encontrado" });
-
-  const activePlan = summary.plans.find((p) => p.status === "active") ?? null;
-  const [
-    progress,
-    subscription,
-    sessions,
-    topics,
-    blocks,
-    spacings,
-    reviewsDone,
-    studyTime,
-    weeks,
-  ] = await Promise.all([
-    activePlan ? getPlanProgress(activePlan.id) : Promise.resolve(null),
-    getStudentSubscription(studentId),
-    getStudentSessions(studentId),
-    activePlan ? getTopicDifficulty(activePlan.id) : Promise.resolve([]),
-    activePlan ? getStudyPlanBlocks(activePlan.id) : Promise.resolve([]),
-    activePlan ? getReviewSpacings(activePlan.id) : Promise.resolve([]),
-    activePlan ? getReviewCompletions(activePlan.id) : Promise.resolve(new Set<string>()),
-    activePlan ? getStudyTime(activePlan.id) : Promise.resolve([]),
-    activePlan ? getPlanWeeks(activePlan.id) : Promise.resolve([]),
-  ]);
-
-  // Toda disciplina do planejamento aparece na tabela de espaçamento, inclusive
-  // a que ainda não tem linha: é aqui que o professor a liga (R-REVE-19).
-  const subjects = new Map<string, { firstInterval: number; secondInterval: number; blockCount: number }>();
-  for (const block of blocks) {
-    const current = subjects.get(block.subject_name) ?? {
-      firstInterval: 0,
-      secondInterval: 0,
-      blockCount: 0,
-    };
-    subjects.set(block.subject_name, { ...current, blockCount: current.blockCount + 1 });
-  }
-  for (const spacing of spacings) {
-    const current = subjects.get(spacing.subject_name);
-    if (!current) continue;
-    subjects.set(spacing.subject_name, {
-      ...current,
-      firstInterval: spacing.first_interval,
-      secondInterval: spacing.second_interval,
-    });
-  }
-
-  const search = new URL(request.url).searchParams;
-  const feito = search.get("feito");
-
-  // Só bateria concluída tem resumo (R-RESU-08), e só do próprio aluno: id
-  // alheio simplesmente não abre nada.
-  const requestedSession = search.get("bateria");
-  const selectedSession =
-    requestedSession && sessions.some((s) => s.id === requestedSession && s.status === "completed")
-      ? requestedSession
-      : null;
-  const sessionTopics = selectedSession ? await getSessionTopics(selectedSession) : [];
-
-  return {
-    summary,
-    activePlan,
-    progress,
-    subscription,
-    sessions,
-    topics,
-    blockNames: blocks.map((b) => [b.id, b.name] as const),
-    spacings: [...subjects].map(([subject, value]) => ({ subject, ...value })),
-    grids: buildGrid(spacings, blocks, reviewsDone),
-    studyTime,
-    weeks,
-    selectedSession,
-    sessionTopics,
-    teacherId: session.profileId,
-    studyPlanId: activePlan?.id ?? null,
-    studentId,
-    doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
-  };
+export async function teacherStudentLoader({ params }: { params: { studentId?: string } }) {
+  await requireRole("teacher");
+  return { file: await api.loadStudentFile(params.studentId!) };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentLoader>>;
 
+const ACCESS: Record<StudentCard["access"], { label: string; tone: BadgeTone }> = {
+  active: { label: "Liberado", tone: "success" },
+  pending: { label: "Aguardando", tone: "warning" },
+  suspended: { label: "Suspenso", tone: "error" },
+  expired: { label: "Vencido", tone: "error" },
+};
+
+const SESSION_STATUS: Record<QuizSessionSummary["status"], { label: string; tone: BadgeTone }> = {
+  in_progress: { label: "Em andamento", tone: "accent" },
+  awaiting_time: { label: "Aguardando tempo", tone: "warning" },
+  completed: { label: "Concluída", tone: "success" },
+  cancelled: { label: "Cancelada", tone: "neutral" },
+  voided: { label: "Anulada", tone: "neutral" },
+};
+
+function formatDateTime(value: string): string {
+  return `${value.slice(8, 10)}/${value.slice(5, 7)} ${value.slice(11, 16)}`;
+}
+
 export function TeacherStudent() {
-  const {
-    summary,
-    activePlan,
-    progress,
-    subscription,
-    sessions,
-    topics,
-    blockNames,
-    spacings,
-    grids,
-    studyTime,
-    weeks,
-    selectedSession,
-    sessionTopics,
-    teacherId,
-    studyPlanId,
-    studentId,
-    doneMessage,
-  } = useLoaderData() as LoaderData;
-  const hasActive = subscription?.status === "active";
+  const { file } = useLoaderData() as LoaderData;
+  const { studentId } = useParams();
+  const { card, plan, statistics, sessions } = file;
 
   return (
     <>
-      <PageHeader title={summary.profile.name} description={summary.profile.contact_email ?? ""} />
+      <PageHeader
+        title={card.name ?? "Aluno"}
+        description={plan?.name ?? "Sem planejamento ativo"}
+      />
 
-      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
+      <ContentBody>
+        <Box
+          sx={(theme) => ({
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 1.25,
+            mb: 1.75,
+            [theme.breakpoints.down("lg")]: { gridTemplateColumns: "repeat(2, 1fr)" },
+          })}
+        >
+          <Metric label="Progresso" value={`${card.progress}%`} note="metas devidas até hoje" />
+          <Metric
+            label="Desempenho"
+            value={statistics.score === null ? "—" : `${statistics.score}%`}
+            note={`${statistics.correctAnswers}/${statistics.questionsAnswered} acertos`}
+          />
+          <Metric label="Tempo" value={formatMinutes(statistics.studiedMinutes)} />
+          <Metric
+            label="Última atividade"
+            value={card.lastActivityAt ? formatDateTime(card.lastActivityAt) : "—"}
+          />
+        </Box>
 
-      <div className="stack">
         <Card
           title="Acesso"
-          sub={
-            hasActive
-              ? `Ativo${formatValidity(subscription?.validity) ? ` · vigência ${formatValidity(subscription?.validity)}` : ""}`
-              : subscription
-                ? `Sem acesso ativo · última assinatura ${ACCESS_LABEL[subscription.status] ?? subscription.status}`
-                : "Este aluno nunca teve acesso liberado"
-          }
+          action={<Badge tone={ACCESS[card.access].tone}>{ACCESS[card.access].label}</Badge>}
+          sub={card.accessExpiresAt ? `Válido até ${card.accessExpiresAt}` : "Sem prazo"}
         >
-          <div className="row" style={{ alignItems: "flex-end", gap: 16 }}>
-            <GrantAccessForm studentId={studentId} hasActive={hasActive} />
-            {hasActive && <SuspendAccessForm studentId={studentId} />}
-          </div>
+          {/*
+            O BOTÃO DE LIBERAR NÃO ESTÁ AQUI, e é deliberado: `profiles`
+            concede `UPDATE (name)` e mais nada — `access_status` e
+            `access_expires_at` ficam fora do grant para que ninguém se promova
+            nem estenda o próprio acesso. Liberar precisa nascer como RPC.
+          */}
+          <Alert status="info">
+            Liberar e bloquear acesso está sendo movido para o servidor, onde a regra pode ser
+            garantida. Enquanto isso, fale com quem administra o banco.
+          </Alert>
         </Card>
 
-        <Card
-          title="Planejamentos"
-          sub={`${summary.plans.length} no histórico`}
-          action={
-            <Link className="btn btn--ghost btn--sm" to={ROUTES.teacher.students}>
-              ← Voltar
-            </Link>
-          }
-        >
-          {summary.plans.length === 0 ? (
-            <Empty>Nenhum planejamento criado para este aluno.</Empty>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Concurso</th>
-                    <th className="num">Metas/semana</th>
-                    <th>Início</th>
-                    <th>Situação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.plans.map((plan) => {
-                    const status = PLAN_STATUS[plan.status] ?? {
-                      text: plan.status,
-                      tone: "neutral" as const,
-                    };
-                    return (
-                      <tr key={plan.id}>
-                        <td>
-                          <strong>{plan.name}</strong>
-                          {plan.area && <div className="muted">{plan.area}</div>}
-                        </td>
-                        <td>{plan.target_exam ?? "—"}</td>
-                        <td className="num">{plan.weekly_goals}</td>
-                        <td>{new Date(plan.start_date).toLocaleDateString("pt-BR")}</td>
-                        <td>
-                          <Badge tone={status.tone}>{status.text}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card
-          title="Baterias"
-          sub={`${sessions.length} no histórico — a mais recente primeiro`}
-        >
-          {sessions.length === 0 ? (
-            <Empty>Este aluno ainda não fez nenhuma bateria.</Empty>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Bloco</th>
-                    <th className="num">Nº</th>
-                    <th className="num">Oficial</th>
-                    <th className="num">Tempo</th>
-                    <th>Situação</th>
-                    <th />
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions.map((session) => {
-                    const pct = scorePercent(session.mainCorrect, session.mainCount);
-                    return (
-                      <tr key={session.id}>
-                        <td>
-                          <strong style={{ color: session.block?.subject_color }}>
-                            {session.block?.subject_name ?? "—"}
-                          </strong>
-                          <div className="muted">{session.block?.name ?? "—"}</div>
-                          {session.void_reason && (
-                            <div className="muted">
-                              <em>Motivo:</em> {session.void_reason}
-                            </div>
-                          )}
-                        </td>
-                        <td className="num">{session.session_number ?? "—"}</td>
-                        <td className="num">
-                          {session.mainCount ? (
-                            <>
-                              {session.mainCorrect}/{session.mainCount}
-                              {pct !== null && <span className="muted"> · {pct}%</span>}
-                            </>
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
-                        </td>
-                        <td className="num">{formatMinutes(session.duration_minutes)}</td>
-                        <td>
-                          <Badge tone={QUIZ_TONE[session.status] ?? "neutral"}>
-                            {QUIZ_STATUS_LABEL[session.status]}
-                          </Badge>
-                        </td>
-                        <td>
-                          {session.status === "completed" &&
-                            (selectedSession === session.id ? (
-                              <Link to={ROUTES.teacher.student(studentId)}>Fechar</Link>
-                            ) : (
-                              <Link
-                                to={`${ROUTES.teacher.student(studentId)}?bateria=${session.id}`}
-                              >
-                                Ver tópicos
-                              </Link>
-                            ))}
-                        </td>
-                        <td>
-                          {VOIDABLE.has(session.status) && (
-                            <VoidSessionForm
-                              quizSessionId={session.id}
-                              studentId={studentId}
-                            />
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        {selectedSession && <SessionTopics rows={sessionTopics} />}
-
-        <div className="grid-cards">
-          <StudyTime rows={studyTime} today={new Date()} />
-          <StudyStreak rows={studyTime} today={new Date()} />
-        </div>
-
-        <WeeklySeries rows={studyTime} plannedWeeks={weeks} />
-
-        <TopicDifficulty rows={topics} blockNames={new Map(blockNames)} />
-
-        {studyPlanId && (
-          <>
-            <SpacingForms
-              spacings={spacings}
-              studyPlanId={studyPlanId}
-              studentId={studentId}
-              teacherId={teacherId}
-            />
-            <ReviewGrid
-              grids={grids}
-              studyPlanId={studyPlanId}
-              redirectTo={ROUTES.teacher.student(studentId)}
-              emptyHint="Nenhuma disciplina com revisão programada. Defina o espaçamento acima."
-              emptyTitle="Grade de revisão"
-            />
-          </>
+        {statistics.bySubject.length > 0 && (
+          <Box sx={{ mt: 1.75 }}>
+            <Card>
+              <RankedBars
+                testId="student-by-subject"
+                title="Desempenho por disciplina"
+                description="O traço é a meta da disciplina. Pior desempenho primeiro."
+                rows={statistics.bySubject.map((subject) => ({
+                  label: subject.subject,
+                  value: subject.score,
+                  target: subject.targetScore,
+                  note: `${subject.correctAnswers}/${subject.questions}`,
+                }))}
+              />
+            </Card>
+          </Box>
         )}
 
-        {progress && (
-          <div className="grid-cards">
-            <Card title="Metas" sub={activePlan?.name}>
-              <p style={{ fontSize: "2rem", fontWeight: 700 }}>
-                {progress.completed}
-                <span className="muted" style={{ fontSize: "1rem" }}>
-                  {" "}
-                  / {progress.goalCount}
-                </span>
-              </p>
-              <p className="muted">{progress.pending} pendentes</p>
-            </Card>
+        <Box sx={{ mt: 1.75 }}>
+          <Card title="Histórico de baterias" sub="O que o motor registrou">
+            {sessions.length === 0 ? (
+              <Empty icon="📝">
+                Nenhuma bateria. A execução de baterias saiu com a extensão e está sendo
+                reescrita — sem ela não há sessão para registrar.
+              </Empty>
+            ) : (
+              sessions.map((session) => (
+                <Box
+                  key={session.id}
+                  data-testid="quiz-session-row"
+                  data-status={session.status}
+                  sx={(theme) => ({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    flexWrap: "wrap",
+                    py: 1.125,
+                    borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+                    "&:last-of-type": { borderBottom: "none" },
+                  })}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: "0.8125rem", fontWeight: 500 }} noWrap>
+                      {session.blockName}
+                    </Typography>
+                    <Typography variant="caption" component="p">
+                      {session.subject} · {formatDateTime(session.startedAt)}
+                      {session.durationMinutes === null
+                        ? ""
+                        : ` · ${formatMinutes(session.durationMinutes)}`}
+                    </Typography>
+                  </Box>
+                  <Badge tone="neutral">
+                    {session.mainCorrect}/{session.mainTotal}
+                  </Badge>
+                  {session.score !== null && <Badge tone="neutral">{session.score}%</Badge>}
+                  <Badge tone={SESSION_STATUS[session.status].tone}>
+                    {SESSION_STATUS[session.status].label}
+                  </Badge>
+                </Box>
+              ))
+            )}
+          </Card>
+        </Box>
 
-            <Card title="Desempenho oficial" sub="Somente questões principais">
-              <p style={{ fontSize: "2rem", fontWeight: 700 }}>
-                {progress.officialPct === null ? "—" : `${progress.officialPct}%`}
-              </p>
-              <p className="muted">
-                {progress.mainCorrect} de {progress.mainQuestions} principais
-              </p>
-            </Card>
+        <Box sx={{ mt: 1.75 }}>
+          <Card title="Dificuldades por tópico">
+            {/*
+              O tópico de cada questão morava em `catalog_questions`, que não
+              foi portada. Sem ela, cruzar o ledger com o tópico é impossível —
+              e inventar um agrupamento por disciplina aqui daria ao professor
+              um número que ele leria como "tópico".
+            */}
+            <Typography variant="body2" data-testid="topic-difficulties-empty">
+              As dificuldades por tópico saem do ledger cruzado com o tópico de cada questão, e o
+              catálogo de tópicos ainda não voltou ao schema. Elas reaparecem junto com o motor de
+              baterias.
+            </Typography>
+          </Card>
+        </Box>
 
-            <Card title="Semanas planejadas">
-              <p style={{ fontSize: "2rem", fontWeight: 700 }}>{progress.weeks.length}</p>
-              <p className="muted">
-                {progress.weeks.length ? `semanas ${progress.weeks.join(", ")}` : "nenhuma"}
-              </p>
-            </Card>
-          </div>
-        )}
-      </div>
+        <Typography variant="caption" component="p" sx={{ mt: 2 }} data-student-id={studentId}>
+          Ficha de {card.name ?? "aluno"}.
+        </Typography>
+      </ContentBody>
     </>
   );
 }

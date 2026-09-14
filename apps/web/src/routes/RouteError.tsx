@@ -1,6 +1,10 @@
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import { Alert, Card, PageHeader } from "@bora/ui";
 import { Link, isRouteErrorResponse, useRouteError } from "react-router";
 
-import { Alert, Card, PageHeader } from "@/components/ui";
+import { ContentBody } from "@/components/AppShell";
 import { ROUTES } from "@/lib/routes";
 
 /**
@@ -18,14 +22,16 @@ export function RouteError() {
     return (
       <>
         <PageHeader title="Não encontrado" />
+        <ContentBody>
         <Card>
-          <Alert kind="warning">
+          <Alert status="warning">
             Esta página não existe, ou você não tem acesso a ela.
           </Alert>
-          <Link className="btn btn--ghost btn--sm" to={ROUTES.home}>
+          <Button component={Link} to={ROUTES.home} variant="outlined" size="small" sx={{ mt: 1.5 }}>
             Voltar para o início
-          </Link>
+          </Button>
         </Card>
+        </ContentBody>
       </>
     );
   }
@@ -40,15 +46,17 @@ export function RouteError() {
   return (
     <>
       <PageHeader title="Algo deu errado" />
+      <ContentBody>
       <Card>
-        <Alert kind="error">{detail}</Alert>
-        <p className="muted">
+        <Alert status="error">{detail}</Alert>
+        <Typography variant="body2">
           Atualize a página. Se continuar, o detalhe acima é o que o time precisa saber.
-        </p>
-        <Link className="btn btn--ghost btn--sm" to={ROUTES.home}>
+        </Typography>
+        <Button component={Link} to={ROUTES.home} variant="outlined" size="small" sx={{ mt: 1.5 }}>
           Voltar para o início
-        </Link>
+        </Button>
       </Card>
+      </ContentBody>
     </>
   );
 }
@@ -59,17 +67,35 @@ export function RouteError() {
  * Numa SPA o servidor devolve o index.html para QUALQUER caminho — é o que
  * permite o roteamento no cliente. Consequência: uma URL sem rota casada não
  * dá 404 do servidor, e sem este componente o resultado é tela branca.
+ *
+ * Fica FORA do `PublicLayout`: é a única tela que alguém pode alcançar
+ * autenticado ou não, e emoldurá-la com o cartão de acesso sugeriria que a
+ * pessoa precisa entrar quando o que houve foi um endereço errado.
  */
 export function NotFound() {
   return (
-    <main className="auth">
-      <div className="auth__card">
-        <p className="auth__brand">Página não encontrada</p>
-        <p className="auth__sub">O endereço que você abriu não existe neste site.</p>
-        <Link className="btn btn--primary btn--block" to={ROUTES.home}>
+    <Box
+      component="main"
+      data-testid="content"
+      sx={(theme) => ({
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        p: 3,
+        backgroundColor: theme.vars.palette.surface.base,
+      })}
+    >
+      <Card sx={{ width: "min(420px, 100%)", textAlign: "center" }}>
+        <Typography component="h1" variant="h1" sx={{ mb: 0.5 }}>
+          Página não encontrada
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 2.5 }}>
+          O endereço que você abriu não existe neste site.
+        </Typography>
+        <Button component={Link} to={ROUTES.home} variant="contained" fullWidth>
           Ir para o início
-        </Link>
-      </div>
-    </main>
+        </Button>
+      </Card>
+    </Box>
   );
 }

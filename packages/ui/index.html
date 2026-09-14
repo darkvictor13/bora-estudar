@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <title>@bora/ui — playground do tema</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Aplica o modo salvo ANTES do primeiro paint, senão pisca o modo errado.
+      //
+      // SÓ O PLAYGROUND funciona assim. Aqui não há conta, então o modo vem do
+      // `localStorage` e quem escreve o atributo é o próprio MUI. No site o
+      // caminho é o oposto — a conta manda, e o MUI não toca no `<html>`; ver
+      // o cabeçalho de `src/theme.ts`.
+      //
+      // A chave e o atributo são os do tema: modeStorageKey 'mui-mode' +
+      // colorSchemeSelector 'data-theme'.
+      (function () {
+        try {
+          var mode = localStorage.getItem('mui-mode') || 'system';
+          var scheme =
+            mode === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode;
+          document.documentElement.setAttribute('data-theme', scheme);
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="/playground/main.tsx"></script>
+  </body>
+</html>

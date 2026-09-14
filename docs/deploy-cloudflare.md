@@ -8,12 +8,6 @@ hospedagem — de forma genérica ("Vercel, Netlify, Cloudflare Pages, S3+CDN").
 Este arquivo é esse passo 5 resolvido para o Cloudflare, e nada mais: se você
 ainda não tem projeto Supabase hospedado, comece por lá, pelos passos 1 a 4.
 
-A extensão não entra aqui. Ela é agnóstica de ambiente — o `manifest.json` só
-pede permissão em `tecconcursos.com.br`, e a volta ao site é
-`location.assign` para o `returnUrl` que veio dentro do payload, montado pelo
-`StartQuizButton` a partir de `location.origin`. Domínio novo não exige
-manifesto novo nem republicação na loja.
-
 Verificado em 23/08/2026 com wrangler 4.125.0 e o `dist/` real do projeto. O
 que foi executado de verdade e o que não foi está no fim do arquivo.
 
@@ -319,8 +313,7 @@ depende de autenticação e RLS. Um monitor externo que verifique 404 em URL
 inválida vai reportar 200 para sempre — monitore conteúdo, não status.
 
 **O build precisa de `npm ci` na raiz.** São workspaces do npm: instalar
-dentro de `apps/web` não resolve `@bora/protocol` nem `@bora/database`, que
-são dependências locais.
+dentro de `apps/web` não resolve `@bora/database`, que é dependência local.
 
 ---
 

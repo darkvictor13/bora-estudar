@@ -10,11 +10,11 @@ import { test as base, expect, type Page } from "@playwright/test";
 
 import { createScenario, type Person, type Scenario, type ScenarioOptions } from "./scenario.ts";
 import { authenticate } from "./session.ts";
-import { stubTec, type TecStub } from "./tec.ts";
+import { stubTec } from "./tec.ts";
 
 export { expect };
 export * from "./scenario.ts";
-export * from "./quiz.ts";
+export * from "./questions.ts";
 export * from "./tec.ts";
 export * from "./battery.ts";
 export { authenticate } from "./session.ts";
@@ -63,8 +63,8 @@ interface Fixtures {
   readonly studentPage: Page;
   /** `page` já autenticada como o professor do cenário. */
   readonly teacherPage: Page;
-  /** Domínio do TEC interceptado e respondido localmente. */
-  readonly tec: TecStub;
+  /** Nada a usar: existe para interceptar o domínio do TEC. */
+  readonly tec: void;
   /** Erros de console acumulados na aba, já sem o ruído do ambiente. */
   readonly consoleErrors: string[];
 }
@@ -100,11 +100,13 @@ export const test = base.extend<Options & Fixtures>({
    *
    * Interceptar o domínio do TEC não custa nada em quem não navega para lá, e
    * garante por construção que NENHUM teste bata no site de um terceiro —
-   * inclusive um teste novo, escrito por quem não leu esta observação.
+   * inclusive um teste novo, escrito por quem não leu esta observação. O site
+   * ainda linka para lá no caderno de erros e no reforço.
    */
   tec: [
     async ({ page }, use) => {
-      await use(await stubTec(page));
+      await stubTec(page);
+      await use();
     },
     { auto: true },
   ],
