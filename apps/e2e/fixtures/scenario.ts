@@ -16,7 +16,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { AvailableQuestion } from "@bora/protocol";
+import type { CatalogQuestion } from "./questions.ts";
 
 import { asUser, query, value } from "./db.ts";
 
@@ -501,10 +501,10 @@ export async function goalStatus(goalId: string): Promise<string> {
 /**
  * Questões do bloco do catálogo, na ordem em que o site as envia.
  *
- * Traz o tópico desde o protocolo 2: é o que permite à extensão escolher a
- * correlata do mesmo tópico.
+ * Traz o tópico junto: é o que permite a uma pré-condição errar de propósito
+ * as questões de um assunto só.
  */
-export async function catalogQuestions(catalogBlockId: string): Promise<AvailableQuestion[]> {
+export async function catalogQuestions(catalogBlockId: string): Promise<CatalogQuestion[]> {
   const rows = await query<{ question_id: string; topic: string }>(
     `select question_id, topic from public.catalog_questions
       where block_id = $1 order by position`,

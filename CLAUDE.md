@@ -42,7 +42,6 @@ npm run check         # typecheck + lint + testes de todos os pacotes
 npm run db:test       # recria o banco e roda as suítes de invariante
 npm run db:reset      # recria o banco: migration + seed
 npm run db:types      # regenera packages/database a partir do schema local
-npm run ext:build     # compila a extensão em apps/extension/dist
 
 npm run e2e           # suíte Playwright, modo rápido
 npm run e2e:video     # a mesma suíte, gravando .webm por teste
@@ -158,42 +157,44 @@ supabase gen types typescript --linked --schema public | diff - packages/databas
 
 ---
 
-## Protocolo site ↔ extensão
+## A extensão foi removida
 
-`packages/protocol` é a **única** definição. As duas pontas importam de lá;
-nenhuma redefine as formas localmente. Elas são versionadas separadamente na
-prática — o site atualiza sozinho, a extensão só quando o usuário quer — e na
-versão anterior cada lado tinha sua cópia e elas derivaram.
+`apps/extension` e `packages/protocol` não existem mais. A extensão conduzia a
+bateria de questões dentro do TEC Concursos; o site montava o payload, ela
+respondia, e o resultado voltava pelo fragmento da URL.
 
-- Toda leitura compara `PROTOCOL_VERSION` e rejeita versão diferente com
-  mensagem acionável.
-- Valide na fronteira: `JSON.parse` devolve `any`, e tipo de TypeScript não
-  sobrevive à serialização.
-- Mudança incompatível incrementa `PROTOCOL_VERSION`.
-- **A extensão nunca fala com o Supabase.** Recebe um payload e devolve outro.
-  Assim o pacote distribuído na loja não carrega credencial e toda regra de
-  negócio fica atrás das RPCs. Por isso `@bora/extension` depende de
-  `@bora/protocol` e não de `@bora/database`.
+O que **saiu junto**, para que ninguém vá procurar: `QuizResultHandler`,
+`StartQuizButton`, `startQuizSession`, `submitQuizResult` e os dois leitores de
+catálogo que alimentavam o payload (`getBlockQuestions`, `getQuestionHistory`).
+
+O que **ficou de pé**, e é onde uma execução nova se apoia:
+
+- **o banco inteiro** — `quiz_sessions`, o ledger `quiz_session_questions`,
+  `start_quiz_session`, `finish_quiz_session`, `record_quiz_session_time` e
+  `void_quiz_session`. Nenhuma migration foi escrita para desfazer nada;
+- **o fechamento da bateria na tela do aluno** — registrar tempo e cancelar,
+  que é o que destrava um planejamento com sessão aberta;
+- **o caderno de erros e o reforço**, que linkam para o TEC como páginas
+  comuns. `TEC_QUESTION_URL` continua sendo isso, e só isso.
+
+A tela do aluno hoje **não tem por onde começar uma bateria**. É deliberado: o
+caminho novo ainda vai ser desenhado, e um botão que abre sessão sem ter onde
+respondê-la só produziria sessão travada.
 
 ---
 
-## Três ordenações que não podem inverter
+## `request_id` gerado uma vez, na origem
 
-Cada uma corresponde a uma perda silenciosa de bateria já respondida na versão
-anterior — o dado mais caro do sistema, porque custa uma hora de estudo do
-aluno e não pode ser recriado.
+Era a terceira de três ordenações que não podiam inverter; as outras duas
+viviam na extensão (persistir antes de limpar a hash, aguardar a gravação antes
+de navegar) e saíram com ela. Esta continua valendo, e continua correspondendo
+a uma perda silenciosa de bateria já respondida na versão anterior — o dado
+mais caro do sistema, porque custa uma hora de estudo do aluno e não pode ser
+recriado.
 
-1. **Persistir antes de limpar a hash.** O payload da URL é a única cópia no
-   navegador. Limpar antes de confirmar a gravação e depois falhar não deixa de
-   onde recuperar.
-
-2. **Aguardar a gravação antes de navegar.** `location.assign` destrói o
-   content script; um `storage.set` não aguardado se perde junto. Sempre
-   `await writeSession(...)` antes de sair da página.
-
-3. **`request_id` gerado uma vez, na origem, e reusado em todo retry.** Gerá-lo
-   no ponto de uso transforma a proteção do servidor em decoração: cada
-   tentativa chega ao banco como operação nova.
+Gerar o `request_id` no ponto de uso transforma a proteção do servidor em
+decoração: cada tentativa chega ao banco como operação nova, e `finish_quiz_session`
+grava duas vezes o que deveria gravar uma.
 
 ---
 
@@ -220,9 +221,11 @@ de modelo. Já confirmados:
 
 **O `redirect` do router descarta o fragmento.** Um redirecionamento HTTP
 preserva o `#` por conta do navegador; este monta a URL nova só com o caminho.
-`requireSession` concatena `location.hash` de propósito: quem volta do TEC com
-a sessão expirada chega em `/aluno#boraQuizResult=…`, e esse fragmento é a
-única cópia do resultado. Ver a primeira das três ordenações acima.
+`requireSession` concatena `location.hash` de propósito. O motivo original era
+a volta do TEC com a sessão expirada, em que o fragmento era a única cópia do
+resultado da bateria; esse caminho saiu com a extensão, mas a concatenação fica
+— descartar fragmento num redirecionamento de login é perda de estado em
+qualquer rota que venha a usá-lo.
 
 **Vite só injeta variável de ambiente com prefixo `VITE_`,** e só quando o
 acesso é literal: `import.meta.env.VITE_X`. Indexar por variável compila para
@@ -267,8 +270,8 @@ duas vezes ao renomear valor de enum.
 
 ### Ponta a ponta, com navegador
 
-`apps/e2e` roda a suíte Playwright contra o site e contra a extensão
-instalada. O catálogo de fluxos que ela implementa é
+`apps/e2e` roda a suíte Playwright contra o site. O catálogo de fluxos que ela
+implementa é
 [`docs/fluxos-e2e.md`](docs/fluxos-e2e.md); cada `describe` cita o código do
 fluxo (`F-AUTH-04`, `F-BAT-09`, …) e, quando o teste existe por causa de um
 defeito conhecido, o número do bug.
@@ -284,16 +287,13 @@ defeito conhecido, o número do bug.
   clique de formulário em `.content` — e `.content` não basta onde a tela tem
   dois formulários. `/aluno/lista-espera` sem acesso liberado mostra o cadastro
   e o resgate de cupom: ali, clique pelo nome do botão.
-- **Voltar do TEC é navegação de documento.** Um `goto` para a mesma URL
-  trocando só o fragmento é *same-document*: o React não remonta e
-  `QuizResultHandler` nunca roda. Use `returnToSite()`, que passa por
-  `about:blank`.
-- **O fragmento não chega ao servidor.** Leia a URL do frame depois da
-  navegação; interceptar a request do TEC dá a URL sem `#`.
 - **O domínio do TEC é interceptado automaticamente**, em todo teste. Nenhuma
-  requisição pode sair para o site de terceiro.
-- **Extensão exige `channel: "chromium"`.** No headless antigo ela não carrega
-  e o teste falha dizendo que o painel não existe.
+  requisição pode sair para o site de terceiro — o caderno de erros e o reforço
+  ainda linkam para lá.
+- **A fila de pré-condição é da suíte, não do produto.** `fixtures/questions.ts`
+  substituiu o motor de seleção que vinha da extensão. Ela garante o que os
+  testes pedem (não repetir questão entre baterias do mesmo bloco) e nada além
+  disso; quando existir um motor novo, é ele que passa a ser exercitado ali.
 - **`locator().all()` não espera por nada.** Devolve o que casa naquele
   instante. O site é uma SPA: o conteúdo só existe depois de os loaders da rota
   resolverem, o que é DEPOIS do evento `load` que o `goto` aguarda. Sem uma
@@ -328,9 +328,7 @@ O plano inteiro, com o porquê de cada decisão, está em
 **Toda migration precisa ser compatível com o bundle que já está no ar.** Em
 staging o banco sobe minutos antes do site; entre um commit e o deploy manual
 de produção podem passar dias e dezenas de commits. Coluna nova nasce
-`nullable` ou com default; RPC nova não substitui a antiga no mesmo commit. É o
-raciocínio do `PROTOCOL_VERSION` entre site e extensão, aplicado ao par
-site/banco.
+`nullable` ou com default; RPC nova não substitui a antiga no mesmo commit.
 
 **Banco antes de site, e essa ordem não pode inverter** — o bundle novo é quem
 chama a RPC nova. Ela tem um custo conhecido: se o job `site` falhar, o banco

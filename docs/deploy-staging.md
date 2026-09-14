@@ -57,8 +57,7 @@ longa.** Em staging os dois sobem no mesmo pipeline, com minutos de diferença.
 Entre um commit e o deploy manual de produção podem passar dias e dezenas de
 commits. Então: **toda migration precisa ser compatível com o bundle que já está
 no ar** — coluna nova nasce `nullable` ou com default, RPC nova não substitui a
-antiga no mesmo commit. É o raciocínio do `PROTOCOL_VERSION` entre site e
-extensão, aplicado ao par site/banco.
+antiga no mesmo commit.
 
 **3. O `db push` de produção aplica um lote, não uma migration.** Como produção
 acumula, um deploy manual pode rodar dez migrations de uma vez. O
@@ -189,7 +188,6 @@ Tudo derivado do código, não de preferência:
 | Exigência | Por quê |
 |---|---|
 | `npm run check` verde antes de publicar | `vite build` não faz typecheck; o gate é explícito ou não existe |
-| Extensão compilada antes do `check` | o lint dela é `web-ext lint --source-dir dist`, e em clone limpo o `dist` não existe |
 | Migration aplicada **antes** do bundle novo | o bundle novo é quem chama a RPC nova; a ordem inversa quebra a tela |
 | As duas `VITE_*` no ambiente do **build** | substituição estática do Vite: a chave é assada no bundle |
 | Fumaça por conteúdo, nunca por status | o fallback de SPA devolve 200 para qualquer caminho |
@@ -374,10 +372,6 @@ No Environment `producao`, duas proteções:
 ---
 
 ## Armadilhas que o pipeline precisa respeitar
-
-**`npm run check` falha em clone limpo.** Verificado: `web-ext lint
---source-dir dist` sai com código 1 quando o diretório não existe, e o
-`.gitignore` garante que não exista. `npm run ext:build` antes, sempre.
 
 **`vite build` não faz typecheck.** O gate é `npm run check`, explícito, antes
 do deploy — não o sucesso do build.

@@ -287,19 +287,19 @@ test.describe("F-PROF-07 · modos replace e replan", () => {
     ).toBe(1);
   });
 
-  test("bateria aberta na semana bloqueia replace", async ({ page, signIn, scenario }) => {
-    // Duas identidades no mesmo teste, uma depois da outra na MESMA aba.
-    // `studentPage` e `teacherPage` juntos brigariam pelos cookies do mesmo
-    // contexto; `signIn` troca de identidade de forma explícita.
-    await signIn(scenario.student);
-    await page.goto("/aluno");
-    await page
-      .locator("tbody tr", { hasText: scenario.quizGoal.title })
-      .locator('button:has-text("Iniciar bateria")')
-      .click();
-    await page.waitForURL(/tecconcursos\.com\.br/);
+  test("bateria aberta na semana bloqueia replace", async ({ teacherPage, scenario }) => {
+    // A bateria abre pela RPC real, impersonando o aluno: desde que a extensão
+    // saiu, a tela não tem mais por onde abrir uma. O que este teste verifica é
+    // o lado do professor, e esse não mudou.
+    await asUser(scenario.student.id, (client) =>
+      client.query("select public.start_quiz_session($1::uuid, $2::uuid, $3::uuid)", [
+        scenario.planId,
+        scenario.quizGoal.blockId,
+        scenario.quizGoal.id,
+      ]),
+    );
 
-    await signIn(scenario.teacher);
+    const page = teacherPage;
     await page.goto("/professor/metas");
     await page.fill("#week", "1");
     await page.selectOption("#mode", "replace");
@@ -906,29 +906,26 @@ test.describe("F-CAD-01 · desativar tira do rodízio sem mexer no histórico", 
 });
 
 test.describe("F-CAD-02 · bloco desativado não abre bateria", () => {
-  test("o aluno recebe a mensagem traduzida e a meta continua pendente", async ({
-    page,
-    scenario,
-    signIn,
-  }) => {
+  test("a RPC recusa e a meta continua pendente", async ({ teacherPage, scenario }) => {
     const block = scenario.blocks.find((b) => b.id === scenario.quizGoal.blockId)!;
 
-    await signIn(scenario.teacher);
-    await page.goto(`/professor/cadernos?plano=${scenario.planId}`);
-    await blockRow(page, block.name).getByRole("button", { name: "Desativar" }).click();
-    await expect(page.locator(".alert--success")).toBeVisible();
+    await teacherPage.goto(`/professor/cadernos?plano=${scenario.planId}`);
+    await blockRow(teacherPage, block.name).getByRole("button", { name: "Desativar" }).click();
+    await expect(teacherPage.locator(".alert--success")).toBeVisible();
 
-    await signIn(scenario.student);
-    await page.goto("/aluno");
-    await page
-      .locator("tbody tr", { hasText: scenario.quizGoal.title })
-      .getByRole("button", { name: "Iniciar bateria" })
-      .click();
+    // O desligamento é pela tela do professor, que é o que este fluxo cobre. A
+    // recusa é verificada na RPC: `start_quiz_session` exige `active and
+    // deleted_at is null`, e desde que a extensão saiu não há tela que a chame.
+    await expect(
+      asUser(scenario.student.id, (client) =>
+        client.query("select public.start_quiz_session($1::uuid, $2::uuid, $3::uuid)", [
+          scenario.planId,
+          scenario.quizGoal.blockId,
+          scenario.quizGoal.id,
+        ]),
+      ),
+    ).rejects.toThrow(/bloco invalido ou indisponivel/);
 
-    // start_quiz_session exige `active and deleted_at is null`; a tela traduz.
-    await expect(page.locator("tbody tr", { hasText: scenario.quizGoal.title })).toContainText(
-      "Este bloco não está disponível no seu planejamento.",
-    );
     expect(await goalStatus(scenario.quizGoal.id)).toBe("pending");
   });
 });
@@ -1157,16 +1154,16 @@ test.describe("F-ANUL-04 · as questões voltam a ser inéditas", () => {
 });
 
 test.describe("F-ANUL-05 · o que não é anulável", () => {
-  test("bateria em andamento não oferece o botão", async ({ page, scenario, signIn }) => {
-    await signIn(scenario.student);
-    await page.goto("/aluno");
-    await page
-      .locator("tbody tr", { hasText: scenario.quizGoal.title })
-      .getByRole("button", { name: "Iniciar bateria" })
-      .click();
-    await page.waitForURL(/tecconcursos/);
+  test("bateria em andamento não oferece o botão", async ({ teacherPage, scenario }) => {
+    await asUser(scenario.student.id, (client) =>
+      client.query("select public.start_quiz_session($1::uuid, $2::uuid, $3::uuid)", [
+        scenario.planId,
+        scenario.quizGoal.blockId,
+        scenario.quizGoal.id,
+      ]),
+    );
 
-    await signIn(scenario.teacher);
+    const page = teacherPage;
     await page.goto(studentPageOf(scenario.student.id));
 
     const row = sessionsCard(page).locator("tbody tr").first();

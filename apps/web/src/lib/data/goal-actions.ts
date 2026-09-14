@@ -219,7 +219,7 @@ export async function deleteExtraStudy(_prev: FormState, data: FormData): Promis
 // Reforço de ciclo — spec docs/specs/20-execucao-do-reforco.md
 // ---------------------------------------------------------------------------
 
-/** URL da questão no TEC. É o mesmo host que a extensão conhece. */
+/** URL da questão no TEC, para o link do caderno de erros. */
 export const TEC_QUESTION_URL = "https://www.tecconcursos.com.br/questoes";
 
 /**

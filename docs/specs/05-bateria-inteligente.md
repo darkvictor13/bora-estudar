@@ -1,5 +1,10 @@
 # 05 — Bateria inteligente
 
+> **Histórico.** Esta spec descreve o fluxo conduzido pela extensão de
+> navegador, que foi removida do repositório. O que ela diz do banco continua
+> valendo; o que diz da execução, não — não existe hoje caminho por onde o aluno
+> responda uma bateria.
+
 **Situação:** implementada · **Fluxos e2e:** F-BAT-01 a F-BAT-19
 
 ---

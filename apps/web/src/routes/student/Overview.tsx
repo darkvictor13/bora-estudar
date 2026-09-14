@@ -1,8 +1,6 @@
 import { Link, useLoaderData } from "react-router";
 
 import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { QuizResultHandler } from "@/components/student/QuizResultHandler";
-import { StartQuizButton } from "@/components/student/StartQuizButton";
 import { CancelSessionForm, RegisterTimeForm } from "@/components/student/QuizSessionPanel";
 import {
   CompleteGoalForm,
@@ -116,8 +114,6 @@ export function Overview() {
         description={`${plan.name}${plan.target_exam ? ` · ${plan.target_exam}` : ""}`}
       />
 
-      <QuizResultHandler />
-
       {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
 
       {openSession && (
@@ -126,22 +122,24 @@ export function Overview() {
           sub={
             openSession.status === "awaiting_time"
               ? "Respondida. Falta registrar o tempo para concluir a meta."
-              : "Em andamento. Continue pela extensão, no TEC."
+              : "Em andamento."
           }
         >
           {openSession.status === "awaiting_time" ? (
             <RegisterTimeForm quizSessionId={openSession.id} />
           ) : (
             <div className="stack-sm">
+              {/*
+                Esta bateria foi aberta pelo fluxo antigo, que entregava as
+                questões à extensão. Não há mais onde respondê-la: o que a tela
+                ainda oferece é cancelar, para destravar o planejamento. A
+                bateria cancelada não conta no desempenho nem como questão
+                vista.
+              */}
               <p className="muted">
-                Abra o TEC com a extensão instalada para continuar de onde parou. Se preferir
-                recomeçar depois, cancele — a bateria cancelada não conta no desempenho nem como
-                questão vista.
+                Bateria aberta sem caminho de execução. Cancele para liberar o planejamento.
               </p>
               <div className="row">
-                {openSession.goal_id && (
-                  <StartQuizButton goalId={openSession.goal_id} label="Continuar no TEC" />
-                )}
                 <CancelSessionForm quizSessionId={openSession.id} />
               </div>
             </div>
@@ -260,10 +258,8 @@ export function Overview() {
                                     que a RPC impõe (R-CONC-02), então a tela
                                     nunca oferece um caminho que o banco recusa.
                                   */}
-                                  {goal.type === "question_block" ? (
-                                    goal.status === "pending" &&
-                                    !openSession && <StartQuizButton goalId={goal.id} />
-                                  ) : goal.status === "pending" ? (
+                                  {goal.type === "question_block" ? null : goal.status ===
+                                    "pending" ? (
                                     <CompleteGoalForm goalId={goal.id} week={week} />
                                   ) : goal.status === "completed" ? (
                                     <div className="row">

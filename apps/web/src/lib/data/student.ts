@@ -302,7 +302,7 @@ export async function getStudyTime(studyPlanId: string) {
  * Tópicos de um bloco de catálogo, com quantas questões cada um tem.
  *
  * A v96 baixava 1,97 MB de catálogo para responder isto. Aqui é uma consulta do
- * bloco aberto — e a extensão continua sem catálogo embutido.
+ * bloco aberto.
  */
 export async function getBlockTopics(
   catalogBlockIds: readonly string[],

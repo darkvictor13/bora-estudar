@@ -53,7 +53,7 @@ export function RegisterTimeForm({ quizSessionId }: { quizSessionId: string }) {
   );
 }
 
-/** Sessão aberta que o aluno quer descartar sem passar pela extensão. */
+/** Sessão aberta que o aluno quer descartar. */
 export function CancelSessionForm({ quizSessionId }: { quizSessionId: string }) {
   const [state, formAction] = useFormActionState(cancelQuizSession);
 

@@ -70,7 +70,7 @@ já respondida — uma hora de estudo do aluno, sem como recriar.
 Preenchida como PLANO, não como registro. Apague as linhas que não se aplicam.
 
 Corte: mais de duas RPCs novas, ou mais de uma migration, ou tocar site e
-extensão ao mesmo tempo → são duas specs.
+banco ao mesmo tempo → são duas specs.
 -->
 
 | Camada | Item |
@@ -82,7 +82,6 @@ extensão ao mesmo tempo → são duas specs.
 | RPCs |  |
 | Migration |  |
 | Banco |  |
-| Protocolo |  |
 
 ---
 

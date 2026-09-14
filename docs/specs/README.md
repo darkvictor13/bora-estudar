@@ -10,6 +10,15 @@ ela. Servem a três coisas — dar um lugar
 para a regra morar quando ela não cabe num comentário, permitir revisar
 comportamento sem ler SQL, e ser o molde das specs das features que faltam.
 
+**As specs da extensão continuam aqui, e não valem como descrição do sistema.**
+A extensão foi removida. Descrevem, no todo, um caminho de execução que não
+existe mais: **05, 06, 07, 21, 22, 28 e 31**. Outras — 09, 12, 16, 20, 23, 24 e
+26 — a citam de passagem, e o que dizem do banco continua valendo. Todas ficam
+como registro do que foi decidido e por quê, que é o material de partida de quem
+for desenhar a execução nova.
+
+(O índice abaixo para na 23; as specs de 24 a 31 já existiam sem entrar nele.)
+
 O que **não** existe está catalogado em
 [`../comparativo-fluxos-v2.md`](../comparativo-fluxos-v2.md) §12 e, contra a
 versão v96 do produto, em [`../inventario-v96.md`](../inventario-v96.md) — que
@@ -26,9 +35,9 @@ de lá vira uma spec nova antes de virar código.
 | 02 | [Acesso e assinatura](02-acesso-e-assinatura.md) | Quem entra nas telas de estudo, e o que vê quem ainda não pode |
 | 03 | [Planejamento e metas](03-planejamento-e-metas.md) | `study_plans`, blocos, metas e as invariantes que o banco impõe |
 | 04 | [Geração da semana](04-geracao-semanal.md) | O professor monta a semana do aluno; lote idempotente |
-| 05 | [Bateria inteligente](05-bateria-inteligente.md) | A volta completa: site → extensão → TEC → site → meta concluída |
-| 06 | [Protocolo site ↔ extensão](06-protocolo-site-extensao.md) | Envelope versionado que trafega no fragmento da URL |
-| 07 | [Motor de seleção](07-motor-de-selecao.md) | Quais 15 questões a bateria escolhe, e por quê |
+| 05 | [Bateria inteligente](05-bateria-inteligente.md) | A volta completa: site → extensão → TEC → site → meta concluída — **fluxo da extensão, removido** |
+| 06 | [Protocolo site ↔ extensão](06-protocolo-site-extensao.md) | Envelope versionado que trafega no fragmento da URL — **fluxo da extensão, removido** |
+| 07 | [Motor de seleção](07-motor-de-selecao.md) | Quais 15 questões a bateria escolhe, e por quê — **fluxo da extensão, removido** |
 | 08 | [Desempenho e estatísticas](08-desempenho-e-estatisticas.md) | Ledger append-only e as cinco views derivadas |
 | 09 | [Reforço e revisões](09-reforco-e-revisoes.md) | Ciclo de 3 baterias, caderno de erros, o que ainda só recomenda |
 | 10 | [Conta e lista de espera](10-conta-e-lista-de-espera.md) | Dados do aluno, inscrição, preferências |
@@ -42,8 +51,8 @@ de lá vira uma spec nova antes de virar código.
 | 18 | [Prévia e distribuição da semana](18-previa-e-distribuicao-da-semana.md) | Peso por disciplina e conferência antes de gravar |
 | 19 | [Estudo extra avulso](19-estudo-extra-avulso.md) | O aluno registra o que estudou fora da semana; `extra_activity` vira enum |
 | 20 | [Execução do reforço de ciclo](20-execucao-do-reforco.md) | O aluno revisa os erros do ciclo de 3 baterias |
-| 21 | [Fases na extensão](21-fases-na-extensao.md) | Reforço correlato e rodada extra dentro do TEC |
-| 22 | [Rodízio por tópico](22-rodizio-por-topico.md) | A bateria deixa de poder cair inteira no mesmo assunto |
+| 21 | [Fases na extensão](21-fases-na-extensao.md) | Reforço correlato e rodada extra dentro do TEC — **fluxo da extensão, removido** |
+| 22 | [Rodízio por tópico](22-rodizio-por-topico.md) | A bateria deixa de poder cair inteira no mesmo assunto — **fluxo da extensão, removido** |
 | 23 | [Dificuldades por tópico](23-dificuldades-por-topico.md) | Em que o aluno está errando, e o que é recorrente — **não implementada** |
 
 ---

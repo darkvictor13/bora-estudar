@@ -7,6 +7,13 @@ Foi levantado percorrendo a aplicação inteira com um navegador de verdade
 contra o Supabase local. Os bugs encontrados nessa varredura estão em
 [`bugs-encontrados.md`](bugs-encontrados.md).
 
+> **A §3 é histórico.** Ela cataloga a bateria conduzida pela extensão de
+> navegador, que foi removida junto com `tests/quiz.spec.ts` e
+> `tests/extension.spec.ts`. Nenhum fluxo `F-BAT-*` ou `F-FASE-*` de execução é
+> exercitado hoje; o que restou deles vive nas pré-condições de
+> `fixtures/battery.ts`, que chamam as RPCs direto. As demais seções continuam
+> descrevendo a suíte que roda.
+
 ---
 
 ## Como montar o ambiente do teste
@@ -46,12 +53,6 @@ npm run e2e --workspace @bora/e2e
   que responde ele não sobe o Vite. É o comportamento desejado, mas significa
   que uma URL remota fora do ar faz o Playwright servir o site local sem avisar.
 
-`extension.spec.ts` independe do ambiente: carrega `apps/extension/dist` num
-Chromium de verdade, e o `global-setup` compila a extensão antes.
-
-`npm run test:e2e` (o `scripts/roundtrip.mjs`) **não** acompanha: tem
-`127.0.0.1:54321` fixo no código, e só roda local até alguém parametrizar.
-
 ### Usuários do seed
 
 | Papel | E-mail | Senha | UUID |
@@ -87,21 +88,14 @@ Chromium de verdade, e o `global-setup` compila a extensão antes.
 
 ### Isolando o TEC Concursos
 
-`tec-page.ts` tem `https://www.tecconcursos.com.br` fixo no código:
-`goToQuestion()` navega direto para lá e não há como apontá-la para outro host.
-Um teste da extensão **precisa** interceptar `**://*.tecconcursos.com.br/**` e
-responder localmente, senão bate no site de terceiro. HTML mínimo que
-`tec-page.ts` sabe ler:
+O site linka para `https://www.tecconcursos.com.br` no caderno de erros e no
+reforço. A suíte intercepta `**://*.tecconcursos.com.br/**` automaticamente, em
+todo teste, e responde localmente — nenhuma requisição pode sair para o site de
+terceiro, inclusive num teste novo escrito por quem não leu isto.
 
-```html
-<div class="id-questao">Questão 100001</div>
-<div class="questao-enunciado-resolucao-acertou" style="display:none">Você acertou!</div>
-<div class="questao-enunciado-resolucao-errou"  style="display:none">Você errou!</div>
-<button class="questao-alternativa">Responder</button>
-```
-
-O resultado é detectado por **visibilidade**, não por presença: alternar
-`display` é o que dispara `detectOutcome()`.
+A página sintética era muito maior enquanto existia a extensão: reproduzia o
+mecanismo de detecção de acerto por visibilidade que o content script lia. Hoje
+o conteúdo só serve para o teste reconhecer onde parou.
 
 ---
 
@@ -1111,11 +1105,10 @@ e `05_teacher_writes.sql`.
 | Comando | Cobertura |
 |---|---|
 | `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
-| `npm run test:e2e` | volta completa da extensão sem navegador, contra o Supabase local |
-| `npm run check` | typecheck, lint e os testes de unidade de `packages/protocol` e `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | 279 testes num Chromium de verdade — este catálogo, implementado |
+| `npm run check` | typecheck, lint e os testes de unidade de `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
+| `npm run e2e` | a suíte num Chromium de verdade — este catálogo, menos a §3 |
 
-O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, que
+O que nenhum dos dois primeiros alcança é a camada de interface e de fluxo, que
 é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
 É o que `apps/e2e` cobre:
 
@@ -1123,16 +1116,13 @@ O que nenhum dos três primeiros alcança é a camada de interface e de fluxo, q
 |---|---|---|
 | `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
 | `tests/student.spec.ts` | §2 inteira, mais F-BAT-14, F-CONC-01 a 06, F-EXTRA-01 a 06 e F-RCIC-01 a 06 | 59 |
-| `tests/quiz.spec.ts` | §3 pelo lado do site: F-BAT-01/02/09/10/11/12/13/15/16/17 | 15 |
-| `tests/extension.spec.ts` | §3 pelo lado da extensão: F-BAT-03/05/06/07/08/16/18/19 e F-FASE-01 a 06, mais a volta completa | 15 |
 | `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05, F-TURMA-01 a 05 e F-PREV-01 a 06 | 71 |
 | `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
 | `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
 
-Fica de fora, de propósito, o que já é provado sem navegador: F-BAT-04
-(determinismo de `pickQuestions`, em `engine.test.ts`) e o lado RPC do §5
-(`supabase/tests/02_rls.sql` e `05_teacher_writes.sql`). Testar de novo custaria
-tempo de execução sem cobrir nada novo.
+Fica de fora, de propósito, o lado RPC do §5 (`supabase/tests/02_rls.sql` e
+`05_teacher_writes.sql`), que já é provado sem navegador. E fica de fora a §3
+inteira, que saiu com a extensão.
 
 ### As três armadilhas, resolvidas
 

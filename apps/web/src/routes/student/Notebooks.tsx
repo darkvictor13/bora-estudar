@@ -11,7 +11,6 @@ import {
   getPendingQuizGoals,
   getStudyPlanBlocks,
 } from "@/lib/data/student";
-import { StartQuizButton } from "@/components/student/StartQuizButton";
 import { oldestPendingGoalOf } from "@/lib/domain/goals";
 import { BlockTopics } from "@/components/SessionTopics";
 
@@ -130,22 +129,20 @@ export function StudentNotebooks() {
                           <td className="acao">
                             {/* Só existe UMA bateria aberta por planejamento, e
                                 `start_quiz_session` recusa a segunda: com uma
-                                aberta, todo bloco aponta para ela. Esconder isso
-                                deixaria o aluno clicando num botão que só
-                                levanta erro. */}
+                                aberta, todo bloco aponta para ela. Enquanto não
+                                houver um caminho novo de execução, a coluna só
+                                informa o estado — não há botão que comece
+                                bateria. */}
                             {openSession ? (
-                              openSession.status === "awaiting_time" ? (
-                                <Link to={ROUTES.student.overview}>Registrar tempo</Link>
-                              ) : openSession.goal_id ? (
-                                <StartQuizButton
-                                  goalId={openSession.goal_id}
-                                  label="Continuar no TEC"
-                                />
-                              ) : null
+                              <Link to={ROUTES.student.overview}>
+                                {openSession.status === "awaiting_time"
+                                  ? "Registrar tempo"
+                                  : "Bateria aberta"}
+                              </Link>
                             ) : !block.active ? (
                               <span className="muted">Bloco desativado</span>
                             ) : proximaMeta ? (
-                              <StartQuizButton goalId={proximaMeta.id} />
+                              <span className="muted">Meta pendente</span>
                             ) : (
                               <span className="muted">Sem meta pendente</span>
                             )}

@@ -106,12 +106,12 @@ discussão que volta a cada revisão.
 
 Com as respostas na mão, esboce a **Superfície** em rascunho e aplique o corte:
 
-> Mais de duas RPCs novas, ou mais de uma migration, ou tocar site e extensão ao
+> Mais de duas RPCs novas, ou mais de uma migration, ou tocar site e banco ao
 > mesmo tempo → **são duas specs.**
 
 O item 8 do §12 é o exemplo: "executar o reforço" e "conduzir as fases
 `reinforcement`/`extra` no content script" são as duas metades do mesmo fluxo, e
-entregar junto significa uma migration e um `PROTOCOL_VERSION` no mesmo commit.
+entregar junto significa uma migration e a tela que a consome no mesmo commit.
 
 Se estourar, proponha a divisão **agora**, diga qual metade vem primeiro e por
 quê, e escreva só a primeira spec.
@@ -233,7 +233,7 @@ que é outro trabalho:
    ```
 
    `docs/specs/11-tema-claro-escuro.md` → `feature/tema-claro-escuro`. A
-   implementação inteira mora nessa branch — migration, RPC, protocolo, site,
+   implementação inteira mora nessa branch — migration, RPC, site,
    e2e e o fechamento da spec. **Nada de implementação é commitado direto na
    `main`:** cada commit na `main` publica staging
    (`.github/workflows/deploy-staging.yml`), e uma feature entregue pela metade
@@ -245,10 +245,8 @@ que é outro trabalho:
 3. teste de banco falhando primeiro, pelos `CA` que mapeiam para
    `supabase/tests/`;
 4. RPC, policies e grants até `npm run db:test` passar;
-5. `packages/protocol`, se a extensão entra — mudança incompatível incrementa
-   `PROTOCOL_VERSION`;
-6. site, mais a tradução das mensagens de `raise exception` para o usuário;
-7. e2e pelos `F-` reservados. **`npm run db:reset` entre `db:test` e `e2e`** —
+5. site, mais a tradução das mensagens de `raise exception` para o usuário;
+6. e2e pelos `F-` reservados. **`npm run db:reset` entre `db:test` e `e2e`** —
    na outra ordem o `global-setup` quebra.
 
 E o fechamento, no commit da implementação: `Situação` vira `implementada`, a

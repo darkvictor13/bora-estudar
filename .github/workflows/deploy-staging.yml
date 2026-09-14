@@ -81,8 +81,8 @@ jobs:
       - name: Instalar
         run: npm ci
 
-      # Build por workspace: o `npm run build` da raiz compila a extensão
-      # junto, que não tem nada a ver com este deploy.
+      # Build por workspace, e não `npm run build` da raiz: só o site é
+      # publicado aqui.
       #
       # As VITE_* precisam existir AQUI, no ambiente do build: o Vite faz
       # substituição estática e a chave é assada no bundle. Configuradas como

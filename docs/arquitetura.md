@@ -1,8 +1,13 @@
 # Arquitetura
 
-O repositório entrega três coisas que precisam evoluir juntas: o site, a
-extensão de navegador e o banco. Elas estão no mesmo repositório porque
-compartilham contratos que, quando versionados separadamente, derivam.
+O repositório entrega duas coisas que precisam evoluir juntas: o site e o
+banco. Elas estão no mesmo repositório porque compartilham contratos que,
+quando versionados separadamente, derivam.
+
+> **A extensão de navegador foi removida**, e com ela `packages/protocol`. Este
+> documento guarda o registro do que ela era e do que ficou no lugar — o que
+> ainda descreve o sistema está no presente; o que descreve a extensão está
+> marcado como histórico.
 
 ## Mapa
 
@@ -10,9 +15,8 @@ compartilham contratos que, quando versionados separadamente, derivam.
 bora-estudar/
 ├── apps/
 │   ├── web/                 # SPA React + Vite — painéis de aluno e professor
-│   └── extension/           # Extensão MV3 — conduz a bateria no TEC Concursos
+│   └── e2e/                 # Suíte Playwright, contra o site
 ├── packages/
-│   ├── protocol/            # Contrato site ↔ extensão (a única definição)
 │   └── database/            # Tipos gerados do schema Supabase
 ├── supabase/
 │   ├── config.toml
@@ -26,7 +30,7 @@ bora-estudar/
 formato que um teste e2e precisa. `docs/bugs-encontrados.md` registra a
 varredura de QA que produziu esse catálogo.
 
-Workspaces do npm. Sem Turborepo, Lerna ou pnpm: quatro pacotes não justificam
+Workspaces do npm. Sem Turborepo, Lerna ou pnpm: três pacotes não justificam
 uma camada extra de orquestração, e `npm run <script> --workspaces` resolve.
 
 ## Idioma
@@ -38,25 +42,24 @@ usuário final.
 
 ## Por que os limites estão onde estão
 
-### `packages/protocol` é o núcleo da decisão
+### `packages/protocol` era o núcleo da decisão — histórico
 
-Site e extensão trocam dados pelo fragmento (`#`) da URL. Esse contrato é a
-peça mais frágil do sistema: as duas pontas são versionadas separadamente na
-prática — o site atualiza sozinho, a extensão só quando o usuário quer.
+Site e extensão trocavam dados pelo fragmento (`#`) da URL, e esse contrato era
+a peça mais frágil do sistema: as duas pontas eram versionadas separadamente na
+prática — o site atualizava sozinho, a extensão só quando o usuário quisesse.
+Por isso existia **uma** definição, importada pelos dois, com `PROTOCOL_VERSION`
+comparada em toda leitura e validação de runtime na fronteira.
 
-Na versão anterior do produto cada lado mantinha sua própria cópia das formas
-de payload, e elas derivaram. O sintoma aparecia só em runtime, quando um campo
-chegava faltando. Aqui existe **uma** definição, importada pelos dois, com:
+Duas lições dali continuam valendo para qualquer fronteira que venha a
+substituí-la:
 
-- `PROTOCOL_VERSION` comparada em toda leitura — payload de versão diferente é
-  rejeitado com mensagem acionável em vez de falhar em cascata;
-- validação de runtime na fronteira, porque `JSON.parse` devolve `any` e um
-  tipo do TypeScript não sobrevive à serialização;
-- `historyComplete: boolean`, para o site poder admitir que não conseguiu
-  carregar o histórico inteiro. A versão anterior marcava o histórico como
-  autoritativo mesmo truncado, e o motor passava a repetir questões em silêncio.
-
-O pacote é dependência zero e roda sem build tanto no Node quanto no navegador.
+- **uma definição só, importada pelas duas pontas.** Na versão anterior do
+  produto cada lado mantinha sua cópia das formas de payload, e elas derivaram;
+  o sintoma aparecia só em runtime, quando um campo chegava faltando;
+- **admitir o que não se sabe.** O payload levava `historyComplete: boolean`
+  para o site poder dizer que não conseguiu carregar o histórico inteiro. A
+  versão anterior marcava o histórico como autoritativo mesmo truncado, e o
+  motor passava a repetir questões em silêncio.
 
 ### `packages/database` é separado de `web`
 
@@ -65,70 +68,45 @@ dentro de `apps/web`, por dois motivos: o diff de cada migration mostra o
 impacto na superfície de tipos, e Edge Functions futuras consomem os mesmos
 tipos sem depender do app.
 
-### A extensão não fala com o Supabase
+### A extensão não falava com o Supabase — histórico
 
-Ela recebe um payload do site e devolve outro. Nunca vê uma chave do Supabase,
-nunca abre conexão com o banco. Duas consequências boas: o pacote distribuído
-na loja não carrega credencial, e toda regra de negócio permanece atrás das
-RPCs, onde é verificável.
-
-Por isso `@bora/extension` depende de `@bora/protocol`, mas não de
-`@bora/database`.
-
-Daí decorre uma propriedade que simplifica o deploy: **a extensão é agnóstica
-de ambiente**. O `manifest.json` só pede permissão em `tecconcursos.com.br`, e
-o `returnUrl` chega dentro do payload — quem o monta é o `StartQuizButton`, a
-partir de `location.origin`. O mesmo `dist/` serve local, staging e produção,
-desde que compilado do mesmo commit. O que amarra as duas pontas não é
-configuração, é o `PROTOCOL_VERSION`.
+Ela recebia um payload do site e devolvia outro. Nunca via uma chave do
+Supabase, nunca abria conexão com o banco: o pacote distribuído na loja não
+carregava credencial, e toda regra de negócio permanecia atrás das RPCs, onde é
+verificável. É a mesma exigência que qualquer superfície de execução nova
+precisa cumprir.
 
 ## Fluxo de uma bateria
 
+**A execução não existe hoje.** O caminho abaixo é o que havia até a remoção da
+extensão, e está aqui porque o banco continua exatamente assim — quem desenhar a
+execução nova encaixa no mesmo ledger.
+
 ```
-  aluno clica em "iniciar"
+  aluno pede para iniciar
         │
   web ──┤ RPC start_quiz_session ──────────────► supabase
         │ ◄── quiz_session (id, session_number, main_target)
         │
-        │ monta QuizStart + histórico (view vw_seen_questions)
-        │ redireciona para tecconcursos.com.br/#boraQuizStart=<base64url>
+        │ [removido] payload com o catálogo do bloco e o histórico do aluno
         ▼
-  extensão lê a hash, PERSISTE a sessão, e só então limpa a hash
+  [removido] a extensão conduzia as questões no TEC e devolvia o resultado
         │
-        │ aluno responde as questões; cada resposta vai para storage.local
-        │
-        │ ao finalizar: gera requestId UMA vez, AGUARDA a gravação,
-        │ e só então navega
-        │ redireciona para <returnUrl>#boraQuizResult=<base64url>
         ▼
-  web lê a hash ──► RPC finish_quiz_session (idempotente por requestId)
-        │           e só limpa a hash DEPOIS da confirmação
+  web ──► RPC finish_quiz_session (idempotente por requestId)
+        │
         ▼
   aluno registra o tempo ──► RPC record_quiz_session_time ──► goal concluída
 ```
 
-As duas ordenações em maiúsculas são deliberadas. Invertê-las reintroduz as
-duas perdas silenciosas de resultado que existiam na versão anterior: limpar a
-hash antes de confirmar a gravação, e navegar antes de a sessão chegar ao disco.
+Do que sobrou, a parte viva é a última linha: `record_quiz_session_time` e o
+cancelamento continuam na tela do aluno, e são o que fecha uma sessão que já
+esteja aberta.
 
-`npm run test:e2e` percorre essa cadeia inteira sem navegador, contra o
-Supabase local: 21 checagens que vão da abertura da sessão até a meta concluída,
-incluindo a retentativa com o mesmo `requestId` e a prova de que a segunda
-bateria do bloco não repete nenhuma questão da primeira.
-
-### Onde mora o acoplamento com o TEC
-
-Todo o conhecimento do HTML de terceiro está em
-`apps/extension/src/content/tec-page.ts`: os seletores da questão e do
-resultado, a navegação e a observação da página. Quando o TEC mudar o layout —
-e vai mudar — só esse arquivo é tocado. O motor de seleção
-(`content/engine.ts`) é função pura e tem testes próprios.
-
-Uma sutileza que parece bug e não é: ao abrir uma questão que o aluno já
-resolveu antes, fora desta bateria, o TEC mostra o resultado de imediato. O
-content script guarda esse id na abertura e ignora o resultado até o primeiro
-clique num controle de resposta — sem isso, um acerto antigo entraria como se
-tivesse acabado de acontecer.
+Duas propriedades do desenho antigo valem ser lembradas antes de escrever o
+novo, porque cada uma corresponde a uma perda real de bateria já respondida:
+**confirmar a gravação antes de descartar a única cópia do resultado**, e
+**gerar o `request_id` uma vez, na origem, reusando-o em toda retentativa**.
 
 ## Banco
 
@@ -276,12 +254,13 @@ recarregar a página.
   professor, vazia. Antes disso o admin não conseguia entrar: a home dele era
   a área do professor, e essa área o devolvia para a própria home. Uma área de
   administração de verdade ainda precisa ser desenhada.
-- **`data_collection_permissions` no manifesto.** O `web-ext lint` avisa que a
-  chave será obrigatória. Declarar o que a extensão coleta é decisão de
-  política, não técnica, e precisa ser resolvida antes de publicar na AMO.
-- ~~**Reforços e extras na extensão.**~~ Resolvido pela spec
-  [21](specs/21-fases-na-extensao.md): o content script conduz as três fases, e
-  o `PROTOCOL_VERSION` passou a 2 para o tópico viajar no payload.
-- ~~**Correlação de tópico na seleção.**~~ Resolvido pela spec
-  [22](specs/22-rodizio-por-topico.md): a fila é montada em rodízio por tópico,
-  pelo menos coberto.
+- **Como o aluno responde uma bateria.** É a pendência que a remoção da
+  extensão abriu, e a maior: o banco tem a sessão, o ledger e as três fases;
+  não há superfície que as execute. Enquanto não houver, a tela do aluno abre
+  nenhuma bateria — de propósito, para não produzir sessão travada.
+- ~~**Reforços e extras na extensão.**~~ Sem efeito: as três fases eram
+  conduzidas pelo content script, que saiu. As fases continuam no schema
+  (`question_phase`) e nos agregados.
+- ~~**Correlação de tópico na seleção.**~~ Sem efeito pelo mesmo motivo: o
+  rodízio por tópico vivia no motor da extensão. O tópico continua no catálogo
+  e no ledger, que é o que uma seleção nova precisa.

@@ -88,7 +88,6 @@ Curta. Existe para a mesma discussão não voltar a cada revisão.
 | O que é tentador incluir e **não** entra agora? | — |
 | A v2 fazia algo parecido? Como, e o que deu errado? | Ver `docs/comparativo-fluxos-v2.md` |
 | Precisa de notificação, e-mail ou aviso fora da tela? | Não |
-| Precisa aparecer na extensão? | Não — e, se precisar, a extensão nunca fala com o Supabase: recebe um payload e devolve outro |
 | Basta o `audit_log`, ou o histórico precisa de tela? | Basta o `audit_log` |
 | Precisa aparecer em relatório ou exportação? | Não |
 

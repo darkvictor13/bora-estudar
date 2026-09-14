@@ -10,32 +10,8 @@
  * Isso também torna a suíte imune à ordem de execução em relação ao
  * `npm run db:test`, que trunca `auth.users` e `public.catalogs`.
  */
-import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
-
 import { closeDb, count, query } from "./fixtures/db.ts";
 import { CATALOG } from "./fixtures/scenario.ts";
-import { EXTENSION_DIST } from "./fixtures/extension.ts";
-
-/**
- * Compila a extensão antes de a suíte rodar.
- *
- * `extension.spec.ts` carrega `apps/extension/dist` num Chromium de verdade.
- * Rodar contra um `dist` velho é pior do que não testar: a suíte fica verde
- * enquanto o código que o aluno usaria está quebrado. O build é de
- * milissegundos, então não vale a pena tentar adivinhar se está atualizado.
- */
-function buildExtension(): void {
-  execFileSync("npm", ["run", "build", "--workspace", "@bora/extension"], {
-    cwd: path.resolve(import.meta.dirname, "../.."),
-    stdio: "pipe",
-  });
-
-  if (!existsSync(path.join(EXTENSION_DIST, "manifest.json"))) {
-    throw new Error(`a extensão não foi compilada: ${EXTENSION_DIST} sem manifest.json`);
-  }
-}
 
 async function ensureCatalog(): Promise<void> {
   await query("insert into public.catalogs (key, name) values ($1, $2) on conflict (key) do nothing", [
@@ -75,7 +51,6 @@ async function ensureCatalog(): Promise<void> {
 
 export default async function globalSetup(): Promise<void> {
   try {
-    buildExtension();
     await ensureCatalog();
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
