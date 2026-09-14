@@ -1,9 +1,11 @@
+import { Alert, Field } from "@bora/ui";
 import { useLoaderData } from "react-router";
 
 import { AuthForm } from "@/components/auth/AuthForm";
-import { Alert, Field } from "@/components/ui";
+import { AuthView } from "@/components/auth/AuthView";
 import { updatePassword } from "@/lib/auth/actions";
 import { getSessionContext } from "@/lib/auth/session";
+import { ROUTES } from "@/lib/routes";
 
 export async function resetPasswordLoader() {
   // O link do e-mail autentica a pessoa antes de chegar aqui, passando por
@@ -17,34 +19,42 @@ export function ResetPassword() {
   const { hasSession } = useLoaderData() as LoaderData;
 
   return (
-    <div className="auth__card">
-      <p className="auth__brand">Nova senha</p>
-      <p className="auth__sub">Escolha uma senha para voltar a acessar sua conta.</p>
-
+    <AuthView
+      title="Redefinir senha"
+      description="Crie uma nova senha para acessar sua conta."
+      backTo={ROUTES.signIn}
+      backLabel="Voltar para o login"
+    >
       {!hasSession ? (
-        <Alert kind="warning">
+        <Alert status="warning">
           Este link expirou ou já foi usado. Peça um novo em “Esqueci minha senha”.
         </Alert>
       ) : (
-        <AuthForm action={updatePassword} submitLabel="Salvar senha" pendingLabel="Salvando…">
-          <Field
-            label="Nova senha"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={6}
-          />
-          <Field
-            label="Confirme a nova senha"
-            name="passwordConfirmation"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={6}
-          />
+        <AuthForm action={updatePassword} submitLabel="Salvar nova senha" pendingLabel="Salvando…">
+          {(state) => (
+            <>
+              <Field
+                label="Nova senha"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Digite a nova senha"
+                required
+                invalid={state.field === "password" && Boolean(state.error)}
+              />
+              <Field
+                label="Confirmar nova senha"
+                name="passwordConfirmation"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Repita a nova senha"
+                required
+                invalid={state.field === "passwordConfirmation" && Boolean(state.error)}
+              />
+            </>
+          )}
         </AuthForm>
       )}
-    </div>
+    </AuthView>
   );
 }

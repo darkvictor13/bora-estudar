@@ -1,245 +1,203 @@
-import { useLoaderData } from "react-router";
-
-import { Alert, Card, Empty, PageHeader } from "@/components/ui";
-import { requireStudentAccess } from "@/lib/auth/session";
+import Box from "@mui/material/Box";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
 import {
-  getActiveStudyPlan,
-  getBlockPerformance,
-  getPlanWeeks,
-  getSessionTopics,
-  getStudentCompletedSessions,
-  getStudyPlanBlocks,
-  getStudyTime,
-  getTopicDifficulty,
-} from "@/lib/data/student";
-import { StudyStreak, StudyTime, WeeklySeries } from "@/components/StudyTime";
-import { SessionTopics } from "@/components/SessionTopics";
-import { Link } from "react-router";
-import { TopicDifficulty } from "@/components/TopicDifficulty";
-import { scorePercent } from "@/lib/domain/goals";
+  Alert,
+  BarChart,
+  Card,
+  Empty,
+  LineChart,
+  Metric,
+  PageHeader,
+  RankedBars,
+} from "@bora/ui";
+import { useLoaderData, useSearchParams } from "react-router";
 
+import { ContentBody } from "@/components/AppShell";
+import { api, type Statistics as StatisticsData } from "@/lib/api";
+import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
+import { requireStudentAccess } from "@/lib/auth/session";
+import { formatMinutes } from "@/lib/domain/week";
+
+/**
+ * Estatísticas do aluno — o `p-estatisticas` da v2.
+ *
+ * Cada gráfico tem UMA SÉRIE, e é por isso que nenhum tem legenda: o título já
+ * nomeia o que está desenhado. Duas medidas de escalas diferentes viram dois
+ * gráficos — nunca dois eixos y, que é a forma mais comum de um painel inventar
+ * uma correlação que o dado não tem.
+ */
 export async function studentStatisticsLoader({ request }: { request: Request }) {
   await requireStudentAccess();
 
-  const plan = await getActiveStudyPlan();
-  if (!plan) return { plan: null } as const;
+  const plan = await loadActivePlanOrNull();
+  if (!plan) return { stats: null, years: [] as number[], year: new Date().getFullYear() };
 
-  const [performance, blocks, topics, studyTime, weeks, sessions] = await Promise.all([
-    getBlockPerformance(plan.id),
-    getStudyPlanBlocks(plan.id),
-    getTopicDifficulty(plan.id),
-    getStudyTime(plan.id),
-    getPlanWeeks(plan.id),
-    getStudentCompletedSessions(plan.id),
-  ]);
+  const asked = Number(new URL(request.url).searchParams.get("ano"));
+  const thisYear = new Date().getFullYear();
+  const year = Number.isFinite(asked) && asked > 2000 ? asked : thisYear;
 
-  // A bateria escolhida mora na query string, como `?bloco=` em /aluno/revisoes:
-  // recarregar mantém, e o link é compartilhável com o professor. Id alheio ou
-  // inexistente não quebra a tela — a RLS já não devolveria a linha, e a tela
-  // simplesmente não mostra resumo nenhum (R-RESU-13).
-  const requested = new URL(request.url).searchParams.get("bateria");
-  const selectedSession = requested && sessions.some((s) => s.id === requested) ? requested : null;
-  const sessionTopics = selectedSession ? await getSessionTopics(selectedSession) : [];
+  const stats = await api.loadStatistics({ studyPlanId: plan.id, year });
+  // Do ano em que o planejamento começou até hoje: um seletor com 2019 numa
+  // conta criada em 2026 é ruído.
+  const firstYear = Number(plan.startsOn.slice(0, 4));
+  const years = Array.from({ length: Math.max(1, thisYear - firstYear + 1) }, (_, i) => firstYear + i);
 
-  return {
-    plan,
-    performance,
-    blocks,
-    topics,
-    studyTime,
-    weeks,
-    sessions,
-    selectedSession,
-    sessionTopics,
-  } as const;
+  return { stats, years, year };
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentStatisticsLoader>>;
 
-export function StudentStatistics() {
-  const data = useLoaderData() as LoaderData;
+function Kpis({ stats }: { stats: StatisticsData }) {
+  return (
+    <Box
+      sx={(theme) => ({
+        display: "grid",
+        gridTemplateColumns: "repeat(5, 1fr)",
+        gap: 1.25,
+        mb: 1.75,
+        [theme.breakpoints.down("lg")]: { gridTemplateColumns: "repeat(2, 1fr)" },
+      })}
+    >
+      {/*
+        A ROSCA DE ACERTO E ERRO DA v2 VIROU UM NÚMERO, e a troca é do método:
+        uma rosca de duas fatias é um número desenhado de forma difícil de ler —
+        a comparação que ela pede o olho faz pior do que a leitura direta.
+      */}
+      <Metric
+        label="Desempenho"
+        value={stats.score === null ? "—" : `${stats.score}%`}
+        note={`${stats.correctAnswers}/${stats.questionsAnswered} acertos`}
+      />
+      <Metric label="Questões" value={stats.questionsAnswered} />
+      <Metric label="Tempo estudado" value={formatMinutes(stats.studiedMinutes)} />
+      <Metric label="Metas concluídas" value={stats.goalsCompleted} />
+      <Metric
+        label="Sequência"
+        value={stats.streakDays}
+        note={stats.streakDays === 1 ? "dia" : "dias"}
+      />
+    </Box>
+  );
+}
 
-  if (!data.plan) {
+export function StudentStatistics() {
+  const { stats, years, year } = useLoaderData() as LoaderData;
+  const [params, setParams] = useSearchParams();
+
+  if (!stats) {
     return (
       <>
         <PageHeader title="Estatísticas" />
-        <Alert kind="info">Nenhum planejamento ativo.</Alert>
+        <ContentBody>
+          <Alert status="info">
+            Nenhum planejamento ativo. Aguarde seu professor montar e ativar um.
+          </Alert>
+        </ContentBody>
       </>
     );
   }
 
-  const { performance, topics, studyTime, weeks, sessions, selectedSession, sessionTopics } =
-    data;
-  const blockNameById = new Map(data.blocks.map((b) => [b.id, b.name]));
-  // `new Date()` no render, e não no loader: o loader é serializado e uma Date
-  // atravessaria como string. O dia de hoje é do navegador, que é onde o aluno
-  // está.
-  const today = new Date();
-  const blockById = new Map(data.blocks.map((b) => [b.id, b]));
-
-  const totals = performance.reduce(
-    (acc, r) => ({
-      main: acc.main + (r.main_count ?? 0),
-      mainCorrect: acc.mainCorrect + (r.main_correct ?? 0),
-      total: acc.total + (r.total_count ?? 0),
-      totalCorrect: acc.totalCorrect + (r.total_correct ?? 0),
-    }),
-    { main: 0, mainCorrect: 0, total: 0, totalCorrect: 0 },
-  );
-
-  const officialPct = scorePercent(totals.mainCorrect, totals.main);
-  const totalPct = scorePercent(totals.totalCorrect, totals.total);
-
-  // Pior desempenho oficial primeiro: é onde o estudo precisa ir.
-  const rows = [...performance].sort(
-    (a, b) => (a.official_score_pct ?? 101) - (b.official_score_pct ?? 101),
-  );
+  const semDado = stats.questionsAnswered === 0 && stats.studiedMinutes === 0;
 
   return (
     <>
       <PageHeader
         title="Estatísticas"
-        description="O desempenho oficial conta só as questões principais. O aproveitamento total inclui extras e reforços."
+        description="O que os seus registros dizem"
+        actions={
+          <TextField
+            select
+            size="small"
+            label="Ano"
+            slotProps={{ select: { inputProps: { "data-testid": "year-select" } } }}
+            value={String(year)}
+            onChange={(event) => {
+              params.set("ano", event.target.value);
+              setParams(params);
+            }}
+            sx={{ minWidth: 140 }}
+          >
+            {years.map((option) => (
+              <MenuItem key={option} value={String(option)}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
+        }
       />
 
-      <div className="stack">
-        <div className="grid-cards">
-          <Card title="Desempenho oficial" sub="Somente questões principais">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>
-              {officialPct === null ? "—" : `${officialPct}%`}
-            </p>
-            <p className="muted">
-              {totals.mainCorrect} acertos em {totals.main} principais
-            </p>
-          </Card>
+      <ContentBody>
+        <Kpis stats={stats} />
 
-          <Card title="Aproveitamento total" sub="Principais, extras e reforços">
-            <p style={{ fontSize: "2rem", fontWeight: 700 }}>
-              {totalPct === null ? "—" : `${totalPct}%`}
-            </p>
-            <p className="muted">
-              {totals.totalCorrect} acertos em {totals.total} questões resolvidas
-            </p>
-          </Card>
-        </div>
+        {semDado ? (
+          <Empty icon="📊">
+            Nenhum registro em {year}. Assim que você registrar estudo, os gráficos aparecem aqui.
+          </Empty>
+        ) : (
+          <Box
+            sx={(theme) => ({
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 1.5,
+              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+            })}
+          >
+            <Card>
+              <LineChart
+                testId="chart-score-week"
+                title="Desempenho por semana"
+                description="Acertos sobre questões da semana — não a média das porcentagens."
+                points={stats.scoreByWeek}
+                format={(value) => `${value}%`}
+              />
+            </Card>
 
-        <div className="grid-cards">
-          <StudyTime rows={studyTime} today={today} />
-          <StudyStreak rows={studyTime} today={today} />
-        </div>
+            <Card>
+              <BarChart
+                testId="chart-questions-week"
+                title="Questões por semana"
+                points={stats.questionsByWeek}
+              />
+            </Card>
 
-        <WeeklySeries rows={studyTime} plannedWeeks={weeks} />
+            <Card>
+              <BarChart
+                testId="chart-minutes-day"
+                title="Tempo por dia"
+                description="Os últimos 14 dias com registro."
+                points={stats.minutesByDay}
+                format={formatMinutes}
+              />
+            </Card>
 
-        <Card title="Suas baterias" sub="Concluídas, da mais recente para a mais antiga">
-          {sessions.length === 0 ? (
-            <Empty>Nenhuma bateria concluída ainda.</Empty>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Bloco</th>
-                    <th className="num">Bateria</th>
-                    <th className="num">Tempo</th>
-                    <th>Tópicos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions.map((session) => (
-                    <tr key={session.id}>
-                      <td>
-                        {(session.block_id && blockNameById.get(session.block_id)) ?? "—"}
-                      </td>
-                      <td className="num">{session.session_number ?? "—"}</td>
-                      <td className="num">
-                        {session.duration_minutes ? `${session.duration_minutes}min` : "—"}
-                      </td>
-                      <td>
-                        {selectedSession === session.id ? (
-                          <Link to="/aluno/estatisticas">Fechar</Link>
-                        ) : (
-                          <Link to={`/aluno/estatisticas?bateria=${session.id}`}>Ver tópicos</Link>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+            <Card>
+              <BarChart
+                testId="chart-minutes-month"
+                title="Tempo por mês"
+                points={stats.minutesByMonth}
+                format={formatMinutes}
+              />
+            </Card>
 
-        {selectedSession && <SessionTopics rows={sessionTopics} />}
-
-        <TopicDifficulty
-          rows={topics}
-          blockNames={new Map(data.blocks.map((b) => [b.id, b.name]))}
-          title="Onde você está errando"
-        />
-
-        <Card title="Blocos x desempenho" sub="Pior desempenho oficial primeiro">
-          {rows.length === 0 ? (
-            <Empty>Nenhuma bateria concluída ainda.</Empty>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Disciplina</th>
-                    <th>Bloco</th>
-                    <th className="num">Total realizado</th>
-                    <th>Composição</th>
-                    <th>Acertos e erros</th>
-                    <th className="num">Oficial</th>
-                    <th className="num">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const block = row.block_id ? blockById.get(row.block_id) : null;
-                    const composition = [
-                      `${row.main_count ?? 0} principais`,
-                      row.extra_count ? `${row.extra_count} extras` : null,
-                      row.reinforcement_count ? `${row.reinforcement_count} reforços` : null,
-                    ].filter(Boolean);
-                    const outcomes = [
-                      `P: ${row.main_correct ?? 0} ac. / ${row.main_incorrect ?? 0} er.`,
-                      row.extra_count
-                        ? `E: ${row.extra_correct ?? 0} ac. / ${row.extra_incorrect ?? 0} er.`
-                        : null,
-                      row.reinforcement_count
-                        ? `R: ${row.reinforcement_correct ?? 0} ac. / ${row.reinforcement_incorrect ?? 0} er.`
-                        : null,
-                    ].filter(Boolean);
-
-                    return (
-                      <tr key={row.block_id}>
-                        <td style={{ color: block?.subject_color }}>
-                          {block?.subject_name ?? "—"}
-                        </td>
-                        <td>{block?.name ?? "—"}</td>
-                        <td className="num">
-                          <strong>{row.total_count ?? 0}</strong>
-                        </td>
-                        <td className="muted">{composition.join(" · ")}</td>
-                        <td className="muted">{outcomes.join(" · ")}</td>
-                        <td className="num">
-                          <strong>
-                            {row.official_score_pct === null ? "—" : `${row.official_score_pct}%`}
-                          </strong>
-                        </td>
-                        <td className="num">
-                          {row.total_score_pct === null ? "—" : `${row.total_score_pct}%`}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      </div>
+            <Box sx={{ gridColumn: "1 / -1" }}>
+              <Card>
+                <RankedBars
+                  testId="chart-by-subject"
+                  title="Desempenho por disciplina"
+                  description="O traço é a meta que seu professor definiu. Pior desempenho primeiro."
+                  rows={stats.bySubject.map((subject) => ({
+                    label: subject.subject,
+                    value: subject.score,
+                    target: subject.targetScore,
+                    note: `${subject.correctAnswers}/${subject.questions}`,
+                  }))}
+                />
+              </Card>
+            </Box>
+          </Box>
+        )}
+      </ContentBody>
     </>
   );
 }

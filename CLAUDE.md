@@ -51,6 +51,23 @@ npm run e2e:video     # a mesma suíte, gravando .webm por teste
 
 ## Banco
 
+> **Esta seção está atrasada em relação ao schema de 14/09/2026.** A tabela
+> abaixo cita `subscriptions`, `student_teacher_links`, `catalogs`,
+> `catalog_questions` e `student_preferences`, que **não existem mais**: o
+> acesso virou `profiles.access_status` + `access_expires_at`, o vínculo virou
+> `profiles.teacher_id`, e o catálogo se resumiu a `catalog_blocks`. O de-para
+> completo está em [`docs/de-para-schema.md`](docs/de-para-schema.md), e é ele
+> que vale até esta seção ser reescrita pela frente do banco. Os PRINCÍPIOS
+> abaixo — grant por coluna, ledger append-only, idempotência, nada apagado —
+> continuam valendo todos.
+>
+> **Pendência que bloqueia cadastro:** o gatilho de criação de perfil em
+> `auth.users` não foi portado. Sem ele, quem se cadastra ganha usuário no
+> GoTrue e nenhuma linha em `profiles` — e o site o trata como não autenticado.
+> Ver `F-AUTH-08` (marcado `fixme`) e a seção "Funções e gatilhos" do de-para,
+> que registra também a decisão de produto que falta: a qual professor um aluno
+> sem metadado é anexado.
+
 **A fronteira da escrita é entre planejar e executar.**
 
 | | Quem escreve | Como |
@@ -310,6 +327,202 @@ defeito conhecido, o número do bug.
   então pula a inserção e as questões batem em violação de FK. O comentário do
   `global-setup` afirma imunidade à ordem e não tem. Rode `npm run db:reset`
   entre os dois.
+
+---
+
+## A interface
+
+**A UI não fala com o Supabase. Ela fala com um contrato.**
+
+`apps/web/src/lib/api/` expõe funções tipadas por caso de uso — `loadWeek`,
+`saveTheoryProgress`, `generateWeek`. Nenhum componente importa
+`@supabase/supabase-js`, e nenhum componente sabe que existe uma tabela
+`goals`. Duas implementações vivem atrás do contrato, e `VITE_API_IMPL` escolhe:
+`fixtures`, em memória, e `supabase` — que é **o padrão** desde que a frente do
+banco entregou o schema.
+
+**O adaptador do Supabase cobre o contrato inteiro** — um módulo por assunto em
+`lib/api/supabase/`, composto em `index.ts`. Cinco operações LANÇAM com o motivo
+em vez de recusar educadamente, porque não são erro de uso: são coisas que este
+schema não permite (liberar acesso, anular bateria, resgatar cupom, selecionar
+matérias do ciclo). Uma tela que finge ter tentado é pior do que uma que
+explica, e a recusa muda no dia em que o banco mudar.
+
+**`VITE_API_IMPL=fixtures` continua servindo** para construir tela sem banco no
+ar. As duas implementações compartilham `lib/api/validation.ts`, então recusam
+com a mesma frase.
+
+**Validação de formulário é do contrato, não de quem o cumpre.** As regras e as
+frases moram em `lib/api/validation.ts`, e as DUAS implementações chamam as
+mesmas funções. Sem isso a fixture recusa nome curto com uma frase, o Supabase
+com outra, e o teste que fixou a primeira passa a mentir.
+
+Existe porque a reconstrução da v2 e a reescrita do banco correm em paralelo.
+Sem a camada, cada tela nasceria acoplada a um schema que ainda vai mudar, e a
+integração seria um segundo reescrever — de telas, não de adaptadores.
+
+- **`contract.ts` é o pedido formal ao banco.** Operação que a UI precisa e o
+  schema não cumpre é resolvida no schema ou no contrato, nunca num `any` no
+  meio do caminho. As lacunas conhecidas estão no cabeçalho do arquivo.
+- **Leitura lança; escrita devolve `Result`.** Loader que falha é trabalho do
+  `ErrorBoundary` da rota. Erro de escrita — acesso vencido, meta já concluída
+  noutra aba — é caminho normal, e `throw` obrigaria cada formulário a um
+  try/catch que ninguém lembra de escrever.
+- **`fixtures` muta e recusa.** Um mock que devolve sempre o mesmo objeto
+  esconde os defeitos que a UI tem: revalidação que não roda, lista que não
+  reordena, contador que não soma. E um que aceita tudo faz o caminho de erro
+  nascer sem tela.
+- **`fixtures.test.ts` é a especificação executável do contrato.** Cada
+  asserção é uma promessa que o adaptador do Supabase vai ter de cumprir igual.
+
+### Tema
+
+**O tema vem da conta, e o MUI não participa da decisão.**
+
+**HOJE ELE NÃO TEM ONDE MORAR NA CONTA.** `user_preferences` saiu no schema de
+14/09/2026 e nada a substituiu — é a lacuna nº 1 de `lib/api/contract.ts`, e o
+pedido à frente do banco é uma coluna `theme_preference` em `profiles`.
+Enquanto ela não existe, `supabaseApi` guarda a escolha no APARELHO, pelo mesmo
+`lib/theme.ts` que pinta antes do primeiro paint. A consequência a dizer em voz
+alta: quem escolhe escuro no computador continua vendo claro no celular, e
+R-TEMA-11 está suspenso — com F-TEMA-02 e F-TEMA-04 marcados `fixme` para que a
+falta continue visível na saída da suíte.
+
+**`null` é "nunca escolheu", e não se grava.** A ausência equivale a claro
+(R-TEMA-07), mas não é a mesma coisa que ter escolhido claro: gravar `light` na
+primeira visita transformaria toda abertura numa escolha que ninguém fez.
+
+Quem escreve `data-theme` no `<html>` é `lib/theme.ts` — o script embutido de
+`index.html` antes do primeiro paint, e o loader do layout logo depois. O tema
+de `@bora/ui` usa `colorSchemeSelector: 'data-theme'`, então ele GERA as duas
+folhas de variável (`:root, [data-theme="light"]` e `[data-theme="dark"]`) mas
+não escolhe qual vale.
+
+O desligamento é explícito em `RootLayout`: `colorSchemeNode={null}`,
+`storageManager={null}`, `storageWindow={null}`. Sem as três, o
+`useColorScheme` do MUI leria `mui-mode` do `localStorage` na montagem e
+sobrescreveria, na frente de quem escolheu, o tema que veio da conta.
+
+**Consequência ao escrever override: `theme.palette.*` congela no
+`defaultColorScheme`.** Cor sempre por `theme.vars.palette.*`, que é CSS
+variable e troca junto com o atributo, sem re-render de árvore.
+
+**Nada de `transition` no `body`.** Havia ali `background-color, color`, e as
+duas quebravam. `color` é HERDADO: animá-lo no `body` anima a cor de cada nó de
+texto ao mesmo tempo, e durante os 180ms o texto não é de nenhum dos dois temas
+— o F-TEMA-07 chegou a medir 2.33:1 num título que, parado, dá 18:1. E a
+transição pega a PRIMEIRA aplicação do estilo, não só a troca: o Emotion injeta
+o estilo do `body` e as variáveis de cor em tempo de execução, e se o `body`
+chega primeiro o fundo desliza do branco para o preto — a piscada que o script
+embutido de `index.html` existe para impedir. Transição continua onde vale:
+hover, foco, largura da barra lateral.
+
+### Tipografia
+
+**DM Sans no texto, DM Mono no número** — o par da v2, auto-hospedado por
+`@fontsource`. Nenhuma requisição sai para `fonts.googleapis.com`, e não é
+preferência: a suíte e2e proíbe rede externa.
+
+- **DM Mono não tem negrito.** Publica 300, 400 e 500, e nada além. A v2 pedia
+  700 em 19 dos 56 lugares onde usa o mono, e o navegador sintetizava um
+  falso-negrito — traço engordado de forma irregular, justamente no que precisa
+  ser lido com precisão. Todo peso de mono passa por `monoWeight`.
+- **O mono é a face dos números, não enfeite.** É o que faz coluna de
+  porcentagem e de tempo alinhar. `Chip`, `Badge` e a variante `numeric` já
+  apontam para ele.
+- **A raiz fica nos 16px do navegador.** A v2 usava `html{font-size:14px}`;
+  fixar a raiz sequestra a preferência de quem aumentou a letra e redefine o
+  que `rem` significa para o MUI, que calcula presumindo 16. A densidade vem da
+  escala: `body1` é `0.875rem`.
+
+### Gráficos
+
+**Uma série por gráfico, e uma cor por série.** Duas medidas de escalas
+diferentes viram dois gráficos, nunca dois eixos y — a sobreposição de duas
+escalas inventa uma correlação que o dado não tem. Pintar a barra maior mais
+escura gasta o único canal livre repetindo o que o comprimento já diz.
+
+**A cor da série foi VALIDADA, não escolhida.** `chart.series` é o petróleo 600,
+e é o único degrau da escala que passa nas seis checagens do método — faixa de
+luminosidade, piso de croma, contraste — contra o branco E contra o preto. O 700
+reprova o piso de croma e lê como cinza num traço fino; o 400 sai da faixa no
+escuro. Antes de trocar, rode o validador; não confie no olho.
+
+**Menos de dois pontos não é gráfico, é número.** `BarChart` e `LineChart` caem
+para `SinglePoint` sozinhos: uma barra só ocupa a largura inteira e não compara
+nada com nada.
+
+**Toda figura tem tabela.** É o que sustenta leitor de tela, impressão em preto e
+branco, e quem só quer o número.
+
+### A casca e as primitivas
+
+**`packages/ui/src/primitives` é de todo mundo; `apps/web/src/components` é da
+aplicação.** `Card`, `PageHeader`, `Metric`, `Empty`, `Badge`, `DayChip`,
+`Alert` e `Field` são as caixas que a v2 repete em toda tela, e a área do
+professor usa as mesmas da do aluno. Cada uma carrega o próprio `data-testid`:
+é isso que permite reescrever o interior sem reescrever a suíte.
+
+**A barra lateral tem DUAS noções de recolhida, e elas não são a mesma.**
+`collapsed` é a preferência do aparelho, em `localStorage`; `compact` é o que a
+barra mostra. Abaixo de 820px — o breakpoint da v2 — `compact` é imposto e a
+preferência continua guardada, para voltar a valer quando a janela crescer.
+Recolher por falta de espaço não pode apagar a escolha de quem usa monitor
+grande.
+
+**`ErrorBoundary` de área fica numa rota SEM CAMINHO, dentro do layout.** O
+React Router substitui pelo boundary o elemento da rota que o DECLARA, não o da
+rota que falhou: declarado no próprio layout, um erro de loader de tela apagava
+a barra lateral junto, e a pessoa perdia a navegação no momento em que mais
+precisa dela — para sair dali.
+
+### `data-testid` nos seletores de teste
+
+**Casar por classe CSS é casar com o que não é contrato.** As classes de
+`globals.css` somem junto com as telas antigas, e as que o MUI gera mudam
+quando o Emotion decide que mudam.
+
+O testid nomeia o PAPEL; o que varia entra num `data-*` ao lado:
+
+```tsx
+<div data-testid="alert" data-status="success">…</div>
+<tr  data-testid="goal-row" data-goal-id={goal.id} data-status={goal.status}>
+```
+
+Um testid por componente, não um por combinação — `alert-success` e
+`alert-error` seriam dois nomes para a mesma caixa. Em kebab-case, em inglês, e
+sem o nome da tela: `goal-row` serve ao aluno e ao professor. Os localizadores
+ficam em `apps/e2e/support/ui.ts`.
+
+**A conversão acontece na fase em que a tela é reescrita**, nunca antes nem
+depois: converter cedo deixa a suíte testando o que vai sumir, converter tarde
+deixa a fase sem rede. **Está feita:** `grep -c 'locator("\.'` em `apps/e2e` dá
+zero.
+
+**`teacherPage` e `studentPage` SÃO A MESMA ABA.** Os dois derivam do `page`
+embutido, e pedir os dois na assinatura de um teste faz o segundo login
+sobrescrever o primeiro EM SILÊNCIO — o teste então navega como o papel errado e
+falha acusando outra coisa. Quem precisa dos dois troca de identidade com
+`signIn`, na ordem que quiser.
+
+**`count()` não espera por nada**, como `.all()`. Ponha uma asserção que espere
+antes de contar, senão o contador lê zero e o teste acusa "sem resultado" quando
+o que faltou foi esperar os loaders da rota.
+
+### Contraste
+
+`packages/ui/src/contrast.test.ts` mede os tokens na aritmética; `F-TEMA-07`
+mede a página de verdade. Os dois valem, e o primeiro falha no commit em que
+alguém trocar um papel de cor, antes de a tela existir.
+
+**Borda de cartão e limite de CONTROLE são coisas diferentes.** A WCAG 1.4.11
+pede 3:1 em componente de interface e nada em cartão. `surface.border` é
+acabamento; `surface.controlBorder` é o cinza opaco que identifica campo e
+botão. Usar o primeiro num campo reprova.
+
+**Preenchimento com texto branco escurece no hover; com texto escuro, clareia.**
+O petróleo clareando dava 3.88:1 com branco por cima. A direção do hover segue
+a cor do texto, não o hábito.
 
 ---
 

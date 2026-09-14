@@ -1,22 +1,37 @@
+import DarkModeIcon from "@mui/icons-material/DarkModeOutlined";
+import LightModeIcon from "@mui/icons-material/LightModeOutlined";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 import { useState } from "react";
 
-import { applyTheme, rememberTheme, type Theme } from "@/lib/theme";
-import { saveTheme } from "@/lib/data/theme-actions";
+import { api } from "@/lib/api";
+import { applyTheme, writeLocalTheme, type Theme } from "@/lib/theme";
 
 /**
  * Alterna o tema da conta.
  *
  * `<button type="button">` com `onClick`, e não um `<form>` com submit: a
- * sidebar já tem um submit — o "Sair" —, e a suíte e2e conta com isso
- * (`button[type=submit]` também casa o Sair, em `CLAUDE.md`). Um segundo submit
- * aqui tornaria ambíguo todo seletor de formulário escopado na sidebar.
+ * sidebar já tem um submit — o "Sair" —, e um segundo aqui tornaria ambíguo
+ * todo seletor de formulário escopado na sidebar.
  *
- * A troca é OTIMISTA: aplica na tela e no aparelho, depois grava na conta. Se a
- * conta recusar, a escolha continua valendo aqui e a mensagem diz exatamente
- * isso — o modo de falha que não se aceita é o silencioso, em que a pessoa acha
- * que escolheu e no outro aparelho volta o claro sem explicação (R-TEMA-12).
+ * A troca é OTIMISTA: aplica na tela e no aparelho, depois grava. Se a
+ * gravação recusar, a escolha continua valendo aqui e a mensagem diz
+ * exatamente isso — o modo de falha que não se aceita é o silencioso, em que a
+ * pessoa acha que escolheu e no outro aparelho volta o claro sem explicação
+ * (R-TEMA-12).
  */
-export function ThemeToggle({ profileId, initial }: { profileId: string; initial: Theme }) {
+export function ThemeToggle({
+  profileId,
+  initial,
+  collapsed = false,
+}: {
+  profileId: string;
+  initial: Theme;
+  collapsed?: boolean;
+}) {
   const [theme, setTheme] = useState<Theme>(initial);
   const [unsaved, setUnsaved] = useState(false);
 
@@ -25,22 +40,49 @@ export function ThemeToggle({ profileId, initial }: { profileId: string; initial
 
     setTheme(next);
     applyTheme(next);
-    rememberTheme(profileId, next);
+    writeLocalTheme(profileId, next);
     setUnsaved(false);
 
-    if (await saveTheme(profileId, next)) setUnsaved(true);
+    const result = await api.saveThemePreference(next);
+    if (!result.ok) setUnsaved(true);
   }
 
+  const label = theme === "dark" ? "Tema claro" : "Tema escuro";
+  const icon = theme === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />;
+
   return (
-    <div className="sidebar__theme">
-      <button type="button" className="btn btn--ghost btn--block btn--sm" onClick={toggle}>
-        {theme === "dark" ? "Tema claro" : "Tema escuro"}
-      </button>
-      {unsaved && (
-        <p className="sidebar__note" role="status">
-          Tema aplicado neste aparelho. Não foi possível salvar na sua conta.
-        </p>
+    <Box data-testid="theme-toggle">
+      {collapsed ? (
+        <Tooltip title={label} placement="right">
+          <IconButton type="button" aria-label={label} onClick={toggle} sx={{ width: "100%" }}>
+            {icon}
+          </IconButton>
+        </Tooltip>
+      ) : (
+        <Button
+          type="button"
+          variant="text"
+          size="small"
+          fullWidth
+          startIcon={icon}
+          onClick={toggle}
+          sx={{ justifyContent: "flex-start" }}
+        >
+          {label}
+        </Button>
       )}
-    </div>
+
+      {unsaved && (
+        <Typography
+          variant="caption"
+          component="p"
+          role="status"
+          data-testid="theme-unsaved"
+          sx={{ mt: 0.5 }}
+        >
+          Tema aplicado neste aparelho. Não foi possível salvar na sua conta.
+        </Typography>
+      )}
+    </Box>
   );
 }

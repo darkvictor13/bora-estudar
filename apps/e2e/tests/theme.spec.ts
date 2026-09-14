@@ -2,27 +2,50 @@
  * §8 do `docs/fluxos-e2e.md` — tema claro e escuro.
  *
  * Implementa F-TEMA-01 a F-TEMA-08, os critérios CA-01 a CA-08 da spec
- * `docs/specs/11-tema-claro-escuro.md`. Os critérios de banco — RLS, grant por
- * coluna, enum — são provados sem navegador em `supabase/tests/06_preferences.sql`.
+ * `docs/specs/11-tema-claro-escuro.md`.
+ *
+ * ## O TEMA PERDEU A CONTA NO SCHEMA DE 14/09/2026
+ *
+ * `user_preferences` saiu e nada a substituiu: `profiles` não tem coluna de
+ * preferência, e `supabase/tests/06_preferences.sql` não tem mais tabela para
+ * provar. É a lacuna nº 1 de `apps/web/src/lib/api/contract.ts`, e o pedido à
+ * frente do banco é pequeno — uma coluna `theme_preference` em `profiles`.
+ *
+ * Enquanto ela não existe, a escolha vale por APARELHO. O que continua
+ * verdadeiro, e continua testado aqui: a troca aplica na hora, sobrevive ao
+ * recarregar, não pisca, e some quando a pessoa sai. O que está suspenso, e
+ * está marcado `fixme` em vez de apagado: a escolha atravessar para outro
+ * aparelho (F-TEMA-02, R-TEMA-11) e o aviso de gravação que falhou
+ * (F-TEMA-04, R-TEMA-12) — não há gravação remota para falhar.
  */
 import type { Page } from "@playwright/test";
 
 import { expect, test, authenticate } from "../fixtures/index.ts";
-import { createUser, deleteUser, type Person } from "../fixtures/scenario.ts";
-import { maybeOne } from "../fixtures/db.ts";
 import { collect, contrast, describe, isLarge, type Spec } from "../support/contrast.ts";
+import { signOut, themeToggle } from "../support/ui.ts";
+
+/**
+ * Cenário SEM planejamento — mesmo motivo de `auth.spec.ts`.
+ *
+ * O tema não depende de meta nenhuma: o que ele exige é uma sessão e uma tela
+ * com a casca em volta. Planejamento, blocos e metas dependem de colunas e de
+ * uma RPC que o schema de 14/09 reescreveu, e voltam na Fase 3.
+ */
+test.use({ scenarioOptions: { withPlan: false } });
 
 /** O botão do tema. `type="button"`, então nunca colide com o "Sair". */
-const toggle = (page: Page) => page.locator(".sidebar__theme button");
+const toggle = (page: Page) => themeToggle(page);
 
 const html = (page: Page) => page.locator("html");
 
-async function storedTheme(profileId: string): Promise<string | null> {
-  const row = await maybeOne<{ theme: string }>(
-    "select theme::text from public.user_preferences where profile_id = $1",
-    [profileId],
-  );
-  return row?.theme ?? null;
+/**
+ * O tema que este APARELHO guardou para um perfil.
+ *
+ * Era uma consulta a `user_preferences`. Enquanto a coluna não existe, a
+ * cópia local é a única, e é ela que o script anti-flash de `index.html` lê.
+ */
+async function storedTheme(page: Page, profileId: string): Promise<string | null> {
+  return page.evaluate((id) => localStorage.getItem(`bora.theme.${id}`), profileId);
 }
 
 async function localCopy(page: Page): Promise<Record<string, string | null>> {
@@ -33,22 +56,21 @@ async function localCopy(page: Page): Promise<Record<string, string | null>> {
 }
 
 test.describe("F-TEMA-01 · escolher o tema", () => {
-  test("aplica na hora, grava na conta e sobrevive ao recarregar", async ({
+  test("aplica na hora, fica guardado e sobrevive ao recarregar", async ({
     studentPage,
     scenario,
   }) => {
     await studentPage.goto("/aluno");
     await expect(studentPage.locator("h1")).toBeVisible();
 
-    // Quem nunca escolheu não tem linha, e a ausência equivale a claro.
+    // Quem nunca escolheu não tem nada guardado, e a ausência equivale a claro.
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
-    expect(await storedTheme(scenario.student.id)).toBeNull();
+    expect(await storedTheme(studentPage, scenario.student.id)).toBeNull();
 
     await toggle(studentPage).click();
 
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
     await expect(toggle(studentPage)).toHaveText("Tema claro");
-    await expect.poll(() => storedTheme(scenario.student.id)).toBe("dark");
     expect(await localCopy(studentPage)).toEqual({
       active: scenario.student.id,
       theme: "dark",
@@ -59,22 +81,31 @@ test.describe("F-TEMA-01 · escolher o tema", () => {
     await expect(toggle(studentPage)).toHaveText("Tema claro");
   });
 
-  test("voltar para o claro grava de novo, sem criar uma segunda linha", async ({
+  test("voltar para o claro grava de novo, sem deixar resíduo", async ({
     studentPage,
     scenario,
   }) => {
     await studentPage.goto("/aluno");
     await toggle(studentPage).click();
-    await expect.poll(() => storedTheme(scenario.student.id)).toBe("dark");
+    await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("dark");
 
     await toggle(studentPage).click();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
-    await expect.poll(() => storedTheme(scenario.student.id)).toBe("light");
+    await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("light");
   });
 });
 
 test.describe("F-TEMA-02 · a escolha é da conta", () => {
-  test("aparece em outro navegador, que não tem cópia local", async ({
+  /*
+   * SUSPENSO ATÉ A COLUNA EXISTIR — ver o cabeçalho deste arquivo.
+   *
+   * Este é o teste que define o que "a escolha é da conta" significa: um
+   * aparelho sem `localStorage` só pode ficar escuro se o escuro tiver vindo do
+   * servidor. Sem `theme_preference` em `profiles`, não vem — e o teste falha
+   * dizendo a verdade. Fica `fixme` para que a verdade continue visível na
+   * saída da suíte em vez de sumir num arquivo apagado.
+   */
+  test.fixme("aparece em outro navegador, que não tem cópia local", async ({
     studentPage,
     scenario,
     browser,
@@ -82,7 +113,7 @@ test.describe("F-TEMA-02 · a escolha é da conta", () => {
   }) => {
     await studentPage.goto("/aluno");
     await toggle(studentPage).click();
-    await expect.poll(() => storedTheme(scenario.student.id)).toBe("dark");
+    await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("dark");
 
     // Contexto criado à mão de propósito: é um aparelho NOVO, sem
     // `localStorage`, então o único caminho possível para o escuro é a conta.
@@ -110,11 +141,10 @@ test.describe("F-TEMA-03 · sem piscada", () => {
     await toggle(studentPage).click();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
 
-    // Espera a gravação ANTES de recarregar, e não por capricho: a conta é a
-    // fonte da verdade (R-TEMA-11), então recarregar antes de o dark subir faz
-    // o loader devolver o valor antigo e desfazer a escolha — comportamento
-    // correto, que aqui seria lido como piscada.
-    await expect.poll(() => storedTheme(scenario.student.id)).toBe("dark");
+    // Espera a gravação ANTES de recarregar, e não por capricho: recarregar
+    // antes de o dark descer faz o loader devolver o valor antigo e desfazer a
+    // escolha — comportamento correto, que aqui seria lido como piscada.
+    await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("dark");
 
     // Segura a resposta do perfil: sem ela o loader não resolve e nenhuma tela
     // renderiza. É exatamente a janela em que a piscada aconteceria — se o tema
@@ -140,14 +170,20 @@ test.describe("F-TEMA-03 · sem piscada", () => {
 });
 
 test.describe("F-TEMA-04 · a gravação falha", () => {
-  test("troca na tela, avisa que não salvou, e não inventa linha no banco", async ({
+  /*
+   * SUSPENSO PELO MESMO MOTIVO DE F-TEMA-02.
+   *
+   * Não há gravação remota para derrubar: `saveThemePreference` escreve no
+   * aparelho e devolve sucesso. Interceptar rota nenhuma produziria o aviso, e
+   * um teste que passa sem exercitar nada é pior do que um `fixme`.
+   */
+  test.fixme("troca na tela, avisa que não salvou, e não inventa linha no banco", async ({
     studentPage,
-    scenario,
   }) => {
     await studentPage.goto("/aluno");
     await expect(studentPage.locator("h1")).toBeVisible();
 
-    await studentPage.route(/\/rest\/v1\/user_preferences/, (route) =>
+    await studentPage.route(/\/rest\/v1\/profiles/, (route) =>
       route.fulfill({
         status: 500,
         contentType: "application/json",
@@ -159,10 +195,9 @@ test.describe("F-TEMA-04 · a gravação falha", () => {
 
     // A escolha vale neste aparelho, e a pessoa sabe que ela não subiu.
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
-    await expect(studentPage.locator(".sidebar__note")).toContainText(
+    await expect(studentPage.locator('[data-testid="theme-unsaved"]')).toContainText(
       "Não foi possível salvar na sua conta",
     );
-    expect(await storedTheme(scenario.student.id)).toBeNull();
   });
 });
 
@@ -177,7 +212,7 @@ test.describe("F-TEMA-05 · sair", () => {
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
 
     // O único submit da sidebar é o "Sair": o controle de tema é `type=button`.
-    await studentPage.locator(".sidebar form button[type=submit]").click();
+    await signOut(studentPage).click();
 
     await expect(studentPage).toHaveURL(/\/entrar$/);
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
@@ -191,33 +226,21 @@ test.describe("F-TEMA-05 · sair", () => {
   });
 });
 
-test.describe("F-TEMA-06 · os três papéis", () => {
+test.describe("F-TEMA-06 · os dois papéis", () => {
+  /*
+   * Eram três. `user_role` no schema de 14/09 é `('teacher','student')`, e o
+   * teste do admin saiu com o papel — não por falta de cobertura.
+   */
   test("professor escolhe o tema e a escolha persiste", async ({ teacherPage, scenario }) => {
     await teacherPage.goto("/professor");
     await expect(teacherPage.locator("h1")).toBeVisible();
 
     await toggle(teacherPage).click();
     await expect(html(teacherPage)).toHaveAttribute("data-theme", "dark");
-    await expect.poll(() => storedTheme(scenario.teacher.id)).toBe("dark");
+    await expect.poll(() => storedTheme(teacherPage, scenario.teacher.id)).toBe("dark");
 
     await teacherPage.reload();
     await expect(html(teacherPage)).toHaveAttribute("data-theme", "dark");
-  });
-
-  test("admin também", async ({ page, signIn, baseURL }) => {
-    let admin: Person | null = null;
-    try {
-      admin = await createUser("admin", "Admin do tema");
-      await signIn(admin);
-      await page.goto(`${baseURL}/professor`);
-      await expect(page.locator("h1")).toBeVisible();
-
-      await toggle(page).click();
-      await expect(html(page)).toHaveAttribute("data-theme", "dark");
-      await expect.poll(() => storedTheme(admin!.id)).toBe("dark");
-    } finally {
-      if (admin) await deleteUser(admin.id);
-    }
   });
 });
 
@@ -330,6 +353,6 @@ test.describe("F-TEMA-08 · sem escolha", () => {
 
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
     await expect(toggle(studentPage)).toHaveText("Tema escuro");
-    expect(await storedTheme(scenario.student.id)).toBeNull();
+    expect(await storedTheme(studentPage, scenario.student.id)).toBeNull();
   });
 });

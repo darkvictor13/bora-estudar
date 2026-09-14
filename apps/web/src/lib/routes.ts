@@ -29,6 +29,8 @@ export const ROUTES = {
   // Aluno
   student: {
     overview: "/aluno",
+    planning: "/aluno/planejamento",
+    theory: "/aluno/teoria",
     subjects: "/aluno/disciplinas",
     notebooks: "/aluno/cadernos",
     statistics: "/aluno/estatisticas",
@@ -42,6 +44,7 @@ export const ROUTES = {
     students: "/professor",
     student: (id: string) => `/professor/alunos/${id}`,
     plans: "/professor/planejamentos",
+    theory: "/professor/teoria",
     notebooks: "/professor/cadernos",
     goals: "/professor/metas",
     reviews: "/professor/revisoes",
@@ -62,6 +65,14 @@ export const STUDENT_ROUTES_WITHOUT_ACCESS: readonly string[] = [
   ROUTES.student.waitlist,
 ];
 
-export function homeForRole(role: "student" | "teacher" | "admin"): string {
+/**
+ * A casa de cada papel.
+ *
+ * Só dois papéis desde o schema de 14/09/2026: `user_role` é
+ * `('teacher','student')`, e `admin` deixou de existir. Quem procurar o
+ * tratamento especial que existia aqui — admin caindo na área do professor,
+ * BUG-01 — não vai achar, porque não há mais o que tratar.
+ */
+export function homeForRole(role: "student" | "teacher"): string {
   return role === "student" ? ROUTES.student.overview : ROUTES.teacher.students;
 }

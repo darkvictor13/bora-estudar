@@ -1,295 +1,330 @@
-import { Link, useLoaderData } from "react-router";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { Alert, Empty, PageHeader, WEEKDAY_NAMES } from "@bora/ui";
+import { useState } from "react";
+import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 
-import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { CancelSessionForm, RegisterTimeForm } from "@/components/student/QuizSessionPanel";
+import { ContentBody } from "@/components/AppShell";
+import { ExtraStudyDialog } from "@/components/student/ExtraStudyDialog";
+import { GoalRow } from "@/components/student/GoalRow";
+import { WeekHero } from "@/components/student/WeekHero";
 import {
-  CompleteGoalForm,
-  DeleteExtraForm,
-  ExtraStudyForm,
-  ReopenGoalForm,
-} from "@/components/student/GoalCompletion";
+  api,
+  newRequestId,
+  type ApiError,
+  type ExtraStudyInput,
+  type Goal,
+  type RecordStudyInput,
+  type TheoryGoal,
+  type WeekOption,
+} from "@/lib/api";
+import { RecordStudyDialog } from "@/components/student/RecordStudyDialog";
+import { TheoryDialog } from "@/components/student/TheoryDialog";
 import { requireStudentAccess } from "@/lib/auth/session";
-import {
-  getActiveStudyPlan,
-  getGoalPerformance,
-  getOpenQuizSession,
-  getPlanWeeks,
-  getStudyPlanBlocks,
-  getWeekGoals,
-} from "@/lib/data/student";
-import {
-  GOAL_TYPE_LABEL,
-  GOAL_STATUS_LABEL,
-  formatMinutes,
-  goalStatusTone,
-  scorePercent,
-  weekdayName,
-} from "@/lib/domain/goals";
-import { ROUTES } from "@/lib/routes";
+import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 
 /**
- * Confirmações que chegam por query string.
+ * A semana do aluno — o `p-dashboard` da v2.
  *
- * As actions de bateria devolvem `redirectTo` porque a revalidação delas
- * desmonta o formulário que mostraria a mensagem — o cartão da sessão aberta
- * some junto com o resultado da action. Quem sobrevive à revalidação é esta
- * página, então é ela que anuncia.
+ * A SEMANA ESCOLHIDA MORA NA URL (`?semana=3`), e não em estado de componente.
+ * Três coisas saem de graça disso: o botão voltar do navegador funciona, o
+ * endereço é compartilhável, e recarregar a página não devolve a pessoa para a
+ * semana corrente depois de ela ter ido olhar a anterior.
  */
-const DONE_MESSAGE: Record<string, string> = {
-  tempo: "Tempo registrado. Meta concluída.",
-  cancelada: "Bateria cancelada. Ela não conta no desempenho nem como questão vista.",
-  meta: "Meta concluída.",
-  reaberta: "Meta reaberta. Ela voltou para pendente.",
-  extra: "Estudo extra registrado.",
-  "extra-removido": "Registro removido.",
-};
-
 export async function overviewLoader({ request }: { request: Request }) {
-  const session = await requireStudentAccess();
+  await requireStudentAccess();
 
-  const plan = await getActiveStudyPlan();
-  if (!plan) return { plan: null } as const;
+  const plan = await loadActivePlanOrNull();
+  if (!plan) return { plan: null, week: null, weeks: [] as readonly WeekOption[] };
 
-  const weeks = await getPlanWeeks(plan.id);
-  const params = new URL(request.url).searchParams;
-  const requested = Number(params.get("semana"));
-  const week = weeks.includes(requested) ? requested : (weeks[0] ?? 1);
-  const feito = params.get("feito");
+  const asked = new URL(request.url).searchParams.get("semana");
+  const weekNumber = asked ? Number(asked) : undefined;
 
-  const [goals, performance, openSession, blocks] = await Promise.all([
-    getWeekGoals(plan.id, week),
-    getGoalPerformance(plan.id),
-    getOpenQuizSession(plan.id),
-    getStudyPlanBlocks(plan.id),
+  const [week, weeks] = await Promise.all([
+    api.loadWeek(plan.id, Number.isFinite(weekNumber) ? weekNumber : undefined),
+    api.listWeeks(plan.id),
   ]);
 
-  return {
-    plan,
-    weeks,
-    week,
-    doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
-    goals,
-    performance,
-    openSession,
-    blocks,
-    studentId: session.profileId,
-  } as const;
+  return { plan, week, weeks };
 }
 
 type LoaderData = Awaited<ReturnType<typeof overviewLoader>>;
 
-export function Overview() {
-  const data = useLoaderData() as LoaderData;
+function DayGroupCard({
+  date,
+  weekday,
+  goals,
+  actions,
+  onExtra,
+}: {
+  date: string;
+  weekday: number;
+  goals: readonly Goal[];
+  actions: Parameters<typeof GoalRow>[0]["actions"];
+  onExtra: (date: string) => void;
+}) {
+  const completed = goals.filter((goal) => goal.status === "completed").length;
 
-  if (!data.plan) {
+  return (
+    <Box
+      data-testid="day-group"
+      data-date={date}
+      sx={(theme) => ({
+        mb: 1.25,
+        borderRadius: `${theme.brand.radius.lg}px`,
+        border: `1px solid ${theme.vars.palette.surface.border}`,
+        backgroundColor: theme.vars.palette.surface.raised,
+        overflow: "hidden",
+      })}
+    >
+      <Box
+        sx={(theme) => ({
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 1.5,
+          flexWrap: "wrap",
+          px: 1.75,
+          py: 1.125,
+          backgroundColor: theme.vars.palette.surface.sunken,
+          borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+        })}
+      >
+        <Typography variant="overline" component="h2" sx={{ fontSize: "0.6875rem" }}>
+          {WEEKDAY_NAMES[weekday - 1]}
+          {" · "}
+          {date.slice(8, 10)}/{date.slice(5, 7)}
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+          <Button size="small" variant="text" onClick={() => onExtra(date)}>
+            Estudo extra
+          </Button>
+          <Typography variant="numeric" component="span" data-testid="day-count">
+            {completed}/{goals.length} concluídas
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box sx={{ px: 1.75 }}>
+        {goals.map((goal) => (
+          <GoalRow key={goal.id} goal={goal} actions={actions} />
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+export function Overview() {
+  const { plan, week, weeks } = useLoaderData() as LoaderData;
+  const [params, setParams] = useSearchParams();
+  const { revalidate } = useRevalidator();
+
+  const [recording, setRecording] = useState<Goal | null>(null);
+  const [theory, setTheory] = useState<TheoryGoal | null>(null);
+  const [theoryPending, setTheoryPending] = useState(false);
+  const [theoryNotice, setTheoryNotice] = useState<string | null>(null);
+  const [extraDate, setExtraDate] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  if (!plan || !week) {
     return (
       <>
-        <PageHeader title="Visão geral" />
-        <Alert kind="info">
-          Nenhum planejamento ativo. Aguarde seu professor montar e ativar um planejamento.
-        </Alert>
+        <PageHeader title="Metas da semana" />
+        <ContentBody>
+          <Alert status="info">
+            Nenhum planejamento ativo. Aguarde seu professor montar e ativar um.
+          </Alert>
+        </ContentBody>
       </>
     );
   }
 
-  const { plan, weeks, week, doneMessage, goals, performance, openSession, blocks, studentId } =
-    data;
-  // Os dias que a semana já usa; o registro avulso cai num deles.
-  const weekdays = [...new Set(goals.map((g) => g.weekday))].sort((a, b) => a - b);
-  const blockById = new Map(blocks.map((b) => [b.id, b]));
-
-  const byWeekday = new Map<number, typeof goals>();
-  for (const goal of goals) {
-    const list = byWeekday.get(goal.weekday) ?? [];
-    list.push(goal);
-    byWeekday.set(goal.weekday, list);
+  /**
+   * Toda ação segue o mesmo caminho: chama, guarda o erro se houver, e revalida.
+   *
+   * `revalidate()` e não um `setState` com a meta devolvida: a conclusão de uma
+   * meta muda o cabeçalho da semana inteiro — desempenho, tempo, sequência —, e
+   * costurar isso à mão em três lugares é como nascem os números que divergem.
+   */
+  async function run(action: () => Promise<{ ok: boolean; error?: ApiError }>) {
+    const result = await action();
+    if (!result.ok && result.error) {
+      setError(result.error);
+      return result.error;
+    }
+    setError(null);
+    await revalidate();
+    return null;
   }
 
-  const done = goals.filter((g) => g.status === "completed").length;
+  /**
+   * O modal da teoria guarda o `TheoryGoal` em estado, e não no loader.
+   *
+   * Ele é caro — catálogo, progresso e regras de revisão — e só interessa a
+   * quem clicou numa meta de teoria. Carregar tudo no loader faria a semana
+   * inteira esperar por dado que a maior parte das visitas não abre.
+   */
+  async function openTheory(goal: Goal) {
+    setTheoryPending(true);
+    setTheoryNotice(null);
+    try {
+      setTheory(await api.loadTheoryGoal(goal.id));
+    } catch (failure) {
+      setError({
+        code: "unknown",
+        message: failure instanceof Error ? failure.message : "Não foi possível abrir a teoria.",
+      });
+    } finally {
+      setTheoryPending(false);
+    }
+  }
+
+  /** Reescreve o modal com o estado que o servidor acabou de confirmar. */
+  async function afterTheoryWrite(result: { ok: boolean; error?: ApiError }, goalId: string) {
+    if (!result.ok && result.error) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+
+    const before = theory?.lesson?.id ?? null;
+    const fresh = await api.loadTheoryGoal(goalId);
+    setTheory(fresh);
+
+    // A AULA MUDOU PORQUE A ANTERIOR FECHOU — o passo 7 do piloto da v108.2, e
+    // o único momento em que o modal troca de conteúdo sozinho. Sem o aviso, a
+    // Aula 02 aparece do nada e a pessoa acha que perdeu o que fez.
+    setTheoryNotice(
+      before && fresh.lesson && fresh.lesson.id !== before
+        ? `Aula concluída. Você está agora em ${fresh.lesson.lessonCode} — ${fresh.lesson.title}.`
+        : null,
+    );
+    await revalidate();
+  }
+
+  const actions = {
+    onRecord: (goal: Goal) => setRecording(goal),
+    onOpenTheory: (goal: Goal) => void openTheory(goal),
+    onComplete: (goal: Goal) => void run(() => api.completeGoal(goal.id, newRequestId())),
+    onReopen: (goal: Goal) => void run(() => api.reopenGoal(goal.id, newRequestId())),
+    onSkip: (goal: Goal) => void run(() => api.skipGoal(goal.id, newRequestId())),
+  };
+
+  const subjects = [...new Set(week.days.flatMap((day) => day.goals.map((g) => g.subject)))];
+  const weekOf = weeks.find((option) => option.weekNumber === week.weekNumber);
 
   return (
     <>
       <PageHeader
-        title="Visão geral"
-        description={`${plan.name}${plan.target_exam ? ` · ${plan.target_exam}` : ""}`}
+        title="Metas da semana"
+        description={plan.name}
+        actions={
+          <>
+            <TextField
+              select
+              size="small"
+              label="Semana"
+              // O testid vai no SELECT, não na raiz do TextField: a raiz é um
+              // <div> que não abre o menu no clique, e um seletor que aponta
+              // para o lugar errado falha com "timeout" em vez de dizer isso.
+              slotProps={{
+                select: { inputProps: { "data-testid": "week-select" } },
+              }}
+              value={String(week.weekNumber)}
+              onChange={(event) => {
+                params.set("semana", event.target.value);
+                setParams(params);
+              }}
+              sx={{ minWidth: 200 }}
+            >
+              {weeks.map((option) => (
+                <MenuItem key={option.weekNumber} value={String(option.weekNumber)}>
+                  Semana {option.weekNumber}
+                  {option.isCurrent ? " · atual" : ""}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => setExtraDate(weekOf?.startsOn ?? week.startsOn)}
+            >
+              Estudo extra
+            </Button>
+          </>
+        }
       />
 
-      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
+      <ContentBody>
+        {error && <Alert status="error">{error.message}</Alert>}
 
-      {openSession && (
-        <Card
-          title={`Bateria ${openSession.session_number}`}
-          sub={
-            openSession.status === "awaiting_time"
-              ? "Respondida. Falta registrar o tempo para concluir a meta."
-              : "Em andamento."
-          }
-        >
-          {openSession.status === "awaiting_time" ? (
-            <RegisterTimeForm quizSessionId={openSession.id} />
-          ) : (
-            <div className="stack-sm">
-              {/*
-                Esta bateria foi aberta pelo fluxo antigo, que entregava as
-                questões à extensão. Não há mais onde respondê-la: o que a tela
-                ainda oferece é cancelar, para destravar o planejamento. A
-                bateria cancelada não conta no desempenho nem como questão
-                vista.
-              */}
-              <p className="muted">
-                Bateria aberta sem caminho de execução. Cancele para liberar o planejamento.
-              </p>
-              <div className="row">
-                <CancelSessionForm quizSessionId={openSession.id} />
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
+        <WeekHero week={week} />
 
-      <div className="stack">
-        <Card
-          title={`Semana ${week}`}
-          sub={`${done} de ${goals.length} metas concluídas`}
-          action={
-            <div className="row" style={{ alignItems: "center" }}>
-              {goals.length > 0 && (
-                <ExtraStudyForm
-                  studyPlanId={plan.id}
-                  week={week}
-                  weekdays={weekdays.length ? weekdays : [1, 2, 3, 4, 5]}
-                />
-              )}
-              {weeks.length > 1 ? (
-                <nav className="row" aria-label="Semanas">
-                  {weeks.map((w) => (
-                    <Link
-                      key={w}
-                      to={`${ROUTES.student.overview}?semana=${w}`}
-                      className={`btn btn--sm ${w === week ? "btn--primary" : "btn--ghost"}`}
-                    >
-                      {w}
-                    </Link>
-                  ))}
-                </nav>
-              ) : null}
-            </div>
-          }
-        >
-          {goals.length === 0 ? (
-            <Empty>Nenhuma meta nesta semana.</Empty>
-          ) : (
-            <div className="stack">
-              {[...byWeekday.entries()]
-                .sort(([a], [b]) => a - b)
-                .map(([weekday, dayGoals]) => (
-                  <div key={weekday}>
-                    <h3 style={{ marginBottom: 8 }}>{weekdayName(weekday)}</h3>
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Meta</th>
-                            <th>Tipo</th>
-                            <th>Bloco</th>
-                            <th className="num">Previsto</th>
-                            <th className="num">Resultado</th>
-                            <th>Situação</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dayGoals.map((goal) => {
-                            const perf = performance.get(goal.id);
-                            const pct = perf
-                              ? scorePercent(perf.correct_answers ?? 0, perf.questions_answered ?? 0)
-                              : null;
-                            const block = goal.block_id ? blockById.get(goal.block_id) : null;
-                            return (
-                              <tr key={goal.id}>
-                                <td>
-                                  <strong>{goal.title}</strong>
-                                  {goal.teacher_note && (
-                                    <div className="muted">{goal.teacher_note}</div>
-                                  )}
-                                  {goal.student_note && (
-                                    <div className="muted">
-                                      <em>Você anotou:</em> {goal.student_note}
-                                    </div>
-                                  )}
-                                </td>
-                                <td>{GOAL_TYPE_LABEL[goal.type]}</td>
-                                <td>
-                                  {block ? (
-                                    <span style={{ color: block.subject_color }}>
-                                      {block.subject_name}
-                                    </span>
-                                  ) : (
-                                    <span className="muted">—</span>
-                                  )}
-                                </td>
-                                <td className="num">
-                                  {formatMinutes(goal.planned_minutes)}
-                                  {goal.spent_minutes ? (
-                                    <div className="muted">
-                                      feito: {formatMinutes(goal.spent_minutes)}
-                                    </div>
-                                  ) : null}
-                                </td>
-                                <td className="num">
-                                  {perf && perf.questions_answered ? (
-                                    <>
-                                      {perf.correct_answers}/{perf.questions_answered}
-                                      {pct !== null && <span className="muted"> · {pct}%</span>}
-                                    </>
-                                  ) : (
-                                    <span className="muted">—</span>
-                                  )}
-                                </td>
-                                <td>
-                                  <Badge tone={goalStatusTone(goal.status)}>
-                                    {GOAL_STATUS_LABEL[goal.status]}
-                                  </Badge>
-                                </td>
-                                <td>
-                                  {/*
-                                    Meta de bateria segue pela bateria; as demais
-                                    concluem por complete_goal. É a mesma divisão
-                                    que a RPC impõe (R-CONC-02), então a tela
-                                    nunca oferece um caminho que o banco recusa.
-                                  */}
-                                  {goal.type === "question_block" ? null : goal.status ===
-                                    "pending" ? (
-                                    <CompleteGoalForm goalId={goal.id} week={week} />
-                                  ) : goal.status === "completed" ? (
-                                    <div className="row">
-                                      <ReopenGoalForm goalId={goal.id} week={week} />
-                                      {/*
-                                        Remover só no registro que o PRÓPRIO
-                                        aluno criou. `created_by` é o que separa
-                                        isso da meta de estudo extra que o
-                                        professor planejou — as duas são
-                                        `extra_study` (R-EXTRA-15).
-                                      */}
-                                      {goal.type === "extra_study" &&
-                                        goal.created_by === studentId && (
-                                          <DeleteExtraForm goalId={goal.id} week={week} />
-                                        )}
-                                    </div>
-                                  ) : null}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          )}
-        </Card>
-      </div>
+        {week.days.length === 0 ? (
+          <Empty icon="🗓">Nenhuma meta para esta semana.</Empty>
+        ) : (
+          week.days.map((day) => (
+            <DayGroupCard
+              key={day.date}
+              date={day.date}
+              weekday={day.weekday}
+              goals={day.goals}
+              actions={actions}
+              onExtra={setExtraDate}
+            />
+          ))
+        )}
+      </ContentBody>
+
+      <RecordStudyDialog
+        goal={recording}
+        onClose={() => setRecording(null)}
+        onSubmit={(input: RecordStudyInput) => run(() => api.recordStudy(input))}
+      />
+
+      <TheoryDialog
+        theory={theory}
+        notice={theoryNotice}
+        error={null}
+        pending={theoryPending}
+        onClose={() => setTheory(null)}
+        onSaveProgress={(input) => {
+          if (!theory) return;
+          setTheoryPending(true);
+          void api
+            .saveTheoryProgress({ ...input, goalId: theory.goalId })
+            .then((result) => afterTheoryWrite(result, theory.goalId))
+            .finally(() => setTheoryPending(false));
+        }}
+        onRecordQuestions={(input) => {
+          if (!theory) return;
+          setTheoryPending(true);
+          void api
+            .recordInitialQuestions({ ...input, goalId: theory.goalId })
+            .then((result) => afterTheoryWrite(result, theory.goalId))
+            .finally(() => setTheoryPending(false));
+        }}
+        onRecordReview={(input) => {
+          if (!theory) return;
+          setTheoryPending(true);
+          void api
+            .recordReviewQuestions(input)
+            .then((result) => afterTheoryWrite(result, theory.goalId))
+            .finally(() => setTheoryPending(false));
+        }}
+      />
+
+      <ExtraStudyDialog
+        studyPlanId={plan.id}
+        date={extraDate ?? week.startsOn}
+        subjects={subjects}
+        open={extraDate !== null}
+        onClose={() => setExtraDate(null)}
+        onSubmit={(input: ExtraStudyInput) => run(() => api.recordExtraStudy(input))}
+      />
     </>
   );
 }

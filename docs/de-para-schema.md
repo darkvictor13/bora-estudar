@@ -21,6 +21,16 @@ O que o mapa **não** cobre: dado. Nenhuma linha foi lida, copiada ou contada �
 contar linha exige conexão direta ao banco, e este trabalho foi todo feito pela
 API de gerenciamento.
 
+**Segunda revisão, 14/09/2026.** A migration foi aplicada num Postgres local e
+atacada com dois professores e dois alunos de mentira, tudo dentro de uma
+transação revertida. Sete ataques passaram, e a correção mudou constraint,
+policy e grant — não coluna. O de-para de colunas continua valendo linha por
+linha; o que mudou está em
+[A segunda rodada de auditoria](#a-segunda-rodada-de-auditoria), e tem
+consequência direta para o script de carga: as FKs compostas novas **recusam
+linha do banco de origem que esteja inconsistente**, e o de-para agora traz as
+consultas que encontram essas linhas antes de a carga rodar.
+
 ---
 
 ## Tabelas
@@ -587,10 +597,15 @@ tabela que tem a coluna — no banco de origem eram cinco de dezenove.
 `coupons.updated_at` e `catalog_blocks.updated_at`. As duas tabelas não tinham
 carimbo de atualização nenhum.
 
-### `goal_entries.goal_id` ganhou FK
+### `goal_entries.goal_id` ganhou FK, e ela é composta
 
 No banco de origem, `registros.meta_id` apontava para `metas` sem restrição
 nenhuma — um registro podia referenciar meta inexistente sem o banco reclamar.
+
+A primeira rodada acrescentou `references goals(id)`. A segunda trocou por
+`(goal_id, teacher_id, student_id) → goals (id, teacher_id, student_id)`: a FK
+de coluna única garantia que a meta EXISTE, e não que ela é do aluno que está
+lançando. Ver a seção da segunda rodada.
 
 ---
 
@@ -609,8 +624,15 @@ nenhuma — um registro podia referenciar meta inexistente sem o banco reclamar.
 | `bora_private.proteger_meta_questoes_bloco()` | `app_private.protect_goal_notebook_block()` |
 | `bora_private.proteger_resultado_meta_questoes()` | `app_private.protect_goal_quiz_result()` |
 | `bora_private.proteger_identidade_bloco_catalogo()` | `app_private.protect_notebook_identity()` |
+| — | `public.is_teacher_of(uuid)` — **nova**, ver a segunda rodada |
+| — | `public.has_active_access()` — **nova**, idem |
+| — | `public.my_teacher()` — **nova**, idem |
+| — | `app_private.protect_goal_planning_fields()` — **novo gatilho**, idem |
 
 O schema `bora_private` virou `app_private`.
+
+As quatro últimas não têm origem: nasceram na segunda rodada de auditoria, para
+fechar buraco que o banco antigo também tinha e ninguém tinha nomeado.
 
 ### Uma mudança de lógica dentro dos gatilhos
 
@@ -671,6 +693,154 @@ tabela.
 
 ---
 
+## A segunda rodada de auditoria
+
+A primeira rodada comparou schema com schema. Esta aplicou a migration e
+**atacou o resultado**: dois professores e dois alunos de mentira, cada ataque
+rodando com o papel `authenticated` e o JWT da vítima ou do atacante, tudo numa
+transação revertida. Sete passaram.
+
+A causa era sempre a mesma. O CLAUDE.md diz que **contexto denormalizado é
+protegido por FK composta**, e a regra valia em `quiz_sessions`,
+`reinforcement_cycles` e `study_plan_notebooks` — as três tabelas que vieram do
+motor de bateria. Nas outras, não valia. E policy não substitui essa FK: a
+policy confere os IDs **da própria linha**, que são justamente os que quem
+escreve escolheu; ela não tem como conferir que a linha **apontada** pertence ao
+mesmo par.
+
+### As FKs que viraram compostas
+
+| tabela | antes | agora | o que passava sem ela |
+|---|---|---|---|
+| `goals` | `study_plan_id → study_plans(id)` | `(study_plan_id, teacher_id, student_id)` | o aluno reatribuía a própria meta a outro professor, e movia a meta para o planejamento de outro aluno |
+| `goal_entries` | `goal_id → goals(id)` | `(goal_id, teacher_id, student_id)` | o aluno lançava minutos e acertos na meta de outro aluno |
+| `class_students` | `class_id → classes(id)` | `(class_id, teacher_id)` | o professor matriculava aluno na turma de outro professor |
+| `theory_catalog_subject_rules` | `catalog_id → theory_catalogs(id)` | `(catalog_id, teacher_id)` | o professor ocupava o par `(catalog_id, subject_key)` no catálogo de outro, e o dono batia em `duplicate key` sem enxergar a linha que estava no caminho |
+| `theory_review_rules` | idem | `(catalog_id, teacher_id)` | idem, com `(catalog_id, subject_key, review_number)` |
+| `theory_lessons` | idem | `(catalog_id, teacher_id)`, com `on delete set null (catalog_id)` | aula de um professor aparecia listada no catálogo de outro |
+| `study_plan_theory_catalogs` | `study_plan_id` e `catalog_id` soltos | `(study_plan_id, teacher_id, student_id)` e `(catalog_id, teacher_id)` | o professor ligava o catálogo de outro ao próprio planejamento, e o aluno ficava com um catálogo que ele não tem permissão de ler |
+| `theory_progress` | `study_plan_id → study_plans(id)` | `(study_plan_id, student_id)` | o aluno gravava progresso dentro do planejamento de outro aluno |
+| `theory_reviews` | idem | `(study_plan_id, student_id)` | o `exists` que a policy fazia virou constraint |
+
+São nove substituições, não nove acréscimos: o total de FKs continua 53.
+
+Os alvos novos são quatro UNIQUE: `classes (id, teacher_id)`, `study_plans (id,
+student_id)`, `goals (id, teacher_id, student_id)` e `theory_catalogs (id,
+teacher_id)`. Nenhuma delas restringe mais que a PK — existem só para ser alvo
+de FK, como `study_plans (id, teacher_id, student_id)` já era.
+
+### O que mudou fora das FKs
+
+- **`is_teacher_of()` em `study_plans` e `class_students`.** `teacher_id =
+  auth.uid()` diz que quem escreve é o professor da linha, não que o aluno da
+  linha é aluno dele. Qualquer professor criava planejamento para aluno alheio,
+  e o aluno passava a ver esse planejamento, porque `study_plans_select` casa
+  por `student_id`.
+- **`has_active_access()` nas escritas do aluno** — metas (ramo do aluno),
+  `goal_entries`, `theory_progress` e `theory_reviews`. Nenhuma policy olhava
+  `access_status` nem `access_expires_at`. Fica no `WITH CHECK` e não no
+  `USING`: o `WITH CHECK` levanta 42501, o `USING` filtraria em silêncio. A
+  leitura continua aberta, então quem venceu ainda vê o próprio histórico, e
+  `profiles` e `waitlist` ficam de fora — é por elas que o pendente pede acesso.
+- **`GRANT UPDATE` por coluna** em `goals`, `goal_entries`, `study_plans`,
+  `study_plan_notebooks`, `study_plan_theory_catalogs`, `theory_progress` e
+  `theory_reviews`. É a defesa 2 do CLAUDE.md, que até aqui só `profiles`
+  estava usando.
+- **`protect_goal_planning_fields()`.** `goals_delete` decide pelo `type`, e
+  `type` era atualizável pelo aluno: ele trocava a meta do professor para
+  'extra' e apagava em seguida. O gatilho congela o `type` para quem não é o
+  professor da meta, e o resto do planejamento só nas metas do professor — o
+  aluno continua editando o estudo extra que ele mesmo lançou.
+- **`coupons` saiu da API.** RLS ligada, zero policy, zero grant. `is_teacher()`
+  não é "é admin" e a tabela não tem dono: todo professor lia o código e os
+  meses de todos os cupons. O resgate e a administração passam pela RPC que o
+  item 1 do cabeçalho da migration já previa.
+- **`my_teacher()`.** `profiles_select` nunca deixou o aluno ler a linha do
+  próprio professor — o professor tem `teacher_id` nulo — e o contrato da UI
+  pede `teacherName`. A função devolve só `id` e `name`, em vez de abrir uma
+  linha que carrega `plan`, `coupon_used` e `access_status`.
+
+### O que ficou em aberto, de propósito
+
+`theory_progress.theory_lesson_id` e `theory_reviews.theory_lesson_id` não são
+amarrados ao catálogo do planejamento. Amarrar exige `teacher_id` nas duas
+tabelas — coluna nova, que mudaria o de-para de colunas. O resíduo é o aluno
+marcar progresso numa aula de outro professor **dentro do próprio
+planejamento**: sujeira na linha dele, sem leitura de dado alheio, porque
+`theory_lessons_select` continua exigindo `can_access_teacher`.
+
+`catalog_blocks` continua com `using (true)` para qualquer autenticado. É
+catálogo comum, sem conteúdo de aluno, e o professor precisa dele para montar
+caderno.
+
+### Antes de carregar dado: as sete consultas
+
+Esta é a parte do de-para que a segunda rodada mudou de verdade. **Uma FK
+composta recusa linha que a FK de coluna única aceitava**, e o banco de origem
+rodou anos sem nenhuma delas — inclusive sem FK alguma em `registros.meta_id`.
+Rode as consultas abaixo **contra o banco de origem** antes de escrever o
+`INSERT ... SELECT`; cada uma devolve exatamente as linhas que a carga vai
+rejeitar.
+
+```sql
+-- 1. metas cujo trio não bate com o planejamento  → goals_study_plan_fk
+select m.id, m.professor_id, m.aluno_id, m.planejamento_id
+  from metas m left join planejamentos p on p.id = m.planejamento_id
+ where p.id is null or p.professor_id <> m.professor_id or p.aluno_id <> m.aluno_id;
+
+-- 2. registros cujo trio não bate com a meta  → goal_entries_goal_fk
+select r.id, r.meta_id from registros r left join metas m on m.id = r.meta_id
+ where m.id is null or m.professor_id <> r.professor_id or m.aluno_id <> r.aluno_id;
+
+-- 3. matrículas em turma de outro professor  → class_students_class_fk
+select a.turma_id, a.aluno_id from aluno_turmas a left join turmas t on t.id = a.turma_id
+ where t.id is null or t.professor_id <> a.professor_id;
+
+-- 4. regras em catálogo de outro professor  → *_catalog_fk (três tabelas)
+select 'regras_materia' as tabela, r.id from teoria_catalogo_regras_materia r
+  left join teoria_catalogos c on c.id = r.catalogo_id
+ where c.id is null or c.professor_id <> r.professor_id
+union all
+select 'regras_revisao', r.id from teoria_regras_revisao r
+  left join teoria_catalogos c on c.id = r.catalogo_id
+ where c.id is null or c.professor_id <> r.professor_id
+union all
+select 'aulas', a.id from teoria_aulas a
+  left join teoria_catalogos c on c.id = a.catalogo_id
+ where a.catalogo_id is not null and (c.id is null or c.professor_id <> a.professor_id);
+
+-- 5. catálogo do planejamento, as duas pontas  → study_plan_theory_catalogs_*_fk
+select t.id from teoria_planejamento_catalogos t
+  left join planejamentos p on p.id = t.planejamento_id
+  left join teoria_catalogos c on c.id = t.catalogo_id
+ where p.id is null or p.professor_id <> t.professor_id or p.aluno_id <> t.aluno_id
+    or c.id is null or c.professor_id <> t.professor_id;
+
+-- 6. progresso e revisão fora do planejamento do aluno  → theory_*_study_plan_fk
+select 'progresso' as tabela, g.id from teoria_progresso g
+  left join planejamentos p on p.id = g.planejamento_id
+ where p.id is null or p.aluno_id <> g.aluno_id
+union all
+select 'revisoes', v.id from teoria_revisoes v
+  left join planejamentos p on p.id = v.planejamento_id
+ where p.id is null or p.aluno_id <> v.aluno_id;
+
+-- 7. planejamento e turma de aluno que não é do professor  → is_teacher_of
+-- Não é FK: a policy só vale para `authenticated`, e a carga roda como
+-- service_role. Mas uma linha assim fica inalcançável pela UI depois de migrada
+-- — o professor não consegue mais editar o que ele mesmo criou.
+select p.id, p.professor_id, p.aluno_id from planejamentos p
+  join profiles a on a.id = p.aluno_id
+ where a.professor_id is distinct from p.professor_id;
+```
+
+Linha que aparecer em 1 a 6 **não entra** — ou é corrigida na origem, ou fica de
+fora com registro de qual consulta a pegou. A 7 entra, mas precisa de decisão:
+ou o vínculo em `profiles.professor_id` é acertado, ou o planejamento vira
+órfão de tela.
+
+---
+
 ## Estado dos dois lados
 
 Medido com a **mesma consulta** nos dois: o dump de origem foi aplicado num
@@ -678,26 +848,58 @@ banco descartável e interrogado pelo catálogo, em vez de contado no texto. A
 primeira versão deste arquivo trazia dois números tirados de `grep` no dump, e
 os dois estavam errados — 102 CHECKs (são 68) e 53 índices (são 85).
 
-| | origem | migration |
-|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 |
-| Policies | 79 | 63 |
-| Tipos enumerados | 0 | 12 |
-| CHECK constraints | 68 | 46 |
-| Foreign keys | 49 | 53 |
-| Índices | 85 | 81 |
-| Views | 0 | 1 |
-| Gatilhos | 12 | 27 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 |
+A coluna da direita foi medida depois da segunda rodada; a do meio é o que a
+primeira rodada tinha produzido, para o diff ficar legível.
+
+| | origem | 1ª rodada | agora |
+|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 |
+| Colunas | 326 | 294 | 294 |
+| Policies | 79 | 63 | 62 |
+| Tipos enumerados | 0 | 12 | 12 |
+| CHECK constraints | 68 | 46 | 46 |
+| Foreign keys | 49 | 53 | 53 |
+| Índices | 85 | 81 | 92 |
+| Views | 0 | 1 | 1 |
+| Gatilhos | 12 | 27 | 28 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.
 
 O salto de 12 para 27 gatilhos é quase todo `set_updated_at`, que passou a
-existir em toda tabela que tem a coluna.
+existir em toda tabela que tem a coluna. O 28º é
+`protect_goal_planning_fields`.
 
-### Os quatro índices a menos
+Uma policy a menos é `coupons_select_teacher`, que saiu inteira.
+
+Foreign keys ficaram em 53 porque as nove FKs compostas da segunda rodada
+**substituíram** as de coluna única, uma a uma.
+
+### Os onze índices a mais
+
++13 e −2, e nenhum dos dois lados é arbitrário.
+
+Entraram quatro UNIQUE que existem só para ser alvo de FK composta — `classes
+(id, teacher_id)`, `study_plans (id, student_id)`, `goals (id, teacher_id,
+student_id)` e `theory_catalogs (id, teacher_id)` — e nove índices comuns, um
+para cada FK composta nova mais `goals_plan_context_idx`.
+
+Esses nove não são luxo. **Uma FK precisa de índice do lado que referencia, na
+ordem das colunas da FK**: é ele que o Postgres usa quando a linha-pai é
+apagada, e apagar um perfil cascateia por vinte tabelas. Os índices que já
+existiam não serviam porque começam pela coluna errada —
+`theory_progress_student_plan_idx` é `(student_id, study_plan_id)` e a FK é
+`(study_plan_id, student_id)`.
+
+Saíram dois de `goals`, pelo motivo oposto: `(study_plan_id)` era prefixo de
+`goals_week_idx` e `(teacher_id)` era prefixo de
+`goals_teacher_plan_week_status_idx`. Índice que é prefixo de outro não serve
+nenhuma leitura a mais, e custa em toda escrita.
+
+### Os quatro índices a menos que a primeira rodada já tinha tirado
 
 A comparação foi feita tabela a tabela, não só no total. Fora a tabela de
 backup, a diferença está toda em `metas` → `goals`, e são quatro redundâncias do

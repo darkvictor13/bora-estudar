@@ -52,6 +52,84 @@
 --     policies. Se o conteúdo dela importa, ele precisa sair de lá por
 --     exportação, não por migration.
 --
+-- SEGUNDA RODADA DE AUDITORIA — O QUE ESTA VERSÃO DO ARQUIVO CORRIGE
+--
+-- A primeira rodada olhou o banco de origem. Esta olhou o resultado: o schema
+-- acima foi aplicado num Postgres local e atacado com dois professores e dois
+-- alunos de mentira. Sete ataques passaram, e a causa era sempre a mesma — a
+-- regra "contexto denormalizado é protegido por FK composta" valia em
+-- `quiz_sessions`, `reinforcement_cycles` e `study_plan_notebooks`, e não
+-- valia nas outras. A policy sozinha confere os IDs DA PRÓPRIA LINHA; ela não
+-- tem como conferir que a linha APONTADA pertence ao mesmo par.
+--
+-- 11. `goals` ganhou FK composta para `study_plans (id, teacher_id,
+--     student_id)`. Sem ela, o aluno reatribuía a própria meta a outro
+--     professor (que passava a vê-la em `goals_select`) e movia a meta para o
+--     planejamento de outro aluno — as duas coisas por UPDATE direto, porque
+--     `goals_update` aceita `student_id = auth.uid()` e nada mais olhava.
+--
+-- 12. `goal_entries` ganhou FK composta para `goals (id, teacher_id,
+--     student_id)`. A FK de coluna única, acrescentada na primeira rodada,
+--     garantia que a meta EXISTE; não que ela é do aluno que está lançando.
+--     Um aluno gravava minutos e acertos na meta de outro.
+--
+-- 13. `class_students`, `theory_catalog_subject_rules`, `theory_review_rules`,
+--     `theory_lessons`, `study_plan_theory_catalogs`, `theory_progress` e
+--     `theory_reviews` ganharam a FK composta equivalente. A pior delas era
+--     `theory_catalog_subject_rules`: como a UNIQUE é `(catalog_id,
+--     subject_key)` e o `catalog_id` não era conferido, um professor ocupava o
+--     slot no catálogo de OUTRO professor e o dono do catálogo não conseguia
+--     mais criar a própria regra.
+--
+-- 14. `is_teacher_of()`, nas policies de `study_plans` e `class_students`.
+--     `teacher_id = auth.uid()` diz que quem escreve é o professor da linha,
+--     não que o aluno da linha é aluno dele: qualquer professor criava
+--     planejamento e enfiava aluno alheio na própria turma.
+--
+-- 15. `GRANT UPDATE` por coluna em `goals`, `goal_entries`, `study_plans`,
+--     `study_plan_notebooks`, `study_plan_theory_catalogs`, `theory_progress`
+--     e `theory_reviews` — é a defesa 2 do CLAUDE.md, que só `profiles`
+--     estava usando. As colunas de contexto ficam fora do grant.
+--
+-- 16. `protect_goal_planning_fields()`. `goals_delete` decide pelo `type`, e
+--     `type` era atualizável pelo aluno: ele trocava a meta do professor para
+--     'extra' e apagava em seguida. O gatilho congela o planejamento da meta
+--     para quem não é o professor dela, e o `type` para todo mundo que não
+--     seja o professor.
+--
+-- 17. `has_active_access()` nas escritas do aluno. Nenhuma policy olhava
+--     `access_status` nem `access_expires_at` — aluno vencido ou pendente
+--     continuava lançando registro e progresso pela API, com o bloqueio
+--     existindo só no frontend. Fica no WITH CHECK, e não no USING, de
+--     propósito: WITH CHECK levanta 42501, USING filtraria em silêncio.
+--
+-- 18. `coupons` deixou de ser legível pela API. `is_teacher()` não é "é
+--     admin", e a tabela não tem dono — todo professor lia o código e os meses
+--     de todos os cupons. Sem policy e sem grant: o resgate e a administração
+--     passam pela RPC que o item 1 já previa.
+--
+-- 19. `my_teacher()`. `profiles_select` nunca deixou o aluno ler o próprio
+--     professor (o professor tem `teacher_id` nulo), e o contrato da UI pede
+--     `teacherName`. Uma função `SECURITY DEFINER` devolve só `id` e `name`,
+--     em vez de abrir a linha inteira do professor — que carrega `plan`,
+--     `coupon_used` e `access_status`.
+--
+-- 20. Dois índices redundantes a menos em `goals`: `(study_plan_id)` era
+--     prefixo de `goals_week_idx` e `(teacher_id)` era prefixo de
+--     `goals_teacher_plan_week_status_idx`.
+--
+-- O QUE FICOU DE FORA, DE PROPÓSITO
+--
+-- `catalog_blocks` continua com `using (true)`: é catálogo comum, sem conteúdo
+-- de aluno nenhum, e o professor precisa dele para montar caderno.
+--
+-- `theory_progress.theory_lesson_id` e `theory_reviews.theory_lesson_id` ainda
+-- não são amarrados ao catálogo do planejamento. Amarrar exige `teacher_id`
+-- nas duas tabelas, que é coluna nova e muda o de-para. O risco é o aluno
+-- marcar progresso numa aula de outro professor DENTRO DO PRÓPRIO
+-- planejamento: sujeira na linha dele, sem leitura de dado alheio, porque
+-- `theory_lessons_select` continua exigindo `can_access_teacher`.
+--
 -- DUAS DECISÕES QUE PRECISAM SER CONFERIDAS CONTRA OS DADOS REAIS
 --
 -- `access_status` e `waitlist_status` viraram enum, mas as colunas de origem
@@ -148,15 +226,23 @@ create table public.classes (
   name        text not null,
   description text,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  -- Alvo da FK composta de class_students.
+  unique (id, teacher_id)
 );
 
 create table public.class_students (
-  class_id   uuid not null references public.classes(id) on delete cascade,
+  class_id   uuid not null,
   student_id uuid not null references public.profiles(id) on delete cascade,
   teacher_id uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
-  primary key (class_id, student_id)
+  primary key (class_id, student_id),
+  -- Composta, e não `references classes(id)`: a policy de INSERT confere que
+  -- `teacher_id` é quem está escrevendo, mas não conferia de quem é a TURMA —
+  -- um professor matriculava aluno na turma de outro.
+  constraint class_students_class_fk
+    foreign key (class_id, teacher_id)
+    references public.classes (id, teacher_id) on delete cascade
 );
 
 -- ---------------------------------------------------------------------------
@@ -292,7 +378,9 @@ create table public.study_plans (
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   -- Alvo das FKs compostas que carregam o contexto denormalizado.
-  unique (id, teacher_id, student_id)
+  unique (id, teacher_id, student_id),
+  -- Alvo das FKs de theory_progress e theory_reviews, que não têm teacher_id.
+  unique (id, student_id)
 );
 
 -- ---------------------------------------------------------------------------
@@ -338,7 +426,7 @@ create table public.study_plan_notebooks (
 
 create table public.goals (
   id                uuid primary key default gen_random_uuid(),
-  study_plan_id     uuid not null references public.study_plans(id) on delete cascade,
+  study_plan_id     uuid not null,
   teacher_id        uuid not null references public.profiles(id) on delete cascade,
   student_id        uuid not null references public.profiles(id) on delete cascade,
   week_number       integer not null default 1,
@@ -364,6 +452,19 @@ create table public.goals (
   constraint goals_weekday_check check (weekday between 1 and 7),
   constraint goals_notebook_block_type_check
     check (notebook_block_id is null or type = 'question_block'),
+
+  -- Alvo da FK composta de goal_entries.
+  unique (id, teacher_id, student_id),
+
+  -- Composta, e não `references study_plans(id)`. Com a FK de coluna única, o
+  -- aluno reatribuía a meta a outro professor e movia a meta para o
+  -- planejamento de outro aluno: `goals_update` aceita a linha por
+  -- `student_id = auth.uid()`, e nada conferia que o trio continuava batendo
+  -- com o planejamento. É a mesma FK que quiz_sessions já usava.
+  constraint goals_study_plan_fk
+    foreign key (study_plan_id, teacher_id, student_id)
+    references public.study_plans (id, teacher_id, student_id) on delete cascade,
+
   constraint goals_notebook_block_fk
     foreign key (teacher_id, student_id, study_plan_id, notebook_block_id)
     references public.study_plan_notebooks (teacher_id, student_id, study_plan_id, block_id)
@@ -376,7 +477,7 @@ create table public.goals (
 
 create table public.goal_entries (
   id            uuid primary key default gen_random_uuid(),
-  goal_id       uuid not null references public.goals(id) on delete cascade,
+  goal_id       uuid not null,
   teacher_id    uuid not null references public.profiles(id) on delete cascade,
   student_id    uuid not null references public.profiles(id) on delete cascade,
   minutes       integer not null default 0,
@@ -391,12 +492,20 @@ create table public.goal_entries (
   manual_lesson text,
   theory_stage  public.theory_stage,
   note          text,
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+
+  -- Composta, e não `references goals(id)`. A FK de coluna única garantia que
+  -- a meta EXISTE; não que ela é do aluno que está lançando. Com ela sozinha,
+  -- um aluno gravava minutos e acertos na meta de outro — a policy só exigia
+  -- `student_id = auth.uid()`, e `student_id` é da PRÓPRIA linha.
+  constraint goal_entries_goal_fk
+    foreign key (goal_id, teacher_id, student_id)
+    references public.goals (id, teacher_id, student_id) on delete cascade
 );
 
--- `goal_id` não tinha FK no banco de origem. Aqui tem.
+-- `goal_id` não tinha FK no banco de origem. Aqui tem, e é composta.
 comment on column public.goal_entries.goal_id is
-  'FK acrescentada: no banco de origem esta coluna apontava para metas sem restrição nenhuma.';
+  'FK acrescentada: no banco de origem esta coluna apontava para metas sem restrição nenhuma. É composta com teacher_id e student_id — a FK de coluna única deixava um aluno lançar registro na meta de outro.';
 
 -- ---------------------------------------------------------------------------
 -- quiz_sessions (as baterias)
@@ -589,7 +698,9 @@ create table public.theory_catalogs (
   active      boolean not null default true,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  unique (teacher_id, key)
+  unique (teacher_id, key),
+  -- Alvo das FKs compostas das quatro tabelas que apontam para o catálogo.
+  unique (id, teacher_id)
 );
 
 create table public.theory_subject_rules (
@@ -608,7 +719,7 @@ create table public.theory_subject_rules (
 
 create table public.theory_catalog_subject_rules (
   id                uuid primary key default gen_random_uuid(),
-  catalog_id        uuid not null references public.theory_catalogs(id) on delete cascade,
+  catalog_id        uuid not null,
   teacher_id        uuid not null references public.profiles(id) on delete cascade,
   subject           text not null,
   subject_key       text not null,
@@ -618,12 +729,21 @@ create table public.theory_catalog_subject_rules (
   updated_at        timestamptz not null default now(),
   constraint theory_catalog_subject_rules_initial_questions_check
     check (initial_questions between 1 and 200),
-  unique (catalog_id, subject_key)
+  unique (catalog_id, subject_key),
+  -- Composta. Era a pior das FKs de coluna única: a UNIQUE acima é por
+  -- catálogo, e o catálogo não era conferido contra quem escreve. Um professor
+  -- criava a regra dentro do catálogo de OUTRO, ocupava o par
+  -- (catalog_id, subject_key), e o dono do catálogo batia em `duplicate key`
+  -- ao criar a regra dele — sem enxergar a linha que estava no caminho,
+  -- porque a policy de SELECT filtra por `teacher_id`.
+  constraint theory_catalog_subject_rules_catalog_fk
+    foreign key (catalog_id, teacher_id)
+    references public.theory_catalogs (id, teacher_id) on delete cascade
 );
 
 create table public.theory_review_rules (
   id               uuid primary key default gen_random_uuid(),
-  catalog_id       uuid not null references public.theory_catalogs(id) on delete cascade,
+  catalog_id       uuid not null,
   teacher_id       uuid not null references public.profiles(id) on delete cascade,
   subject          text not null,
   subject_key      text not null,
@@ -637,13 +757,17 @@ create table public.theory_review_rules (
   constraint theory_review_rules_lesson_spacing_check check (lesson_spacing between 1 and 200),
   constraint theory_review_rules_minimum_questions_check
     check (minimum_questions between 1 and 200),
-  unique (catalog_id, subject_key, review_number)
+  unique (catalog_id, subject_key, review_number),
+  -- Composta, pelo mesmo motivo de theory_catalog_subject_rules.
+  constraint theory_review_rules_catalog_fk
+    foreign key (catalog_id, teacher_id)
+    references public.theory_catalogs (id, teacher_id) on delete cascade
 );
 
 create table public.theory_lessons (
   id                   uuid primary key default gen_random_uuid(),
   teacher_id           uuid not null references public.profiles(id) on delete cascade,
-  catalog_id           uuid references public.theory_catalogs(id) on delete set null,
+  catalog_id           uuid,
   subject              text not null,
   subject_key          text not null,
   lesson_code          text not null,
@@ -669,23 +793,41 @@ create table public.theory_lessons (
     pdf_total_pages is null or theory_end_page is null
     or theory_end_page <= pdf_total_pages
   ),
-  unique (teacher_id, catalog_id, pdf_file)
+  unique (teacher_id, catalog_id, pdf_file),
+  -- Composta. A coluna é anulável e a FK é MATCH SIMPLE: aula sem catálogo
+  -- não é conferida, que é o comportamento desejado. A lista de colunas no
+  -- `set null` é obrigatória aqui — sem ela o Postgres anularia `teacher_id`
+  -- junto, e `teacher_id` é NOT NULL, então apagar um catálogo falharia.
+  constraint theory_lessons_catalog_fk
+    foreign key (catalog_id, teacher_id)
+    references public.theory_catalogs (id, teacher_id) on delete set null (catalog_id)
 );
 
 create table public.study_plan_theory_catalogs (
   id            uuid primary key default gen_random_uuid(),
-  study_plan_id uuid not null unique references public.study_plans(id) on delete cascade,
-  catalog_id    uuid not null references public.theory_catalogs(id) on delete cascade,
+  study_plan_id uuid not null unique,
+  catalog_id    uuid not null,
   teacher_id    uuid not null references public.profiles(id) on delete cascade,
   student_id    uuid not null references public.profiles(id) on delete cascade,
   created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now()
+  updated_at    timestamptz not null default now(),
+  -- As duas pontas compostas: o planejamento é do par, e o catálogo é do
+  -- professor. Sem a segunda, um professor ligava o catálogo de outro ao
+  -- próprio planejamento — e o aluno ficava com um catálogo que ele não tem
+  -- permissão de ler, porque `theory_catalogs_select` exige
+  -- `can_access_teacher`.
+  constraint study_plan_theory_catalogs_study_plan_fk
+    foreign key (study_plan_id, teacher_id, student_id)
+    references public.study_plans (id, teacher_id, student_id) on delete cascade,
+  constraint study_plan_theory_catalogs_catalog_fk
+    foreign key (catalog_id, teacher_id)
+    references public.theory_catalogs (id, teacher_id) on delete cascade
 );
 
 create table public.theory_progress (
   id                          uuid primary key default gen_random_uuid(),
   student_id                  uuid not null references public.profiles(id) on delete cascade,
-  study_plan_id               uuid not null references public.study_plans(id) on delete cascade,
+  study_plan_id               uuid not null,
   theory_lesson_id            uuid not null references public.theory_lessons(id) on delete cascade,
   current_page                integer not null default 0,
   theory_done                 boolean not null default false,
@@ -699,13 +841,20 @@ create table public.theory_progress (
   updated_at                  timestamptz not null default now(),
   constraint theory_progress_current_page_check check (current_page >= 0),
   constraint theory_progress_initial_questions_check check (initial_questions_done >= 0),
-  unique (student_id, study_plan_id, theory_lesson_id)
+  unique (student_id, study_plan_id, theory_lesson_id),
+  -- Composta. `theory_progress_write` só exigia `student_id = auth.uid()`, e
+  -- `theory_reviews_write` já conferia o planejamento no WITH CHECK: as duas
+  -- tabelas irmãs discordavam, e a que não conferia deixava o aluno gravar
+  -- progresso dentro do planejamento de outro aluno.
+  constraint theory_progress_study_plan_fk
+    foreign key (study_plan_id, student_id)
+    references public.study_plans (id, student_id) on delete cascade
 );
 
 create table public.theory_reviews (
   id                uuid primary key default gen_random_uuid(),
   student_id        uuid not null references public.profiles(id) on delete cascade,
-  study_plan_id     uuid not null references public.study_plans(id) on delete cascade,
+  study_plan_id     uuid not null,
   theory_lesson_id  uuid not null references public.theory_lessons(id) on delete cascade,
   review_number     integer not null,
   minimum_questions integer not null default 15,
@@ -719,17 +868,26 @@ create table public.theory_reviews (
   constraint theory_reviews_minimum_questions_check
     check (minimum_questions between 1 and 200),
   constraint theory_reviews_questions_answered_check check (questions_answered >= 0),
-  unique (student_id, study_plan_id, theory_lesson_id, review_number)
+  unique (student_id, study_plan_id, theory_lesson_id, review_number),
+  -- O que o WITH CHECK da policy já exigia, agora como constraint: invariante
+  -- que cabe no banco não fica só na policy.
+  constraint theory_reviews_study_plan_fk
+    foreign key (study_plan_id, student_id)
+    references public.study_plans (id, student_id) on delete cascade
 );
 
 -- ---------------------------------------------------------------------------
 -- Índices
 -- ---------------------------------------------------------------------------
 
-create index goals_study_plan_idx        on public.goals (study_plan_id);
+-- `(study_plan_id)` e `(teacher_id)` sozinhos saíram: eram prefixo de
+-- `goals_week_idx` e de `goals_teacher_plan_week_status_idx`. Um índice que é
+-- prefixo de outro não serve nenhuma leitura a mais, e custa em toda escrita.
 create index goals_student_idx           on public.goals (student_id);
-create index goals_teacher_idx           on public.goals (teacher_id);
 create index goals_week_idx              on public.goals (study_plan_id, week_number);
+-- Cobre `goals_study_plan_fk` na ordem da FK, para o cascade não virar seq scan.
+create index goals_plan_context_idx
+  on public.goals (study_plan_id, teacher_id, student_id);
 create index goals_teacher_plan_week_status_idx
   on public.goals (teacher_id, study_plan_id, student_id, week_number, status);
 create index goals_notebook_block_idx
@@ -799,6 +957,29 @@ create index theory_lessons_teacher_idx on public.theory_lessons (teacher_id, su
 create index theory_progress_student_plan_idx on public.theory_progress (student_id, study_plan_id);
 create index theory_reviews_student_plan_status_idx
   on public.theory_reviews (student_id, study_plan_id, status);
+
+-- Índices das FKs compostas novas.
+--
+-- Uma FK precisa de índice do lado que REFERENCIA, na ordem das colunas da FK:
+-- é ele que o Postgres usa quando a linha-pai é apagada. Os que já existem
+-- cobrem o prefixo errado — `theory_progress_student_plan_idx` começa por
+-- `student_id`, e a FK começa por `study_plan_id`.
+create index goal_entries_goal_idx
+  on public.goal_entries (goal_id, teacher_id, student_id);
+create index class_students_class_idx
+  on public.class_students (class_id, teacher_id);
+create index theory_catalog_subject_rules_catalog_idx
+  on public.theory_catalog_subject_rules (catalog_id, teacher_id);
+create index theory_review_rules_catalog_idx
+  on public.theory_review_rules (catalog_id, teacher_id);
+create index theory_lessons_catalog_teacher_idx
+  on public.theory_lessons (catalog_id, teacher_id);
+create index study_plan_theory_catalogs_catalog_idx
+  on public.study_plan_theory_catalogs (catalog_id, teacher_id);
+create index theory_progress_plan_student_idx
+  on public.theory_progress (study_plan_id, student_id);
+create index theory_reviews_plan_student_idx
+  on public.theory_reviews (study_plan_id, student_id);
 
 -- ---------------------------------------------------------------------------
 -- View de desempenho
@@ -1015,6 +1196,59 @@ create trigger protect_goal_notebook_block
   on public.goals
   for each row execute function app_private.protect_goal_notebook_block();
 
+-- O planejamento da meta é do professor; o aluno só registra execução.
+--
+-- `goals_update` aceita a linha por `teacher_id = auth.uid()` OU
+-- `student_id = auth.uid()`, sem distinguir o que cada um pode mudar. Com isso
+-- o aluno trocava o `type` de uma meta do professor para 'extra' e apagava em
+-- seguida, porque `goals_delete` decide pelo tipo — a meta sumia da semana e
+-- nada no banco registrava que ela existiu.
+--
+-- O `type` fica congelado para quem não é o professor da meta, inclusive nas
+-- metas que o próprio aluno criou: é ele que governa quem pode apagar. O resto
+-- do planejamento (título, matéria, dia, minutos previstos, bloco do caderno)
+-- fica congelado só nas metas do professor — o aluno continua editando o
+-- estudo extra que ele mesmo lançou.
+create or replace function app_private.protect_goal_planning_fields() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+declare
+  -- Mesmo critério das outras: o papel sai do JWT, e só dele. Ver a nota
+  -- longa em `protect_profile_admin_fields`.
+  v_actor text := coalesce(auth.jwt() ->> 'role', '');
+  v_privileged boolean := v_actor not in ('authenticated', 'anon');
+begin
+  if v_privileged or (select auth.uid()) = old.teacher_id then
+    return new;
+  end if;
+
+  if old.type is distinct from new.type then
+    raise exception 'o tipo da meta so e alterado pelo professor';
+  end if;
+
+  if old.type not in ('extra', 'reinforcement')
+     and (old.title is distinct from new.title
+       or old.subject is distinct from new.subject
+       or old.description is distinct from new.description
+       or old.lesson is distinct from new.lesson
+       or old.block is distinct from new.block
+       or old.planned_minutes is distinct from new.planned_minutes
+       or old.week_number is distinct from new.week_number
+       or old.weekday is distinct from new.weekday
+       or old.weekday_name is distinct from new.weekday_name
+       or old.day_position is distinct from new.day_position
+       or old.due_on is distinct from new.due_on
+       or old.notebook_block_id is distinct from new.notebook_block_id) then
+    raise exception 'somente o professor altera o planejamento da meta';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger protect_goal_planning_fields
+  before update on public.goals
+  for each row execute function app_private.protect_goal_planning_fields();
+
 -- Contexto congelado depois que existe bateria.
 create or replace function app_private.freeze_goal_with_sessions() returns trigger
   language plpgsql security definer set search_path = '' as $$
@@ -1192,6 +1426,67 @@ create or replace function public.can_access_teacher(p_teacher uuid) returns boo
       );
 $$;
 
+-- O inverso de `can_access_teacher`: quem está agindo é o professor DESTE
+-- aluno?
+--
+-- `teacher_id = auth.uid()` dentro de uma policy diz que quem escreve é o
+-- professor da LINHA — que é um valor que quem escreve escolheu. Não diz nada
+-- sobre o aluno. Sem esta função, qualquer professor criava planejamento para
+-- aluno de outro e matriculava aluno alheio na própria turma: as duas coisas
+-- passavam, porque a linha inteira era montada por quem estava atacando.
+create or replace function public.is_teacher_of(p_student uuid) returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.profiles p
+     where p.id = p_student and p.teacher_id = (select auth.uid())
+  );
+$$;
+
+-- O acesso do aluno está vigente?
+--
+-- Nenhuma policy olhava `access_status` nem `access_expires_at`: aluno vencido
+-- ou ainda pendente continuava lançando registro e progresso por uma chamada
+-- direta à API, porque o bloqueio existia só no frontend.
+--
+-- Entra no WITH CHECK das escritas do ALUNO, e não no USING nem nas leituras:
+-- WITH CHECK levanta 42501, que a tela consegue explicar, enquanto um USING
+-- falso filtraria a linha em silêncio (ver a nota sobre isso no CLAUDE.md). E
+-- quem venceu continua lendo o próprio histórico.
+--
+-- `profiles` e `waitlist` ficam de fora de propósito: é por elas que um aluno
+-- pendente pede acesso, e fechá-las trancaria a porta de entrada.
+create or replace function public.has_active_access() returns boolean
+  language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.profiles p
+     where p.id = (select auth.uid())
+       and p.access_status = 'active'
+       and (p.access_expires_at is null or p.access_expires_at > now())
+  );
+$$;
+
+-- O professor do aluno, com id e nome — e nada além disso.
+--
+-- `profiles_select` nunca deixou o aluno ler a linha do próprio professor: a
+-- policy é `id = auth.uid() or teacher_id = auth.uid()`, e o professor tem
+-- `teacher_id` nulo. O contrato da UI pede `teacherName` (Account, em
+-- `apps/web/src/lib/api/contract.ts`), então a leitura precisa existir.
+--
+-- Por função, e não abrindo a policy: a linha de `profiles` carrega `plan`,
+-- `coupon_used`, `access_status` e `access_expires_at`, e a RLS decide QUAL
+-- LINHA, nunca QUAL COLUNA. Por view também não — view precisa de
+-- `security_invoker = true` neste repositório, e com ele a view herdaria a
+-- mesma policy e voltaria vazia.
+create or replace function public.my_teacher()
+  returns table (id uuid, name text)
+  language sql stable security definer set search_path = '' as $$
+  select t.id, t.name
+    from public.profiles t
+   where t.id = (
+     select p.teacher_id from public.profiles p where p.id = (select auth.uid())
+   );
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Policies — uma por comando, por tabela.
 --
@@ -1223,8 +1518,14 @@ create policy classes_delete on public.classes for delete to authenticated
 -- class_students
 create policy class_students_select on public.class_students for select to authenticated
   using (public.can_access_teacher(teacher_id) or student_id = (select auth.uid()));
+-- `is_teacher_of` é o que impede matricular aluno de outro professor. A FK
+-- composta `class_students_class_fk` cuida da outra ponta, a turma.
 create policy class_students_insert on public.class_students for insert to authenticated
-  with check (public.is_teacher() and teacher_id = (select auth.uid()));
+  with check (
+    public.is_teacher()
+    and teacher_id = (select auth.uid())
+    and public.is_teacher_of(student_id)
+  );
 create policy class_students_delete on public.class_students for delete to authenticated
   using (public.is_teacher() and teacher_id = (select auth.uid()));
 
@@ -1291,9 +1592,15 @@ create policy subject_lessons_delete on public.subject_lessons for delete to aut
      where s.id = subject_lessons.subject_id and s.teacher_id = (select auth.uid())
   ));
 
--- coupons — leitura só do professor. O resgate é RPC, e não existe ainda.
-create policy coupons_select_teacher on public.coupons for select to authenticated
-  using (public.is_teacher());
+-- coupons — sem policy, e sem grant lá embaixo.
+--
+-- A tabela é global: não tem coluna de dono, e `user_role` não tem 'admin'.
+-- `is_teacher()` não é "é admin", então a policy anterior dava a TODO professor
+-- o código e os meses de liberação de TODOS os cupons. Com RLS ligada e zero
+-- policy, só `service_role` lê — e o resgate passa pela RPC `SECURITY DEFINER`
+-- que o item 1 do cabeçalho já previa, que valida o código do lado do servidor
+-- sem devolver a tabela. Tela de administração de cupom, se nascer, nasce pela
+-- mesma RPC.
 
 -- waitlist
 create policy waitlist_select on public.waitlist for select to authenticated
@@ -1332,10 +1639,18 @@ create policy catalog_blocks_select on public.catalog_blocks for select to authe
 -- study_plans
 create policy study_plans_select on public.study_plans for select to authenticated
   using (teacher_id = (select auth.uid()) or student_id = (select auth.uid()));
+-- `is_teacher_of`: sem ele, `teacher_id = auth.uid()` deixava qualquer
+-- professor criar planejamento para aluno de outro — e o aluno passava a ver
+-- esse planejamento, porque `study_plans_select` casa por `student_id`.
 create policy study_plans_insert on public.study_plans for insert to authenticated
-  with check (teacher_id = (select auth.uid()));
+  with check (
+    teacher_id = (select auth.uid()) and public.is_teacher_of(student_id)
+  );
 create policy study_plans_update on public.study_plans for update to authenticated
-  using (teacher_id = (select auth.uid())) with check (teacher_id = (select auth.uid()));
+  using (teacher_id = (select auth.uid()))
+  with check (
+    teacher_id = (select auth.uid()) and public.is_teacher_of(student_id)
+  );
 create policy study_plans_delete on public.study_plans for delete to authenticated
   using (teacher_id = (select auth.uid()));
 
@@ -1377,8 +1692,10 @@ create policy goals_insert on public.goals for insert to authenticated
   with check (
     teacher_id = (select auth.uid())
     or (
-      -- O aluno cria só estudo extra e reforço, no próprio planejamento ativo.
+      -- O aluno cria só estudo extra e reforço, no próprio planejamento ativo,
+      -- e só enquanto o acesso dele estiver vigente.
       student_id = (select auth.uid())
+      and public.has_active_access()
       and type in ('extra', 'reinforcement')
       and exists (
         select 1 from public.study_plans p
@@ -1390,6 +1707,13 @@ create policy goals_insert on public.goals for insert to authenticated
     )
   );
 
+-- Quem VÊ a linha para atualizar são os dois. O QUE cada um pode mudar não
+-- cabe numa policy, que decide linha e não coluna, e está em três lugares:
+--   * `goals_study_plan_fk`, que impede o trio divergir do planejamento;
+--   * o GRANT UPDATE por coluna, que tira teacher_id, student_id e
+--     study_plan_id do alcance do PostgREST;
+--   * `protect_goal_planning_fields`, que congela o `type` e, nas metas do
+--     professor, o resto do planejamento.
 create policy goals_update on public.goals for update to authenticated
   using (teacher_id = (select auth.uid()) or student_id = (select auth.uid()))
   with check (teacher_id = (select auth.uid()) or student_id = (select auth.uid()));
@@ -1401,13 +1725,23 @@ create policy goals_delete on public.goals for delete to authenticated
   );
 
 -- goal_entries
+--
+-- O que impede um aluno lançar registro na meta de OUTRO é
+-- `goal_entries_goal_fk`, não a policy: `student_id` e `teacher_id` aqui são
+-- da própria linha, e quem insere escolhe os dois.
 create policy goal_entries_select on public.goal_entries for select to authenticated
   using (student_id = (select auth.uid()) or teacher_id = (select auth.uid()));
 create policy goal_entries_insert on public.goal_entries for insert to authenticated
-  with check (student_id = (select auth.uid()) or teacher_id = (select auth.uid()));
+  with check (
+    teacher_id = (select auth.uid())
+    or (student_id = (select auth.uid()) and public.has_active_access())
+  );
 create policy goal_entries_update on public.goal_entries for update to authenticated
   using (student_id = (select auth.uid()) or teacher_id = (select auth.uid()))
-  with check (student_id = (select auth.uid()) or teacher_id = (select auth.uid()));
+  with check (
+    teacher_id = (select auth.uid())
+    or (student_id = (select auth.uid()) and public.has_active_access())
+  );
 create policy goal_entries_delete on public.goal_entries for delete to authenticated
   using (student_id = (select auth.uid()) or teacher_id = (select auth.uid()));
 
@@ -1477,8 +1811,12 @@ create policy theory_progress_select on public.theory_progress for select to aut
          and p.student_id = theory_progress.student_id
     )
   );
+-- O planejamento é garantido por `theory_progress_study_plan_fk`; aqui fica só
+-- o acesso vigente. No WITH CHECK, não no USING: assim o aluno vencido recebe
+-- 42501 ao gravar e continua enxergando e apagando o que já era dele.
 create policy theory_progress_write on public.theory_progress for all to authenticated
-  using (student_id = (select auth.uid())) with check (student_id = (select auth.uid()));
+  using (student_id = (select auth.uid()))
+  with check (student_id = (select auth.uid()) and public.has_active_access());
 
 create policy theory_reviews_select on public.theory_reviews for select to authenticated
   using (
@@ -1490,15 +1828,11 @@ create policy theory_reviews_select on public.theory_reviews for select to authe
          and p.student_id = theory_reviews.student_id
     )
   );
+-- O `exists` que estava aqui virou `theory_reviews_study_plan_fk`. Sobra o
+-- acesso vigente, pelo mesmo motivo de theory_progress.
 create policy theory_reviews_write on public.theory_reviews for all to authenticated
   using (student_id = (select auth.uid()))
-  with check (
-    student_id = (select auth.uid())
-    and exists (
-      select 1 from public.study_plans p
-       where p.id = theory_reviews.study_plan_id and p.student_id = (select auth.uid())
-    )
-  );
+  with check (student_id = (select auth.uid()) and public.has_active_access());
 
 -- ---------------------------------------------------------------------------
 -- Grants
@@ -1537,13 +1871,49 @@ grant select, insert, delete         on public.class_students     to authenticat
 grant select, insert, update, delete on public.subjects           to authenticated;
 grant select, insert, update, delete on public.subject_blocks     to authenticated;
 grant select, insert, update, delete on public.subject_lessons    to authenticated;
-grant select                         on public.coupons            to authenticated;
 grant select, insert, update, delete on public.waitlist           to authenticated;
 grant select                         on public.catalog_blocks     to authenticated;
-grant select, insert, update, delete on public.study_plans        to authenticated;
-grant select, insert, update, delete on public.study_plan_notebooks to authenticated;
-grant select, insert, update, delete on public.goals              to authenticated;
-grant select, insert, update, delete on public.goal_entries       to authenticated;
+
+-- `coupons` não aparece aqui de propósito: RLS ligada, zero policy e zero
+-- grant. Ver a nota na seção de policies.
+
+-- Daqui para baixo, UPDATE é POR COLUNA — a defesa 2 do CLAUDE.md, que até
+-- agora só `profiles` estava usando. As colunas de contexto (`teacher_id`,
+-- `student_id`, `study_plan_id`, e o `goal_id` que é o contexto de
+-- `goal_entries`) ficam fora do grant: a RLS decide QUAL LINHA e nunca QUAL
+-- COLUNA, então sem isto um UPDATE legítimo carrega junto a mudança de dono.
+-- `id`, `created_at` e `updated_at` também ficam de fora — o carimbo é do
+-- gatilho.
+
+grant select, insert, delete on public.study_plans to authenticated;
+grant update (
+  class_id, name, area, target_exam, stage, study_model, weekly_goals,
+  starts_on, exam_date, status
+) on public.study_plans to authenticated;
+
+grant select, insert, delete on public.study_plan_notebooks to authenticated;
+-- `block_id` fica fora: é a identidade do caderno, e o gatilho
+-- `protect_notebook_identity` já o trata como imutável. `catalog_key` fica
+-- dentro porque pode ser definido uma vez (NULL -> valor).
+grant update (
+  subject_key, subject_name, subject_color, subject_target, notebook_key,
+  notebook_name, notebook_link, total_questions, subject_position,
+  notebook_position, active, deleted, catalog_key
+) on public.study_plan_notebooks to authenticated;
+
+grant select, insert, delete on public.goals to authenticated;
+grant update (
+  week_number, weekday, weekday_name, day_position, type, subject, title,
+  description, lesson, block, planned_minutes, spent_minutes,
+  questions_answered, correct_answers, status, due_on, completed_at,
+  notebook_block_id
+) on public.goals to authenticated;
+
+grant select, insert, delete on public.goal_entries to authenticated;
+-- `wrong_answers` e `score` são colunas geradas: não entram em UPDATE.
+grant update (
+  minutes, questions, correct_answers, manual_lesson, theory_stage, note
+) on public.goal_entries to authenticated;
 
 -- Execução: leitura e nada mais. A escrita é da RPC, que roda como definer.
 grant select on public.quiz_sessions          to authenticated;
@@ -1556,15 +1926,31 @@ grant select, insert, update, delete on public.theory_subject_rules         to a
 grant select, insert, update, delete on public.theory_catalog_subject_rules to authenticated;
 grant select, insert, update, delete on public.theory_review_rules          to authenticated;
 grant select, insert, update, delete on public.theory_lessons               to authenticated;
-grant select, insert, update, delete on public.study_plan_theory_catalogs   to authenticated;
-grant select, insert, update, delete on public.theory_progress              to authenticated;
-grant select, insert, update, delete on public.theory_reviews               to authenticated;
+
+-- As três de baixo carregam contexto, e seguem a mesma regra por coluna.
+grant select, insert, delete on public.study_plan_theory_catalogs to authenticated;
+grant update (catalog_id) on public.study_plan_theory_catalogs to authenticated;
+
+grant select, insert, delete on public.theory_progress to authenticated;
+grant update (
+  current_page, theory_done, theory_done_at, initial_questions_done,
+  initial_questions_complete, initial_questions_complete_at,
+  lesson_done, lesson_done_at
+) on public.theory_progress to authenticated;
+
+grant select, insert, delete on public.theory_reviews to authenticated;
+grant update (
+  minimum_questions, questions_answered, status, started_at, completed_at
+) on public.theory_reviews to authenticated;
 
 -- Funções: `revoke ... from public` acima já tirou o EXECUTE que o Postgres
 -- concede por padrão ao grantee vazio. Revogar de `anon` e `authenticated`
 -- sem revogar de PUBLIC não tira nada — os dois herdam dele.
 grant execute on function public.is_teacher()                 to authenticated;
 grant execute on function public.can_access_teacher(uuid)     to authenticated;
+grant execute on function public.is_teacher_of(uuid)          to authenticated;
+grant execute on function public.has_active_access()          to authenticated;
+grant execute on function public.my_teacher()                 to authenticated;
 
 -- As de gatilho não são API: rodam pelo gatilho, com o privilégio do dono.
 -- Ninguém recebe EXECUTE.

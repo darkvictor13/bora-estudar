@@ -1,278 +1,273 @@
-import { Link, useLoaderData } from "react-router";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import { Alert, Badge, Card, Empty, Field, Metric, PageHeader } from "@bora/ui";
+import { useState } from "react";
+import { useLoaderData, useRevalidator } from "react-router";
 
-import { Alert, Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { requireStudentAccess } from "@/lib/auth/session";
+import { ContentBody } from "@/components/AppShell";
 import {
-  getActiveStudyPlan,
-  getBlockErrors,
-  getBlockPerformance,
-  getCompletedSessions,
-  getCycleErrors,
-  getReviewCompletions,
-  getReviewCycles,
-  getReviewSpacings,
-  getStudyPlanBlocks,
-  getUsedSessions,
-} from "@/lib/data/student";
-import { ReviewGrid } from "@/components/ReviewGrid";
-import { buildGrid } from "@/lib/domain/spacing";
-import { ReinforcementForm } from "@/components/student/ReinforcementForm";
-import { buildCycles } from "@/lib/domain/reinforcement";
-import { ROUTES } from "@/lib/routes";
+  api,
+  newRequestId,
+  type ApiError,
+  type Reinforcement,
+  type ReviewGridRow,
+} from "@/lib/api";
+import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
+import { requireStudentAccess } from "@/lib/auth/session";
 
-const PHASE_LABEL: Record<string, string> = {
-  main: "principal",
-  extra: "extra",
-  reinforcement: "reforço",
-};
-
-/** Confirmação por query string: o ciclo some da lista com a revalidação. */
-const DONE_MESSAGE: Record<string, string> = {
-  reforco: "Reforço concluído. O ciclo foi revisado e saiu da lista.",
-  revisao: "Revisão marcada como feita.",
-  "revisao-desfeita": "Revisão desmarcada.",
-};
-
-export async function studentReviewsLoader({ request }: { request: Request }) {
+/**
+ * Controle de revisões — o `p-controleRevisoes` da v2.
+ *
+ * REVISÃO E REFORÇO SÃO COISAS DIFERENTES, e a tela mantém a separação que a v2
+ * já tinha: a grade de revisão é CALENDÁRIO — relê o que foi estudado, no
+ * espaçamento configurado, independentemente de ter ido bem —, e o reforço é
+ * REAÇÃO a desempenho baixo. Numa lista só, o aluno não sabe por que cada linha
+ * está ali.
+ *
+ * O ESPAÇAMENTO É SÓ LEITURA AQUI. Quem o configura é o professor: a policy de
+ * `theory_review_rules` exige `teacher_id = auth.uid()`, e um campo editável
+ * nesta tela seria promessa que o banco recusa.
+ */
+export async function studentReviewsLoader() {
   await requireStudentAccess();
 
-  const plan = await getActiveStudyPlan();
-  if (!plan) return { plan: null } as const;
+  const plan = await loadActivePlanOrNull();
+  if (!plan) {
+    return {
+      grid: [] as readonly ReviewGridRow[],
+      reinforcements: [] as readonly Reinforcement[],
+      hasPlan: false,
+    };
+  }
 
-  const [blocks, performance, spacings, reviewsDone] = await Promise.all([
-    getStudyPlanBlocks(plan.id),
-    getBlockPerformance(plan.id),
-    getReviewSpacings(plan.id),
-    getReviewCompletions(plan.id),
+  const [grid, reinforcements] = await Promise.all([
+    api.loadReviewGrid(plan.id),
+    api.listReinforcements(plan.id),
   ]);
-  const blockIds = blocks.map((b) => b.id);
-  const [cycles, used] = await Promise.all([getReviewCycles(blockIds), getUsedSessions(blockIds)]);
 
-  const params = new URL(request.url).searchParams;
-  const requested = params.get("bloco");
-  const selectedId = requested && blocks.some((b) => b.id === requested) ? requested : null;
-  const errors = selectedId ? await getBlockErrors(plan.id, selectedId) : [];
-
-  // Ciclos abertos de cada bloco. `buildCycles` é pura e devolve só os que
-  // exigem reforço — em 80% ou mais o ciclo se fecha sozinho.
-  const openCycles = await Promise.all(
-    blocks.map(async (block) => {
-      const sessions = await getCompletedSessions(plan.id, block.id);
-      const cycle = buildCycles(sessions, used)[0];
-      if (!cycle) return null;
-      return {
-        blockId: block.id,
-        blockName: block.name,
-        subjectName: block.subject_name,
-        subjectColor: block.subject_color,
-        score: cycle.score,
-        highPriority: cycle.highPriority,
-        sessionIds: cycle.sessions.map((s) => s.id),
-        errors: await getCycleErrors(cycle.sessions.map((s) => s.id)),
-      };
-    }),
-  );
-
-  const feito = params.get("feito");
-
-  return {
-    plan,
-    blocks,
-    performance,
-    cycles,
-    selectedId,
-    errors,
-    openCycles: openCycles.filter((c) => c !== null),
-    // A grade é derivada aqui, no loader, pelo mesmo módulo que os testes de
-    // domínio exercitam. Nada dela está gravado.
-    grids: buildGrid(spacings, blocks, reviewsDone),
-    doneMessage: feito ? (DONE_MESSAGE[feito] ?? null) : null,
-    // Gerado UMA vez por carga da tela, e não a cada submissão: é o que faz o
-    // reenvio devolver o reforço já gravado (R-RCIC-11).
-    requestId: crypto.randomUUID(),
-  } as const;
+  return { grid, reinforcements, hasPlan: true };
 }
 
 type LoaderData = Awaited<ReturnType<typeof studentReviewsLoader>>;
 
 export function StudentReviews() {
-  const data = useLoaderData() as LoaderData;
+  const { grid, reinforcements, hasPlan } = useLoaderData() as LoaderData;
+  const { revalidate } = useRevalidator();
+  const [open, setOpen] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
-  if (!data.plan) {
-    return (
-      <>
-        <PageHeader title="Revisões" />
-        <Alert kind="info">Nenhum planejamento ativo.</Alert>
-      </>
-    );
+  const due = grid.flatMap((row) => row.reviews.filter((review) => review.due));
+  const pending = grid.flatMap((row) =>
+    row.reviews.filter((review) => review.status !== "completed"),
+  );
+
+  async function record(reviewId: string, questions: number, correctAnswers: number) {
+    const result = await api.recordReviewQuestions({
+      reviewId,
+      requestId: newRequestId(),
+      questions,
+      correctAnswers,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    setOpen(null);
+    await revalidate();
   }
-
-  const { blocks, selectedId, errors, openCycles, doneMessage, requestId, grids } = data;
-  const perfById = new Map(data.performance.map((p) => [p.block_id, p]));
-
-  const cyclesByBlock = new Map<string, number>();
-  for (const cycle of data.cycles) {
-    cyclesByBlock.set(cycle.block_id, (cyclesByBlock.get(cycle.block_id) ?? 0) + 1);
-  }
-
-  const selected = selectedId ? blocks.find((b) => b.id === selectedId) : null;
-
-  /**
-   * O reforço automático nasce quando três baterias válidas do mesmo bloco
-   * ficam abaixo de 80% no acumulado. A avaliação usa SOMENTE as principais.
-   */
-  const needsReinforcement = (blockId: string) => {
-    const perf = perfById.get(blockId);
-    if (!perf) return false;
-    return (perf.session_count ?? 0) >= 3 && (perf.official_score_pct ?? 100) < 80;
-  };
 
   return (
     <>
       <PageHeader
-        title="Revisões"
-        description="O caderno de erros reúne as questões erradas nas três fases: principais, extras e reforços."
+        title="Controle de revisões"
+        description="O calendário de releitura, no espaçamento que seu professor definiu"
       />
 
-      {doneMessage && <Alert kind="success">{doneMessage}</Alert>}
+      <ContentBody>
+        {!hasPlan && (
+          <Alert status="info">
+            Nenhum planejamento ativo. Aguarde seu professor montar e ativar um.
+          </Alert>
+        )}
+        {error && <Alert status="error">{error.message}</Alert>}
 
-      <div className="stack">
-        {openCycles.map((cycle) => (
-          <Card
-            key={cycle.blockId}
-            title={`Reforço — ${cycle.blockName}`}
-            sub={`Ciclo de 3 baterias com ${cycle.score}% nas principais · ${cycle.errors.length} questão(ões) a revisar`}
-            action={
-              cycle.highPriority ? <Badge tone="red">Prioridade alta</Badge> : <Badge tone="amber">Disponível</Badge>
-            }
+        {hasPlan && (
+          <Box
+            sx={(theme) => ({
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 1.25,
+              mb: 1.75,
+              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+            })}
           >
-            <ReinforcementForm
-              studyPlanId={data.plan.id}
-              blockId={cycle.blockId}
-              sessionIds={cycle.sessionIds}
-              errors={cycle.errors}
-              requestId={requestId}
+            <Metric label="Disciplinas no ciclo" value={grid.filter((row) => row.selected).length} />
+            <Metric
+              label="Revisões vencidas"
+              value={due.length}
+              note={due.length === 0 ? "Nada em atraso" : "Não bloqueiam a próxima aula"}
             />
-          </Card>
+            <Metric label="Agendadas" value={pending.length - due.length} />
+          </Box>
+        )}
+
+        {hasPlan && grid.length === 0 && (
+          <Empty icon="🔁">
+            Nenhuma regra de revisão configurada. Seu professor define de quantas em quantas aulas
+            cada matéria volta.
+          </Empty>
+        )}
+
+        {grid.map((row) => (
+          <Box key={row.subjectKey} sx={{ mb: 1.5 }}>
+            <Card
+              title={row.subject}
+              sub={
+                row.lessonSpacing > 0
+                  ? `Revisão a cada ${row.lessonSpacing} ${
+                      row.lessonSpacing === 1 ? "aula" : "aulas"
+                    } · mínimo de ${row.minimumQuestions} questões`
+                  : "Sem regra de revisão configurada"
+              }
+              action={
+                <Badge tone={row.reviews.some((review) => review.due) ? "warning" : "neutral"}>
+                  {row.reviews.filter((review) => review.status === "completed").length}/
+                  {row.reviews.length}
+                </Badge>
+              }
+            >
+              {row.reviews.length === 0 ? (
+                <Typography variant="caption" component="p">
+                  Nenhuma revisão criada ainda. Elas nascem quando a aula fecha.
+                </Typography>
+              ) : (
+                row.reviews.map((review) => (
+                  <Box
+                    key={review.id}
+                    data-testid="review-row"
+                    data-review-id={review.id}
+                    data-due={review.due}
+                    data-status={review.status}
+                    sx={(theme) => ({
+                      py: 1.125,
+                      borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+                      "&:last-of-type": { borderBottom: "none" },
+                    })}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                      <Typography sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem" }}>
+                        {review.lessonTitle}
+                      </Typography>
+                      <Badge tone="neutral">{review.reviewNumber}ª</Badge>
+                      <Badge
+                        tone={
+                          review.due
+                            ? "warning"
+                            : review.status === "completed"
+                              ? "success"
+                              : "neutral"
+                        }
+                      >
+                        {review.due
+                          ? "Vencida"
+                          : review.status === "completed"
+                            ? "Feita"
+                            : "Agendada"}
+                      </Badge>
+                      <Badge tone="neutral">
+                        {review.questionsAnswered}/{review.minimumQuestions}
+                      </Badge>
+                      {review.status !== "completed" && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setOpen(open === review.id ? null : review.id)}
+                        >
+                          Registrar
+                        </Button>
+                      )}
+                    </Box>
+
+                    {open === review.id && (
+                      <Box
+                        component="form"
+                        noValidate
+                        sx={{ mt: 1, display: "flex", gap: 1, alignItems: "flex-end", flexWrap: "wrap" }}
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const data = new FormData(event.currentTarget);
+                          void record(
+                            review.id,
+                            Number(data.get("questions") ?? 0),
+                            Number(data.get("correctAnswers") ?? 0),
+                          );
+                        }}
+                      >
+                        <Field
+                          label="Questões"
+                          name="questions"
+                          type="number"
+                          min={0}
+                          defaultValue={review.minimumQuestions - review.questionsAnswered}
+                        />
+                        <Field label="Acertos" name="correctAnswers" type="number" min={0} defaultValue={0} />
+                        <Button type="submit" size="small" variant="contained" sx={{ mb: 1.75 }}>
+                          Salvar
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                ))
+              )}
+            </Card>
+          </Box>
         ))}
 
-        <ReviewGrid
-          grids={grids}
-          studyPlanId={data.plan.id}
-          redirectTo={ROUTES.student.reviews}
-          emptyHint="Seu professor ainda não programou revisão espaçada. Ela diz de quantos em quantos cadernos cada disciplina volta."
-        />
-
-        <Card title="Blocos" sub="Selecione um bloco para ver os erros acumulados">
-          {blocks.length === 0 ? (
-            <Empty>Nenhum bloco configurado.</Empty>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Bloco</th>
-                    <th className="num">Baterias</th>
-                    <th className="num">Oficial</th>
-                    <th className="num">Ciclos revisados</th>
-                    <th>Situação</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {blocks.map((block) => {
-                    const perf = perfById.get(block.id);
-                    const pct = perf?.official_score_pct ?? null;
-                    return (
-                      <tr key={block.id}>
-                        <td>
-                          <strong style={{ color: block.subject_color }}>
-                            {block.subject_name}
-                          </strong>
-                          <div className="muted">{block.name}</div>
-                        </td>
-                        <td className="num">{perf?.session_count ?? 0}</td>
-                        <td className="num">{pct === null ? "—" : `${pct}%`}</td>
-                        <td className="num">{cyclesByBlock.get(block.id) ?? 0}</td>
-                        <td>
-                          {needsReinforcement(block.id) ? (
-                            <Badge tone="red">Reforço recomendado</Badge>
-                          ) : (
-                            <Badge tone="neutral">Em dia</Badge>
-                          )}
-                        </td>
-                        <td>
-                          {/*
-                            <Link>, e não <a href="?bloco=…">: numa SPA o <a>
-                            recarrega o documento inteiro e joga fora o estado
-                            da aplicação para trocar um parâmetro de busca. O
-                            loader revalida sozinho quando a query muda.
-                          */}
-                          <Link
-                            className="btn btn--ghost btn--sm"
-                            to={`${ROUTES.student.reviews}?bloco=${block.id}`}
-                            aria-current={block.id === selectedId ? "true" : undefined}
-                          >
-                            Ver erros
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        {selected && (
+        {hasPlan && (
           <Card
-            title={`Erros — ${selected.name}`}
-            sub={`${errors.length} questão(ões) única(s) errada(s)`}
+            title="Reforços"
+            sub="Nascem de desempenho baixo numa bateria — não do calendário"
           >
-            {errors.length === 0 ? (
-              <Empty>Nenhum erro registrado neste bloco.</Empty>
+            {reinforcements.length === 0 ? (
+              // O VAZIO AQUI É A RESPOSTA CERTA, e não um defeito: o motor de
+              // baterias saiu com a extensão, e sem bateria não há desempenho
+              // baixo que dispare reforço.
+              <Typography variant="body2">
+                Nenhum reforço. Eles aparecem quando uma bateria fica abaixo da meta da
+                disciplina — e a execução de baterias está sendo reescrita.
+              </Typography>
             ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Questão</th>
-                      <th>Tópico</th>
-                      <th className="num">Vezes</th>
-                      <th>Origem dos erros</th>
-                      <th>Último erro</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {errors.map((error) => (
-                      <tr key={error.question_id}>
-                        <td>#{error.question_id}</td>
-                        <td>{error.topic ?? "Tópico não identificado"}</td>
-                        <td className="num">{error.error_count}</td>
-                        <td className="muted">
-                          {[
-                            error.main_errors ? `${error.main_errors}P` : null,
-                            error.extra_errors ? `${error.extra_errors}E` : null,
-                            error.reinforcement_errors ? `${error.reinforcement_errors}R` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </td>
-                        <td className="muted">
-                          {error.last_error_phase
-                            ? (PHASE_LABEL[error.last_error_phase] ?? error.last_error_phase)
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              reinforcements.map((reinforcement) => (
+                <Box
+                  key={reinforcement.id}
+                  data-testid="reinforcement-row"
+                  sx={(theme) => ({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    py: 1.125,
+                    borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+                    "&:last-of-type": { borderBottom: "none" },
+                  })}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontSize: "0.8125rem", fontWeight: 500 }}>
+                      {reinforcement.blockName}
+                    </Typography>
+                    <Typography variant="caption" component="p">
+                      {reinforcement.subject} · {reinforcement.sourceErrors} erros em{" "}
+                      {reinforcement.uniqueQuestions} questões
+                    </Typography>
+                  </Box>
+                  <Badge tone="warning">{reinforcement.sourceScore}%</Badge>
+                </Box>
+              ))
             )}
           </Card>
         )}
-      </div>
+      </ContentBody>
     </>
   );
 }
