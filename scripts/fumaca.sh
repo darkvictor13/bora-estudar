@@ -42,11 +42,21 @@ if [ -z "$asset" ]; then
   erro "não achei /assets/index-*.js no index.html"
 else
   ok "asset: $asset"
-  corpo=$(curl -sS --max-time 60 "$URL$asset" || true)
+
+  # O bundle vai para ARQUIVO, e o grep lê o arquivo. A forma óbvia,
+  # `printf '%s' "$corpo" | grep -q ...`, parece equivalente e não é: o
+  # `grep -q` sai no primeiro casamento e fecha o pipe enquanto o `printf`
+  # ainda escreve, o `printf` morre de SIGPIPE (141), e sob `pipefail` o
+  # pipeline inteiro vira falha. A checagem reprovava exatamente quando ACHAVA
+  # o que procurava, e só a partir do bundle grande o bastante para a escrita
+  # não caber de uma vez — deploy vermelho com o bundle certo no ar.
+  bundle=$(mktemp)
+  trap 'rm -f "$bundle"' EXIT
+  curl -sS --max-time 60 "$URL$asset" -o "$bundle" || true
 
   # A chave é assada no bundle pelo Vite. Se ela não está aqui, o build rodou
   # sem as VITE_*, e o produto sobe com tela branca.
-  if printf '%s' "$corpo" | grep -q "$HOST"; then
+  if grep -q "$HOST" "$bundle"; then
     ok "a URL do Supabase do ambiente está no bundle"
   else
     erro "o bundle não cita $HOST — build sem as VITE_* do ambiente?"
@@ -56,7 +66,12 @@ else
   # DEPOIS do prefixo: `@supabase/supabase-js` carrega o literal `sb_secret_`
   # num validador de formato, e um grep pelo prefixo sozinho reprova todo
   # deploy. Medido contra o bundle publicado.
-  if printf '%s' "$corpo" | grep -qE 'sb_secret_[A-Za-z0-9_-]{10,}|service_role'; then
+  #
+  # Esta é a checagem que mais precisava sair do pipe: sem casamento o
+  # `printf` terminava inteiro e ela passava, então ela só funcionava no caso
+  # em que não acusava nada — um segredo vazado cairia no mesmo SIGPIPE e
+  # seria reportado como "nenhum segredo".
+  if grep -qE 'sb_secret_[A-Za-z0-9_-]{10,}|service_role' "$bundle"; then
     erro "chave secreta no bundle"
   else
     ok "nenhum segredo no bundle"
