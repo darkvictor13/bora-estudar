@@ -618,7 +618,8 @@ lançando. Ver a seção da segunda rodada.
 | `can_access_profile()` | **removida** — a policy de `profiles` ficou inline, sem função no caminho |
 | `set_updated_at()` | `set_updated_at()`, agora com `search_path` fixo |
 | `bora_proteger_campos_administrativos_perfil()` | `protect_profile_admin_fields()`, agora em INSERT também |
-| `proteger_identidade_lista_espera()` | `protect_waitlist_identity()` |
+| `proteger_identidade_lista_espera()` | `protect_waitlist_identity()`, com a mesma exceção de manutenção dos outros (`20260914190000`) |
+| `bora_criar_perfil_novo_aluno()` | `app_private.create_profile_for_new_user()` (`20260914190000`) — **sem a regra do professor mais antigo** |
 | `bora_private.validar_contexto_meta_bateria()` | `app_private.validate_session_goal_context()` |
 | `bora_private.bloquear_recontextualizacao_meta_com_bateria()` | `app_private.freeze_goal_with_sessions()` |
 | `bora_private.proteger_meta_questoes_bloco()` | `app_private.protect_goal_notebook_block()` |
@@ -672,13 +673,24 @@ e `limpar_metas_pendentes_professor`. Elas carregam a lógica do modelo antigo,
 inclusive a manutenção dos nove contadores que deixaram de existir. A execução
 de bateria vai ser redesenhada, e as RPCs nascem com ela.
 
-**O gatilho de criação de perfil.** `bora_criar_perfil_novo_aluno()` roda em
-`auth.users`, fora do schema `public`, e é o que cria a linha em `profiles`
-quando alguém se cadastra. **Sem ele, cadastro novo não ganha perfil.** Ele
-também embute uma regra de negócio que precisa de decisão antes de ser copiada:
-quando o metadado não indica professor, o aluno é anexado ao professor mais
-antigo da base. É o primeiro item a resolver antes de qualquer tela de cadastro
-funcionar.
+**O gatilho de criação de perfil — RESOLVIDO em `20260914190000`.** Ficou de
+fora da migration inicial, e o custo apareceu em staging: quem se cadastrava
+ganhava usuário no GoTrue e nenhuma linha em `profiles`, confirmava o e-mail e
+lia "Entramos, mas seu perfil não foi encontrado." no login.
+
+`app_private.create_profile_for_new_user()` o repõe, e **não copia duas coisas**:
+
+- **a regra do professor mais antigo.** O gatilho de origem anexava quem se
+  cadastrava sem metadado ao professor de menor `created_at` — uma regra que
+  dependia da ordem de criação das contas e entregava os dados de um aluno a
+  quem por acaso tivesse entrado primeiro. O perfil passa a nascer **sem
+  professor**, e a consequência é `waitlist.teacher_id` nulável: a lista de
+  espera é a fila de quem ainda não tem um. Enquanto `user_role` não tiver
+  'admin', essa fila é legível por qualquer professor — está dito na policy.
+- **o `role` do metadado.** `raw_user_meta_data` é escrito pelo CLIENTE na
+  chamada de cadastro: quem mandasse `{"role":"teacher"}` nasceria professor, e
+  professor enxerga aluno. Toda conta nasce ALUNO e `pending`; promover entra na
+  mesma fila de "liberar acesso precisa nascer como RPC", logo abaixo.
 
 **A liberação de acesso.** Com o grant por coluna em `profiles`, nem o dono nem
 o professor alteram `role`, `access_status`, `access_expires_at`, `plan`,

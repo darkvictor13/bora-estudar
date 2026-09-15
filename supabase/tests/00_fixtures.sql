@@ -71,9 +71,13 @@ grant execute on function app_test.act_as_owner() to authenticated;
 -- ---------------------------------------------------------------------------
 -- Contas
 --
--- O perfil é inserido à mão: o gatilho de criação de perfil em `auth.users`
--- não foi portado (ver docs/de-para-schema.md). Quando ele voltar, os INSERT
--- em `public.profiles` saem daqui e a suíte 04 ganha o caso do cadastro.
+-- O PERFIL NÃO É INSERIDO AQUI: `create_profile_for_new_user` o cria junto com
+-- a conta, com o nome do metadado. O que sobra é o que o gatilho não faz de
+-- propósito — promover os dois professores, ligar cada aluno ao seu e carimbar
+-- o acesso. Sem JWT, então os gatilhos de proteção tratam como manutenção.
+--
+-- O `role` do metadado continua aqui, e continua sendo IGNORADO pelo gatilho:
+-- é o que a suíte 04 verifica, e é por isso que a promoção abaixo é explícita.
 -- ---------------------------------------------------------------------------
 insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-000000000000','11111111-1111-4111-8111-111111111111','authenticated','authenticated','ana@x.com',   '{"role":"teacher","name":"Professora Ana"}'),
@@ -83,13 +87,20 @@ insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data) v
   ('00000000-0000-0000-0000-000000000000','55555555-5555-4555-8555-555555555555','authenticated','authenticated','elias@x.com', '{"role":"student","name":"Aluno Elias"}'),
   ('00000000-0000-0000-0000-000000000000','66666666-6666-4666-8666-666666666666','authenticated','authenticated','fabi@x.com',  '{"role":"student","name":"Aluna Fabi"}');
 
-insert into public.profiles (id, name, role, teacher_id, access_status, access_expires_at) values
-  ('11111111-1111-4111-8111-111111111111','Professora Ana','teacher', null, 'active', null),
-  ('22222222-2222-4222-8222-222222222222','Aluno Bruno',   'student','11111111-1111-4111-8111-111111111111','active', null),
-  ('33333333-3333-4333-8333-333333333333','Aluna Carla',   'student','11111111-1111-4111-8111-111111111111','active', null),
-  ('44444444-4444-4444-8444-444444444444','Professor Davi','teacher', null, 'active', null),
-  ('55555555-5555-4555-8555-555555555555','Aluno Elias',   'student','44444444-4444-4444-8444-444444444444','active', null),
-  ('66666666-6666-4666-8666-666666666666','Aluna Fabi',    'student','11111111-1111-4111-8111-111111111111','expired', now() - interval '30 days');
+update public.profiles as p
+   set role = v.role::public.user_role,
+       teacher_id = v.teacher_id::uuid,
+       access_status = v.access_status::public.access_status,
+       access_expires_at = v.access_expires_at
+  from (values
+    ('11111111-1111-4111-8111-111111111111','teacher', null,                                   'active',  null::timestamptz),
+    ('22222222-2222-4222-8222-222222222222','student','11111111-1111-4111-8111-111111111111','active',  null),
+    ('33333333-3333-4333-8333-333333333333','student','11111111-1111-4111-8111-111111111111','active',  null),
+    ('44444444-4444-4444-8444-444444444444','teacher', null,                                   'active',  null),
+    ('55555555-5555-4555-8555-555555555555','student','44444444-4444-4444-8444-444444444444','active',  null),
+    ('66666666-6666-4666-8666-666666666666','student','11111111-1111-4111-8111-111111111111','expired', now() - interval '30 days')
+  ) as v(id, role, teacher_id, access_status, access_expires_at)
+ where p.id = v.id::uuid;
 
 do $$
 declare v_total integer;
@@ -99,6 +110,20 @@ begin
     raise exception 'FALHOU: o cenario nasceu com % perfis, esperava 6', v_total;
   end if;
   raise notice '01 OK  seis perfis, dois professores e quatro alunos';
+end $$;
+
+-- O nome não foi escrito por nenhum INSERT acima: se ele está certo, foi o
+-- gatilho que o leu do metadado. É o que separa "o cenário montou" de "o
+-- gatilho montou o cenário".
+do $$
+declare v_nome text;
+begin
+  select name into v_nome from public.profiles
+   where id = '22222222-2222-4222-8222-222222222222';
+  if v_nome is distinct from 'Aluno Bruno' then
+    raise exception 'FALHOU: o gatilho nao trouxe o nome do metadado (veio %)', v_nome;
+  end if;
+  raise notice '02 OK  o perfil nasceu pelo gatilho, com o nome do metadado';
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -243,5 +268,5 @@ insert into public.coupons (code, description, months_granted) values
   ('BORA3M','Três meses de acesso',3);
 
 do $$ begin
-  raise notice '02 OK  cenario montado: planejamentos, cadernos, metas, bateria e teoria';
+  raise notice '03 OK  cenario montado: planejamentos, cadernos, metas, bateria e teoria';
 end $$;

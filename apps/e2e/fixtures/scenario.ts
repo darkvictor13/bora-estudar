@@ -158,22 +158,14 @@ function uniqueEmail(prefix: string): string {
  * `auth.identities` não é opcional: sem a identidade do provedor `email` o
  * login falha mesmo com o usuário existindo.
  *
- * O PERFIL É INSERIDO AQUI, E ISSO É UM REMENDO COM DATA PARA SAIR.
+ * O PERFIL VEM DO GATILHO, e por isso criar usuário aqui percorre o mesmo
+ * caminho do cadastro público: `create_profile_for_new_user` cria a linha de
+ * `profiles` junto com a de `auth.users`. O remendo que existia neste lugar —
+ * um `insert` em `public.profiles`, enquanto o gatilho não tinha sido portado
+ * para o schema de 14/09 — saiu com a migration `20260914190000`.
  *
- * Até o schema de 13/09 o perfil vinha do gatilho em `auth.users`, e esta
- * fixture não desviava da regra de negócio: criar usuário aqui percorria o
- * mesmo caminho do cadastro público. O schema de 14/09 não trouxe esse gatilho
- * — `docs/de-para-schema.md` o lista como pendência, com a decisão de produto
- * que falta (a qual professor um aluno sem metadado é anexado).
- *
- * Sem perfil, `loadSession` devolve `null` e TODO teste da suíte vira
- * "redirecionado para /entrar". Inserir a linha aqui devolve a rede de
- * segurança às outras fases; o que ela NÃO faz é provar que o cadastro público
- * cria perfil — esse teste está marcado `fixme` em `auth.spec.ts`, e é o único
- * lugar onde a falta precisa continuar visível.
- *
- * Quando o gatilho existir: apague o segundo `insert` e o teste volta a ser o
- * caminho real.
+ * O que a fixture ainda faz por fora é o que o gatilho recusa fazer: promover
+ * a professora. Ver o comentário no corpo.
  */
 export async function createUser(
   role: "student" | "teacher",
@@ -218,13 +210,23 @@ export async function createUser(
     [id, id, id, email],
   );
 
-  // O remendo descrito acima. `access_status` nasce `pending`: quem libera é
-  // `setAccess`, e um aluno que nasce liberado esconderia o caminho de bloqueio.
-  await query(
-    `insert into public.profiles (id, name, role)
-     values ($1, $2, $3::public.user_role)`,
-    [id, name, role],
-  );
+  /*
+   * O PERFIL JÁ EXISTE AQUI: `create_profile_for_new_user` o criou junto com a
+   * linha de `auth.users`, com o nome do metadado, sempre ALUNO e sempre
+   * `pending` — quem libera é `setAccess`, e um aluno que nasce liberado
+   * esconderia o caminho de bloqueio.
+   *
+   * Promover a professora é o que sobra, e sobra de propósito: o gatilho ignora
+   * o `role` do metadado porque ele é escrito pelo cliente na chamada de
+   * cadastro. A fixture não é a aplicação; ela monta, como dono do banco, a
+   * pré-condição que uma RPC de promoção vai passar a montar.
+   */
+  if (role === "teacher") {
+    await query(
+      "update public.profiles set role = 'teacher' where id = $1",
+      [id],
+    );
+  }
 
   return { id, email, password: TEST_PASSWORD, name };
 }

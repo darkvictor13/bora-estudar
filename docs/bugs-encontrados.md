@@ -347,6 +347,73 @@ não se perder.
 
 ---
 
+### BUG-15 · CRÍTICO · Cadastro cria a conta e nenhum perfil: "Entramos, mas seu perfil não foi encontrado."
+
+> Origem diferente do resto deste arquivo, como a do BUG-14: não saiu de
+> varredura nenhuma — saiu de **usar staging**. Alguém criou uma conta,
+> confirmou o e-mail, tentou entrar e leu essa frase. Por isso também não entra
+> no placar das 249 verificações.
+
+O cadastro criava o usuário no GoTrue e parava aí. `currentSession()` lê
+`profiles` pelo `auth.uid()`, não achava linha nenhuma, e `signIn` caía no
+`fail("unknown", "Entramos, mas seu perfil não foi encontrado.")` — com a conta
+funcionando no GoTrue, a senha certa, e o produto inteiro fechado. Da tela não
+havia como perceber a causa: a mensagem descreve o sintoma, e o sintoma é
+indistinguível de um erro de leitura.
+
+**Não era regressão, era uma pendência conhecida cobrando.**
+`bora_criar_perfil_novo_aluno()` rodava em `auth.users` no banco de origem e não
+foi portada para `20260914150000`. Estava registrada em três lugares — o de-para
+("o primeiro item a resolver antes de qualquer tela de cadastro funcionar"), o
+plano da v2, e o `test.fixme` de `F-AUTH-08` — e o que a manteve aberta foi a
+decisão de produto que ela embutia: a qual professor um aluno sem metadado é
+anexado.
+
+O que segurou o diagnóstico é que **nada quebrava nas suítes**: as fixtures do
+e2e e as de invariante inseriam o perfil à mão para não derrubar o resto, e o
+seed local fazia o mesmo. Só o `fixme` apontava a falta, e um `fixme` não falha.
+
+**A decisão que faltava.** O gatilho de origem anexava quem se cadastrava sem
+metadado ao professor de menor `created_at`. A regra não foi copiada: ela
+dependia da ordem de criação das contas e entregava os dados de um aluno a quem
+por acaso tivesse entrado primeiro. **O perfil nasce sem professor**, e o
+vínculo passa a ser ato de alguém.
+
+**Correção** `20260914190000_profile_on_signup.sql`, migration nova.
+`app_private.create_profile_for_new_user()`, `after insert on auth.users`,
+`security definer` — quem insere em `auth.users` é o `supabase_auth_admin`, que
+não tem nem deve ter grant em `public.profiles`. O gatilho **não lê `role` do
+metadado**: `raw_user_meta_data` é escrito pelo cliente na chamada de cadastro,
+e quem mandasse `{"role":"teacher"}` nasceria professor. Toda conta nasce aluno,
+`pending` e sem professor.
+
+Três consequências que vieram junto, porque sem elas a fila de entrada não
+fecha:
+
+- `waitlist.teacher_id` deixou de ser `not null`, e `waitlist_insert_student`
+  troca `p.teacher_id = waitlist.teacher_id` por `is not distinct from`: com o
+  `=`, o par nulo/nulo dá `null`, e WITH CHECK que não é `true` barra;
+- `waitlist_select` passou a mostrar a inscrição sem dono a quem é professor —
+  senão ela não apareceria para ninguém além de quem a escreveu. Enquanto
+  `user_role` não tiver 'admin', isso significa **todos** os professores;
+- `protect_waitlist_identity` ganhou a exceção de manutenção que os outros
+  gatilhos de proteção já tinham. Sem ela, `teacher_id` nulo nunca viraria um
+  id — nem por RPC `security definer`.
+
+A migration também **backfilla** quem já estava preso: todo `auth.users` sem
+perfil ganha um, aluno e pendente. Inclusive quem pediu `{"role":"teacher"}` no
+metadado, pelo mesmo motivo que o gatilho não lê o campo — promover é um
+`update` deliberado, e está escrito no comentário da migration.
+
+**Verificado** com `npm run db:test` (oito suítes, incluindo os casos novos de
+`04_profiles` e os cinco de `05_waitlist`), `npm run check`, `npm run db:types`
+com o diff commitado, e `npm run e2e`: **172 verdes, 7 `fixme`** — `F-AUTH-08`
+saiu do `fixme` e passa. As fixtures do e2e e as de invariante deixaram de
+inserir perfil à mão: o mesmo gatilho que o cadastro público percorre passou a
+sustentar a suíte inteira.
+
+---
+
 ## Registrados, não corrigidos
 
 Não são defeitos: são telas que ainda não existem. Corrigir cada um seria
@@ -355,16 +422,25 @@ listados aqui e em `fluxos-e2e.md` §7.
 
 ### GAP-01 · ALTO · Quem se cadastra nunca chega a nenhum professor
 
-O cadastro público cria `auth.users` e `profiles`, e o aluno entra na lista de
-espera. Não cria `student_teacher_links` nem `subscriptions`, e **não existe
-tela** para um professor criar o vínculo ou liberar o acesso. `getMyStudents`
-parte de `student_teacher_links`, então o aluno recém-cadastrado é invisível
-para todo mundo e fica na lista de espera para sempre.
+> **Atualizado em 14/09/2026.** A primeira metade deste gap virou o BUG-15 e foi
+> corrigida: o perfil passou a nascer com a conta, e a inscrição sem professor
+> passou a ser aceita e a aparecer para quem é professor. A metade que sobra é a
+> de sempre — **não existe tela, nem RPC, para assumir o candidato e liberar o
+> acesso.** O texto abaixo foi reescrito contra o schema de 14/09;
+> `student_teacher_links` e `subscriptions` não existem mais.
 
-A RLS e os grants já permitem essa escrita ao professor
-(`subscriptions_teacher_insert`, `subscriptions_teacher_update`); o que falta é
-a interface. `student_teacher_links` não tem grant nenhum — o vínculo precisa
-de RPC ou `service_role`.
+O cadastro público cria `auth.users`, `profiles` (pelo gatilho) e a inscrição na
+lista de espera. `profiles.teacher_id` e `profiles.access_status` ficam como
+nasceram — nulo e `pending` — e não há por onde mudá-los: as duas colunas estão
+**fora do `GRANT UPDATE`** de `profiles`, de propósito, porque nem o dono nem o
+professor podem carimbar o próprio acesso. O aluno fica na lista de espera para
+sempre.
+
+O que falta não é permissão: é **uma RPC `security definer`** que assuma o
+candidato (`waitlist.teacher_id` e `profiles.teacher_id` de uma vez) e libere o
+acesso, mais a tela do professor que a chame. É o mesmo item que aparece como
+"a liberação de acesso" no de-para e como `F-VINC` na lista de `fixme` do e2e.
+A espec está em [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-e-liberacao-de-acesso.md).
 
 ### GAP-02 · MÉDIO · RPCs implementadas que nenhuma tela chama
 

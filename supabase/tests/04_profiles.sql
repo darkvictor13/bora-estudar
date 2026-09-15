@@ -8,22 +8,67 @@
 -- PostgREST `session_user` é sempre `authenticator`, então a checagem antiga
 -- dependia de como a conexão tinha sido aberta.
 --
--- O ramo de INSERT é o que um cadastro público percorre, e é o testável daqui:
--- o de UPDATE congela colunas que o grant por coluna já tirou do alcance de
--- `authenticated` (suíte 01) — as duas defesas existem para que um grant
+-- São DUAS defesas, e esta suíte exercita as duas separadas:
+--
+--   1. o gatilho `create_profile_for_new_user`, que é quem realmente cria o
+--      perfil hoje — e que ignora o `role` do metadado;
+--   2. o ramo de INSERT de `protect_profile_admin_fields`, que sobra como
+--      defesa em profundidade: `profiles_insert_own` e o grant de INSERT
+--      continuam de pé, então um cliente AINDA consegue inserir a própria linha
+--      se ela não existir.
+--
+-- O ramo de UPDATE congela colunas que o grant por coluna já tirou do alcance
+-- de `authenticated` (suíte 01) — as duas defesas existem para que um grant
 -- esquecido numa migration futura não reabra o buraco sozinho.
 -- =============================================================================
 
--- Uma conta recém-criada no GoTrue, ainda sem perfil. Enquanto o gatilho de
--- criação de perfil não voltar, é isto que a tela de cadastro faz.
+-- Uma conta recém-criada no GoTrue. O metadado PEDE professor, de propósito: é
+-- o que qualquer um pode mandar na chamada de cadastro.
 insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data)
 values ('00000000-0000-0000-0000-000000000000','77777777-7777-4777-8777-777777777777',
-        'authenticated','authenticated','gil@x.com','{"role":"student","name":"Gil"}');
+        'authenticated','authenticated','gil@x.com','{"role":"teacher","name":"Gil"}');
+
+-- ---------- O gatilho cria o perfil, e ignora o papel que o cliente pediu ----------
+do $$
+declare
+  v_nome text; v_role public.user_role; v_status public.access_status; v_teacher uuid;
+begin
+  select name, role, access_status, teacher_id
+    into v_nome, v_role, v_status, v_teacher
+    from public.profiles where id = '77777777-7777-4777-8777-777777777777';
+
+  if not found then
+    raise exception 'FALHOU: a conta nasceu no GoTrue e nao ganhou perfil';
+  end if;
+  if v_nome is distinct from 'Gil' then
+    raise exception 'FALHOU: o gatilho nao trouxe o nome do metadado (veio %)', v_nome;
+  end if;
+  if v_role <> 'student' then
+    raise exception 'FALHOU: o metadado do cliente virou papel % no perfil', v_role;
+  end if;
+  if v_status <> 'pending' then
+    raise exception 'FALHOU: a conta nasceu com acesso %', v_status;
+  end if;
+  if v_teacher is not null then
+    raise exception 'FALHOU: a conta nasceu anexada ao professor %', v_teacher;
+  end if;
+  raise notice '01 OK  o gatilho cria o perfil aluno, pendente e sem professor';
+end $$;
 
 set role authenticated;
 select app_test.act_as('77777777-7777-4777-8777-777777777777');
 
--- ---------- O perfil nasce aluno e pendente, diga o cliente o que disser ----------
+-- ---------- O INSERT do cliente também nasce aluno e pendente ----------
+--
+-- O perfil de Gil JÁ EXISTE, criado pelo gatilho: para exercitar o ramo de
+-- INSERT do `protect_profile_admin_fields` é preciso apagá-lo antes, como
+-- manutenção. Não é cenário de produção — é a defesa que segura o dia em que
+-- o gatilho for removido ou falhar, e que uma chamada direta à API percorre.
+reset role;
+delete from public.profiles where id = '77777777-7777-4777-8777-777777777777';
+set role authenticated;
+select app_test.act_as('77777777-7777-4777-8777-777777777777');
+
 do $$
 declare v_role public.user_role; v_status public.access_status; v_plan text; v_cupom text;
 begin
@@ -44,7 +89,7 @@ begin
   if v_plan is not null or v_cupom is not null then
     raise exception 'FALHOU: a conta nasceu com plano/cupom carimbados';
   end if;
-  raise notice '01 OK  toda conta nasce aluno e pendente, ignorando o que o cliente mandou';
+  raise notice '02 OK  o INSERT do cliente tambem nasce aluno e pendente';
 end $$;
 
 -- ---------- Ninguém cria perfil para outro ----------
@@ -54,9 +99,9 @@ do $$ begin
   raise exception 'FALHOU: criou perfil no id de outra pessoa';
 exception
   when insufficient_privilege then
-    raise notice '02 OK  profiles_insert_own so aceita o proprio id';
+    raise notice '03 OK  profiles_insert_own so aceita o proprio id';
   when foreign_key_violation then
-    raise notice '02 OK  profiles_insert_own so aceita o proprio id (sem conta no GoTrue)';
+    raise notice '03 OK  profiles_insert_own so aceita o proprio id (sem conta no GoTrue)';
 end $$;
 
 -- ---------- Sem acesso vigente, sem escrita de execução ----------
@@ -67,7 +112,7 @@ begin
   if v_ativo then
     raise exception 'FALHOU: conta pendente passou por has_active_access()';
   end if;
-  raise notice '03 OK  conta pendente nao tem acesso vigente';
+  raise notice '04 OK  conta pendente nao tem acesso vigente';
 end $$;
 
 -- ---------- O nome continua sendo do dono ----------
@@ -81,7 +126,7 @@ begin
   if v_nome <> 'Gil da Silva' then
     raise exception 'FALHOU: o nome ficou %', v_nome;
   end if;
-  raise notice '04 OK  o dono grava o proprio nome';
+  raise notice '05 OK  o dono grava o proprio nome';
 end $$;
 
 -- ---------- A policy também amarra o papel, não só o grant ----------
@@ -94,7 +139,7 @@ begin
   if v_check is null or v_check not like '%uid%' then
     raise exception 'FALHOU: profiles_update_own nao amarra mais a linha ao dono';
   end if;
-  raise notice '05 OK  profiles_update_own continua amarrando a linha ao dono';
+  raise notice '06 OK  profiles_update_own continua amarrando a linha ao dono';
 end $$;
 
 -- ---------- O gatilho decide pelo JWT, e não por session_user ----------
@@ -117,5 +162,5 @@ begin
   if v_fonte not like '%auth.jwt()%' then
     raise exception 'FALHOU: o gatilho nao le mais o papel do JWT';
   end if;
-  raise notice '06 OK  quem e manutencao sai do JWT, nunca de session_user';
+  raise notice '07 OK  quem e manutencao sai do JWT, nunca de session_user';
 end $$;

@@ -164,20 +164,19 @@ test("F-AUTH-07 · logout apaga o cookie e a área volta a barrar", async ({ stu
 
 test.describe("F-AUTH-08/09 · cadastro público", () => {
   /*
-   * NÃO EXISTE GATILHO DE CRIAÇÃO DE PERFIL no schema de 14/09/2026.
+   * O TESTE QUE ESTEVE `fixme` ATÉ A MIGRATION `20260914190000`.
    *
-   * `bora_criar_perfil_novo_aluno()` rodava em `auth.users` e criava a linha em
-   * `profiles`. Ele não foi portado, e `docs/de-para-schema.md` o lista como o
-   * primeiro item a resolver — com a decisão de produto que falta: a qual
-   * professor um aluno sem metadado é anexado.
+   * `bora_criar_perfil_novo_aluno()` rodava em `auth.users` no banco de origem
+   * e não foi portado para o schema de 14/09. Sem ele o cadastro criava o
+   * usuário no GoTrue e parava aí: `loadSession` devolvia `null`, e quem
+   * acabava de confirmar o e-mail lia "Entramos, mas seu perfil não foi
+   * encontrado." — com a conta funcionando e o produto inteiro fechado.
    *
-   * Sem ele o cadastro cria o usuário no GoTrue e para aí: `loadSession`
-   * devolve `null`, e quem acabou de se cadastrar volta para a tela de entrar.
-   * O `fixme` é o lugar onde essa falta continua visível — as outras fixtures
-   * inserem o perfil à mão para não derrubar a suíte inteira, e isso esconderia
-   * a pendência se este teste não a apontasse.
+   * O que ele prova agora é o caminho REAL do cadastro público, e não o
+   * remendo: as fixtures deixaram de inserir perfil à mão, então toda a suíte
+   * passou a depender do mesmo gatilho que esta asserção fixa.
    */
-  test.fixme("cria o perfil e cai na lista de espera", async ({ page }) => {
+  test("cria o perfil e cai na lista de espera", async ({ page }) => {
     const email = `cadastro-${Date.now().toString(36)}@e2e.local`;
 
     await page.goto("/cadastro");
@@ -196,10 +195,12 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     );
     expect(profile).toMatchObject({ role: "student", name: "Candidata Recém-Cadastrada" });
 
-    // GAP-01: o cadastro público não vincula nem libera. Enquanto não houver
-    // tela para isso, é o comportamento correto — e é o que este teste fixa.
-    // O vínculo é `profiles.teacher_id` e o acesso é `profiles.access_status`,
-    // desde que `student_teacher_links` e `subscriptions` saíram do schema.
+    // O CADASTRO PÚBLICO NÃO VINCULA NEM LIBERA, e isso é a decisão, não a
+    // lacuna: o gatilho de origem anexava quem se cadastrava ao professor MAIS
+    // ANTIGO da base — uma regra que dependia da ordem de criação das contas e
+    // entregava os dados do aluno a quem por acaso tivesse entrado primeiro.
+    // O vínculo é `profiles.teacher_id` e o acesso é `profiles.access_status`;
+    // os dois nascem vazios e são ato de alguém.
     expect(
       await count(
         "select count(*) from public.profiles where id = (select id from auth.users where email = $1) and teacher_id is not null",

@@ -39,9 +39,11 @@ begin
   -- `auth.identities` não é opcional: sem a identidade do provedor `email` o
   -- login falha mesmo com o usuário existindo.
   --
-  -- O PERFIL É INSERIDO À MÃO porque o gatilho de criação de perfil em
-  -- `auth.users` não foi portado — ver docs/de-para-schema.md. Quando ele
-  -- voltar, os dois INSERT em `public.profiles` saem daqui.
+  -- O PERFIL NÃO É INSERIDO AQUI: `create_profile_for_new_user` o cria junto
+  -- com a conta, com o nome do metadado. O que sobra é exatamente o que o
+  -- gatilho NÃO faz, de propósito — promover a professora, liberar os dois
+  -- acessos e ligar o aluno a ela. Roda sem JWT, então
+  -- `protect_profile_admin_fields` trata como manutenção e deixa passar.
   -- ---------------------------------------------------------------------
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -71,11 +73,13 @@ begin
      'email', now(), now(), now())
   on conflict (provider, provider_id) do nothing;
 
-  insert into public.profiles (id, name, role, access_status, teacher_id, plan)
-  values
-    (v_teacher, 'Professora Local', 'teacher', 'active', null, null),
-    (v_student, 'Aluno Local', 'student', 'active', v_teacher, 'Área Fiscal')
-  on conflict (id) do nothing;
+  update public.profiles
+     set role = 'teacher', access_status = 'active', teacher_id = null, plan = null
+   where id = v_teacher;
+
+  update public.profiles
+     set role = 'student', access_status = 'active', teacher_id = v_teacher, plan = 'Área Fiscal'
+   where id = v_student;
 
   -- ---------------------------------------------------------------------
   -- Disciplinas do professor

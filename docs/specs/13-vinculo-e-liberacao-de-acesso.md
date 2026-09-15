@@ -6,6 +6,15 @@
 > `profiles.access_status` com `access_expires_at` — os três FORA do `GRANT
 > UPDATE`. `link_student` não foi portada: vincular e liberar **precisam nascer
 > como RPC**, e os fluxos de `F-VINC` estão `fixme` até lá.
+>
+> **A policy nova que este item exigia JÁ EXISTE** (`20260914190000`, BUG-15).
+> `waitlist_select` passou a mostrar a inscrição **sem professor** a quem é
+> professor, e `waitlist.teacher_id` virou nulável — o perfil deixou de nascer
+> anexado ao professor mais antigo da base. A consulta que devolve "a pessoa a
+> vincular" existe: é `select * from waitlist where teacher_id is null`. O que
+> falta é a RPC que assume o candidato e libera o acesso, mais a tela; e
+> `protect_waitlist_identity` já tem a exceção de manutenção que essa RPC vai
+> usar para escrever o `teacher_id`.
 
 ---
 
@@ -29,10 +38,13 @@ profiles_read    using (id = auth.uid() or public.is_teacher_of(id))
 waitlist_own     using (student_id = auth.uid() or public.is_teacher_of(student_id))
 ```
 
-`is_teacher_of` exige vínculo vigente. Ou seja: **o professor só enxerga quem já
-é aluno dele.** Não existe consulta que devolva a pessoa a vincular. Uma tela
-construída sobre a leitura atual mostraria uma lista vazia, sempre. É por isso
-que este item exige policy nova, e é o único da fila que exige.
+`is_teacher_of` exige vínculo vigente. Ou seja: **o professor só enxergava quem
+já era aluno dele.** Não existia consulta que devolvesse a pessoa a vincular, e
+uma tela construída sobre a leitura de então mostraria lista vazia, sempre. Era
+por isso que este item exigia policy nova, e era o único da fila que exigia —
+**essa parte foi feita**, ver a nota do cabeçalho. O preço está dito na própria
+policy: enquanto `user_role` não tiver 'admin', a fila sem dono é legível por
+qualquer professor.
 
 A versão anterior **também não tinha essa tela**, e vale registrar como ela
 escapava: todo aluno novo era amarrado no cadastro a um UUID de professor fixo

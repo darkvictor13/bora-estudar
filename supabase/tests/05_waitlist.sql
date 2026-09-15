@@ -108,3 +108,99 @@ begin
   end if;
   raise notice '09 OK  liberar o cadastro e do professor da turma';
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- A fila de quem ainda não tem professor
+-- ---------------------------------------------------------------------------
+-- Gil (7777…) vem da suíte 04: cadastrou-se, ganhou perfil pelo gatilho e está
+-- `pending` SEM PROFESSOR — que é o estado de toda conta nova desde a migration
+-- `20260914190000`. É a inscrição que o `not null` de `teacher_id` recusava, e
+-- que o `p.teacher_id = waitlist.teacher_id` da policy recusaria depois dele:
+-- `null = null` é `null`, e WITH CHECK que não é `true` barra.
+-- ---------------------------------------------------------------------------
+
+select app_test.act_as('77777777-7777-4777-8777-777777777777');  -- Gil
+
+do $$ begin
+  insert into public.waitlist (student_id, teacher_id, name, email, whatsapp, interest_area, target_exam)
+  values ('77777777-7777-4777-8777-777777777777','11111111-1111-4111-8111-111111111111',
+          'Gil da Silva','gil@x.com','41999991111','Fiscal','Receita Federal');
+  raise exception 'FALHOU: entrou na fila de uma professora a que nao esta ligado';
+exception when insufficient_privilege then
+  raise notice '10 OK  sem vinculo, so a fila sem dono e aceita';
+end $$;
+
+do $$ begin
+  insert into public.waitlist (student_id, teacher_id, name, email, whatsapp, interest_area, target_exam)
+  values ('77777777-7777-4777-8777-777777777777', null,
+          'Gil da Silva','gil@x.com','41999991111','Fiscal','Receita Federal');
+  raise notice '11 OK  quem acabou de se cadastrar entra na fila sem professor';
+end $$;
+
+-- ---------- A fila sem dono aparece para quem é professor ----------
+select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.waitlist where teacher_id is null;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Davi enxergou % inscricoes sem professor, esperava 1', v_total;
+  end if;
+  raise notice '12 OK  a inscricao sem professor e visivel a qualquer professor';
+end $$;
+
+-- ---------- E não aparece para outro aluno ----------
+select app_test.act_as('33333333-3333-4333-8333-333333333333');  -- Carla
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.waitlist where student_id <> '33333333-3333-4333-8333-333333333333';
+  if v_total <> 0 then
+    raise exception 'FALHOU: Carla enxergou % inscricoes alheias', v_total;
+  end if;
+  raise notice '13 OK  aluno nenhum enxerga a fila, com ou sem professor';
+end $$;
+
+-- ---------- Assumir a inscrição é trabalho privilegiado ----------
+--
+-- `protect_waitlist_identity` congelava o vínculo para TODO MUNDO, e com
+-- `teacher_id` nulável isso deixaria a fila num beco: nulo nunca viraria id,
+-- nem por RPC `security definer`. A exceção é a mesma de
+-- `protect_profile_admin_fields` — quem age sai do JWT.
+-- Contado, e não esperando exceção: a inscrição sem dono nem CHEGA ao gatilho
+-- para Ana — `waitlist_update` a filtra antes, porque `teacher_id = auth.uid()`
+-- é `null` quando a coluna é nula. É a armadilha que o CLAUDE.md descreve:
+-- UPDATE recusado por policy afeta zero linhas, em silêncio.
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_afetadas integer;
+begin
+  update public.waitlist set teacher_id = '11111111-1111-4111-8111-111111111111'
+   where student_id = '77777777-7777-4777-8777-777777777777';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 0 then
+    raise exception 'FALHOU: uma professora assumiu a inscricao pela API';
+  end if;
+  raise notice '14 OK  professor nenhum assume a inscricao pelo PostgREST';
+exception when raise_exception then
+  if sqlerrm not like '%vinculos do cadastro%' then raise; end if;
+  raise notice '14 OK  professor nenhum assume a inscricao pelo PostgREST';
+end $$;
+
+-- `reset role` junto com o `act_as_owner`: o papel do JWT é o que o GATILHO lê,
+-- mas quem a RLS filtra é o PAPEL DO BANCO. Continuar como `authenticated` sem
+-- JWT deixaria a linha invisível, e o teste passaria sem escrever nada.
+reset role;
+select app_test.act_as_owner();
+do $$
+declare v_teacher uuid;
+begin
+  update public.waitlist set teacher_id = '11111111-1111-4111-8111-111111111111'
+   where student_id = '77777777-7777-4777-8777-777777777777';
+  select teacher_id into v_teacher from public.waitlist
+   where student_id = '77777777-7777-4777-8777-777777777777';
+  if v_teacher is distinct from '11111111-1111-4111-8111-111111111111' then
+    raise exception 'FALHOU: a manutencao nao conseguiu assumir a inscricao';
+  end if;
+  raise notice '15 OK  a manutencao (e a RPC que rodar como definer) assume a inscricao';
+end $$;

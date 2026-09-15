@@ -13,7 +13,9 @@ import { requireSession } from "@/lib/auth/session";
  * Lista de espera — o `p-listaEspera` e o `p-bloqueio` da v2, numa tela só.
  *
  * É A CASA DE QUEM AINDA NÃO TEM ACESSO. Quem se cadastra pelo site nasce
- * `pending`, e o `requireStudentAccess` de toda tela de estudo o manda para cá.
+ * `pending` E SEM PROFESSOR, e o `requireStudentAccess` de toda tela de estudo
+ * o manda para cá. Por isso o texto daqui nunca diz "seu professor": na
+ * primeira visita não existe um, e a inscrição é o que vai fazer existir.
  * A tela precisa então fazer duas coisas ao mesmo tempo: explicar por que as
  * outras estão fechadas, e recolher o que o professor precisa para liberar.
  *
@@ -78,7 +80,7 @@ export function Waitlist() {
     <>
       <PageHeader
         title="Lista de espera"
-        description="O que seu professor precisa saber para liberar seu acesso"
+        description="O que o professor precisa saber para liberar seu acesso"
       />
 
       <ContentBody>
@@ -90,7 +92,7 @@ export function Waitlist() {
           sozinha.
         */}
         {error && <Alert status="error">{error.message}</Alert>}
-        {saved && !error && <Alert status="success">Inscrição enviada ao seu professor.</Alert>}
+        {saved && !error && <Alert status="success">Inscrição enviada. Você está na fila.</Alert>}
 
         <Card
           title={entry ? "Sua inscrição" : "Entrar na lista"}
@@ -116,7 +118,7 @@ export function Waitlist() {
               value={email}
               disabled
               readOnly
-              hint="É por ele que seu professor vai te encontrar."
+              hint="É por ele que o professor vai te encontrar."
             />
             <Field
               label="WhatsApp"
@@ -157,7 +159,7 @@ export function Waitlist() {
           <Card title="Tem um cupom?">
             <Typography variant="body2">
               O resgate de cupom está sendo reescrito para acontecer no servidor. Enquanto isso,
-              envie o código ao seu professor — ele libera o acesso pela ficha do aluno.
+              envie o código ao professor — ele libera o acesso pela ficha do aluno.
             </Typography>
           </Card>
         </Box>

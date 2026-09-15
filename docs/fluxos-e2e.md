@@ -15,8 +15,8 @@ que o teste **não** diz: o índice, o ambiente, e o registro do que saiu.
 > isso que ids não são renumerados — ver as convenções em
 > [`specs/README.md`](specs/README.md).
 
-Estado medido em 14/09/2026, com `npm run e2e`: **171 verdes, 8 `fixme`, zero
-falhas**.
+Estado medido em 14/09/2026, com `npm run e2e`: **172 verdes, 7 `fixme`, zero
+falhas** — `F-AUTH-08` passou a rodar com a migration `20260914190000`.
 
 ---
 
@@ -70,9 +70,10 @@ npm run e2e --workspace @bora/e2e
 | Aluno | `aluno@local.dev` | `SenhaLocal#2026` |
 
 Não há conta de administrador: `user_role` tem dois valores, `teacher` e
-`student`. O perfil dos dois é inserido pelo próprio seed — o gatilho de criação
-de perfil em `auth.users` não foi portado, e é o que mantém `F-AUTH-08` em
-`fixme`.
+`student`. **O perfil dos dois vem do gatilho**
+`app_private.create_profile_for_new_user`, como o de qualquer conta; o seed só
+faz o que o gatilho recusa fazer — promover a professora, liberar os acessos e
+ligar o aluno a ela.
 
 ### Dados do seed
 
@@ -164,7 +165,7 @@ diff mostra a omissão.
 | F-AUTH-05 | papel errado é devolvido para a própria casa |
 | F-AUTH-06 | tela pública com sessão ativa redireciona |
 | F-AUTH-07 | logout apaga o cookie e a área volta a barrar |
-| F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera — **`fixme`** |
+| F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera, sem professor e sem acesso |
 | F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido |
 | F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações |
 | F-CONTA-01 | meus dados: o nome salva, o resto é contexto — `tests/student-analysis.spec.ts` |
@@ -263,15 +264,19 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 
 ---
 
-## Os oito `fixme`, e por que continuam visíveis
+## Os sete `fixme`, e por que continuam visíveis
 
 Nenhum é bug de interface: os cinco primeiros esperam o banco, e os dois do tema
 esperam a mesma coluna. Ficam como `fixme` em vez de apagados porque um teste
 que some leva a falta junto — e um que passa sem exercitar nada é pior ainda.
 
+**Eram oito.** `F-AUTH-08` saiu da lista com a migration `20260914190000`, que
+repôs o gatilho de criação de perfil e resolveu a decisão de produto que ele
+embutia: o perfil nasce **sem professor**, e a lista de espera passou a aceitar
+inscrição sem vínculo.
+
 | Fluxo | O que falta |
 |---|---|
-| F-AUTH-08 | o gatilho de criação de perfil em `auth.users`, e a decisão de produto que ele embute: a qual professor um aluno sem metadado é anexado |
 | F-CUP-01 | a RPC de resgate. `coupons` está com RLS ligada, zero policy e zero grant, de propósito |
 | F-VINC (3) | liberar e suspender acesso precisam nascer como RPC: `access_status` e `access_expires_at` estão fora do `GRANT UPDATE` de `profiles` |
 | F-ANUL | `void_quiz_session` não foi portada, e `quiz_sessions` é SELECT |

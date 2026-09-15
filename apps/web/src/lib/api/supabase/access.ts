@@ -72,12 +72,6 @@ export async function joinWaitlist(input: WaitlistInput): Promise<Result<Waitlis
   if (!input.targetExam.trim()) {
     return fail("validation", "Informe para qual concurso você estuda.", "targetExam");
   }
-  if (!session.teacherId) {
-    return fail(
-      "conflict",
-      "Sua conta ainda não está vinculada a um professor. Aguarde o contato.",
-    );
-  }
 
   const values = {
     name: input.name.trim(),
@@ -99,6 +93,10 @@ export async function joinWaitlist(input: WaitlistInput): Promise<Result<Waitlis
     : await supabase.from("waitlist").insert({
         ...values,
         student_id: session.profileId,
+        // NULO É O CASO NORMAL, e não falta de dado: o perfil nasce sem
+        // professor (migration 20260914190000), e esta fila é justamente a de
+        // quem ainda não tem um. A policy `waitlist_insert_student` compara o
+        // par com `is not distinct from`, então nulo casa com nulo.
         teacher_id: session.teacherId,
       });
 

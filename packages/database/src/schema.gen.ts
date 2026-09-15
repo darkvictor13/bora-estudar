@@ -1512,7 +1512,7 @@ export type Database = {
           status: Database["public"]["Enums"]["waitlist_status"]
           student_id: string
           target_exam: string
-          teacher_id: string
+          teacher_id: string | null
           timezone: string
           updated_at: string
           whatsapp: string
@@ -1526,7 +1526,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["waitlist_status"]
           student_id: string
           target_exam: string
-          teacher_id: string
+          teacher_id?: string | null
           timezone?: string
           updated_at?: string
           whatsapp: string
@@ -1540,7 +1540,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["waitlist_status"]
           student_id?: string
           target_exam?: string
-          teacher_id?: string
+          teacher_id?: string | null
           timezone?: string
           updated_at?: string
           whatsapp?: string

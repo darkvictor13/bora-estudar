@@ -52,12 +52,18 @@ npm run e2e:video     # a mesma suíte, gravando .webm por teste
 
 ## Banco
 
-> **Pendência que bloqueia cadastro:** o gatilho de criação de perfil em
-> `auth.users` não foi portado. Sem ele, quem se cadastra ganha usuário no
-> GoTrue e nenhuma linha em `profiles` — e o site o trata como não autenticado.
-> Ver `F-AUTH-08` (marcado `fixme`) e a seção "Funções e gatilhos" do de-para,
-> que registra também a decisão de produto que falta: a qual professor um aluno
-> sem metadado é anexado.
+> **O perfil nasce com a conta, e nasce sem professor.**
+> `app_private.create_profile_for_new_user`, em `auth.users`, cria a linha em
+> `profiles` — sempre ALUNO, sempre `pending`, sempre `teacher_id` nulo. Ele
+> **não lê `role` do metadado**: `raw_user_meta_data` é escrito pelo cliente na
+> chamada de cadastro, e quem mandasse `{"role":"teacher"}` nasceria professor.
+> Promover é trabalho privilegiado, no mesmo lugar onde liberar acesso mora.
+>
+> A regra de origem — anexar quem se cadastra ao professor MAIS ANTIGO da base
+> — morreu com a migration `20260914190000`: o vínculo é ato de alguém, não
+> efeito colateral de um `order by created_at limit 1`. Em troca,
+> `waitlist.teacher_id` é **nulável**, e a fila de quem ainda não tem professor
+> é visível a qualquer professor enquanto `user_role` não tiver 'admin'.
 
 O de-para coluna a coluna, contra o banco de origem, está em
 [`docs/de-para-schema.md`](docs/de-para-schema.md).

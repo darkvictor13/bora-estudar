@@ -216,12 +216,14 @@ suíte `auth.spec.ts`, já convertida para `data-testid`, passa.
 Os três dependem da frente do banco, e os três estão marcados no código para
 não sumirem de vista:
 
-1. **Cadastro público não cria perfil.** O gatilho `bora_criar_perfil_novo_aluno`
-   em `auth.users` não foi portado para o schema de 14/09. Sem ele o cadastro
-   cria o usuário no GoTrue e para aí. `F-AUTH-08` está `fixme`, e as fixtures
-   do e2e inserem o perfil à mão — um remendo com data para sair. O de-para
-   registra a decisão de produto que falta junto: a qual professor um aluno sem
-   metadado é anexado.
+1. ~~**Cadastro público não cria perfil.**~~ **RESOLVIDO** pela migration
+   `20260914190000`, depois de o defeito aparecer em staging: quem se cadastrava
+   confirmava o e-mail e lia "Entramos, mas seu perfil não foi encontrado." no
+   login. `app_private.create_profile_for_new_user` repõe o gatilho,
+   `F-AUTH-08` saiu do `fixme` e as fixtures do e2e deixaram de inserir perfil
+   à mão. A decisão de produto que faltava foi tomada: **o perfil nasce sem
+   professor** — a regra de origem, que anexava ao professor mais antigo da
+   base, não foi copiada.
 2. **O tema não tem onde morar na conta.** `user_preferences` saiu e nada a
    substituiu; a escolha vale por aparelho. `F-TEMA-02` e `F-TEMA-04` estão
    `fixme`. O pedido é uma coluna `theme_preference` em `profiles`.
