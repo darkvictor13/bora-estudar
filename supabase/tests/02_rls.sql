@@ -1,95 +1,192 @@
+\set ON_ERROR_STOP on
 \pset pager off
--- Segundo aluno, com professor diferente, para provar o isolamento.
-insert into auth.users (id,email,raw_user_meta_data) values
- ('33333333-3333-3333-3333-333333333333','prof2@x.com','{"role":"teacher","name":"Prof Carla"}'),
- ('44444444-4444-4444-4444-444444444444','aluno2@x.com','{"role":"student","name":"Aluno Dora"}');
-insert into public.student_teacher_links (student_id,teacher_id)
- values ('44444444-4444-4444-4444-444444444444','33333333-3333-3333-3333-333333333333');
-insert into public.study_plans (student_id,teacher_id,name,start_date,status)
- values ('44444444-4444-4444-4444-444444444444','33333333-3333-3333-3333-333333333333','Plano Dora',current_date,'active');
-
--- Sem RLS (superuser) enxerga tudo: 2 planejamentos, 2 metas.
-select 'A superuser ve study_plans' item, count(*)::text valor from public.study_plans;
+-- =============================================================================
+-- Isolamento: quem enxerga o quê
+-- =============================================================================
+-- O caso que passa despercebido não é professor vendo aluno alheio — é ALUNO
+-- vendo aluno do MESMO professor. Bruno e Carla dividem a professora Ana, e
+-- metade das policies deste schema casa por `teacher_id`.
+--
+-- Onde o teste conta linhas em vez de esperar exceção, é porque a RLS FILTRA:
+-- SELECT e UPDATE recusados por policy não levantam erro nenhum, devolvem
+-- vazio. É a armadilha que o CLAUDE.md descreve, e um teste que espera exceção
+-- aqui passaria sem provar nada.
+-- =============================================================================
 
 set role authenticated;
 
--- ALUNO 1
-select set_config('request.jwt.claim.sub','22222222-2222-2222-2222-222222222222',false);
-select 'B aluno1 ve study_plans (1)'  item, count(*)::text valor from public.study_plans;
-select 'C aluno1 ve goals (2)'          item, count(*)::text valor from public.goals;
-select 'D aluno1 ve sessoes (1)'       item, count(*)::text valor from public.quiz_sessions;
-select 'E aluno1 ve ledger (15)'        item, count(*)::text valor from public.quiz_session_questions;
-select 'F aluno1 ve profiles (1: so ele)' item, count(*)::text valor from public.profiles;
-
--- ALUNO 2: não pode ver NADA do aluno 1.
-select set_config('request.jwt.claim.sub','44444444-4444-4444-4444-444444444444',false);
-select 'G aluno2 ve study_plans (1)'  item, count(*)::text valor from public.study_plans;
-select 'H aluno2 ve goals (0)'          item, count(*)::text valor from public.goals;
-select 'I aluno2 ve sessoes (0)'       item, count(*)::text valor from public.quiz_sessions;
-select 'J aluno2 ve ledger (0)'         item, count(*)::text valor from public.quiz_session_questions;
-select 'K aluno2 ve vw_seen_questions (0)' item, count(*)::text valor from public.vw_seen_questions;
-select 'L aluno2 ve vw_goal_performance (0)' item, count(*)::text valor from public.vw_goal_performance;
-
--- PROFESSOR 1 vê o próprio aluno, não o do outro professor.
-select set_config('request.jwt.claim.sub','11111111-1111-1111-1111-111111111111',false);
-select 'M prof1 ve study_plans (1)'  item, count(*)::text valor from public.study_plans;
-select 'N prof1 ve goals (2)'          item, count(*)::text valor from public.goals;
-select 'O prof1 ve profiles (2: ele+aluno)' item, count(*)::text valor from public.profiles;
-
--- Escrita direta nas tabelas transacionais deve ser negada mesmo para o dono.
--- O professor PODE criar meta avulsa no planejamento dele: a escrita de
--- planejamento foi aberta. O que continua fechado é a execução.
+-- ---------- Aluno: só o próprio planejamento ----------
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
 do $$
-declare v_antes integer; v_depois integer;
+declare v_total integer;
 begin
-  select count(*) into v_antes from public.goals;
-  insert into public.goals (study_plan_id,student_id,teacher_id,week_number,weekday,day_order,type,title,created_by)
-  values ((select id from public.study_plans limit 1),'22222222-2222-2222-2222-222222222222',
-          '11111111-1111-1111-1111-111111111111',1,1,99,'theory','meta avulsa','11111111-1111-1111-1111-111111111111');
-  select count(*) into v_depois from public.goals;
-  if v_depois <> v_antes + 1 then raise exception 'FALHOU: professor nao criou a meta'; end if;
-  raise notice 'P OK  professor cria meta avulsa no proprio planejamento';
+  select count(*) into v_total from public.study_plans;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Bruno enxergou % planejamentos, esperava 1', v_total;
+  end if;
+  raise notice '01 OK  o aluno enxerga um planejamento: o dele';
 end $$;
 
--- Mas não para aluno de outro professor.
-do $$ begin
-  insert into public.goals (study_plan_id,student_id,teacher_id,week_number,weekday,day_order,type,title,created_by)
-  values ((select id from public.study_plans limit 1),'44444444-4444-4444-4444-444444444444',
-          '11111111-1111-1111-1111-111111111111',1,1,98,'theory','invasao','11111111-1111-1111-1111-111111111111');
-  raise exception 'FALHOU: criou meta para aluno de outro professor';
-exception when insufficient_privilege then
-  raise notice 'P2 OK  meta para aluno sem vinculo negada';
-end $$;
-
-do $$ begin
-  update public.quiz_sessions set duration_minutes = 9999;
-  raise exception 'FALHOU: UPDATE direto em quiz_sessions foi aceito';
-exception when insufficient_privilege then
-  raise notice 'Q OK  UPDATE direto em quiz_sessions negado';
-end $$;
-
-reset role;
-
--- Invariantes restantes.
 do $$
-declare v_plan uuid; v_goal uuid;
+declare v_total integer;
 begin
-  select id into v_plan from public.study_plans where student_id='22222222-2222-2222-2222-222222222222';
-  select id into v_goal from public.goals where type='theory' limit 1;
-  begin
-    insert into public.goals (study_plan_id,student_id,teacher_id,week_number,weekday,day_order,type,title,created_by)
-    values (v_plan,'22222222-2222-2222-2222-222222222222','11111111-1111-1111-1111-111111111111',
-            1,1,1,'theory','colisao','11111111-1111-1111-1111-111111111111');
-    raise exception 'FALHOU: aceitou day_order duplicada';
-  exception when unique_violation then
-    raise notice 'R OK  day_order duplicada bloqueada';
-  end;
+  select count(*) into v_total from public.goals;
+  if v_total <> 4 then
+    raise exception 'FALHOU: Bruno enxergou % metas, esperava 4', v_total;
+  end if;
+  raise notice '02 OK  o aluno enxerga as proprias metas, e so elas';
 end $$;
 
+-- ---------- Registro na meta de outro: barrado pela FK composta ----------
+--
+-- `goal_entries_insert` exige `student_id = auth.uid()`, e `student_id` é da
+-- PRÓPRIA linha — quem insere escolhe o valor. O que recusa é a FK composta.
 do $$ begin
-  insert into public.quiz_session_questions (quiz_session_id,question_id,execution_order,round,phase,outcome,answered_at)
-  values ((select id from public.quiz_sessions limit 1),1001,99,0,'main','correct',now());
-  raise exception 'FALHOU: aceitou questao duplicada no ledger';
-exception when unique_violation then
-  raise notice 'S OK  (sessao,questao,rodada) duplicada bloqueada no ledger';
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
+  values ('a5000000-0000-4000-8000-000000000004',
+          '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',30,10,9);
+  raise exception 'FALHOU: Bruno lancou registro na meta da Carla';
+exception when foreign_key_violation then
+  raise notice '03 OK  goal_entries_goal_fk recusa registro na meta de outro aluno';
+end $$;
+
+-- ---------- Escrita na meta de outro: filtrada em silêncio ----------
+do $$
+declare v_afetadas integer;
+begin
+  update public.goals set status = 'completed'
+   where id = 'a5000000-0000-4000-8000-000000000004';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 0 then
+    raise exception 'FALHOU: Bruno alterou % meta(s) da Carla', v_afetadas;
+  end if;
+  raise notice '04 OK  UPDATE na meta de outro afeta 0 linhas (filtra, nao levanta)';
+end $$;
+
+-- ---------- Apagar meta do professor: policy decide pelo tipo ----------
+do $$
+declare v_afetadas integer;
+begin
+  delete from public.goals where id = 'a5000000-0000-4000-8000-000000000002';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 0 then
+    raise exception 'FALHOU: o aluno apagou a meta de teoria do professor';
+  end if;
+  raise notice '05 OK  o aluno nao apaga meta do professor';
+end $$;
+
+do $$
+declare v_afetadas integer;
+begin
+  delete from public.goals where id = 'a5000000-0000-4000-8000-000000000006';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 1 then
+    raise exception 'FALHOU: o aluno nao apagou o proprio estudo extra';
+  end if;
+  raise notice '06 OK  o aluno apaga o estudo extra que ele mesmo lancou';
+end $$;
+
+-- ---------- Perfis e o professor ----------
+do $$
+declare v_total integer; v_nome text;
+begin
+  select count(*) into v_total from public.profiles;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Bruno enxergou % perfis, esperava so o dele', v_total;
+  end if;
+
+  -- `profiles_select` nunca deixa o aluno ler a linha do professor; o nome vem
+  -- por função, que devolve id e nome e nada mais.
+  select name into v_nome from public.my_teacher();
+  if v_nome <> 'Professora Ana' then
+    raise exception 'FALHOU: my_teacher() devolveu %', coalesce(v_nome, '<nulo>');
+  end if;
+  raise notice '07 OK  o aluno le so o proprio perfil, e o professor so por my_teacher()';
+end $$;
+
+-- ---------- Teoria de outro aluno ----------
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.theory_progress;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Bruno enxergou % progressos de teoria', v_total;
+  end if;
+  raise notice '08 OK  progresso de teoria e do dono';
+end $$;
+
+-- ---------- Bateria de outro aluno ----------
+select app_test.act_as('33333333-3333-4333-8333-333333333333');  -- Carla
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.quiz_sessions;
+  if v_total <> 0 then
+    raise exception 'FALHOU: Carla enxergou % baterias do Bruno', v_total;
+  end if;
+  raise notice '09 OK  a bateria de um aluno nao aparece para o colega de turma';
+end $$;
+
+-- ---------- Professor: os próprios alunos, e nada além ----------
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_planos integer; v_perfis integer;
+begin
+  select count(*) into v_planos from public.study_plans;
+  if v_planos <> 3 then
+    raise exception 'FALHOU: Ana enxergou % planejamentos, esperava 3', v_planos;
+  end if;
+
+  -- O dela mais os três alunos.
+  select count(*) into v_perfis from public.profiles;
+  if v_perfis <> 4 then
+    raise exception 'FALHOU: Ana enxergou % perfis, esperava 4', v_perfis;
+  end if;
+  raise notice '10 OK  o professor enxerga os proprios alunos, e so eles';
+end $$;
+
+select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.study_plans;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Davi enxergou % planejamentos, esperava 1', v_total;
+  end if;
+  raise notice '11 OK  professor de outra turma nao enxerga planejamento alheio';
+end $$;
+
+-- ---------- Planejamento para aluno alheio: `is_teacher_of` ----------
+do $$ begin
+  insert into public.study_plans (teacher_id, student_id, name, starts_on)
+  values ('44444444-4444-4444-8444-444444444444','22222222-2222-4222-8222-222222222222',
+          'Plano invasor', current_date);
+  raise exception 'FALHOU: Davi criou planejamento para o aluno da Ana';
+exception when insufficient_privilege then
+  raise notice '12 OK  is_teacher_of recusa planejamento para aluno de outro professor';
+end $$;
+
+-- ---------- Caderno dentro do planejamento de outro professor ----------
+do $$ begin
+  insert into public.study_plan_notebooks (
+    study_plan_id, teacher_id, student_id, subject_key, subject_name,
+    notebook_key, notebook_name
+  ) values (
+    'a2000000-0000-4000-8000-000000000001','44444444-4444-4444-8444-444444444444',
+    '22222222-2222-4222-8222-222222222222','forenses','Ciências Forenses',
+    'invasor','Caderno invasor');
+  raise exception 'FALHOU: Davi criou caderno no planejamento da Ana';
+exception when insufficient_privilege then
+  raise notice '13 OK  o caderno so nasce no planejamento do proprio professor';
+end $$;
+
+-- ---------- Catálogo de teoria de outro professor ----------
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.theory_catalogs;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Davi enxergou % catalogos de teoria, esperava 1', v_total;
+  end if;
+  raise notice '14 OK  catalogo de teoria e do professor que o criou';
 end $$;

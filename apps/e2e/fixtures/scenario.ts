@@ -7,16 +7,14 @@
  * é exatamente o que esta suíte não pode pagar.
  *
  * A saída aqui é outra: nenhum teste toca o aluno do seed. Cada um recebe
- * professor, aluno, vínculo, assinatura, planejamento, blocos e metas
- * próprios, com UUID e e-mail gerados. Dois testes não têm como colidir
- * porque não existe linha em comum — nem o índice de bateria aberta por
- * planejamento, nem o de vínculo vigente por aluno.
+ * professor, aluno, vínculo, acesso, planejamento, cadernos e metas próprios,
+ * com UUID e e-mail gerados. Dois testes não têm como colidir porque não existe
+ * linha em comum — nem o índice de bateria aberta por planejamento.
  *
- * O que continua compartilhado é só o catálogo de questões, que é leitura.
+ * O que continua compartilhado é `catalog_blocks`, que é leitura — e está
+ * vazio: a carga do catálogo é do professor, pela tela, e o seed não a faz.
  */
 import { randomUUID } from "node:crypto";
-
-import type { CatalogQuestion } from "./questions.ts";
 
 import { asUser, query, value } from "./db.ts";
 
@@ -606,234 +604,14 @@ export async function addWeek(
 }
 // ---------------------------------------------------------------------------
 // Leituras de conferência
+//
+// AS DOZE AJUDANTES DE BATERIA, CUPOM E REVISÃO SAÍRAM AQUI. Liam
+// `study_plan_blocks`, `catalog_questions`, `review_spacings`,
+// `review_completions`, `goals.deleted_at` e as views `vw_*` — nada disso existe
+// no schema de 14/09/2026, e nenhum teste as usava: eram fixtures que só
+// falhariam se alguém as chamasse. Voltam junto com o motor de baterias, e a
+// forma antiga está em `git show feda119:apps/e2e/fixtures/scenario.ts`.
 // ---------------------------------------------------------------------------
-
-export interface QuizSessionRow extends Record<string, unknown> {
-  readonly id: string;
-  readonly status: string;
-  readonly session_number: number;
-  readonly main_target: number;
-  readonly duration_minutes: number | null;
-  readonly goal_id: string | null;
-}
-
-/**
- * Bateria mais recente do planejamento.
- *
- * Ordena por `execution_sequence`, não por data: a tabela não tem `created_at`,
- * e duas baterias criadas no mesmo instante — o que acontece num teste —
- * empatariam em `started_at`. `execution_sequence` é sequencial por construção.
- */
-export async function openSessionOf(planId: string): Promise<QuizSessionRow | null> {
-  const rows = await query<QuizSessionRow>(
-    `select id, status, session_number, main_target, duration_minutes, goal_id
-       from public.quiz_sessions
-      where study_plan_id = $1
-      order by execution_sequence desc
-      limit 1`,
-    [planId],
-  );
-  return rows[0] ?? null;
-}
-
-export async function goalStatus(goalId: string): Promise<string> {
-  return value<string>("select status::text from public.goals where id = $1", [goalId]);
-}
-
-/**
- * Questões do bloco do catálogo, na ordem em que o site as envia.
- *
- * Traz o tópico junto: é o que permite a uma pré-condição errar de propósito
- * as questões de um assunto só.
- */
-export async function catalogQuestions(catalogBlockId: string): Promise<CatalogQuestion[]> {
-  const rows = await query<{ question_id: string; topic: string }>(
-    `select question_id, topic from public.catalog_questions
-      where block_id = $1 order by position`,
-    [catalogBlockId],
-  );
-  return rows.map((row) => ({ id: Number(row.question_id), topic: row.topic }));
-}
-
-export async function ledgerCount(quizSessionId: string): Promise<number> {
-  return Number(
-    await value<string>("select count(*) from public.quiz_session_questions where quiz_session_id = $1", [
-      quizSessionId,
-    ]),
-  );
-}
-
-export async function goalPerformance(
-  goalId: string,
-): Promise<{ answered: number; correct: number; minutes: number | null } | null> {
-  const rows = await query<{
-    questions_answered: string | null;
-    correct_answers: string | null;
-    minutes_spent: string | null;
-  }>(
-    `select questions_answered, correct_answers, minutes_spent
-       from public.vw_goal_performance where goal_id = $1`,
-    [goalId],
-  );
-  const first = rows[0];
-  if (!first) return null;
-  return {
-    answered: Number(first.questions_answered ?? 0),
-    correct: Number(first.correct_answers ?? 0),
-    minutes: first.minutes_spent === null ? null : Number(first.minutes_spent),
-  };
-}
-
-/** Marca a semana como já tendo baterias concluídas, para a tela de Revisões. */
-export async function planWeeks(planId: string): Promise<number[]> {
-  const rows = await query<{ week_number: number }>(
-    `select distinct week_number from public.goals
-      where study_plan_id = $1 and deleted_at is null order by week_number`,
-    [planId],
-  );
-  return rows.map((row) => row.week_number);
-}
-
-export async function goalCount(planId: string): Promise<number> {
-  return Number(
-    await value<string>(
-      "select count(*) from public.goals where study_plan_id = $1 and deleted_at is null",
-      [planId],
-    ),
-  );
-}
-
-/**
- * Cadernos extras numa disciplina do planejamento.
- *
- * A grade de revisão espaçada só tem o que mostrar com vários cadernos na mesma
- * disciplina, e o cenário padrão cria um por disciplina. Os novos entram DEPOIS
- * do que já existe, em `block_order` crescente, que é a ordem que a grade usa.
- */
-export async function addBlocks(
-  scenario: Scenario,
-  subjectName: string,
-  count: number,
-): Promise<readonly string[]> {
-  const base = await query<{ max: string | null }>(
-    `select max(block_order)::text as max from public.study_plan_blocks
-      where study_plan_id = $1 and subject_name = $2 and deleted_at is null`,
-    [scenario.planId, subjectName],
-  );
-  const start = Number(base[0]?.max ?? -1) + 1;
-
-  const order = await query<{ subject_order: number }>(
-    `select subject_order from public.study_plan_blocks
-      where study_plan_id = $1 and subject_name = $2 limit 1`,
-    [scenario.planId, subjectName],
-  );
-  const subjectOrder = order[0]?.subject_order ?? 0;
-
-  const ids: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const id = randomUUID();
-    await query(
-      `insert into public.study_plan_blocks
-         (id, study_plan_id, student_id, teacher_id, subject_name, name,
-          subject_order, block_order)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        id,
-        scenario.planId,
-        scenario.student.id,
-        scenario.teacher.id,
-        subjectName,
-        `Aula ${start + i + 1}`,
-        subjectOrder,
-        start + i,
-      ],
-    );
-    ids.push(id);
-  }
-  return ids;
-}
-
-/** Espaçamento definido pelo professor, pelo caminho real: escrita com RLS. */
-export async function setSpacing(
-  scenario: Scenario,
-  subjectName: string,
-  first: number,
-  second: number,
-): Promise<void> {
-  await asUser(scenario.teacher.id, (client) =>
-    client.query(
-      `insert into public.review_spacings
-         (study_plan_id, student_id, teacher_id, subject_name, first_interval, second_interval)
-       values ($1, $2, $3, $4, $5, $6)`,
-      [scenario.planId, scenario.student.id, scenario.teacher.id, subjectName, first, second],
-    ),
-  );
-}
-
-/** Marcações vivas do planejamento, na forma `${blockId}:${ordinal}`. */
-export async function reviewsDone(planId: string): Promise<readonly string[]> {
-  const rows = await query<{ study_plan_block_id: string; ordinal: number }>(
-    `select study_plan_block_id, ordinal from public.review_completions
-      where study_plan_id = $1 and deleted_at is null`,
-    [planId],
-  );
-  return rows.map((row) => `${row.study_plan_block_id}:${row.ordinal}`);
-}
-
-/**
- * Conclui uma meta sem bateria, pela RPC real.
- *
- * `complete_goal` exige o tempo: não existe meta concluída sem minuto neste
- * schema, e é o que a suíte 12 assegura. Ver R-TEMP-09.
- */
-export async function completeGoal(
-  scenario: Scenario,
-  goalId: string,
-  minutes: number,
-): Promise<void> {
-  await asUser(scenario.student.id, (client) =>
-    client.query("select public.complete_goal($1::uuid, $2::uuid, $3::integer, null)", [
-      goalId,
-      randomUUID(),
-      minutes,
-    ]),
-  );
-}
-
-export interface CouponOptions {
-  readonly months?: number;
-  readonly maxUses?: number | null;
-  readonly usedUp?: boolean;
-  readonly active?: boolean;
-  readonly expired?: boolean;
-}
-
-/**
- * Um cupom só deste teste.
- *
- * `current_uses` é um contador compartilhado: dois testes resgatando o cupom do
- * seed em paralelo leem um do outro. Cada teste que afirma sobre a contagem
- * cria o próprio código, pela mesma razão que cada teste cria o próprio par
- * professor/aluno.
- */
-export async function createCoupon(options: CouponOptions = {}): Promise<string> {
-  const code = `E2E${randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-  const maxUses = options.maxUses === undefined ? null : options.maxUses;
-
-  await query(
-    `insert into public.coupons (code, months, max_uses, current_uses, valid_until, active)
-     values ($1, $2, $3, $4, $5, $6)`,
-    [
-      code,
-      options.months ?? 3,
-      maxUses,
-      options.usedUp ? (maxUses ?? 1) : 0,
-      options.expired ? "yesterday" : null,
-      options.active ?? true,
-    ],
-  );
-  return code;
-}
 
 /* ------------------------------------------------------------------ *
  * Catálogo de teoria — Fase 4

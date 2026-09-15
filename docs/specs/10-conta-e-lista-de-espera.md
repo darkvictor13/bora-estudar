@@ -1,6 +1,6 @@
 # 10 — Conta e lista de espera
 
-**Situação:** implementada · **Fluxos e2e:** F-ALU-04, F-ALU-05
+**Situação:** implementada · **Fluxos e2e:** F-CONTA-01, F-ESP-01
 
 ---
 

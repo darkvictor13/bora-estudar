@@ -1,6 +1,10 @@
 # 20 — Execução do reforço de ciclo
 
-**Situação:** implementada · **Comparativo:** §12 item 8 (primeira metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 · **Fluxos e2e:** F-RCIC-01 a F-RCIC-06
+**Situação:** implementada · **Comparativo:** §12 item 8 (primeira metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 · **Fluxos e2e:** F-REV-01 (só a parte que não depende do motor)
+
+> **Atualizada em 14/09/2026.** O reforço nasce de desempenho baixo em bateria, e o motor de baterias saiu com
+> a extensão. `record_reinforcement` não foi portada: a tela mostra o vazio como
+> resposta, que é o certo enquanto não houver o que reforçar.
 
 ---
 
@@ -19,7 +23,8 @@ desde então.
 baterias do ciclo, confere que o acumulado é mesmo abaixo de 80%, grava o
 reforço, e **exige que todo erro principal do ciclo tenha sido revisado** — um
 `EXCEPT` entre as questões erradas e as revisadas, que recusa a gravação se
-faltar uma. Está testada em `supabase/tests/03_reinforcement.sql`. É a última das
+faltar uma. Estava testada em `supabase/tests/03_reinforcement.sql`, suíte que saiu
+com a RPC no schema de 14/09/2026. É a última das
 três RPCs que o GAP-02 listava como implementadas e sem chamador.
 
 O ciclo é a peça pedagógica do produto: é o que transforma "você errou" em "você
@@ -102,7 +107,7 @@ aluno abre /aluno/revisoes
 | Leitura | as baterias concluídas do bloco, as já usadas em ciclo, e os erros principais das três |
 | RPCs | **nenhuma nova.** `record_reinforcement` já existe |
 | Migration | **nenhuma** |
-| Testes | `apps/web/src/lib/domain/reinforcement.test.ts`, `apps/e2e/tests/student.spec.ts` |
+| Testes | **sem cobertura** enquanto o motor de baterias não voltar; a tela vazia é conferida por `F-REV-01`, em `apps/e2e/tests/student-analysis.spec.ts` |
 
 **Os erros do ciclo são deduplicados por questão.** Quando o bloco do catálogo
 tem menos questões que três baterias consomem, a terceira já repete o que a

@@ -1,6 +1,6 @@
 # 14 — Gestão do planejamento pelo professor
 
-**Situação:** implementada · **Comparativo:** §12 item 3 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-GPLAN-01 a F-GPLAN-07
+**Situação:** implementada · **Comparativo:** §12 item 3 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-GPLAN-01
 
 ---
 

@@ -1,5 +1,5 @@
 /**
- * §2 do `docs/fluxos-e2e.md` — telas do aluno.
+ * O catálogo de `docs/fluxos-e2e.md` — telas do aluno.
  *
  * ESTE ARQUIVO FOI ESVAZIADO NAS FASES 3 A 5, e o que sobrou é o mapa. Todas as
  * telas que ele cobria foram reescritas a partir da v2, e a regra do plano é

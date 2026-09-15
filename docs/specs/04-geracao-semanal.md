@@ -1,6 +1,6 @@
 # 04 — Geração da semana
 
-**Situação:** implementada · **Fluxos e2e:** F-PROF-04 a F-PROF-08
+**Situação:** implementada · **Fluxos e2e:** F-PROF-04 a F-PROF-06
 
 ---
 
@@ -93,7 +93,7 @@ marcados), `input[name=withTheory]`.
 | CA-05 | `replace` marca `deleted_at` nas metas `pending`/`in_progress`/`skipped` da semana | F-PROF-07 |
 | CA-06 | `replan` preserva as metas com bateria concluída | F-PROF-07 |
 | CA-07 | Bateria aberta na semana bloqueia `replace` e `replan` com `ha bateria aberta nesta semana` | F-PROF-07 |
-| CA-08 | Gerar duas vezes em `append` não colide: `day_order` continua a maior sobrevivente do dia | F-PROF-04, `supabase/tests/05_teacher_writes.sql` |
+| CA-08 | Gerar duas vezes em `append` não colide: `day_order` continua a maior sobrevivente do dia | F-PROF-04, `supabase/tests/03_goals.sql` |
 | CA-09 | Professor de outro aluno chamando a RPC recebe `42501` | F-ISO-02 |
 | CA-10 | `?plano=` com id inválido cai no planejamento ativo | F-PROF-08 |
 

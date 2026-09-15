@@ -1,6 +1,10 @@
 # 16 — Histórico de baterias e anulação
 
-**Situação:** implementada · **Comparativo:** §12 item 6 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 e §9 · **Fluxos e2e:** F-ANUL-01 a F-ANUL-05
+**Situação:** implementada · **Comparativo:** §12 item 6 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 e §9 · **Fluxos e2e:** F-ANUL (em `fixme`)
+
+> **Atualizada em 14/09/2026.** `void_quiz_session` não foi portada e `quiz_sessions` é SELECT: anular
+> **precisa nascer como RPC**, e `F-ANUL` está `fixme`. O histórico, que é
+> leitura, continua na ficha do aluno.
 
 ---
 

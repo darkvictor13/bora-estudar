@@ -13,12 +13,17 @@ supabase db reset >/dev/null
 
 CONTAINER="supabase_db_$(grep -m1 '^project_id' supabase/config.toml | cut -d'"' -f2)"
 
+# `catalogs` e `audit_log` saíram do schema em 14/09/2026, e o truncate delas
+# abortava este script antes da primeira suíte. O que resta a limpar é o que o
+# seed cria (tudo pende de `auth.users`) mais as duas tabelas que não pendem de
+# usuário nenhum: o catálogo comum e os cupons.
 echo "→ limpando o seed para as suítes partirem do zero"
 docker exec "$CONTAINER" psql -U postgres -q \
   -c "set client_min_messages = warning;
+      drop schema if exists app_test cascade;
       truncate auth.users cascade;
-      truncate public.catalogs cascade;
-      truncate public.audit_log;"
+      truncate public.catalog_blocks cascade;
+      truncate public.coupons cascade;"
 
 # O glob é [0-9]*, e não 0*: com a décima suíte, `0*.sql` passou a PULAR
 # silenciosamente tudo a partir de 10_. Suíte que não roda é pior que suíte que

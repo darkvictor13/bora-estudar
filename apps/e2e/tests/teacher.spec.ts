@@ -1,5 +1,5 @@
 /**
- * §3 do `docs/fluxos-e2e.md` — telas do professor.
+ * O catálogo de `docs/fluxos-e2e.md` — telas do professor.
  *
  * REESCRITO NA FASE 6, e não convertido: as telas mudaram de forma junto com o
  * schema. A ficha do aluno era um modal e virou rota; gerar metas ganhou prévia
