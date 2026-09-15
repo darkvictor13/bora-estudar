@@ -14,12 +14,12 @@
  * valendo — que é exatamente o que uma rede de segurança precisa fazer durante
  * uma migração.
  *
- * ## Quando converter
+ * ## A conversão terminou
  *
- * NA FASE EM QUE A TELA É REESCRITA, nunca antes nem depois. Converter cedo
- * deixa a suíte testando o que vai sumir; converter tarde deixa a fase sem
- * rede. A Fase 2 converteu a casca e a autenticação; `goalRow` e `cardByTitle`
- * pertencem a telas que as fases 3 a 6 ainda vão reescrever.
+ * A regra era converter NA FASE EM QUE A TELA É REESCRITA, nunca antes nem
+ * depois: cedo deixa a suíte testando o que vai sumir, tarde deixa a fase sem
+ * rede. As sete fases saíram, e hoje `grep -c 'locator("\.'` em `apps/e2e` dá
+ * zero — nenhum teste casa por classe CSS. Teste novo nasce com testid.
  *
  * ## A convenção
  *

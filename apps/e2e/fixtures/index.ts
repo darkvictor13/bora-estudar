@@ -14,9 +14,7 @@ import { stubTec } from "./tec.ts";
 
 export { expect };
 export * from "./scenario.ts";
-export * from "./questions.ts";
 export * from "./tec.ts";
-export * from "./battery.ts";
 export { authenticate } from "./session.ts";
 
 /**
