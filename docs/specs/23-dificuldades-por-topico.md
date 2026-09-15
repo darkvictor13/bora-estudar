@@ -1,6 +1,10 @@
 # 23 — Dificuldades por tópico
 
-**Situação:** implementada · **Comparativo:** §12 item 8 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-DIFI-01 a F-DIFI-04
+**Situação:** implementada · **Comparativo:** §12 item 8 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** **sem cobertura** — depende do motor de baterias
+
+> **Atualizada em 14/09/2026.** O tópico vinha do ledger da bateria, e o motor saiu com a extensão. A view
+> `vw_topic_difficulty` não foi portada; a ficha do aluno explica a ausência em
+> vez de mostrar uma tabela vazia.
 
 ---
 
@@ -78,7 +82,7 @@ quiz_session_questions (completed, phase = main)
 | RPCs | **nenhuma nova** |
 | Migration | **uma:** `create view vw_topic_difficulty` |
 | Banco | `quiz_session_questions` e `quiz_sessions`, leitura |
-| Testes | `supabase/tests/10_topic_difficulty.sql`, `apps/e2e/tests/teacher.spec.ts` |
+| Testes | **sem cobertura**; a tela explica a ausência, e isso é conferido por `F-PROF-03` |
 
 **O fixture de bateria mandava `topic: null`.** A extensão real manda o tópico
 do item da fila (`content/index.ts`), então toda bateria de teste agregava como
@@ -100,9 +104,9 @@ admite.
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | A view agrega por tópico, contando respondidas, acertos, erros, questões distintas erradas e baterias distintas com erro | `supabase/tests/10_topic_difficulty.sql` |
-| CA-02 | Só bateria `completed` e fase `main` entram; cancelada, anulada, extra e reforço ficam de fora | `supabase/tests/10_topic_difficulty.sql` |
-| CA-03 | A view tem `security_invoker`, e um aluno não vê a dificuldade de outro | `supabase/tests/10_topic_difficulty.sql` |
+| CA-01 | A view agrega por tópico, contando respondidas, acertos, erros, questões distintas erradas e baterias distintas com erro | **sem cobertura**: `vw_topic_difficulty` não foi portada |
+| CA-02 | Só bateria `completed` e fase `main` entram; cancelada, anulada, extra e reforço ficam de fora | **sem cobertura**: `vw_topic_difficulty` não foi portada |
+| CA-03 | A view tem `security_invoker`, e um aluno não vê a dificuldade de outro | **sem cobertura**: `vw_topic_difficulty` não foi portada |
 | CA-04 | A ficha do aluno mostra os tópicos com erro, ordenados por mais erros | F-DIFI-01 |
 | CA-05 | Tópico com erro em duas baterias distintas vem marcado como recorrente; com erro numa só, não | F-DIFI-02 |
 | CA-06 | Tópico sem erro não aparece | F-DIFI-03 |

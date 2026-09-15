@@ -1,6 +1,6 @@
 # 08 — Desempenho e estatísticas
 
-**Situação:** implementada · **Fluxos e2e:** F-BAT-14, F-ALU-01
+**Situação:** implementada · **Fluxos e2e:** F-EST-01, F-ALU-01
 
 ---
 

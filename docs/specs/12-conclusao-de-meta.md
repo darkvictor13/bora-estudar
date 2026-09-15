@@ -1,6 +1,11 @@
 # 12 — Conclusão de meta sem bateria
 
-**Situação:** implementada · **Comparativo:** §12 item 1 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-CONC-01 a F-CONC-06
+**Situação:** implementada · **Comparativo:** §12 item 1 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-META-03 e F-META-04
+
+> **Atualizada em 14/09/2026.** `complete_goal` e `reopen_goal` não foram portadas para o schema de
+> 14/09/2026. A conclusão passou a ser escrita direta em `goals`, sustentada
+> pelo grant por coluna e pelos gatilhos de `app_private` — o COMPORTAMENTO
+> descrito aqui continua valendo; a superfície é que mudou.
 
 ---
 
@@ -145,7 +150,7 @@ decoração. É a mesma armadilha que `batchIdFor` resolve na geração da seman
 | Migration | **uma:** `goals.spent_minutes` + `check` de `student_note` + `create or replace view vw_goal_performance` + as duas funções, com `revoke`/`grant` |
 | Banco | `goals` (coluna nova), `vw_goal_performance` (expressão de uma coluna), `operations` (via `reserve_operation`), `audit_log` (via gatilho existente) |
 | Protocolo | **nada muda** — a extensão não participa |
-| Testes | `supabase/tests/07_goal_completion.sql`, `apps/e2e/tests/student.spec.ts` |
+| Testes | `supabase/tests/03_goals.sql`, `apps/e2e/tests/student-week.spec.ts` |
 
 **Reuso de `parseDuration`.** O `"80"`/`"1:20"` já é entendido por
 `lib/domain/goals.ts`, escrito para o registro de tempo da bateria. A mesma
@@ -170,15 +175,15 @@ bateria existem para tornar inexprimível.
 | CA-03 | O tempo aceita `80` e `1:20`; `0`, `241` e texto sem número são recusados com mensagem em português, e nada é gravado | F-CONC-03 |
 | CA-04 | A observação do aluno é gravada, exibida na linha e sobrevive a desfazer | F-CONC-04 |
 | CA-05 | Desfazer volta a meta a `pending`, zera tempo e `completed_at`, e a contagem da semana desce | F-CONC-05 |
-| CA-06 | Meta de bateria **não** oferece o formulário de conclusão; chamada direta à RPC com meta `question_block` é recusada | F-CONC-06 + `supabase/tests/07_goal_completion.sql` |
-| CA-07 | Reenviar o mesmo `request_id` com o mesmo payload devolve o estado anterior sem segunda gravação; com payload diferente é recusado com `23505` | `supabase/tests/07_goal_completion.sql` |
-| CA-08 | O aluno não conclui nem reabre meta de outro aluno: `42501`, e a meta alheia fica intacta | `supabase/tests/07_goal_completion.sql` |
-| CA-09 | Planejamento fora de `active` recusa as duas operações | `supabase/tests/07_goal_completion.sql` |
-| CA-10 | Meta já `completed` recusa `complete_goal`, e meta `pending` recusa `reopen_goal` — fora do caminho de replay | `supabase/tests/07_goal_completion.sql` |
-| CA-11 | `vw_goal_performance.minutes_spent` devolve o tempo declarado para meta sem bateria e continua devolvendo o da sessão para meta de bateria; `questions_answered` continua `0` na primeira | `supabase/tests/07_goal_completion.sql` |
-| CA-12 | O aluno continua **sem** `insert`, `update` e `delete` em `goals`: a escrita direta é recusada, e `delete` não é concedido | `supabase/tests/07_goal_completion.sql` |
-| CA-13 | As duas funções não têm `execute` para `public`; `authenticated` tem, nominalmente | `supabase/tests/07_goal_completion.sql` |
-| CA-14 | `spent_minutes` recusa `0`, negativo e `241` no próprio banco, mesmo por fora da RPC | `supabase/tests/07_goal_completion.sql` |
+| CA-06 | Meta de bateria **não** oferece o formulário de conclusão; chamada direta à RPC com meta `question_block` é recusada | F-CONC-06 + **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-07 | Reenviar o mesmo `request_id` com o mesmo payload devolve o estado anterior sem segunda gravação; com payload diferente é recusado com `23505` | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-08 | O aluno não conclui nem reabre meta de outro aluno: `42501`, e a meta alheia fica intacta | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-09 | Planejamento fora de `active` recusa as duas operações | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-10 | Meta já `completed` recusa `complete_goal`, e meta `pending` recusa `reopen_goal` — fora do caminho de replay | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-11 | `vw_goal_performance.minutes_spent` devolve o tempo declarado para meta sem bateria e continua devolvendo o da sessão para meta de bateria; `questions_answered` continua `0` na primeira | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-12 | O aluno continua **sem** `insert`, `update` e `delete` em `goals`: a escrita direta é recusada, e `delete` não é concedido | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-13 | As duas funções não têm `execute` para `public`; `authenticated` tem, nominalmente | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-14 | `spent_minutes` recusa `0`, negativo e `241` no próprio banco, mesmo por fora da RPC | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
 
 ---
 

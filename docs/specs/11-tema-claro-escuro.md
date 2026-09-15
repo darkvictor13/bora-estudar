@@ -1,6 +1,12 @@
 # 11 — Tema claro e escuro
 
-**Situação:** implementada · **Comparativo:** §12 item 14 · **Fluxos e2e:** F-TEMA-01 a F-TEMA-08
+**Situação:** implementada · **Comparativo:** §12 item 14 · **Fluxos e2e:** F-TEMA-01 a F-TEMA-08 (02 e 04 em `fixme`)
+
+> **Atualizada em 14/09/2026.** `user_preferences` saiu do schema de 14/09/2026 e nada a substituiu: a escolha
+> vale POR APARELHO até existir uma coluna `theme_preference` em `profiles`. É o
+> que mantém `F-TEMA-02` e `F-TEMA-04` em `fixme`. A camada de papéis migrou de
+> `globals.css` para os tokens de `packages/ui`; o resto desta spec continua
+> valendo.
 
 ---
 
@@ -100,9 +106,9 @@ carga da página
 | RPCs | **nenhuma** |
 | Migration | uma: `create type theme_preference`, `create table user_preferences`, policy, grants, gatilho de `updated_at`, e `alter table student_preferences drop column theme` |
 | Banco | `user_preferences` (nova), `student_preferences` (perde `theme`), `profiles` (só leitura, para o `profile_id`) |
-| CSS | `apps/web/src/styles/globals.css` — camada de papéis sobre a escala de `:root` |
+| Tema | `packages/ui/src/{tokens,palette,theme}.ts` — a camada de papéis, hoje em tokens do MUI |
 | Extensão | nada muda |
-| Testes | `apps/e2e/tests/theme.spec.ts`, `apps/e2e/support/contrast.ts`, `supabase/tests/06_preferences.sql` |
+| Testes | `apps/e2e/tests/theme.spec.ts`, `apps/e2e/support/contrast.ts`, `packages/ui/src/contrast.test.ts` |
 
 **Por que não é `upsert`.** O grant de UPDATE cobre só `theme`, e o upsert do
 PostgREST (`Prefer: resolution=merge-duplicates`) exige UPDATE na tabela
@@ -134,10 +140,10 @@ claro/escuro" sai do Fora de escopo dela.
 | CA-06 | Os três papéis têm o controle e a preferência persistida — aluno, professor e admin | F-TEMA-06 |
 | CA-07 | Texto sobre fundo cumpre 4.5:1 (3:1 se grande), e o limite de campo e de botão cumpre 3:1, nos dois temas, nas telas de aluno e de professor | F-TEMA-07 |
 | CA-08 | Sem nenhuma escolha feita, e sem linha em `user_preferences`, o site abre em claro mesmo com o sistema operacional no escuro | F-TEMA-08 |
-| CA-09 | Um perfil não escreve a linha de outro: o `INSERT` levanta `42501` e o `UPDATE` afeta **zero linhas** (contadas com `row_count`, porque UPDATE filtra em silêncio) | `supabase/tests/06_preferences.sql` |
-| CA-10 | `theme` recusa qualquer valor fora de `light` e `dark` | `supabase/tests/06_preferences.sql` |
-| CA-11 | `profile_id` não é atualizável pelo grant por coluna, e `delete` é recusado | `supabase/tests/06_preferences.sql` |
-| CA-12 | `student_preferences` não tem mais a coluna `theme`, e as demais colunas continuam intactas | `supabase/tests/06_preferences.sql` |
+| CA-09 | Um perfil não escreve a linha de outro: o `INSERT` levanta `42501` e o `UPDATE` afeta **zero linhas** (contadas com `row_count`, porque UPDATE filtra em silêncio) | **sem cobertura**: `user_preferences` saiu do schema |
+| CA-10 | `theme` recusa qualquer valor fora de `light` e `dark` | **sem cobertura**: `user_preferences` saiu do schema |
+| CA-11 | `profile_id` não é atualizável pelo grant por coluna, e `delete` é recusado | **sem cobertura**: `user_preferences` saiu do schema |
+| CA-12 | `student_preferences` não tem mais a coluna `theme`, e as demais colunas continuam intactas | **sem cobertura**: `user_preferences` saiu do schema |
 
 ---
 

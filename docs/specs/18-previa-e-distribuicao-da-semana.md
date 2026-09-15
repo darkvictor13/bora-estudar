@@ -1,6 +1,9 @@
 # 18 — Prévia e distribuição por peso na semana
 
-**Situação:** implementada · **Comparativo:** §12 item 7 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §8 · **Fluxos e2e:** F-PREV-01 a F-PREV-06
+**Situação:** implementada · **Comparativo:** §12 item 7 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §8 · **Fluxos e2e:** F-PROF-04 e F-PROF-05
+
+> **Atualizada em 14/09/2026.** A distribuição por peso e o rodízio foram reescritos na Fase 6 e vivem em
+> `lib/domain/teacher.ts` (`shareByWeight` e `planWeek`), com teste de unidade.
 
 ---
 
@@ -109,7 +112,7 @@ professor abre /professor/metas
 | Leitura | o loader passa a trazer, por bloco, quantas metas de bateria já existem |
 | RPCs | **nenhuma nova** |
 | Migration | **nenhuma** |
-| Testes | `apps/web/src/lib/domain/week-planner.test.ts`, `apps/e2e/tests/teacher.spec.ts` |
+| Testes | `apps/web/src/lib/domain/teacher.test.ts` (`shareByWeight`, `planWeek`), `apps/e2e/tests/teacher.spec.ts` |
 
 **O formulário ganhou `noValidate`**, pela mesma razão do de login (F-AUTH-03):
 quem valida é a action, e a mensagem sai em português dentro da tela. Com a

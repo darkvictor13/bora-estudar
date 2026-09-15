@@ -74,7 +74,7 @@ campo de senha
 | Actions | **nenhuma** |
 | RPCs | **nenhuma** |
 | Migration | **nenhuma** |
-| Testes | `sidebar-state.test.ts`, `apps/e2e/tests/student.spec.ts` e `auth.spec.ts` |
+| Testes | `apps/web/src/lib/ui/sidebar-state.test.ts`, `apps/e2e/tests/shell.spec.ts` e `auth.spec.ts` |
 
 **Nada disto vai ao banco**, e é decisão, não economia: ver `R-UI-02`.
 

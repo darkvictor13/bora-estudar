@@ -1,6 +1,10 @@
 # 25 — Tempo de estudo, série semanal e sequência de dias
 
-**Situação:** implementada · **Comparativo:** §12 item 10 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 e §9 · **Fluxos e2e:** F-TEMP-01 a F-TEMP-07
+**Situação:** implementada · **Comparativo:** §12 item 10 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 e §9 · **Fluxos e2e:** F-EST-01
+
+> **Atualizada em 14/09/2026.** As views `vw_study_time` e as séries derivadas não foram portadas. Os números
+> saem hoje de `goal_entries`, agregados em `lib/domain` com teste de unidade, e
+> conferidos na tela por `F-EST-01`.
 
 ---
 
@@ -103,7 +107,7 @@ quiz_sessions ─────┘     data local · minutos · disciplina · ativ
 | Domínio | `lib/domain/study-time.ts` — períodos, agrupamento, série e sequência |
 | RPCs | **nenhuma nova** |
 | Migration | **uma:** `create view vw_study_time` |
-| Testes | `supabase/tests/12_study_time.sql`, `study-time.test.ts`, `apps/e2e` |
+| Testes | `apps/web/src/lib/domain/week.test.ts` (`streakDays`, `summarizeWeek`), `apps/e2e/tests/student-analysis.spec.ts` |
 
 **A fila previa "site" e saiu com uma migration.** O motivo é `R-TEMP-02`: a
 regra de qual minuto conta já mora em `vw_goal_performance`, e reimplementá-la

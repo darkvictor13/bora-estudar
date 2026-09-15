@@ -291,7 +291,12 @@ Origem: `p-controleRevisoes`, `p-revisao`, `p-estatisticas`, `p-meusDados`,
 - Estatísticas: KPIs, desempenho semanal, questões por semana, radar por
   disciplina, rosca de resultado, tempo de estudo por dia/mês, filtros por plano
   e por ano. Antes da primeira linha de gráfico, ler a skill `dataviz`.
-- `share-post-modal`: post de tempo de estudo em canvas + `navigator.share`.
+- ~~`share-post-modal`: post de tempo de estudo em canvas + `navigator.share`.~~
+  **Não foi portado, e a ausência é decisão.** O inventário já o listava em
+  "Fora de escopo desta reconstrução" — conforto que depende de
+  `navigator.share`, indisponível em parte dos navegadores de desktop, para
+  produzir uma imagem que ninguém consegue reabrir depois. Entrou nesta lista
+  por engano quando a fase foi escrita.
 - Meus dados, lista de espera, cupom de acesso e a tela de bloqueio sem acesso.
 
 ### Fase 6 — Professor — **entregue**
@@ -390,8 +395,9 @@ Todas as sete fases estão entregues. O estado, medido e não afirmado:
 
 | | |
 |---|---|
-| `npm run check` | verde — typecheck, lint e 74 testes de unidade |
+| `npm run check` | verde — typecheck, lint e 74 testes de unidade (exige Node 24) |
 | `npm run e2e` | **171 verdes**, 8 `fixme` documentados, zero falhas |
+| `npm run db:test` | verde — **86 asserções** em 8 suítes, reescritas em 14/09 contra o schema novo |
 | Seletor de classe CSS na suíte | zero (`grep -c 'locator("\.'` em `apps/e2e`) |
 | `globals.css` | apagado; não existe mais CSS próprio |
 | `lib/data/` | apagado; toda tela fala com `lib/api` |
@@ -399,7 +405,8 @@ Todas as sete fases estão entregues. O estado, medido e não afirmado:
 
 ### O que o banco ainda não permite
 
-São cinco, e as cinco **lançam com o motivo** em vez de recusar educadamente —
+São **seis** — a sexta é `setSelectedSubjects`, no fim da lista — e todas
+**lançam com o motivo** em vez de recusar educadamente —
 uma tela que finge ter tentado é pior do que uma que explica. Nenhuma é decisão
 da interface: em todas, a defesa do banco é a certa, e afrouxá-la para a tela
 funcionar abriria o buraco que ela fecha.
@@ -418,6 +425,10 @@ funcionar abriria o buraco que ela fecha.
    sem metadado é anexado. (`F-AUTH-08`)
 5. **Tema na conta.** `user_preferences` saiu; a escolha vale por aparelho até
    existir uma coluna `theme_preference` em `profiles`. (`F-TEMA-02`, `F-TEMA-04`)
+6. **Selecionar as matérias do ciclo.** A v2 guardava a seleção; o schema de
+   14/09 não tem onde. Hoje "estar no ciclo" é DERIVADO — está no ciclo a
+   disciplina com regra de revisão configurada —, e derivado não se escreve.
+   (`lib/api/supabase/review.ts`)
 
 Além delas, **a execução de bateria** continua fora — saiu com a extensão, e o
 motor novo ainda vai ser desenhado. As telas que a pressupõem dizem isso: a meta

@@ -27,6 +27,7 @@ Onde o comparativo e este documento discordam sobre a situação de um fluxo,
 | 🟡 | Existe em parte — a tela abre, mas alguma ação do fluxo não está lá |
 | ❌ | Não existe na versão atual |
 | 🚫 | Existia e **não deve** voltar como estava — viola a fronteira de escrita do `CLAUDE.md` |
+| ⏸ | Foi reconstruído e **está suspenso** desde 14/09/2026: saiu com a extensão, ou espera uma RPC que não foi portada |
 
 A coluna **Spec** fica vazia até a spec existir. A coluna **Estado** é o ledger
 desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: <motivo>`.
@@ -35,28 +36,37 @@ desta sessão: `pendente` → `especificada` → `implementada` → `bloqueada: 
 
 ## Quadro-resumo
 
-| Área | Fluxos na v96 | ✅ | 🟡 | ❌ | 🚫 |
-|---|---:|---:|---:|---:|---:|
-| 1. Autenticação e conta | 12 | 10 | 1 | 1 | 0 |
-| 2. Aluno — metas e execução | 12 | 7 | 2 | 0 | 3 |
-| 3. Aluno — bateria inteligente | 9 | 8 | 1 | 0 | 0 |
-| 4. Aluno — reforço e revisão | 10 | 7 | 0 | 3 | 0 |
-| 5. Aluno — conteúdo e análise | 12 | 8 | 0 | 3 | 1 |
-| 6. Professor — alunos e acesso | 12 | 12 | 0 | 0 | 0 |
-| 7. Professor — planejamento | 10 | 7 | 1 | 2 | 0 |
-| 8. Professor — geração de metas | 9 | 6 | 1 | 2 | 0 |
-| 9. Professor — acompanhamento | 8 | 6 | 1 | 1 | 0 |
-| 10. Extensão | 12 | 12 | 0 | 0 | 0 |
-| **Total** | **106** | **83** | **7** | **12** | **4** |
+| Área | Fluxos na v96 | ✅ | 🟡 | ⏸ | ❌ | 🚫 |
+|---|---:|---:|---:|---:|---:|---:|
+| 1. Autenticação e conta | 12 | 9 | 0 | 2 | 1 | 0 |
+| 2. Aluno — metas e execução | 12 | 8 | 1 | 0 | 0 | 3 |
+| 3. Aluno — bateria inteligente | 9 | 0 | 0 | 9 | 0 | 0 |
+| 4. Aluno — reforço e revisão | 10 | 4 | 0 | 3 | 3 | 0 |
+| 5. Aluno — conteúdo e análise | 12 | 8 | 1 | 2 | 0 | 1 |
+| 6. Professor — alunos e acesso | 12 | 9 | 0 | 3 | 0 | 0 |
+| 7. Professor — planejamento | 10 | 8 | 1 | 0 | 1 | 0 |
+| 8. Professor — geração de metas | 9 | 8 | 0 | 0 | 1 | 0 |
+| 9. Professor — acompanhamento | 8 | 4 | 1 | 2 | 1 | 0 |
+| 10. Extensão | 12 | 0 | 0 | 12 | 0 | 0 |
+| **Total** | **106** | **58** | **4** | **33** | **7** | **4** |
 
-**As contagens acima são de 31/08/2026, com a fila encerrada.** Quando o
-inventário foi escrito eram 68 ✅, 11 🟡, 23 ❌; vinte specs depois, são 83 ✅ e
-12 ❌. As duas áreas que estavam mais vazias — extensão e acompanhamento do
-professor — fecharam.
+**As contagens foram refeitas em 14/09/2026, depois da reimplementação.** Três
+marcos, para ler a linha do tempo: quando o inventário foi escrito eram 68 ✅,
+11 🟡 e 23 ❌; com a fila de specs encerrada, em 31/08, eram 83 ✅ e 12 ❌; hoje
+são 58 ✅ e **33 ⏸**.
+
+O ⏸ é a diferença, e não é regressão de qualidade: a extensão de navegador foi
+removida e o schema foi recriado a partir do banco de produção, sem as RPCs de
+execução. O que dependia de uma das duas coisas parou de ter caminho — a bateria
+inteira, o reforço que nasce dela, o resumo por tópicos, e as quatro ações que
+precisam nascer como RPC (liberar acesso, bloquear, vincular, resgatar cupom).
+O banco continua com a máquina de estados, o ledger e as FKs que sustentam tudo
+isso; o que falta é a superfície.
 
 O que a v96 tinha e ainda falta está listado nas tabelas de cada área, e o que
-sobrou tem um motivo escrito: ou é 🚫 deliberado, ou é o bloqueio do login com
-Google, ou é uma pendência menor que nenhuma spec da fila cobriu.
+sobrou tem um motivo escrito: ou é 🚫 deliberado, ou é ⏸ esperando motor ou RPC,
+ou é o bloqueio do login com Google, ou é uma pendência menor que nenhuma spec
+da fila cobriu.
 
 O texto abaixo é o diagnóstico original, de 30/08/2026, e fica como registro do
 ponto de partida.
@@ -97,16 +107,17 @@ linha 247.
 | Tema claro e escuro | `toggleTheme` index.js:1945 | ✅ | 11 | — |
 | **Entrar com Google (OAuth)** | `iniciarLoginGoogle` index.js:2029 | ❌ | | **bloqueada: provedor não configurado** |
 | **Mostrar/ocultar a senha digitada** | `alternarVisibilidadeSenha` index.js:2008 | ✅ | 29 | implementada |
-| Cupom de acesso concede 3 meses | `dadosCupomAcesso` aluno.js:3905, `CUPONS_ACESSO_TESTE` | ✅ | 30 | implementada |
-| Vínculo automático ao professor padrão no cadastro | `garantirPerfilNovoAluno` index.js:2045 (`PROFESSOR_PADRAO_ID`) | 🟡 | | pendente |
+| Cupom de acesso concede 3 meses | `dadosCupomAcesso` aluno.js:3905, `CUPONS_ACESSO_TESTE` | ⏸ | 30 | suspensa: precisa de RPC |
+| Vínculo automático ao professor padrão no cadastro | `garantirPerfilNovoAluno` index.js:2045 (`PROFESSOR_PADRAO_ID`) | ⏸ | | suspensa: gatilho de perfil não portado |
 | **Sidebar recolhível, estado persistido** | `toggleSidebar` index.js:261 | ✅ | 29 | implementada |
 
 **A tabela `coupons` existe no schema atual e nenhuma tela a lê ou escreve.** Na
 v96 o cupom era aplicado por **upsert direto em `profiles` a partir do
 navegador**, gravando `status_acesso:'ativo'` e `plano_expira_em` — só a RLS
-separava um aluno de liberar o próprio acesso. Aqui a liberação é `subscriptions`,
-escrita do professor; se o cupom voltar, é como RPC que valida o código e cria a
-assinatura, nunca como escrita do aluno.
+separava um aluno de liberar o próprio acesso. No schema de 14/09/2026 a
+liberação é `profiles.access_status` mais `access_expires_at`, as duas fora de
+todo grant, e `coupons` está com RLS ligada e zero policy: o resgate só volta
+como RPC que valida o código do lado do servidor, nunca como escrita do aluno.
 
 **Duas funções da v96 nunca eram chamadas**: `acessoAlunoLiberado` e
 `mensagemAcessoAluno` (index.js:2072/2084). O roteamento mandava para
@@ -127,7 +138,7 @@ código morto. A versão atual barra no loader com `requireStudentAccess`.
 | **Editar e excluir estudo extra** | `excluirEstudoExtra` aluno.js:2503 | ✅ | 19 | implementada |
 | **Desfazer conclusão / voltar a pendente** | `desfazerRegistroMeta` aluno.js:2907 | ✅ | 12 | implementada |
 | Tempo aceito em `80`, `1:20`, `1h20`, `40min` | `interpretarTempoRegistro` aluno.js:2717 | 🟡 | 05 | — |
-| Abas Metas / Reforços no painel | `ensureDashboardTabs` aluno.js:1297 | 🟡 | | pendente |
+| Abas Metas / Reforços no painel | `ensureDashboardTabs` aluno.js:1297 | ✅ | | implementada de outra forma: `/aluno/revisoes` |
 | Aluno apaga metas filtradas / todas | `deleteFilteredMetas` aluno.js:1604 | 🚫 | — | — |
 | Aluno gera o próprio ciclo semanal | `gerarCicloSemanal` aluno.js:2161 | 🚫 | — | — |
 | Aluno cadastra disciplina e blocos | `salvarDisc` aluno.js:1467 | 🚫 | — | — |
@@ -160,15 +171,15 @@ resultado é imutável, "correções administrativas em fluxo próprio" — que 
 
 | Fluxo v96 | Onde está no código v96 | Situação | Spec | Estado |
 |---|---|---|---|---|
-| Iniciar / continuar bateria a partir da meta | `iniciarBateriaMeta` aluno.js:5422 | ✅ | 05 | — |
-| Ordem livre: qualquer meta pendente inicia | `iniciar_bateria` 013:133 | ✅ | 05 | — |
-| Retorno do TEC e gravação idempotente | `processarRetornoBoraExtensao` aluno.js:5451 | ✅ | 05 | — |
-| Registrar tempo para concluir | `salvarRegistroMeta` ramo :2825 | ✅ | 05 | — |
-| Cancelar bateria | `cancelarBateriaAbertaParaTroca` aluno.js:5355 | ✅ | 05 | — |
-| Finalização antecipada: 1 a 15 principais | 017:103, changelog v89 | ✅ | 05 | — |
-| Extras em blocos de 5, e só após todas as principais | 017:120, `mod(extras,5)=0` | ✅ | 05 | — |
-| **Trocar de bateria em um passo** (cancelar a atual e já iniciar a nova) | `escolherAcaoBateriaAberta` aluno.js:5296 | 🟡 | | pendente |
-| **Iniciar a bateria pelo caderno** | `htmlAcaoBateriaLivre` aluno.js:1525 | ✅ | 31 | implementada |
+| Iniciar / continuar bateria a partir da meta | `iniciarBateriaMeta` aluno.js:5422 | ⏸ | 05 | suspensa: depende do motor de baterias |
+| Ordem livre: qualquer meta pendente inicia | `iniciar_bateria` 013:133 | ⏸ | 05 | suspensa: depende do motor de baterias |
+| Retorno do TEC e gravação idempotente | `processarRetornoBoraExtensao` aluno.js:5451 | ⏸ | 05 | suspensa: depende do motor de baterias |
+| Registrar tempo para concluir | `salvarRegistroMeta` ramo :2825 | ⏸ | 05 | suspensa: depende do motor de baterias |
+| Cancelar bateria | `cancelarBateriaAbertaParaTroca` aluno.js:5355 | ⏸ | 05 | suspensa: depende do motor de baterias |
+| Finalização antecipada: 1 a 15 principais | 017:103, changelog v89 | ⏸ | 05 | suspensa: depende do motor de baterias |
+| Extras em blocos de 5, e só após todas as principais | 017:120, `mod(extras,5)=0` | ⏸ | 05 | suspensa: depende do motor de baterias |
+| **Trocar de bateria em um passo** (cancelar a atual e já iniciar a nova) | `escolherAcaoBateriaAberta` aluno.js:5296 | ⏸ | | suspensa: depende do motor de baterias |
+| **Iniciar a bateria pelo caderno** | `htmlAcaoBateriaLivre` aluno.js:1525 | ⏸ | 31 | suspensa: depende do motor de baterias |
 
 **A linha acima dizia "bateria livre por bloco, FORA da meta da semana", e
 estava errada.** `htmlAcaoBateriaLivre` chama `metasPendentesSemanaDoBloco`, que
@@ -201,9 +212,9 @@ importante deste inventário**, porque o §12 item 8 as trata como uma só.
 | Ciclo de 3 baterias, abaixo de 80% libera | `getBoraCiclosSmartReforco` aluno.js:5558 | ✅ | 09 | — |
 | Ver erros acumulados do bloco | `abrirErrosBloco` aluno.js:5667 | ✅ | 09 | — |
 | Caderno de erros reúne as três fases | `obterErrosBloco` aluno.js:5509 | ✅ | 08 | — |
-| **Prioridade alta abaixo de 75%** | aluno.js:5590, badge :3800 | ✅ | 20 | implementada |
-| **Executar o reforço do ciclo** (site) | `iniciarReforcoCicloSmart` aluno.js:5658 | ✅ | 20 | implementada |
-| **Conduzir as fases `reinforcement` e `extra`** (extensão) | content.js:261 e :280 | ✅ | 21 | implementada |
+| **Prioridade alta abaixo de 75%** | aluno.js:5590, badge :3800 | ⏸ | 20 | suspensa: depende do motor de baterias |
+| **Executar o reforço do ciclo** (site) | `iniciarReforcoCicloSmart` aluno.js:5658 | ⏸ | 20 | suspensa: depende do motor de baterias |
+| **Conduzir as fases `reinforcement` e `extra`** (extensão) | content.js:261 e :280 | ⏸ | 21 | suspensa: saiu com a extensão |
 | **Agendar reforço como meta futura** | `agendarReforco` aluno.js:2003 | ❌ | | pendente |
 | **Ignorar reforço sugerido** | `ignorarReforco` aluno.js:1986 | ❌ | | pendente |
 | **Cancelar reforço já agendado** | `cancelarReforcoDoRegistro` aluno.js:2668 | ❌ | | pendente |
@@ -233,13 +244,13 @@ do domínio. `review_cycles` guarda ciclo de reforço, que é outro conceito.
 | Cadernos TEC por disciplina | `renderAulas` aluno.js:3355 | ✅ | 08 | — |
 | Desempenho oficial × aproveitamento total | changelog v93 | ✅ | 08 | — |
 | Blocos × desempenho com composição P/E/R | `renderEstatisticas` aluno.js:3770 | ✅ | 08 | — |
-| Ver tópicos do bloco antes de estudar | `htmlTopicosBloco` aluno.js:1514 | ✅ | 26 | implementada |
-| Resumo por tópicos da bateria concluída | `resumoBateriaDb` aluno.js:4444 | ✅ | 26 | implementada |
+| Ver tópicos do bloco antes de estudar | `htmlTopicosBloco` aluno.js:1514 | ⏸ | 26 | suspensa: depende do motor de baterias |
+| Resumo por tópicos da bateria concluída | `resumoBateriaDb` aluno.js:4444 | ⏸ | 26 | suspensa: depende do motor de baterias |
 | **Tempo de estudo por período** (hoje/semana/mês/ano/total) | `obterResumoTempoEstudo` aluno.js:924 | ✅ | 25 | implementada |
 | **Série de desempenho por semana** | `getWeeklyStats` aluno.js:3549 | ✅ | 25 | implementada |
-| **Radar por disciplina** (≥3 matérias) | `svgRadarDisciplinas` aluno.js:3679 | ❌ | | pendente |
-| **Filtros de histórico por plano e por ano** | `carregarHistoricoEstatisticasAluno` aluno.js:777 | ❌ | | pendente |
-| **Marcar teoria/PDF e caderno TEC como feitos** | `toggleAula` aluno.js:3494 | ❌ | | pendente |
+| **Radar por disciplina** (≥3 matérias) | `svgRadarDisciplinas` aluno.js:3679 | ✅ | | implementada como barras horizontais |
+| **Filtros de histórico por plano e por ano** | `carregarHistoricoEstatisticasAluno` aluno.js:777 | 🟡 | | parcial: só o filtro por ano |
+| **Marcar teoria/PDF e caderno TEC como feitos** | `toggleAula` aluno.js:3494 | ✅ | | implementada no fluxo da teoria |
 | Aluno cadastra e edita disciplina | `salvarDisc` aluno.js:1467 | 🚫 | — | — |
 
 **O tópico da questão já está no banco desta versão** — `catalog_questions.topic`
@@ -268,9 +279,9 @@ inventário.**
 | Lista de alunos vinculados | `renderMeusAlunos` professor.js:3551 | ✅ | 03 | — |
 | Ficha individual do aluno | `verDetalhesAluno` professor.js:4220 | ✅ | 03 | — |
 | Estatísticas do aluno | `verEstatAluno` professor.js:4262 | ✅ | 08 | — |
-| **Liberar acesso do aluno por 3 meses** | `liberarAlunoAcesso` professor.js:3992 | ✅ | 13 | implementada |
-| **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ✅ | 13 | implementada |
-| **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ✅ | 13 | implementada |
+| **Liberar acesso do aluno por 3 meses** | `liberarAlunoAcesso` professor.js:3992 | ⏸ | 13 | suspensa: precisa de RPC |
+| **Bloquear acesso do aluno** | `bloquearAlunoAcesso` professor.js:4004 | ⏸ | 13 | suspensa: precisa de RPC |
+| **Vincular aluno a professor** | não existe UI — só `PROFESSOR_PADRAO_ID` no cadastro | ⏸ | 13 | suspensa: precisa de RPC |
 | **Badge de acesso com data de validade** | `badgeAcessoAluno` professor.js:4011 | ✅ | 13 | implementada |
 | **Classificação Em ritmo / Atenção / Atrasado / Sem dados** | `classificarAluno` professor.js:3274 | ✅ | 17 | implementada |
 | **KPIs no card do aluno** (desempenho, questões, metas, barra) | `renderCardAlunoHTML` professor.js:4019 | ✅ | 17 | implementada |
@@ -305,7 +316,7 @@ com desempenho **< 70%** (havendo questões) **ou** progresso **< 0,55**;
 |---|---|---|---|---|
 | **Criar planejamento a partir de curso-modelo** | `salvarNovoPlanejamentoAluno` professor.js:4365 | ✅ | 14 | implementada |
 | **Ativar planejamento, arquivando o anterior** | idem, `.neq('id',planoId)` | ✅ | 14 | implementada |
-| **Editar planejamento** | `salvarAlteracaoPlanejamentoAluno` professor.js:4539 | ❌ | | pendente |
+| **Editar planejamento** | `salvarAlteracaoPlanejamentoAluno` professor.js:4539 | ✅ | | implementada na reconstrução da v2 |
 | **Arquivar planejamento** | `arquivarPlanejamentoSelecionadoAluno` professor.js:4588 | ✅ | 14 | implementada |
 | **Excluir planejamento sem histórico** | `excluirPlanejamentoSelecionadoAluno` professor.js:4718 | ❌ | | pendente |
 | **Materializar os blocos do catálogo no planejamento** | `registrosModeloParaPlano` professor.js:2741 | ✅ | 14 | implementada |
@@ -341,8 +352,8 @@ dizer isso ao professor em vez de deixar o banco recusar.
 | **Distribuição por peso da matéria** (`contatosSemanais`) | `calcularDistribuicaoPadraoBlocos` professor.js:5006 | ✅ | 18 | implementada |
 | **Rodízio de blocos B1→B2→…→Bn→B1** | `proximoBlocoParaMeta` professor.js:5544 | ✅ | 18 | implementada |
 | **Repetição por prioridade de incidência** (3×, 2×, 1×) | `sequenciaPrioridadeBlocos` professor.js:5538 | ❌ | | pendente |
-| **Copiar semana anterior** | `copiarSemanaAnterior` professor.js:5282 | ❌ | | pendente |
-| Conferência "Soma X / Total" antes de salvar | `atualizarSomaMetasTeoriaAluno` professor.js:5461 | 🟡 | | pendente |
+| **Copiar semana anterior** | `copiarSemanaAnterior` professor.js:5282 | ✅ | | implementada na reconstrução da v2 |
+| Conferência "Soma X / Total" antes de salvar | `atualizarSomaMetasTeoriaAluno` professor.js:5461 | ✅ | | implementada na prévia da semana |
 
 **Números que a spec vai precisar:** total de metas 1 a **80**; tempo por meta
 **10 a 240**, default **60**; dias default de segunda a sexta; a soma por matéria
@@ -361,8 +372,8 @@ total comporta, e o resto pelo maior resto. No PCPR Reta Final a soma dos
 | Fluxo v96 | Onde está no código v96 | Situação | Spec | Estado |
 |---|---|---|---|---|
 | Reforços sugeridos por aluno | `abrirReforcosAluno` professor.js:3736 | ✅ | 09 | — |
-| **Anular bateria** | `anularBateriaAluno` professor.js:3979 | ✅ | 16 | implementada |
-| **Dificuldades por tópico** | `abrirDificuldadesAluno` professor.js:3925 | ✅ | 23 | implementada |
+| **Anular bateria** | `anularBateriaAluno` professor.js:3979 | ⏸ | 16 | suspensa: precisa de RPC |
+| **Dificuldades por tópico** | `abrirDificuldadesAluno` professor.js:3925 | ⏸ | 23 | suspensa: depende do motor de baterias |
 | **Agendar reforço para o aluno** | `agendarReforcoAlunoSupabase` professor.js:3813 | ❌ | | pendente |
 | Estatísticas gerais do professor | `renderEstatisticas` professor.js:2217 | 🟡 | 08 | — |
 | **Tempo de estudo e sequência de dias** | `renderTempoEstudoStats` professor.js:644 e `calcularSequenciaEstudos` aluno.js:1162 | ✅ | 25 | implementada |
@@ -390,18 +401,18 @@ confirma o GAP-03 como lacuna herdada. Aqui `updateProfile` exige
 
 | Fluxo v96 (1.0.7) | Onde está no código v96 | Situação | Spec | Estado |
 |---|---|---|---|---|
-| Importa o payload da hash e monta a fila | `importPayloadFromUrl` content.js:415 | ✅ | 06 | — |
-| Persiste antes de limpar a hash | content.js:410 | ✅ | 06 | — |
-| Versão do protocolo verificada na leitura | content.js:421 | ✅ | 06 | — |
-| Seleção: inédita → mais erros → mais antiga → menos vista | `candidateRank` content.js:190 | ✅ | 07 | — |
-| Histórico do servidor sobrepõe o local | `mergedHistory` content.js:83 | ✅ | 06 | — |
-| Guarda de questão já respondida | `armInitialGuard` content.js:811 | ✅ | 05 | — |
-| Finalização antecipada e cancelamento | content.js:758 e :775 | ✅ | 05 | — |
-| **Rodízio por tópico na seleção** (cobertura ascendente) | `selectBalanced` content.js:202 | ✅ | 22 | implementada |
-| **Fase de reforço correlato** (1 do mesmo tópico por erro, profundidade 2) | `pickReinforcement` content.js:261 | ✅ | 21 | implementada |
-| **Rodada extra de +5, tudo ou nada** | `appendExtraRound` content.js:280 | ✅ | 21 | implementada |
-| **Resumo por tópicos no painel** | `topicSummary` content.js:542 | ✅ | 28 | implementada |
-| **Painel arrastável, posição persistida** | `PANEL_POS_KEY` content.js:530 | ✅ | 28 | implementada |
+| Importa o payload da hash e monta a fila | `importPayloadFromUrl` content.js:415 | ⏸ | 06 | suspensa: saiu com a extensão |
+| Persiste antes de limpar a hash | content.js:410 | ⏸ | 06 | suspensa: saiu com a extensão |
+| Versão do protocolo verificada na leitura | content.js:421 | ⏸ | 06 | suspensa: saiu com a extensão |
+| Seleção: inédita → mais erros → mais antiga → menos vista | `candidateRank` content.js:190 | ⏸ | 07 | suspensa: saiu com a extensão |
+| Histórico do servidor sobrepõe o local | `mergedHistory` content.js:83 | ⏸ | 06 | suspensa: saiu com a extensão |
+| Guarda de questão já respondida | `armInitialGuard` content.js:811 | ⏸ | 05 | suspensa: saiu com a extensão |
+| Finalização antecipada e cancelamento | content.js:758 e :775 | ⏸ | 05 | suspensa: saiu com a extensão |
+| **Rodízio por tópico na seleção** (cobertura ascendente) | `selectBalanced` content.js:202 | ⏸ | 22 | suspensa: saiu com a extensão |
+| **Fase de reforço correlato** (1 do mesmo tópico por erro, profundidade 2) | `pickReinforcement` content.js:261 | ⏸ | 21 | suspensa: saiu com a extensão |
+| **Rodada extra de +5, tudo ou nada** | `appendExtraRound` content.js:280 | ⏸ | 21 | suspensa: saiu com a extensão |
+| **Resumo por tópicos no painel** | `topicSummary` content.js:542 | ⏸ | 28 | suspensa: saiu com a extensão |
+| **Painel arrastável, posição persistida** | `PANEL_POS_KEY` content.js:530 | ⏸ | 28 | suspensa: saiu com a extensão |
 
 **O rodízio por tópico é a "correlação de tópico" que
 [`arquitetura.md`](arquitetura.md) lista como decisão pendente.** A v96 ordena os
@@ -476,6 +487,14 @@ condução dentro do TEC.
 | 19 | Login com Google | **bloqueada** — ver [Bloqueios](#bloqueios) |
 | ~~20~~ | Cupom de acesso — spec [30](specs/30-cupom-de-acesso.md) ✅ | 1 RPC, site |
 | ~~21~~ | Iniciar a bateria pelo caderno — spec [31](specs/31-iniciar-bateria-pelo-caderno.md) ✅ | site, sem RPC |
+
+**A fila continua encerrada, e seis dos itens entregues estão ⏸ desde
+14/09/2026.** São os que dependiam da extensão ou de uma RPC que não foi
+portada: 9 e 10 (execução do reforço), 11 (rodízio por tópico), 12 (dificuldades
+por tópico), 15 (resumo por tópicos), 17 (painel arrastável) e 20 (cupom). As
+specs continuam valendo como decisão; o que falta é a superfície de execução, e
+ela é a primeira coisa a desenhar depois desta reimplementação — ver *Decisões
+pendentes* em [`arquitetura.md`](arquitetura.md).
 
 ---
 

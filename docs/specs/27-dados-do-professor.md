@@ -1,6 +1,6 @@
 # 27 — Dados do próprio professor
 
-**Situação:** implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-CONTA-01 a F-CONTA-04
+**Situação:** implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §9 · **Fluxos e2e:** F-CONTA-01
 
 ---
 
@@ -68,7 +68,7 @@ que ele o troque — a promessa da tela não é sustentada por nenhuma defesa.
 | Leitura | a mesma consulta a `profiles` |
 | RPCs | **nenhuma nova** |
 | Migration | **uma:** troca o `grant update` de `profiles` por um grant de colunas |
-| Testes | `supabase/tests/14_profile_grants.sql`, `apps/e2e` |
+| Testes | `supabase/tests/01_grants.sql` e `04_profiles.sql`, `apps/e2e/tests/student-analysis.spec.ts` |
 
 **Não há F-CONTA-05.** "A tela do aluno continua funcionando igual" já é o que
 `F-ALU-04` verifica desde antes desta spec, e o critério aponta para ele em vez

@@ -1,18 +1,22 @@
 # Fluxos da aplicação
 
-Catálogo dos fluxos exercitáveis de ponta a ponta, no formato que um teste e2e
-precisa: pré-condição, passos, resultado esperado e o seletor de cada elemento.
+Catálogo dos fluxos exercitáveis de ponta a ponta: **o id, o que ele cobre,
+onde o teste mora e em que estado está**.
 
-Foi levantado percorrendo a aplicação inteira com um navegador de verdade
-contra o Supabase local. Os bugs encontrados nessa varredura estão em
-[`bugs-encontrados.md`](bugs-encontrados.md).
+A versão anterior deste arquivo descrevia cada fluxo passo a passo, com o
+seletor de cada elemento, porque foi escrita ANTES da suíte — era um roteiro de
+QA feito percorrendo a aplicação com um navegador. Hoje a suíte existe, casa por
+`data-testid` e se lê sozinha: repetir os passos aqui criaria duas descrições do
+mesmo comportamento, e a que apodrece é sempre a que não roda. O que ficou é o
+que o teste **não** diz: o índice, o ambiente, e o registro do que saiu.
 
-> **A §3 é histórico.** Ela cataloga a bateria conduzida pela extensão de
-> navegador, que foi removida junto com `tests/quiz.spec.ts` e
-> `tests/extension.spec.ts`. Nenhum fluxo `F-BAT-*` ou `F-FASE-*` de execução é
-> exercitado hoje; o que restou deles vive nas pré-condições de
-> `fixtures/battery.ts`, que chamam as RPCs direto. As demais seções continuam
-> descrevendo a suíte que roda.
+> **O id é o contrato entre spec e teste.** Uma spec cita `F-TEO-04`; o teste
+> carrega `F-TEO-04` no `describe`. Renomear um id quebra os dois lados, e é por
+> isso que ids não são renumerados — ver as convenções em
+> [`specs/README.md`](specs/README.md).
+
+Estado medido em 14/09/2026, com `npm run e2e`: **171 verdes, 8 `fixme`, zero
+falhas**.
 
 ---
 
@@ -22,11 +26,16 @@ contra o Supabase local. Os bugs encontrados nessa varredura estão em
 npm run db:start        # exige Docker
 npm run db:reset        # ponto de partida conhecido: seed
 npm run dev             # http://localhost:3000
+npm run e2e             # a suíte, modo rápido
 ```
 
-`db:reset` é a única forma confiável de isolar um teste do anterior. As suítes
-de `supabase/tests/` **apagam os usuários do seed** — rodar `db:test` antes de
-um e2e quebra o login.
+`global-setup.ts` **não** roda `supabase db reset`: o reset custa uns 25 s e
+cada teste cria o próprio par professor/aluno (`fixtures/scenario.ts`). O que
+ele confere é que o banco responde e que o schema está aplicado.
+
+**`npm run db:test` apaga os usuários do seed** — as suítes de invariante
+truncam `auth.users` para partir do zero. Rodar `db:reset` depois devolve o
+login local.
 
 ### Rodando contra um ambiente remoto
 
@@ -55,47 +64,73 @@ npm run e2e --workspace @bora/e2e
 
 ### Usuários do seed
 
-| Papel | E-mail | Senha | UUID |
-|---|---|---|---|
-| Admin | `admin@boraestudar.local` | `BoraEstudar#2026!` | `ad000000-0000-4000-8000-000000000001` |
-| Professor | `professor@boraestudar.local` | `BoraEstudar#2026!` | `d65a965f-0ccb-4a12-ac7b-858519d9df00` |
-| Aluno | `aluno@boraestudar.local` | `BoraEstudar#2026!` | `a1000000-0000-4000-8000-000000000001` |
+| Papel | E-mail | Senha |
+|---|---|---|
+| Professor | `professor@local.dev` | `SenhaLocal#2026` |
+| Aluno | `aluno@local.dev` | `SenhaLocal#2026` |
+
+Não há conta de administrador: `user_role` tem dois valores, `teacher` e
+`student`. O perfil dos dois é inserido pelo próprio seed — o gatilho de criação
+de perfil em `auth.users` não foi portado, e é o que mantém `F-AUTH-08` em
+`fixme`.
 
 ### Dados do seed
 
-| Objeto | Id | Observação |
+| Objeto | Quantidade | Para quê |
 |---|---|---|
-| Planejamento ativo | `aaaa0000-…-000000000001` | "Plano PCPR 2026" |
-| Bloco 1 | `bbbb0000-…-000000000001` | Ciências Forenses, meta 80% |
-| Bloco 2 | `bbbb0000-…-000000000002` | Direito Penal, meta 80% |
-| Catálogo | `cb000000-…-000000000001/2` | 30 questões cada (ids 100001–100030 e 200001–200030) |
-| Metas da semana 1 | 5 | 2 de teoria, 2 de bateria, 1 de estudo extra |
+| Disciplinas do professor | 4, com peso e meta | distribuição por peso na geração da semana |
+| Blocos e aulas por disciplina | 3 e 2 | catálogo do professor |
+| Cadernos TEC do planejamento | 1 por disciplina | as metas de bateria têm onde apontar |
+| Catálogo de teoria | 1, ligado ao planejamento | o fluxo da teoria |
+| Aulas de teoria | 5 por disciplina auditada | progresso por página |
+| Disciplina **sem** páginas auditadas | 1 (Raciocínio Lógico) | o diagnóstico de `F-TEO-06` |
+| Regras de questões iniciais e de revisão | por disciplina, 2 revisões | `F-TEO-04` e `F-TEO-05` |
+| Metas | 2 semanas × 4 | teoria e bateria, agrupadas por dia |
+| Registros | nas metas de teoria, espalhados por 20 dias | série temporal de verdade em `/aluno/estatisticas` |
 
-`main_target` de toda bateria é **15**, fixo em `start_quiz_session`.
+O planejamento começa na segunda-feira da semana corrente, de propósito: um
+seed com data fixa envelhece e a semana 1 sai da tela.
 
-### Três armadilhas do harness
+`quiz_sessions` e o ledger ficam **fora** do seed. A execução de bateria é de
+RPC, as RPCs não voltaram, e fabricar bateria por INSERT produziria desempenho
+que nenhuma tela consegue explicar.
 
-1. **`button[type=submit]` também casa o "Sair" da sidebar.** Todo clique de
-   formulário precisa ser escopado em `.content` — e **`.content` deixou de
-   bastar** onde a tela tem dois formulários. `/aluno/lista-espera` sem acesso
-   liberado mostra o cadastro e o resgate de cupom, e o seletor por tipo casa os
-   dois. Com mais de um formulário na tela, clique pelo NOME do botão.
-2. **Voltar do TEC é navegação de documento.** Um `goto` para a mesma URL
-   trocando só o fragmento é navegação *same-document*: o React não remonta e
-   `QuizResultHandler` nunca roda. Passe por `about:blank` antes.
-3. **O fragmento não chega ao servidor.** Interceptar a request para o TEC dá a
-   URL sem `#`. Leia a URL do frame depois da navegação.
+### `data-testid`: como a suíte encontra as coisas
+
+O testid nomeia o **papel** do elemento; o que varia entra num `data-*` ao
+lado — `data-testid="alert" data-status="error"`, e não `alert-error`. Em
+kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
+`apps/e2e/support/ui.ts`.
+
+| Área | Testids |
+|---|---|
+| Casca | `content`, `sidebar`, `sidebar-toggle`, `sidebar-foot`, `nav-item`, `user-chip`, `user-name`, `sign-out`, `theme-toggle`, `theme-unsaved` |
+| Primitivas | `alert` (+`data-status`), `badge`, `card`, `metric`, `metric-value`, `page-header`, `empty`, `day-chip` |
+| Autenticação | `auth-card`, `auth-overlay` |
+| Semana do aluno | `week-hero`, `week-stat`, `week-stat-value`, `day-group`, `day-count`, `goal-row` (+`data-goal-id`, `data-status`), `goal-check`, `goal-actions`, `goal-blocked`, `goal-theory`, `record-study-dialog`, `extra-study-dialog` |
+| Teoria | `theory-dialog`, `theory-tabs`, `theory-subject`, `theory-percent`, `theory-review`, `theory-save-continue`, `theory-save-end`, `initial-questions-form`, `initial-questions-count`, `lesson-row` (+`data-lesson-id`) |
+| Revisões e reforço | `review-row` (+`data-review-id`), `review-rule`, `spacing-form`, `cycle-row`, `reinforcement-row` |
+| Gráficos | `chart-bar`, `chart-point`, `chart-single-value`, `chart-table`, `chart-tooltip`, `ranked-row`, `ranked-target` |
+| Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `goals-confirm`, `quiz-session-row`, `topic-difficulties-empty` |
+| Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
+| Conta | `account-form`, `waitlist-form` |
+
+### Duas armadilhas do harness
+
+1. **`button[type=submit]` também casa o "Sair" da casca.** Todo clique de
+   formulário é escopado em `content(page)`. Onde a tela tem dois formulários —
+   `/aluno/lista-espera` mostra o cadastro e o resgate de cupom —, clique pelo
+   NOME do botão.
+2. **Toda figura tem a tabela ao lado.** `chart-table` existe em cada gráfico, e
+   é por ela que o teste confere número; ler valor de SVG é ler pixel. É também
+   o que torna a tela legível por leitor de tela — ver `F-EST-01`.
 
 ### Isolando o TEC Concursos
 
-O site linka para `https://www.tecconcursos.com.br` no caderno de erros e no
-reforço. A suíte intercepta `**://*.tecconcursos.com.br/**` automaticamente, em
-todo teste, e responde localmente — nenhuma requisição pode sair para o site de
+O site linka para `https://www.tecconcursos.com.br` no caderno e na revisão. A
+suíte intercepta `**://*.tecconcursos.com.br/**` automaticamente, em todo
+teste, e responde localmente — nenhuma requisição pode sair para o site de
 terceiro, inclusive num teste novo escrito por quem não leu isto.
-
-A página sintética era muito maior enquanto existia a extensão: reproduzia o
-mecanismo de detecção de acerto por visibilidade que o content script lia. Hoje
-o conteúdo só serve para o teste reconhecer onde parou.
 
 ---
 
@@ -105,1143 +140,204 @@ o conteúdo só serve para o teste reconhecer onde parou.
 |---|---|---|
 | `/` | — | redireciona para a home do papel, ou `/entrar` |
 | `/entrar`, `/cadastro`, `/recuperar-senha` | anônimo | com sessão, redireciona para a home |
-| `/redefinir-senha` | link do e-mail | sem sessão, mostra "link expirou" |
-| `/aluno`, `/aluno/disciplinas`, `/aluno/cadernos`, `/aluno/estatisticas`, `/aluno/revisoes` | aluno | `requireStudentAccess` — exige assinatura ativa |
-| `/aluno/conta`, `/aluno/lista-espera` | aluno | `requireRole` — acessíveis sem liberação |
-| `/professor`, `/professor/planejamentos`, `/professor/metas`, `/professor/cadernos`, `/professor/revisoes`, `/professor/estatisticas` | professor | `requireRole("teacher")` |
+| `/redefinir-senha`, `/confirmar` | link do e-mail | sem sessão, mostra "link expirou" |
+| `/aluno`, `/aluno/planejamento`, `/aluno/teoria`, `/aluno/disciplinas`, `/aluno/cadernos`, `/aluno/estatisticas`, `/aluno/revisoes` | aluno | exige acesso vigente |
+| `/aluno/conta`, `/aluno/lista-espera` | aluno | alcançáveis sem liberação — é por elas que se pede acesso |
+| `/professor`, `/professor/planejamentos`, `/professor/metas`, `/professor/teoria`, `/professor/cadernos`, `/professor/revisoes`, `/professor/estatisticas`, `/professor/conta` | professor | papel `teacher` |
 | `/professor/alunos/:studentId` | professor | `notFound()` sem vínculo vigente |
 
----
-
-## 1. Autenticação
-
-### F-AUTH-01 — Anônimo é mandado para o login
-**Passos** GET em cada rota protegida.
-**Esperado** todas terminam em `/entrar`. Verificado nas 13 rotas.
-
-### F-AUTH-02 — Login com credencial errada
-**Passos** `/entrar` → `#field-email`, `#field-password` → submit.
-**Esperado** permanece em `/entrar`; `.alert--error` = "E-mail ou senha incorretos."
-A mesma mensagem vale para e-mail inexistente — não revelar quais contas existem é intencional.
-
-### F-AUTH-03 — Campos vazios
-O `<form>` tem `noValidate`; quem valida é a action.
-**Esperado** "Informe e-mail e senha."
-
-### F-AUTH-04 — Login por papel
-| Usuário | Destino |
-|---|---|
-| aluno | `/aluno` |
-| professor | `/professor` |
-| admin | `/professor` |
-
-### F-AUTH-05 — Papel errado é devolvido para a própria casa
-Aluno em qualquer `/professor/*` → `/aluno`. Professor em qualquer `/aluno/*` → `/professor`.
-
-### F-AUTH-06 — `/entrar` e `/cadastro` com sessão ativa
-**Esperado** redirecionam para a home do papel.
-
-### F-AUTH-07 — Logout
-**Passos** `.sidebar__foot button[type=submit]`.
-**Esperado** `/entrar`, cookie `sb-*-auth-token` removido, `/aluno` volta a barrar.
-
-### F-AUTH-08 — Cadastro público
-**Passos** `/cadastro` → `#field-name`, `#field-email`, `#field-password` → submit.
-**Esperado** `/aluno/lista-espera`; aviso "Seu acesso ainda não foi liberado".
-**Efeito no banco** `auth.users` + `profiles` (role `student`, pelo gatilho
-`tg_create_profile_for_new_user`). **Não** cria `student_teacher_links` nem
-`subscriptions` — ver BUG-07.
-
-### F-AUTH-09 — Validações do cadastro
-| Entrada | Mensagem |
-|---|---|
-| nome com menos de 3 caracteres | "Informe seu nome completo." |
-| senha com menos de 6 | "A senha precisa ter pelo menos 6 caracteres." |
-| e-mail já cadastrado | "Já existe uma conta com este e-mail." |
-
-### F-AUTH-10 — Recuperação de senha
-**Passos** `/recuperar-senha` → e-mail → submit → ler o e-mail no Mailpit
-(`http://127.0.0.1:54324/api/v1/messages`) → seguir o link.
-**Esperado** resposta neutra na tela ("Se houver uma conta…"); o link leva a
-`/redefinir-senha` **com sessão de recuperação ativa**; nova senha → login com
-ela funciona; a senha antiga deixa de funcionar.
-
-### F-AUTH-11 — Link de recuperação expirado
-`/redefinir-senha` sem sessão → "Este link expirou ou já foi usado."
-
-### F-AUTH-12 — Nova senha
-`#field-password` ≠ `#field-passwordConfirmation` → "As senhas não conferem."
-Menos de 6 caracteres → "A senha precisa ter pelo menos 6 caracteres."
-
-### F-UI-04 — Mostrar e ocultar a senha
-**Esperado** o botão alterna o `type` do próprio input entre `password` e
-`text`, e o valor continua no mesmo campo. A senha nunca existe em dois lugares,
-e o `autoComplete` original fica — o gerenciador de senhas não pode perder o
-campo só porque o texto ficou visível.
-
-### F-UI-05 — O botão de senha não submete
-**Esperado** clicar nele não dispara o login: a URL não muda e nenhum erro de
-credencial aparece. **Um `<button>` sem `type` dentro de `<form>` submete** — sem
-`type="button"`, tentar ver a senha faria login com ela.
-
-### F-UI-06 — A senha começa sempre oculta
-**Esperado** revelar e recarregar devolve o campo a `password`. Nada de lembrar
-"estava visível": quem abre a tela depois pode ser outra pessoa no mesmo
-computador.
+A lista vive duplicada em `apps/e2e/support/routes.ts`, de propósito: tela
+protegida nova que não entre lá deixa `F-AUTH-01` contando as rotas antigas, e o
+diff mostra a omissão.
 
 ---
 
-## 2. Aluno
+## O catálogo
 
-### F-ALU-01 — Todas as telas renderizam
-| Rota | Título |
+### Autenticação e conta — `tests/auth.spec.ts`
+
+| Id | Cobre |
 |---|---|
-| `/aluno` | Visão geral |
-| `/aluno/disciplinas` | Disciplinas |
-| `/aluno/cadernos` | Cadernos TEC |
-| `/aluno/estatisticas` | Estatísticas |
-| `/aluno/revisoes` | Revisões |
-| `/aluno/conta` | Meus dados |
-| `/aluno/lista-espera` | Lista de espera |
-
-Nenhuma pode produzir erro de runtime nem de console.
-
-### F-ALU-02 — Seletor de semana
-`?semana=<n>`. Semana inexistente, texto ou negativo caem na primeira semana
-com metas, sem quebrar.
-
-### F-ALU-03 — Caderno de erros por bloco
-`?bloco=<uuid>`; id que não pertence ao planejamento é ignorado.
-Botão: `a:has-text("Ver erros")`.
-
-### F-ALU-04 — Editar os próprios dados
-`#field-name`, `#field-phone`; e-mail é `readOnly`.
-**Esperado** "Dados atualizados."; o nome novo aparece na sidebar; persiste
-depois de recarregar. Nome com menos de 3 caracteres → "Informe seu nome completo."
-
-### F-ALU-05 — Lista de espera
-`#field-whatsapp`, `#field-interestArea`, `#field-focusExam`, `#field-birthDate`,
-`#field-timezone`. Os três primeiros são obrigatórios na action.
-**Esperado** "Cadastro salvo. Você está na lista de espera."; é upsert por
-`student_id`, então salvar duas vezes não duplica. Com acesso liberado a tela
-mostra "Seu acesso já está liberado."
-
-### F-ALU-06 — Estados vazios (aluno sem planejamento)
-As cinco telas de estudo mostram "Nenhum planejamento ativo." e nenhum dado de
-outro aluno.
-
-### F-ALU-07 — Aluno sem assinatura ativa
-**Pré** `update subscriptions set status='suspended'`.
-**Esperado** as cinco telas de estudo redirecionam para `/aluno/lista-espera`;
-`/aluno/conta` e `/aluno/lista-espera` continuam abrindo; os itens de estudo da
-sidebar vêm com `aria-disabled="true"`.
-
-### Execução do reforço de ciclo — F-RCIC-01 a 06
-
-Spec: [`specs/20-execucao-do-reforco.md`](specs/20-execucao-do-reforco.md). O
-cartão é "Reforço — <bloco>" em `/aluno/revisoes`, com uma linha por erro e dois
-radios (`input[value="correct"]` e `input[value="incorrect"]`).
-
-**`.all()` não espera por nada.** Marcar os radios logo depois do `goto`
-encontra a lista vazia, nenhum é marcado, e o teste falha dizendo que faltaram
-15 — quando na verdade nada foi lido. Faça uma asserção que aguarde
-`tbody tr` antes.
-
-**Os erros são deduplicados por questão.** O bloco do seed tem 30 questões, e
-três baterias de 15 já repetem: 7 erros por bateria dão **15 únicos**, não 21.
-
-#### F-RCIC-01 — O ciclo aberto aparece
-**Esperado** "Ciclo de 3 baterias com 53% nas principais · 15 questão(ões) a
-revisar", badge "Prioridade alta" (abaixo de 75%), e 15 linhas.
-
-#### F-RCIC-02 — Concluir o reforço
-**Esperado** "Reforço concluído."; o cartão some; `reinforcements` ganha 1 linha,
-`reinforcement_sessions` 3 e `reinforcement_questions` 15.
-
-#### F-RCIC-03 — Faltando marcar
-**Esperado** "faltam 2" e nenhuma linha em `reinforcements`. A tela impede antes
-de a RPC recusar, para o aluno não perder o trabalho.
-
-#### F-RCIC-04 — O que muda depois
-**Esperado** "Ciclos revisados" sobe para 1 e o desempenho oficial do bloco
-continua **53%** — reforço não anula bateria.
-
-#### F-RCIC-05 — Quando não há reforço
-**Esperado** com menos de três baterias, e com o acumulado em 80% exatos, o
-cartão não existe.
-
-#### F-RCIC-06 — O professor vê e não executa
-**Esperado** `/professor/revisoes` mostra o bloco e **não** tem "Concluir
-reforço".
-
-### Estudo extra avulso — F-EXTRA-01 a 06
-
-Spec: [`specs/19-estudo-extra-avulso.md`](specs/19-estudo-extra-avulso.md). O
-botão "Registrar estudo extra" fica no cabeçalho do cartão da semana; o submit
-do formulário é "Registrar", e o clique precisa de `{ exact: true }` para não
-casar o botão que o abriu.
-
-#### F-EXTRA-01 — Registrar
-**Esperado** "Estudo extra registrado."; a linha aparece como "Estudo extra —
-Anki", concluída, com a observação e o tempo; no banco, `status='completed'`,
-`extra_activity='flashcards'`, `created_by` do aluno, `block_id` nulo.
-
-#### F-EXTRA-02 — Entra no tempo, não no desempenho
-**Esperado** "0 de 5" vira "1 de 6" — a meta nasce concluída, então sobe os
-dois lados; `1:20` vira 80 minutos em `minutes_spent`; `questions_answered`
-continua 0.
-
-#### F-EXTRA-03 — Os sete tipos
-**Esperado** o `<select>` oferece Lei seca, Anki, Simulado, Revisão, Questões
-extras, Videoaula e Outro, nessa ordem, e grava o valor em inglês.
-
-#### F-EXTRA-04 — Remover
-**Esperado** "Registro removido."; a linha some da semana e `deleted_at` fica
-preenchido — a linha continua no banco.
-
-#### F-EXTRA-05 — A meta do professor não é removível pelo aluno
-**Esperado** a linha planejada não tem "Remover", e `delete_extra_study`
-chamada direto levanta "planejada pelo professor". `created_by` é o que separa
-as duas: ambas são `extra_study`.
-
-#### F-EXTRA-06 — Validação do tempo
-**Esperado** `241` e texto sem número são recusados, e a contagem de metas não
-muda.
-
-### Conclusão de meta sem bateria — F-CONC-01 a 06
-
-Spec: [`specs/12-conclusao-de-meta.md`](specs/12-conclusao-de-meta.md). Meta de
-teoria, de estudo extra e de reforço concluem por `complete_goal`; meta de
-bateria continua concluindo por `record_quiz_session_time`, e a RPC recusa
-`question_block` — a tela nunca oferece um caminho que o banco recusa.
-
-O formulário abre sob demanda: o botão "Concluir" é `type="button"` e o único
-submit da linha é o "Concluir meta". Campos `input[name="minutes"]` e
-`textarea[name="note"]`.
-
-#### F-CONC-01 — Concluir meta de teoria
-**Passos** abrir o formulário, preencher tempo e observação, enviar.
-**Esperado** "Meta concluída."; a linha vira "Concluída"; aparece "Você anotou:"
-e o tempo realizado; `goals` fica com `status='completed'`, `completed_at` não
-nulo, `spent_minutes` e `student_note` gravados.
-
-#### F-CONC-02 — A contagem sobe dos dois lados
-**Esperado** "0 de 5 metas concluídas" vira "1 de 5"; `1:20` é lido como 80
-minutos e exibido como "1h20"; a ficha do professor mostra "1 / 5" para o mesmo
-aluno. Nenhum dos dois números é contador escrito à mão — os dois derivam de
-`goals.status`.
-
-#### F-CONC-03 — Validação do tempo
-Texto sem número e `0` → "Informe o tempo em minutos ou no formato hora:minuto.
-Ex.: 80 ou 1:20." `241` → "O tempo de uma meta não passa de 240 minutos (4
-horas)." Em qualquer um deles a meta continua `pending` e `spent_minutes` nulo.
-
-#### F-CONC-04 — A observação sobrevive a desfazer
-**Esperado** depois de desfazer, `spent_minutes` é nulo e `student_note`
-continua como estava. É `R-CONC-13`: o que se desfaz é a afirmação de que
-terminou, não o que o aluno escreveu.
-
-#### F-CONC-05 — Desfazer derruba a contagem
-**Esperado** "Meta reaberta. Ela voltou para pendente."; "1 de 5" volta a "0 de
-5"; o status no banco volta a `pending`.
-
-#### F-CONC-06 — Meta de bateria não conclui por aqui
-**Esperado** a linha da meta de bateria oferece "Iniciar bateria" e **não** tem
-botão "Concluir". Chamar `complete_goal` direto no banco com essa meta levanta
-`meta de bateria conclui-se pela bateria`, e ela continua `pending` — a regra
-mora no banco, não na ausência do botão.
-
-### F-LIVR-01 — Iniciar a bateria pelo caderno
-**Esperado** o botão na linha do bloco abre o TEC com `boraQuizStart=`, e a
-sessão nasce ligada à meta daquele bloco. É a **mesma** `start_quiz_session` de
-`/aluno`: não há caminho paralelo para o mesmo ato.
-
-### F-LIVR-02 — Bloco sem meta pendente
-**Esperado** "Sem meta pendente", e nenhum botão. Oferecer o início sem meta
-daria um botão que só levanta erro — é o `'—'` da v96 com a razão escrita.
-
-### F-LIVR-03 — Com bateria aberta
-**Esperado** **todo** bloco mostra "Continuar no TEC", inclusive os outros. Só
-existe uma bateria aberta por planejamento, e `start_quiz_session` recusa a
-segunda.
-
-### F-LIVR-04 — É a mesma bateria da visão geral
-**Esperado** iniciar pelo caderno e voltar a `/aluno` mostra a mesma sessão: uma
-linha em `quiz_sessions` e a meta em `in_progress`.
-
-### F-LIVR-05 — Bloco desativado
-**Esperado** "Bloco desativado" e nenhum botão: `start_quiz_session` recusaria
-com "bloco invalido ou indisponivel".
-
-### F-CUP-01 — Resgatar um cupom
-**Esperado** o código é aceito **normalizado** — sem espaços, maiúsculas ou
-minúsculas tanto faz —, a assinatura nasce `active` com plano `cupom`, e as
-telas de estudo passam a abrir.
-
-**Cada teste cria o próprio cupom** (`createCoupon`). `current_uses` é um
-contador compartilhado: dois testes resgatando o mesmo código em paralelo leem
-um do outro.
-
-### F-CUP-02 — Código inválido
-**Esperado** inexistente, inativo, vencido e esgotado dão **a mesma** mensagem —
-"Cupom inválido ou expirado." Distinguir entregaria um oráculo para adivinhar
-códigos válidos.
-
-**Este é o único teste que submete o mesmo formulário quatro vezes**, e foi ele
-que expôs o reset do React 19: a action termina, o formulário reseta, e o campo
-solto perdia o que a pessoa digitou. Por isso o campo do cupom é controlado.
-
-### F-CUP-03 — Resgatar duas vezes
-**Esperado** uma única assinatura **ativa** e um único uso consumido. A linha
-`pending` que o cenário criou continua lá — o que não pode existir é uma segunda
-ativa, e `active_subscription_uidx` garante.
-
-### F-CUP-04 — O cupom não cria vínculo
-**Esperado** o aluno liberado por cupom vê "Nenhum planejamento ativo" e não tem
-`study_plans`. O cupom resolve o **acesso**; quem monta planejamento é o
-professor.
-
-### F-UI-01 — Recolher a sidebar
-**Esperado** o botão recolhe, o conteúdo ganha a largura, e o **botão continua
-visível** — uma sidebar recolhida sem como expandir é uma sidebar perdida.
-Recolher é CSS, não desmontagem: a barra segue no DOM, e os testes que leem o
-nome nela continuam valendo.
-
-### F-UI-02 — O estado persiste
-**Esperado** sobrevive à navegação e ao recarregamento. Vive em `localStorage`,
-e não em `user_preferences` como o tema: recolher é preferência do **aparelho**,
-e a mesma pessoa quer a barra aberta no monitor grande e recolhida no laptop.
-
-### F-UI-03 — O estado é anunciado
-**Esperado** `aria-expanded` diz o que **é** e o rótulo diz o que **vai**
-acontecer: "Recolher menu" com a barra aberta, "Expandir menu" com ela
-recolhida.
-
-### F-RESU-01 — Tópicos do bloco antes de estudar
-**Esperado** cada bloco do catálogo traz um `<details>` "Ver o que será
-estudado" com os tópicos e quantas questões cada um tem. Recolhido: um bloco de
-27 tópicos empurraria a tabela para fora da tela.
-
-### F-RESU-02 — Bloco sem catálogo vinculado
-**Esperado** bloco criado à mão pelo professor **não** mostra a seção. Não é
-erro: é bloco sem questões cadastradas. `addBlocks` do e2e cria exatamente esse
-caso, sem `catalog_block_id`.
-
-### F-RESU-03 — Resumo da bateria concluída
-**Esperado** "Ver tópicos" abre o resumo daquela bateria, uma linha por tópico.
-O estado vai na query string (`?bateria=`), como `?bloco=` em `/aluno/revisoes`:
-recarregar mantém o resumo aberto.
-
-### F-RESU-04 — O resumo separa as três fases
-**Esperado** colunas de principais, reforços e extras. Fase que não aconteceu
-vem com `—`, e não `0/0`: não ter tido extra é diferente de ter errado todas.
-
-### F-RESU-05 — Bateria alheia na query string
-**Esperado** a tela abre normalmente e **nenhum resumo** aparece. A RLS já não
-devolveria a linha; a tela não pode reagir a isso com erro. Não existe status
-404 neste servidor — verifica-se a TELA.
-
-### F-TEMP-01 — Tempo do período, por disciplina e por atividade
-**Esperado** o cartão soma o tempo das metas concluídas e divide em uma linha
-por grupo: meta **com bloco** vai pela disciplina, meta **sem bloco** pela
-atividade. Nunca pelos dois — misturar os eixos produziria fatias que se
-sobrepõem.
-
-### F-TEMP-02 — Trocar o período
-**Esperado** as abas hoje/semana/mês/ano/total trocam os números **sem buscar
-nada**: a view devolveu o planejamento inteiro e o recorte é função pura. A aba
-ativa carrega `aria-pressed="true"`.
-
-### F-TEMP-03 — Período sem tempo
-**Esperado** "Nenhum tempo registrado neste período" e **nenhuma linha** — não
-um total de zero. Zero e "não registrou" são coisas diferentes.
-
-### F-TEMP-04 — Série semana a semana
-**Esperado** uma linha por semana **planejada**, incluindo a semana intocada,
-que aparece com `0min` e desempenho `—`. Sumir com ela esconderia justamente a
-semana em que o aluno parou; e `—` não é 0%, porque não responder não é errar.
-
-### F-TEMP-05 — Sequência de dias
-**Esperado** zero antes de qualquer conclusão, e 1 depois da primeira. A
-sequência conta dias distintos para trás, tolera **hoje** vazio se ontem tem, e
-zera quando ontem também não teve.
-
-### F-TEMP-07 — Reabrir uma meta
-**Esperado** o tempo dela sai das **três** leituras no mesmo instante:
-`vw_study_time` filtra `status = 'completed'`, e reabrir é mudar o status.
-
-### F-REVE-02 — O aluno marca uma revisão
-**Esperado** a célula da revisão vira "Feita", a mensagem aparece no nível da
-página, e recarregar mantém a marcação. Uma linha viva em `review_completions`.
-
-**A asserção é no badge, nunca em `hasText: "Feita"`.** O `hasText` do Playwright
-é case-insensitive, e o botão "Marcar feita" casa com ele: a asserção passaria
-antes de qualquer clique.
-
-### F-REVE-03 — Desmarcar
-**Esperado** a célula volta ao pendente e `review_completions` fica com **zero
-linhas vivas e uma linha total** — desmarcar escreve `deleted_at`, não apaga.
-
-### F-REVE-06 — Mudar o espaçamento não perde a marcação
-**Esperado** apertar o intervalo reordena a grade e a revisão já feita continua
-feita, agora noutra linha. A chave é `(bloco, ordinal)`: na v96 era
-`disciplina:linha:tipo:aula`, e mexer no intervalo órfãava tudo.
-
-### F-DIFI-04 — O aluno vê onde está errando
-**Esperado** `/aluno/estatisticas` traz o cartão "Onde você está errando" com o
-mesmo recorte de F-DIFI-01, para o próprio aluno. Não há policy nova: a RLS de
-`quiz_session_questions` já passa por `can_view_context`, e a view tem
-`security_invoker`.
+| F-AUTH-01 | anônimo é mandado para o login, em toda rota protegida |
+| F-AUTH-02/03 | credencial recusada, sem revelar se a conta existe; campos vazios validados pela action |
+| F-AUTH-04 | login leva cada papel para a própria casa |
+| F-AUTH-05 | papel errado é devolvido para a própria casa |
+| F-AUTH-06 | tela pública com sessão ativa redireciona |
+| F-AUTH-07 | logout apaga o cookie e a área volta a barrar |
+| F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera — **`fixme`** |
+| F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido |
+| F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações |
+| F-CONTA-01 | meus dados: o nome salva, o resto é contexto — `tests/student-analysis.spec.ts` |
+
+### Casca e navegação — `tests/shell.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-UI-01 | recolher a barra lateral, e o conteúdo ganhar a largura |
+| F-UI-02 | o estado persiste entre navegação e recarregamento |
+| F-UI-03 | `aria-expanded` acompanha, e o rótulo diz a ação |
+| F-UI-04/05/06 | mostrar e ocultar a senha; o botão não submete; começa sempre oculta — `tests/auth.spec.ts` |
+| F-UI-07 | abaixo de 820px a barra recolhe à força |
+| F-UI-08 | o item ativo é o da rota mais específica, e só ele |
+| F-UI-09 | o rodapé identifica quem está logado, nos dois papéis |
+| F-UI-10 | sem acesso liberado, os itens de estudo ficam inertes e os da conta não |
+
+### Aluno — semana e execução — `tests/student-week.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-META-01 | os quatro números do cabeçalho saem dos REGISTROS, não das metas |
+| F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona |
+| F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam |
+| F-META-04 | concluir e reabrir devolve o estado que os registros justificam |
+| F-META-05 | meta de bateria não se mexe pela tela |
+| F-META-06 | aluno sem planejamento ativo: as três telas explicam em vez de quebrar |
+| F-META-07 | planejamento em rascunho é o mesmo que nenhum |
+| F-EXTRA-01 | estudo fora das metas: cria meta e registro numa operação só |
+| F-PLAN-01 | o planejamento como o aluno o vê: identidade, números e ciclo por peso |
+| F-DISC-01 | disciplinas e blocos, só leitura |
+| F-ALU-01 | todas as telas do aluno abrem — `tests/student.spec.ts` |
+
+### Aluno — teoria — `tests/student-theory.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-TEO-01 | o modal abre na primeira aula não concluída, com as três abas |
+| F-TEO-02 | o progresso é por página, preso ao intervalo auditado, e continua de onde parou |
+| F-TEO-03 | encerrar a sessão grava a página e **não** conclui a aula |
+| F-TEO-04 | as questões iniciais liberam a próxima aula, e entram no ledger da meta |
+| F-TEO-05 | a revisão nasce pela regra, não bloqueia o avanço, e fecha no mínimo |
+| F-TEO-06 | disciplina fora do catálogo auditado recebe diagnóstico, não página inventada |
+| F-TEO-07 | o controle por disciplina: aula atual, progresso e revisões vencidas |
+
+### Aluno — análise, revisão e conta — `tests/student-analysis.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso |
+| F-REV-01 | a grade de revisão mostra o espaçamento do professor; a vencida é marcada; o reforço tem lugar próprio |
+| F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde |
+| F-CUP-01 | resgatar cupom libera o acesso — **`fixme`** |
+| F-CAD-01 | cadernos TEC do aluno: lista por disciplina, com link e sem botão de bateria |
+
+### Professor — `tests/teacher.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-PROF-01 | todas as telas do professor abrem |
+| F-PROF-02 | a lista abre pelos atrasados; filtros somam; o recorte fica na URL |
+| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer |
+| F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
+| F-PROF-05 | a substituição segura preserva a meta concluída; replanejar a semana exige confirmação |
+| F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
+| F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno |
+| F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |
+| F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
+| F-TREV-01 | é na tela do professor que o espaçamento se configura |
+| F-TEST-01 | estatísticas do professor: as mesmas do aluno, apontadas para o planejamento dele |
+| F-VINC | liberar acesso, suspender, vincular candidato — **3 `fixme`** |
+| F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
+
+### Isolamento — `tests/isolation.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-ISO-01 | o aluno 2 não vê nada do aluno 1; o professor 2 não vê o aluno 1 em tela nenhuma |
+| F-ISO-02 | a query string não é uma porta: `?plano=`, `?catalogo=` e semana alheia são ignorados |
+
+O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela —
+é assunto de `supabase/tests/`, e não daqui.
+
+### Tema — `tests/theme.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-TEMA-01 | escolher o tema aplica na hora, fica guardado e sobrevive ao recarregar |
+| F-TEMA-02 | a escolha é da conta, e aparece em outro navegador — **`fixme`** |
+| F-TEMA-03 | sem piscada: o documento já está escuro antes de a rota renderizar |
+| F-TEMA-04 | quando a gravação falha, a tela avisa — **`fixme`** |
+| F-TEMA-05 | sair apaga a cópia local e o próximo não herda |
+| F-TEMA-06 | os dois papéis |
+| F-TEMA-07 | contraste AA nos dois temas, medido em cada tela |
+| F-TEMA-08 | sem escolha, abre claro mesmo com o sistema no escuro |
 
 ---
 
-## 3. Bateria — a volta completa
+## Os oito `fixme`, e por que continuam visíveis
 
-O fluxo mais caro do produto: cada etapa custa uma hora de estudo do aluno e
-não pode ser recriada. As três ordenações de `docs/arquitetura.md` são o que
-um teste precisa provar.
+Nenhum é bug de interface: os cinco primeiros esperam o banco, e os dois do tema
+esperam a mesma coluna. Ficam como `fixme` em vez de apagados porque um teste
+que some leva a falta junto — e um que passa sem exercitar nada é pior ainda.
 
-```
-/aluno  ──[Iniciar bateria]──►  RPC start_quiz_session
-                                     │
-                                     ▼
-              https://www.tecconcursos.com.br/questoes#boraQuizStart=<b64url>
-                                     │
-                    extensão: PERSISTE ──► depois limpa a hash
-                                     │
-                    aluno responde; cada resposta vai para storage.local
-                                     │
-                    finalizar: requestId gerado UMA vez, AGUARDA gravação,
-                               só então navega
-                                     ▼
-              http://localhost:3000/aluno#boraQuizResult=<b64url>
-                                     │
-                    site: RPC finish_quiz_session ──► só então limpa a hash
-                                     ▼
-              registrar tempo ──► RPC record_quiz_session_time ──► meta concluída
-```
-
-### F-BAT-01 — Abrir a bateria
-**Pré** meta `question_block` com `status='pending'` e nenhuma sessão aberta.
-**Passos** `/aluno` → `button:has-text("Iniciar bateria")`.
-**Esperado**
-- navegação para `https://www.tecconcursos.com.br/questoes#boraQuizStart=…`;
-- `quiz_sessions` ganha uma linha `in_progress`, `session_number=1`, `main_target=15`;
-- a meta vira `in_progress`.
-
-**Payload recebido pela extensão** (`parseStartHash`):
-
-| Campo | Valor no seed |
+| Fluxo | O que falta |
 |---|---|
-| `returnUrl` | `http://localhost:3000/aluno` |
-| `mainTarget` | 15 |
-| `availableQuestions` | 30 ids, na ordem do catálogo |
-| `history` | `[]` na primeira bateria |
-| `historyComplete` | `true` |
-| `sessionNumber` | 1 |
+| F-AUTH-08 | o gatilho de criação de perfil em `auth.users`, e a decisão de produto que ele embute: a qual professor um aluno sem metadado é anexado |
+| F-CUP-01 | a RPC de resgate. `coupons` está com RLS ligada, zero policy e zero grant, de propósito |
+| F-VINC (3) | liberar e suspender acesso precisam nascer como RPC: `access_status` e `access_expires_at` estão fora do `GRANT UPDATE` de `profiles` |
+| F-ANUL | `void_quiz_session` não foi portada, e `quiz_sessions` é SELECT |
+| F-TEMA-02, F-TEMA-04 | uma coluna `theme_preference` em `profiles`. Enquanto não existir, a escolha vale por aparelho |
 
-### F-BAT-02 — Sessão aberta bloqueia abrir outra
-**Esperado** cartão "Bateria 1 · Em andamento"; **nenhum** botão "Iniciar
-bateria"; aparecem "Continuar no TEC" e "Cancelar bateria". Chamar a RPC de
-novo para outra meta levanta `ja existe uma bateria aberta neste planejamento`
-(índice `open_quiz_session_uidx`).
-
-### F-BAT-03 — Extensão persiste antes de limpar a hash
-**Esperado** `storage.local["bora.quiz.session.v1"]` existe **antes** de
-`location.hash` ser limpa; `queue.length === mainTarget`; `requestId === null`;
-`finishedAt === null`.
-
-### F-TOPI-01/02/03 — Rodízio por tópico
-Spec: [`specs/22-rodizio-por-topico.md`](specs/22-rodizio-por-topico.md).
-**Esperado** as 15 principais saem equilibradas entre os tópicos do bloco —
-nenhum tópico leva mais que um a mais que o menor —, a segunda bateria do bloco
-não repete questão, e a fila reproduzida pela fixture é a que o banco registrou.
-
-**Nenhum teste deve fixar quantas questões um ciclo tem.** Quais questões cada
-bateria pega é propriedade do motor, e ela mudou quando o rodízio entrou. Os
-testes de `F-RCIC` derivam esse número do banco.
-
-### F-BAT-04 — Motor de seleção
-`pickQuestions` ordena por: inédita → mais erros → vista há mais tempo → vista
-menos vezes → id. Determinística: a mesma entrada dá sempre a mesma fila.
-
-### F-BAT-05 — Painel e navegação
-Painel em `#bora-panel`: "Bateria N", "x de y respondidas", e os botões "Ir
-para a próxima" / "Finalizar e enviar" / "Finalizar agora" / "Cancelar bateria".
-Ao abrir, a extensão navega para a primeira pendente da fila.
-
-### F-BAT-06 — Registrar respostas
-**Passos** clicar num `.questao-alternativa` e tornar visível
-`.questao-enunciado-resolucao-acertou` ou `…-errou`.
-**Esperado** a resposta entra em `answers[questionId]`; `executionOrder`
-sequencial sem colisão (o banco tem `unique(quiz_session_id, execution_order)`).
-
-### F-BAT-07 — Guarda de abertura
-**Cenário** abrir uma questão da fila que o aluno já resolveu **fora** desta
-bateria: o TEC mostra o resultado já na carga.
-**Esperado** o resultado antigo **não** é registrado. Depois do primeiro clique
-num controle de resposta a trava cai e o resultado passa a contar.
-
-### F-BAT-08 — Finalizar
-**Esperado** `requestId` gerado uma única vez e gravado **antes** de navegar;
-URL de volta `…/aluno#boraQuizResult=<b64url>` com `cancel:false` e todas as
-respostas.
-
-### F-BAT-09 — Site grava o resultado
-**Esperado** alerta "Gravando o resultado da bateria…" e depois "Resultado
-gravado. Falta registrar o tempo para concluir a meta."; a hash é limpa **só
-depois** da confirmação; sessão vai para `awaiting_time`; ledger com 15 linhas.
-
-### F-BAT-10 — Falha na gravação preserva a hash
-**Esperado** com erro, a hash **continua** na URL (é a única cópia do resultado
-no navegador) e a mensagem manda atualizar a página em vez de refazer a bateria.
-
-### F-BAT-11 — Idempotência
-| Reenvio | Esperado |
-|---|---|
-| mesmo `requestId`, mesmo payload | replay: devolve o estado anterior, ledger continua com 15 linhas |
-| mesmo `requestId`, payload diferente | recusado: `request_id … ja utilizado com outro payload` |
-
-### F-BAT-12 — Payload inválido na volta
-| Hash | Mensagem |
-|---|---|
-| base64 corrompido | "O resultado voltou da extensão em formato inválido." |
-| `protocol` diferente de 1 | "Atualize a extensão: ela devolveu o resultado num formato que este site ainda não entende." |
-
-### F-BAT-13 — Registrar o tempo
-**Passos** `#minutes` → `button:has-text("Registrar tempo")`.
-**Esperado** sessão `completed`, `duration_minutes` gravado, meta `completed`,
-`vw_goal_performance` com 15 respondidas / 11 certas / 85 min.
-Aceita minutos (`80`) e hora:minuto (`1:20`).
-
-### F-BAT-14 — Números propagados
-Com 11/15:
-
-| Tela | Esperado |
-|---|---|
-| `/aluno` | `11/15 · 73%`, meta "Concluída" |
-| `/aluno/estatisticas` | desempenho oficial 73%, "11 acertos em 15 principais" |
-| `/aluno/disciplinas` | 73%, badge "Abaixo" (meta 80%) |
-| `/aluno/cadernos` | 73% no bloco |
-| `/aluno/revisoes` | 4 questões no caderno de erros, fase "principal" |
-
-### F-BAT-15 — Cancelar pelo site
-**Esperado** sessão `cancelled`; meta volta para `pending`; o botão "Iniciar
-bateria" reaparece; a bateria cancelada **não** conta em `vw_block_performance`
-nem em `vw_seen_questions` (as views filtram `status='completed'`), mas as
-respostas ficam no ledger para auditoria.
-
-### F-BAT-16 — Cancelar pela extensão
-`#bora-panel button:has-text("Cancelar bateria")` → confirm → volta com
-`cancel:true` e `answers:[]` se nada foi respondido.
-
-### F-BAT-17 — Segunda bateria não repete questão
-**Pré** primeira bateria concluída no mesmo bloco.
-**Esperado** `history` volta com as 15 vistas; `pickQuestions` escolhe 15
-inéditas; interseção com a fila anterior é vazia.
-
-### F-BAT-18 — Histórico incompleto
-Com `historyComplete:false` o painel mostra "Histórico incompleto: pode repetir
-questão." O site marca assim quando o teto de 50 páginas de `vw_seen_questions`
-é atingido.
-
-### Reforço correlato e rodada extra — F-FASE-01 a 06
-
-Spec: [`specs/21-fases-na-extensao.md`](specs/21-fases-na-extensao.md).
-**O protocolo é o 2**: `availableQuestions` carrega `{ id, topic }`.
-
-**A fila CRESCE durante a bateria.** Cada erro acrescenta uma correlata do
-mesmo tópico ao fim, então "N de M respondidas" tem o M subindo — todo teste
-que conta precisa somar os erros já cometidos. Foi o que quebrou três testes de
-F-BAT quando esta spec entrou.
-
-#### F-FASE-01 — Errar põe uma correlata na fila
-**Esperado** o total sobe de 2 para 3, e o painel passa a mostrar
-"N principais · N reforços · N extras".
-
-#### F-FASE-02 — A correlata é gravada com fase e origem
-**Esperado** `phase='reinforcement'`, `sourceQuestionId` da questão errada, e o
-`topic` da correlata igual ao da origem.
-
-#### F-FASE-03 — Rodada extra
-**Esperado** com todas as principais respondidas, "+ 5 questões extras"
-acrescenta 5 com `round = 1`. Com principal pendente, o botão **não existe**.
-
-#### F-FASE-04 — Tudo ou nada
-**Esperado** sem 5 inéditas, um `alert` diz "Não há 5 questões inéditas" e a
-fila não muda. O banco exige `mod(extras, 5) = 0`.
-
-#### F-FASE-05 — Finalização antecipada descarta o que não é principal
-**Esperado** o resultado leva só a principal respondida. Sem o descarte,
-`finish_quiz_session` recusaria a bateria inteira.
-
-#### F-FASE-06 — As fases chegam ao ledger
-Provado dentro da **volta completa**: 15 principais com 4 erros geram 4
-correlatas, o ledger fica com 19 linhas, nenhuma correlata sem
-`source_question_id`, a nota da meta continua **11/15** — porque
-`vw_goal_performance` conta só `main` — e `/aluno/estatisticas` passa a mostrar
-"4 reforços".
-
-### F-BAT-19 — Bateria já enviada, reabrindo o TEC
-**Esperado** a extensão **não** pode reoferecer "Finalizar e enviar" para uma
-bateria que já foi entregue ao site.
-
-### F-PAIN-01 — Arrastar o painel
-**Esperado** arrastar o cabeçalho move o painel, e recarregar a página o traz de
-volta onde foi deixado. A posição vive em chave própria do `storage.local`, e
-não no envelope da sessão: preferência perdida é irritação, bateria perdida é
-uma hora de estudo.
-
-**O arrasto usa ponteiro, e o `pointermove` fica no documento só enquanto dura.**
-O teste move em dois passos — um `pointermove` só costuma ser engolido pelo
-início do arrasto nativo.
-
-### F-PAIN-02 — O painel não sai da tela
-**Esperado** arrastado para fora em qualquer direção, ele prende nas bordas. Um
-painel fora da tela não tem como voltar, porque a alça vai junto.
-
-**A largura é MEDIDA, não a constante.** `width:274px` mais `padding:0 16px` dá
-306px de caixa: prender pela constante deixava o painel passar 32px da borda
-direita, e foi este teste que pegou.
-
-### F-PAIN-03/04 — Minimizar
-**Esperado** o painel vira um botão, o corpo some, e o estado sobrevive à
-navegação entre questões — quem minimizou não quer o painel de volta a cada
-questão. Restaurar traz tudo.
-
-### F-PAIN-05 — Resumo por tópicos
-**Esperado** com a primeira resposta o resumo existe, **recolhido**: durante a
-bateria o que importa é quantas faltam. Terminada a fila, abre sozinho. Os
-números são de `topicSummary`, que conta **o que será enviado** — numa
-finalização antecipada, correlata e extra não entram.
-
-### F-PAIN-06 — Clicar não é arrastar
-**Esperado** o botão de minimizar, que fica dentro da alça, minimiza sem mover o
-painel um pixel.
+A mesma lista, do lado do banco, está em
+[`de-para-schema.md`](de-para-schema.md); do lado da interface, em
+[`plano-v2-react-mui.md`](plano-v2-react-mui.md).
 
 ---
 
-## 4. Professor
-
-### F-PROF-01 — Todas as telas renderizam
-`/professor` (Meus alunos), `/professor/planejamentos`, `/professor/metas`,
-`/professor/cadernos`, `/professor/revisoes`, `/professor/estatisticas`.
-
-### F-PROF-02 — Lista de alunos
-Uma linha por vínculo vigente em `student_teacher_links`, com contato,
-planejamento ativo e badge de acesso (`Acesso ativo`, `Aguardando liberação`,
-`Suspenso`, `Expirado`).
-
-### F-PROF-03 — Ficha do aluno
-`/professor/alunos/:studentId`. Cartões: Planejamentos, Metas (concluídas /
-total), Desempenho oficial, Semanas planejadas.
-Id inexistente, id de aluno de outro professor e id malformado → **404**.
-
-### F-PROF-04 — Gerar metas da semana
-**Campos** `#week` (padrão: última semana + 1), `#minutes` (60), `#mode`
-(`append` / `replace` / `replan`), `input[name=weekdays]` (seg–sex marcados),
-`input[name=blocks]` (todos marcados), `input[name=withTheory]`.
-**Esperado** com 2 blocos e teoria ligada → "4 meta(s) criada(s) na semana N";
-`day_order` é calculado no banco, continuando o maior sobrevivente do dia.
-
-### F-PROF-05 — Reenviar o mesmo lote é no-op
-**Passos** submeter o mesmo formulário duas vezes, sem mudar nada.
-**Esperado** a segunda vez **não** cria metas novas; o total do planejamento
-continua igual.
-
-### F-PROF-06 — Validações
-Sem dia → "Escolha pelo menos um dia de estudo."
-Sem bloco → "Escolha pelo menos um bloco."
-
-### F-PROF-07 — Modos `replace` e `replan`
-`replace` marca `deleted_at` nas metas `pending`/`in_progress`/`skipped` da
-semana. `replan` preserva as que têm bateria concluída. Bateria aberta na
-semana bloqueia os dois: `ha bateria aberta nesta semana`.
-
-### F-PROF-08 — Query string de planejamento
-`?plano=<uuid>` em `/professor/metas` e `/professor/cadernos`; id inválido cai
-no planejamento ativo (ou no primeiro) sem quebrar.
-
-### Prévia e distribuição da semana — F-PREV-01 a 06
-
-Spec: [`specs/18-previa-e-distribuicao-da-semana.md`](specs/18-previa-e-distribuicao-da-semana.md).
-O campo de peso é `input[name="peso:<Disciplina>"]` — endereçar por `id` não
-funciona, porque o nome da disciplina tem espaço e acento. A prévia é a seção
-`.preview`, e o botão que a gera é `type="button"`.
-
-**O formulário tem `noValidate`**, como o de login: quem valida é a action. Sem
-isso, `max` no campo de total faria o navegador barrar o envio e a mensagem em
-português nunca apareceria.
-
-#### F-PREV-01 — A prévia não grava nada
-**Esperado** a seção mostra "4 meta(s)", "nada foi gravado ainda" e os dias; a
-contagem de metas do planejamento não muda.
-
-#### F-PREV-02 — O que a prévia mostrou é o que a semana recebe
-**Esperado** o conjunto de títulos da prévia é igual ao dos títulos gravados.
-
-#### F-PREV-03 — Peso maior gera mais metas
-**Esperado** com total 8 e pesos 3 e 1, a primeira disciplina recebe 6 e a
-segunda 2.
-
-#### F-PREV-04 — Peso 0 tira a disciplina da semana
-**Esperado** zero metas da disciplina zerada; o total inteiro vai para a outra.
-
-#### F-PREV-05 — Validação do total e do peso
-**Esperado** total 81 → "O total de metas precisa ficar entre 1 e 80."; peso 21
-→ "entre 0 e 20". Nada é gravado em nenhum dos dois.
-
-#### F-PREV-06 — Mudar um peso não é replay
-**Esperado** a segunda geração da mesma semana, com peso diferente, cria metas
-em vez de devolver "Este lote já tinha sido aplicado". É `R-PREV-16`: o peso
-entra no hash do `batch_id`.
-
-### Ficha da turma — F-TURMA-01 a 05
-
-Spec: [`specs/17-ficha-da-turma.md`](specs/17-ficha-da-turma.md). Busca e
-filtros vivem na query string: `?busca=`, `?situacao=`, `?plano=`.
-
-**A linha tem DOIS badges** — situação de estudo e situação de acesso. Use
-`td.situacao .badge` e `td.acesso .badge`; `tr .badge` é violação de modo
-estrito. E **`allTextContents()` não espera por nada**: para ler a ordem da
-lista, faça antes uma asserção que aguarde a tabela existir.
-
-#### F-TURMA-01 — A lista mostra o diagnóstico
-**Esperado** metas `concluídas/total` com o percentual, desempenho oficial, e o
-badge da faixa; os quatro números do resumo batem com as linhas.
-
-#### F-TURMA-02 — O limiar de desempenho decide a faixa
-**Esperado** 10 de 15 (67%) é "Atenção"; com a segunda bateria de 15 de 15 o
-acumulado sobe e vira "Em ritmo".
-
-#### F-TURMA-03 — Busca e filtros
-**Esperado** `?busca=` casa nome **e** e-mail, sem acento; `?situacao=` e
-`?plano=` filtram; termo sem correspondência mostra "Nenhum aluno neste filtro".
-
-#### F-TURMA-04 — Filtro inválido não quebra
-**Esperado** situação inexistente, plano inexistente e valores vazios devolvem a
-lista inteira, sem erro de console. Mesma regra de `?semana=`.
-
-#### F-TURMA-05 — Quem precisa de atenção vem primeiro
-**Esperado** Atrasado antes de Sem dados. A ordenação é por faixa e, dentro
-dela, por nome.
-
-### Histórico de baterias e anulação — F-ANUL-01 a 05
-
-Spec: [`specs/16-historico-e-anulacao-de-bateria.md`](specs/16-historico-e-anulacao-de-bateria.md).
-O cartão "Baterias" fica na ficha do aluno. O botão "Anular" abre o campo de
-motivo; o submit é o segundo "Anular", então o clique precisa de
-`{ exact: true }` para não casar o que abriu o formulário.
-
-#### F-ANUL-01 — A ficha lista as baterias
-**Esperado** bloco, número, `acertos/principais` com o percentual, tempo e
-situação, da mais recente para a mais antiga.
-
-#### F-ANUL-02 — Anular preserva o ledger
-**Esperado** "Bateria anulada."; a situação vira "Anulada"; o motivo aparece na
-linha; `quiz_session_questions` **continua com as mesmas 15 linhas**.
-
-#### F-ANUL-03 — O desempenho desce e a meta volta
-**Esperado** "Desempenho oficial" sai de 73% para "—" — é
-`vw_quiz_session_performance` filtrando `status = 'completed'` — e a meta volta a
-"Pendente" na tela do aluno.
-
-#### F-ANUL-04 — As questões voltam a ser inéditas
-**Esperado** `vw_seen_questions` volta a zero para o bloco, e a bateria seguinte
-da mesma meta escolhe **exatamente a mesma fila**. É a consequência que a tela
-avisa antes de o professor clicar.
-
-#### F-ANUL-05 — O que não é anulável
-**Esperado** bateria `in_progress` não tem botão; motivo vazio grava
-`Anulação administrativa`.
-
-### Cadernos do planejamento — F-CAD-01 a 06
-
-Spec: [`specs/15-cadernos-do-planejamento.md`](specs/15-cadernos-do-planejamento.md).
-`/professor/cadernos?plano=<id>&ver=<recorte>`, com os recortes `ativos`
-(padrão), `desativados`, `excluidos` e `todos`.
-
-**Duas armadilhas.** Desativar ou excluir **tira a linha do recorte atual** — a
-conferência do badge tem de ser feita em outro `ver=`, não na mesma tela. E a
-confirmação é do nível da página, nunca do formulário: todas as ações devolvem
-`redirectTo` com `?feito=`.
-
-#### F-CAD-01 — Desativar tira do rodízio sem mexer no histórico
-**Esperado** "Metas concluídas e estatísticas antigas foram preservadas"; a
-linha sai de `ativos` e aparece em `desativados`; o bloco some de
-`/professor/metas`; o ledger continua com as 15 linhas da bateria concluída.
-
-#### F-CAD-02 — Bloco desativado não abre bateria
-**Esperado** "Este bloco não está disponível no seu planejamento." na linha da
-meta, e a meta continua `pending`. É `start_quiz_session` exigindo
-`active and deleted_at is null`, traduzida.
-
-#### F-CAD-03 — Editar vale só para este planejamento
-**Esperado** o nome e a meta mudam na tela; `catalog_blocks` — compartilhado
-entre alunos — fica intacto.
-
-#### F-CAD-04 — Excluir e restaurar
-**Esperado** o bloco sai de `ativos`, aparece em `excluidos` com badge
-"Excluído", e restaurar devolve `deleted_at = null`, `active = true` e um
-`block_order` recalculado, sem violar `study_plan_block_order_uidx`.
-
-#### F-CAD-05 — Bloco com meta não oferece excluir
-**Esperado** a coluna mostra "N meta(s)" no lugar do botão.
-
-#### F-CAD-06 — Caderno avulso
-**Esperado** "Caderno avulso criado."; a linha nasce com `catalog_block_id`
-nulo e `active = true`, e passa a aparecer em `/professor/metas`.
-
-### Gestão do planejamento — F-GPLAN-01 a 07
-
-Spec: [`specs/14-gestao-do-planejamento.md`](specs/14-gestao-do-planejamento.md).
-O formulário fica no cartão "Novo planejamento" de `/professor/planejamentos`;
-as ações por linha são "Ativar" e "Arquivar".
-
-**Duas armadilhas do harness aqui.** A confirmação de ativar e arquivar é do
-NÍVEL DA PÁGINA — `.content > .alert--success` —, porque o alerta do formulário
-de criação continua na tela dentro do cartão e `.alert--success` sozinho casa os
-dois, em violação do modo estrito. E o formulário some na revalidação: quem
-anuncia é a página, lendo `?feito=`.
-
-#### F-GPLAN-01 — Criar planejamento
-**Esperado** "criado como rascunho"; `study_plans` com `status='draft'`;
-`study_plan_blocks` com os blocos ativos do catálogo, `block_order` começando em
-0 dentro de cada disciplina.
-
-#### F-GPLAN-02 — O rascunho não é visível para o aluno
-**Esperado** badge "Rascunho" para o professor; o aluno continua com "Nenhum
-planejamento ativo".
-
-#### F-GPLAN-03 — Ativar
-**Esperado** "Planejamento ativado."; **exatamente um** ativo para o aluno; o
-anterior fica `archived` e **não** apagado; o aluno passa a ver o novo no
-cabeçalho da Visão geral.
-
-#### F-GPLAN-04 — Gerar metas usa os blocos materializados
-**Esperado** `/professor/metas` não diz "não tem blocos ativos" e oferece os
-checkboxes de bloco.
-
-#### F-GPLAN-05 — Arquivar
-**Esperado** "Planejamento arquivado."; a contagem de metas do planejamento não
-muda; o aluno volta ao estado vazio.
-
-#### F-GPLAN-06 — Nome repetido
-**Esperado** "Este aluno já tem um planejamento com esse nome. Escolha outro." e
-nenhuma linha nova — é `study_plan_name_unique` traduzida.
-
-#### F-GPLAN-07 — Professor sem aluno vinculado
-**Esperado** o cartão diz "Vincule um aluno a você" e **não** renderiza o
-seletor de alunos.
-
-### Vínculo e liberação de acesso — F-VINC-01 a 07
-
-Spec: [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-e-liberacao-de-acesso.md).
-O cartão "Candidatos" em `/professor` só existe por causa da policy
-`waitlist_teacher_read`: sem ela, `waitlist_own` passa por `is_teacher_of` e a
-consulta volta vazia. As ações de acesso ficam no cartão "Acesso" da ficha do
-aluno.
-
-**Armadilha, e ela custou um teste vermelho.** `tbody tr` com o nome do
-candidato casa **a linha da própria fila**, então esperar por ela depois de
-clicar em "Vincular a mim" passa de imediato e a conferência no banco roda antes
-de a action terminar. Espere o candidato **sair** do cartão "Candidatos" —
-`toHaveCount(0)` —, que é o que só é verdade depois da gravação.
-
-#### F-VINC-01 — O candidato aparece na fila
-**Pré** aluno com linha em `waitlist` e sem `student_teacher_links`.
-**Esperado** ele aparece em "Candidatos" com nome, e-mail e concurso em foco.
-Aluno que já tem professor **não** aparece.
-
-#### F-VINC-02 — Vincular
-**Esperado** o candidato sai da fila; passa a constar em "Meus alunos" com
-"Aguardando liberação"; `student_teacher_links` ganha a linha com
-`teacher_id` de quem clicou e `ended_at` nulo; `waitlist.teacher_id` é
-reivindicado.
-
-#### F-VINC-03 — O candidato reivindicado sai da fila dos outros
-**Esperado** outro professor, autenticado em seguida, não o enxerga.
-
-#### F-VINC-04 — Liberar acesso
-**Pré** cenário com `access: "none"`; o aluno é empurrado para
-`/aluno/lista-espera`.
-**Esperado** "Acesso liberado por 3 meses."; `subscriptions` ganha a linha
-`active` com `validity` fechada no início e aberta no fim; o aluno passa a abrir
-`/aluno`.
-
-#### F-VINC-05 — Liberar de novo estende a mesma linha
-**Esperado** "Acesso estendido por 12 meses." e **uma** assinatura ativa. O
-índice `active_subscription_uidx` recusaria a segunda.
-
-#### F-VINC-06 — Suspender
-**Esperado** "Acesso suspenso."; o status vira `suspended` e **a vigência é
-preservada** (R-VINC-18); o badge na lista vira "Suspenso"; o aluno volta a ser
-mandado para a lista de espera.
-
-#### F-VINC-07 — Vincular duas vezes
-**Esperado** uma linha em `student_teacher_links`. Chamar `link_student` de novo,
-com `request_id` novo, continua devolvendo o vínculo existente em vez de
-esbarrar no índice `active_link_uidx`.
-
-### F-PROF-09 — Revisões
-Lista os blocos com **3 ou mais** baterias válidas e desempenho oficial
-acumulado **abaixo de 80%**. É a mesma regra do reforço automático, que avalia
-somente as questões `main`.
-
-### F-CONTA-01 — O professor vê os próprios dados
-**Esperado** `/professor/conta` abre a **mesma** tela de `/aluno/conta`, com o
-nome preenchido e o texto do papel dele. Não é rota duplicada: são os mesmos
-campos e o mesmo action, e o que muda é uma frase.
-
-### F-CONTA-02 — Salvar um nome novo
-**Esperado** "Dados atualizados" e o nome muda **na sidebar** sem recarregar. A
-revalidação que o `useFormActionState` dispara ao ver `success` re-roda o loader
-do layout, que é quem alimenta a sidebar.
-
-### F-CONTA-03 — Nome curto demais
-**Esperado** "Informe seu nome completo." e a sidebar intacta. A tela exige 3
-caracteres e a `check` da tabela exige 2: a tela é mais estrita de propósito.
-
-### F-CONTA-04 — O e-mail é bloqueado nas duas telas
-**Esperado** o campo vem desabilitado para os dois papéis, com a frase de cada
-um. A frase agora é sustentada pela fronteira: `contact_email` saiu do
-`grant update` (`supabase/tests/14_profile_grants.sql`).
-
-### F-RESU-06 — O resumo da bateria na ficha
-**Esperado** o professor abre "Ver tópicos" no cartão "Baterias" e vê o mesmo
-resumo. Só bateria `completed` oferece o link: anulada saiu do desempenho, e
-mostrá-la contradiria a tela que a anulou.
-
-### F-TEMP-06 — As três leituras na ficha do aluno
-**Esperado** o professor vê tempo, sequência e série do aluno, com os mesmos
-números que o aluno vê. Nenhuma policy nova: `vw_study_time` tem
-`security_invoker` e as tabelas base já passam por `can_view_context`.
-
-### F-REVE-01 — O professor define o espaçamento
-**Esperado** a disciplina aparece com "sem revisão programada"; preenchidos os
-dois campos e salvo, a página anuncia "Espaçamento salvo" e a grade do aluno
-passa a mostrar as revisões.
-
-**`teacherPage` e `studentPage` embrulham a MESMA Page.** Pedir os dois no mesmo
-teste faz o segundo login sobrescrever o primeiro, e a tela do professor abre
-como aluno — sem erro visível, só um cartão que não existe. Troca de identidade
-é `signIn`, explícita.
-
-### F-REVE-04 — Disciplina sem espaçamento
-**Esperado** ela **não** entra na grade do aluno, e aparece na tabela do
-professor com os campos zerados e "sem revisão programada". Grade vazia com dez
-disciplinas listadas seria ruído.
-
-### F-REVE-05 — Espaçamento fora da faixa
-**Esperado** 61 é recusado com "entre 0 e 60" e nada é gravado. O formulário é
-`noValidate` de propósito: a validação nativa bloquearia o submit e a action
-nunca rodaria, deixando a tela muda. Quem garante é a `check` do banco.
-
-### F-REVE-07 — Isolamento do espaçamento
-**Esperado** o professor sem vínculo abre a ficha e não vê nem o aluno nem a
-disciplina. Não existe status 404 neste servidor: verifica-se a TELA e a
-ausência do dado no HTML.
-
-**A garantia de RLS não é testável por aqui.** `asUser` do e2e conecta como
-superusuário, que não exerce policy nenhuma; quem prova o isolamento é
-`supabase/tests/11_review_spacing.sql`, que roda como `authenticated`.
-
-### F-DIFI-01 — Dificuldades por tópico na ficha
-**Esperado** o cartão "Dificuldades por tópico" lista um tópico por linha, **do
-que mais errou para o que menos errou**, com o bloco de origem, respondidas,
-erros, em quantas baterias houve erro, questões distintas erradas e o acerto.
-
-O cenário erra dois tópicos numa bateria e um deles de novo na seguinte, usando
-`incorrectTopics` do `completeQuiz`: a fila é montada pelo rodízio por tópico
-(F-TOPI), então **"as N últimas" não diz em que assunto o aluno errou**. Um
-teste de dificuldade precisa nomear o assunto, não a posição.
-
-### F-DIFI-02 — Recorrente é erro em duas baterias distintas
-**Esperado** o tópico errado nas duas baterias vem com o badge "Recorrente" e
-"em 2 bateria(s)"; o errado numa só vem sem o badge e com "em 1 bateria(s)".
-Errar duas vezes na mesma bateria pode ser o enunciado; em duas diferentes, é a
-matéria.
-
-### F-DIFI-03 — Tópico sem erro não aparece
-**Esperado** o tópico respondido e todo certo **não** tem linha, e a bateria
-inteira certa deixa o cartão com "Nenhum erro registrado ainda". A tela responde
-"onde está o problema", e 100% não é problema (R-DIFI-07). Quem esconde é a
-leitura, não a view: `vw_topic_difficulty` descreve, a tela decide.
-
----
-
-## 5. Isolamento entre contextos
-
-Suíte que precisa de um segundo par professor/aluno. Todos os pontos abaixo
-foram verificados e **passam**.
-
-### F-ISO-01 — Leitura
-Aluno 2 lê 0 planejamentos, 0 metas e 0 linhas do ledger do aluno 1.
-Professor 2 não vê o aluno 1 em nenhuma tela; a ficha dele dá 404.
-
-### F-ISO-02 — Escrita por RPC
-| Tentativa | Esperado |
+## O que saiu, e para onde foi
+
+A suíte tinha 142 testes antes da reconstrução, e a maior parte dos ids deste
+catálogo vinha de fluxos que hoje não existem. Duas causas, e nenhuma delas é
+"o teste era ruim":
+
+**A extensão de navegador saiu** (`8569f1a`), e com ela `tests/quiz.spec.ts` e
+`tests/extension.spec.ts`. Morreram junto os fluxos de EXECUÇÃO de bateria —
+`F-BAT-01` a `F-BAT-19`, `F-FASE-01` a `F-FASE-06`, `F-TOPI-01/02/03`,
+`F-PAIN-01` a `F-PAIN-06` e `F-LIVR-01` a `F-LIVR-05`. O que eles descreviam
+continua registrado nas specs [05](specs/05-bateria-inteligente.md),
+[06](specs/06-protocolo-site-extensao.md), [07](specs/07-motor-de-selecao.md),
+[21](specs/21-fases-na-extensao.md), [22](specs/22-rodizio-por-topico.md),
+[28](specs/28-painel-arrastavel-e-topicos.md) e
+[31](specs/31-iniciar-bateria-pelo-caderno.md), que são o material de partida de
+quem for desenhar a execução nova.
+
+**As telas foram reescritas a partir da v2** (fases 2 a 7 do plano), e os fluxos
+que sobreviveram mudaram de nome junto com a tela. O mapa, para quem procurar um
+id antigo num comentário de código ou numa mensagem de commit:
+
+| Id antigo | Hoje |
 |---|---|
-| aluno 2 chama `start_quiz_session` na meta do aluno 1 | `somente o aluno pode iniciar a bateria` |
-| aluno insere meta em planejamento alheio | `42501` |
-| aluno insere a própria `subscription` ativa | `42501` |
-| professor 2 chama `void_quiz_session` em bateria alheia | `somente o professor responsavel pode anular` |
-| professor 2 renomeia planejamento alheio | 0 linhas afetadas (RLS filtra em silêncio no UPDATE) |
+| F-ALU-02 (seletor de semana) | F-META-02 |
+| F-ALU-03 e F-LIVR-\* (cadernos) | F-CAD-01 |
+| F-ALU-04 (meus dados) | F-CONTA-01 |
+| F-ALU-05 (lista de espera) | F-ESP-01 |
+| F-ALU-06 (sem planejamento) | F-META-06 e F-META-07 |
+| F-CONC-\* (concluir meta) | F-META-03 e F-META-04 |
+| F-EXTRA-02 a 06 | F-EXTRA-01 |
+| F-REVE-\* (revisão espaçada) | F-REV-01, e F-TREV-01 do lado do professor |
+| F-TEMP-\* (tempo e série) | F-EST-01 |
+| F-PREV-\* (prévia e distribuição) | F-PROF-04 e F-PROF-05 |
+| F-TURMA-\* (ficha da turma) | F-PROF-02 |
+| F-GPLAN-02 a 07 | F-GPLAN-01 |
+| F-CAD-02 a 06 | F-CAD-01 |
+| F-RCIC-\*, F-RESU-\*, F-DIFI-\* | sem cobertura: dependem do motor de baterias |
+| F-CUP-02 a 04 | sem cobertura enquanto F-CUP-01 estiver `fixme` |
 
-> `UPDATE` e `DELETE` **filtram em silêncio**: a linha não fica visível e o
-> comando afeta zero linhas, sem erro. Um teste que espere exceção passa por
-> engano no dia em que a policy sumir — conte linhas afetadas.
-
-### F-ISO-03 — Escrita direta bloqueada
-`quiz_sessions`, `quiz_session_questions`, `audit_log` e
-`student_teacher_links` não têm grant para `authenticated`: qualquer
-INSERT/UPDATE vindo do cliente é `42501`. Coberto por `supabase/tests/02_rls.sql`
-e `05_teacher_writes.sql`.
-
----
-
-## 6. Onde cada fluxo é coberto
-
-| Comando | Cobertura |
-|---|---|
-| `npm run db:test` | 141 invariantes de banco: fluxo completo com replay em cada RPC, RLS entre dois alunos, ciclo de reforço, recorte por fase, escrita do professor, preferência de interface, conclusão de meta, vínculo e acesso, estudo extra |
-| `npm run check` | typecheck, lint e os testes de unidade de `apps/web` — inclui a classificação da turma em `lib/domain/students.test.ts` |
-| `npm run e2e` | a suíte num Chromium de verdade — este catálogo, menos a §3 |
-
-O que nenhum dos dois primeiros alcança é a camada de interface e de fluxo, que
-é justamente onde vivia todo bug de [`bugs-encontrados.md`](bugs-encontrados.md).
-É o que `apps/e2e` cobre:
-
-| Arquivo | Fluxos | Testes |
-|---|---|---|
-| `tests/auth.spec.ts` | §1 inteira, F-AUTH-01 a 12 | 47 |
-| `tests/student.spec.ts` | §2 inteira, mais F-BAT-14, F-CONC-01 a 06, F-EXTRA-01 a 06 e F-RCIC-01 a 06 | 59 |
-| `tests/teacher.spec.ts` | §4 inteira, F-PROF-01 a 09, F-VINC-01 a 07, F-GPLAN-01 a 07, F-CAD-01 a 06, F-ANUL-01 a 05, F-TURMA-01 a 05 e F-PREV-01 a 06 | 71 |
-| `tests/isolation.spec.ts` | §5 pelo lado das telas | 6 |
-| `tests/theme.spec.ts` | §8 inteira, F-TEMA-01 a 08 | 13 |
-
-Fica de fora, de propósito, o lado RPC do §5 (`supabase/tests/02_rls.sql` e
-`05_teacher_writes.sql`), que já é provado sem navegador. E fica de fora a §3
-inteira, que saiu com a extensão.
-
-### As três armadilhas, resolvidas
-
-As armadilhas do harness descritas mais acima não voltaram a ser problema de
-quem escreve teste — cada uma virou uma peça da suíte:
-
-| Armadilha | Onde mora a solução |
-|---|---|
-| `button[type=submit]` casa o "Sair" | `support/ui.ts`, e todo clique escopado em `.content` |
-| Voltar do TEC é navegação de documento | `returnToSite()`, em `fixtures/quiz.ts` |
-| O fragmento não chega ao servidor | `readStartPayload()`, que lê a URL do frame |
-| `tec-page.ts` aponta para o TEC de verdade | `fixtures/tec.ts`, interceptando **automaticamente** em todo teste |
-| `db:reset` é a única forma de isolar | `createScenario()`, que dá a cada teste um par professor/aluno próprio |
+O mesmo mapa está no cabeçalho de `tests/student.spec.ts` e de
+`tests/teacher.spec.ts`, ao lado do código que o cumpre. O histórico completo
+dos testes apagados está em `git show 8569f1a:apps/e2e/tests/student.spec.ts`.
 
 ---
 
-## 7. Fluxos que ainda não existem
+## Como acrescentar um fluxo
 
-Nenhum deles tem tela; ficam registrados porque um e2e futuro vai esbarrar neles.
-
-O catálogo completo do que a versão anterior fazia e ainda não existe está em
-[`inventario-v96.md`](inventario-v96.md), com a fila de reconstrução.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
----
-
-## 8. Tema claro e escuro
-
-Spec: [`specs/11-tema-claro-escuro.md`](specs/11-tema-claro-escuro.md). A
-preferência é da conta e vale para os três papéis; o banco guarda em
-`user_preferences`, e os critérios de RLS, grant por coluna e enum são provados
-sem navegador em `supabase/tests/06_preferences.sql`.
-
-O controle é `.sidebar__theme button`, e é `type="button"` de propósito: o único
-submit da sidebar continua sendo o "Sair".
-
-### F-TEMA-01 — Escolher o tema
-**Pré** qualquer pessoa autenticada, sem linha em `user_preferences`.
-**Passos** clicar em "Tema escuro" na sidebar.
-**Esperado**
-- `<html data-theme="dark">` imediatamente;
-- o botão passa a dizer "Tema claro";
-- `user_preferences` ganha a linha com `theme='dark'`;
-- `localStorage` tem `bora.theme.active` = id do perfil e `bora.theme.<id>` = `dark`;
-- recarregar mantém o escuro.
-
-Voltar ao claro grava de novo, sem criar uma segunda linha.
-
-### F-TEMA-02 — A escolha é da conta
-**Cenário** contexto de navegador NOVO, sem `localStorage`, autenticado como a
-mesma pessoa. **Esperado** a tela abre escura — o único caminho possível para o
-escuro ali é a conta.
-
-### F-TEMA-03 — Sem piscada
-**Cenário** a resposta de `/rest/v1/profiles` é segurada, então nenhum loader
-resolve e nenhuma tela renderiza.
-**Esperado** `<html data-theme="dark">` **já está aplicado** e `h1` ainda não
-existe. É o script embutido de `index.html` provando que roda antes do primeiro
-paint; se o tema dependesse do loader, aqui o documento estaria claro.
-
-**Espere a gravação antes de recarregar.** A conta é a fonte da verdade: trocar
-o tema e recarregar antes de o valor subir faz o loader devolver o antigo e
-desfazer a escolha. É `R-TEMA-11` funcionando, e um teste que não aguarda a
-gravação falha de forma intermitente acusando piscada.
-
-### F-TEMA-04 — A gravação falha
-**Cenário** `/rest/v1/user_preferences` responde 500.
-**Esperado** a tela troca de cor assim mesmo; aparece "Tema aplicado neste
-aparelho. Não foi possível salvar na sua conta."; `user_preferences` continua
-sem linha.
-
-### F-TEMA-05 — Sair
-**Esperado** as duas chaves do `localStorage` somem, `/entrar` fica clara, e
-outra pessoa autenticando no mesmo navegador não herda o escuro.
-
-### F-TEMA-06 — Os três papéis
-Aluno, professor e **admin** têm o controle e a preferência persiste. O admin é
-criado com `createUser("admin", …)` e removido no fim do teste.
-
-### F-TEMA-07 — Contraste AA nos dois temas
-**Esperado** em `/aluno`, `/aluno/estatisticas`, `/aluno/revisoes`,
-`/aluno/conta`, `/professor`, `/professor/planejamentos` e
-`/professor/estatisticas`, nos dois temas: texto a 4.5:1 — 3:1 se grande — e
-limite de campo e de botão a 3:1.
-
-Os pares saem de `getComputedStyle` na página, em `support/contrast.ts`, com
-duas correções que a medição ingênua erra:
-
-- **o fundo é resolvido subindo pelos ancestrais**, compondo alfa. Quase todo
-  elemento tem `background-color: rgba(0,0,0,0)`, e comparar texto contra
-  transparente não mede nada;
-- **`opacity` é multiplicada no alfa da cor.** Ela não aparece em
-  `getComputedStyle().color`, e três rótulos da sidebar a usam — sem isso o
-  teste aprovaria um contraste que ninguém enxerga.
-
-Borda de cartão fica **fora** de propósito: contêiner não interativo não é
-componente na acepção da 1.4.11, e o tema claro nunca cumpriu 3:1 ali.
-
-### F-TEMA-08 — Sem escolha
-**Cenário** `emulateMedia({ colorScheme: "dark" })`, sem linha na tabela.
-**Esperado** a tela abre **clara**. Não existe "seguir o sistema":
-`prefers-color-scheme` não é lido em lugar nenhum do site.
+1. **O id nasce com a spec**, não com o teste — ver
+   [`specs/README.md`](specs/README.md). Sem spec, o teste não tem critério de
+   aceitação a citar.
+2. **O prefixo é da ÁREA**, não da tela: `F-TEO` serve ao modal e ao controle
+   por disciplina. Prefixo por tela multiplica ids quando a tela é dividida.
+3. **Um `describe` por id**, com o id no começo do título: é o que faz
+   `npx playwright test -g F-TEO-04` funcionar.
+4. **Selecione por `data-testid`**, e acrescente o testid novo à tabela deste
+   arquivo no mesmo commit.
+5. **Acrescente a linha ao catálogo acima.** Um fluxo que roda e não está aqui
+   é invisível para quem escreve a próxima spec.

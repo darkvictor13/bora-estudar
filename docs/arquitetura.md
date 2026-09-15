@@ -14,15 +14,16 @@ quando versionados separadamente, derivam.
 ```
 bora-estudar/
 ├── apps/
-│   ├── web/                 # SPA React + Vite — painéis de aluno e professor
+│   ├── web/                 # SPA React + MUI + Vite — painéis de aluno e professor
 │   └── e2e/                 # Suíte Playwright, contra o site
 ├── packages/
+│   ├── ui/                  # @bora/ui — tokens, tema e primitivas (com playground)
 │   └── database/            # Tipos gerados do schema Supabase
 ├── supabase/
 │   ├── config.toml
 │   ├── migrations/          # Schema versionado
 │   ├── seed.sql             # Usuários e dados de desenvolvimento
-│   └── tests/               # 49 checagens de invariantes (npm run db:test)
+│   └── tests/               # 86 asserções de invariante, em 8 suítes (npm run db:test)
 └── docs/
 ```
 
@@ -30,7 +31,7 @@ bora-estudar/
 formato que um teste e2e precisa. `docs/bugs-encontrados.md` registra a
 varredura de QA que produziu esse catálogo.
 
-Workspaces do npm. Sem Turborepo, Lerna ou pnpm: três pacotes não justificam
+Workspaces do npm. Sem Turborepo, Lerna ou pnpm: quatro pacotes não justificam
 uma camada extra de orquestração, e `npm run <script> --workspaces` resolve.
 
 ## Idioma
@@ -68,6 +69,31 @@ dentro de `apps/web`, por dois motivos: o diff de cada migration mostra o
 impacto na superfície de tipos, e Edge Functions futuras consomem os mesmos
 tipos sem depender do app.
 
+### A interface fala com um contrato, não com o Supabase
+
+`apps/web/src/lib/api/` expõe funções tipadas por caso de uso — `loadWeek`,
+`saveTheoryProgress`, `generateWeek`. A interface importa daí e de nenhum outro
+lugar; qual implementação atende (`supabase` ou `fixtures`) é decidido uma vez,
+por variável de ambiente, no carregamento do módulo.
+
+A camada nasceu na reconstrução da v2 por uma razão de cronograma — as telas
+foram escritas enquanto o schema ainda mudava —, mas o que a mantém é outra
+coisa: **é onde a falta fica visível**. As seis operações que o banco não
+permite lançam ali, com o motivo e o caminho do de-para na mensagem, em vez de
+cada tela inventar o próprio jeito de recusar. Quando a RPC nascer, muda um
+arquivo de `lib/api/supabase/` e nenhuma tela.
+
+`contract.ts` é, por isso, o pedido formal ao banco: a lista de operações que a
+interface precisa, com os tipos de entrada e saída já travados.
+
+### `packages/ui` é pacote, e não pasta dentro de `web`
+
+O tema tem `npm run typecheck` e um playground que valem por si: revisar uma
+primitiva sem subir o app inteiro é o que evita que o design system derive para
+"o que a tela do momento precisava". Os testes de contraste
+(`packages/ui/src/contrast.test.ts`) rodam contra os tokens, não contra a tela —
+uma cor que quebra AA falha no pacote, antes de existir tela que a use.
+
 ### A extensão não falava com o Supabase — histórico
 
 Ela recebia um payload do site e devolvia outro. Nunca via uma chave do
@@ -99,9 +125,13 @@ execução nova encaixa no mesmo ledger.
   aluno registra o tempo ──► RPC record_quiz_session_time ──► goal concluída
 ```
 
-Do que sobrou, a parte viva é a última linha: `record_quiz_session_time` e o
-cancelamento continuam na tela do aluno, e são o que fecha uma sessão que já
-esteja aberta.
+Do que sobrou, sobrou o BANCO: `quiz_sessions` com a máquina de estados inteira,
+o ledger com as três fases e as FKs compostas que amarram sessão, meta e
+caderno. Nenhuma das RPCs foi portada para o schema de 14/09/2026 — nem
+`start_quiz_session`, nem `finish_quiz_session`, nem
+`record_quiz_session_time` —, então hoje não há caminho nenhum que abra uma
+bateria. As telas que a pressupõem dizem isso em vez de oferecer um botão que
+falha.
 
 Duas propriedades do desenho antigo valem ser lembradas antes de escrever o
 novo, porque cada uma corresponde a uma perda real de bateria já respondida:
@@ -110,15 +140,27 @@ novo, porque cada uma corresponde a uma perda real de bateria já respondida:
 
 ## Banco
 
-O contrato está em `supabase/migrations`. Resumo do que a arquitetura assume:
+O contrato está em `supabase/migrations`. O schema foi **recriado em 14/09/2026 a
+partir do banco de produção**, com a auditoria aplicada: o de-para coluna a
+coluna está em [`de-para-schema.md`](de-para-schema.md). Resumo do que a
+arquitetura assume hoje:
 
 - `quiz_session_questions` é um ledger append-only e a única fonte de
-  desempenho; todo agregado vem de view, nunca de contador mantido à mão;
-- a escrita se divide entre planejar e executar: o professor grava direto em
-  `study_plans`, `study_plan_blocks`, `goals` e `subscriptions`, restrito por
-  RLS e por grant de coluna; as tabelas de execução só mudam por RPC;
-- toda RPC mutante é idempotente por `request_id` com hash de payload;
-- nada é apagado fisicamente: `deleted_at` mais a tabela `audit_log`.
+  desempenho da bateria; a escrita dele é de RPC, e nenhuma RPC de execução foi
+  portada ainda — ver *Decisões pendentes*;
+- a escrita se divide entre planejar e executar: o professor grava DIRETO em
+  `study_plans`, `study_plan_notebooks` e `goals`, restrito por RLS e por
+  **grant de coluna**; as tabelas de execução (`quiz_sessions`,
+  `quiz_session_questions`, `reinforcement_cycles`) são SELECT e nada mais;
+- **a RLS decide qual LINHA, nunca qual COLUNA.** O que impede um UPDATE
+  legítimo de carregar junto a troca de dono é o grant por coluna, e o que
+  impede o aluno de reescrever o planejamento são os gatilhos de `app_private`;
+- as FKs que carregam contexto são **compostas** — `(study_plan_id, teacher_id,
+  student_id)` e parentes. A FK de coluna única garantia que a linha EXISTE, não
+  que ela é de quem está escrevendo;
+- o que é administrativo (`role`, `access_status`, `access_expires_at`,
+  `teacher_id`) fica fora de todo grant: liberar acesso, resgatar cupom e anular
+  bateria **precisam nascer como RPC**.
 
 ### Linha de base do schema
 
@@ -127,23 +169,34 @@ alguém precisar saber se algo regrediu:
 
 | | |
 |---|---|
-| Tabelas | 21, todas com RLS habilitada |
-| Policies | 33 |
-| Views | 5, todas com `security_invoker = true` |
-| `DELETE` para `anon`/`authenticated` | zero, em tabela nenhuma |
-| Funções em `public` | 16, das quais 11 com `execute` para `authenticated` |
-| Gatilho de criação de perfil | presente e ativo em `auth.users` |
+| Tabelas | 24, todas com RLS habilitada |
+| Policies | 62 |
+| Views | 1 (`vw_quiz_session_performance`), com `security_invoker = true` |
+| Tipos enumerados | 12 |
+| Foreign keys | 53, sendo 14 compostas |
+| Privilégio para `anon` | zero, em tabela nenhuma |
+| Funções | 14 (`public` + `app_private`), das quais 5 com `execute` para `authenticated` |
+| Gatilho de criação de perfil | **ausente** — não foi portado |
 
-Atenção ao nome do último: o gatilho chama-se **`on_auth_user_created`**;
-`tg_create_profile_for_new_user` é a função que ele executa. Procurar pelo nome
-da função na lista de gatilhos não acha nada.
+As cinco funções com grant são os predicados que as policies usam —
+`is_teacher`, `is_teacher_of`, `can_access_teacher`, `has_active_access` e
+`my_teacher`. As de gatilho vivem em `app_private` e não recebem `execute` de
+ninguém: rodam pelo gatilho, com o privilégio do dono.
 
-As 11 funções com grant são as da API pública — as quatro `tg_*` e
-`reserve_operation` ficam sem grant para papel nenhum, desde a migration
-`20260829183000_harden_function_grants.sql`. Ver BUG-14 em
-[`bugs-encontrados.md`](bugs-encontrados.md) para o que isso corrigiu.
+A ausência do gatilho de perfil é o que mantém `F-AUTH-08` em `fixme` — o
+cadastro cria o usuário no GoTrue e para aí. Ele embute uma decisão de produto
+que ainda falta: a qual professor um aluno sem metadado é anexado.
 
-### Duas medidas de desempenho
+Todos estes números são conferidos por `supabase/tests/07_schema.sql`, que falha
+quando um deles muda — e a mensagem manda atualizar a tabela equivalente do
+de-para junto.
+
+### Duas medidas de desempenho — histórico
+
+> As duas views que sustentavam esta seção (`vw_block_performance` e
+> `vw_block_errors`) não foram portadas, e `record_reinforcement` também não. A
+> distinção continua valendo como DECISÃO DE PRODUTO e volta junto com o motor
+> de baterias; o que a implementava não existe hoje.
 
 O produto distingue, desde a v93, duas coisas que costumam ser confundidas:
 
@@ -159,15 +212,20 @@ O reforço automático a cada três sessões continua avaliando **somente** as
 principais — `record_reinforcement` soma `main_count`/`main_correct` e exige
 revisão apenas dos erros de `phase = 'main'`.
 
-`npm run db:test` recria a base e roda 59 checagens de invariante: fluxo
-completo com replay em cada RPC, isolamento de RLS entre dois alunos de
-professores diferentes, o ciclo de reforço, e o recorte por fase. Cada checagem
-que testa um estado proibido usa `raise exception` se o banco aceitar — então a
-suíte falha quando uma constraint desaparece, não só quando o código quebra.
+`npm run db:test` recria a base e roda **86 asserções** em oito suítes,
+organizadas por DEFESA e não por feature: grant por coluna, isolamento de RLS,
+os cinco gatilhos que protegem a meta, o perfil, a lista de espera, a teoria e
+os invariantes do schema inteiro. Cada asserção que testa um estado proibido usa
+`raise exception` se o banco aceitar — então a suíte falha quando uma constraint
+desaparece, não só quando o código quebra.
 
-`supabase/seed.sql` cria as metas chamando as RPCs reais, com o professor
-impersonado. Se uma regra de negócio regredir, `supabase db reset` falha em vez
-de gravar dado inválido.
+As suítes atacam a fronteira **pelo lado de fora da interface**: nenhum teste de
+tela tenta `PATCH /profiles?role=teacher`, que é o que uma chamada direta à API
+faria. É por isso que elas não são redundantes com o e2e.
+
+`supabase/seed.sql` insere direto, e não mais pelas RPCs — elas não existem
+neste schema, e a fronteira mudou junto: planejar é escrita direta com RLS e
+grant por coluna. Inserir ali é percorrer o mesmo caminho da tela do professor.
 
 ## O site é uma SPA, e por que isso é possível
 
@@ -247,13 +305,17 @@ recarregar a página.
 
 ## Decisões pendentes
 
-- **Admin não enxerga dado de domínio.** A RLS usa
-  `can_view_context(student_id, teacher_id)`, que não reconhece o papel admin.
-  Por ora `requireRole("teacher")` aceita admin — espelhando o `is_teacher()`
-  do banco, que é `role in ('teacher','admin')` — e ele cai na área do
-  professor, vazia. Antes disso o admin não conseguia entrar: a home dele era
-  a área do professor, e essa área o devolvia para a própria home. Uma área de
-  administração de verdade ainda precisa ser desenhada.
+- ~~**Admin não enxerga dado de domínio.**~~ Sem efeito: `user_role` tem dois
+  valores no schema de 14/09/2026, `teacher` e `student`. Não há mais papel
+  admin para acomodar, e `can_view_context` deu lugar a `can_access_teacher` e
+  `is_teacher_of`. Uma área de administração, se nascer, nasce com um papel novo
+  e uma decisão nova.
+- **As seis operações que o banco ainda não permite.** Liberar acesso, suspender
+  acesso, vincular candidato, anular bateria, resgatar cupom e selecionar as
+  matérias do ciclo lançam com o motivo em `lib/api/supabase/`, em vez de
+  recusar em silêncio. Nas seis a defesa do banco é a certa: o que falta é a RPC
+  `security definer` que valida do lado do servidor. A sétima, o tema na conta,
+  espera uma coluna `theme_preference` em `profiles`.
 - **Como o aluno responde uma bateria.** É a pendência que a remoção da
   extensão abriu, e a maior: o banco tem a sessão, o ledger e as três fases;
   não há superfície que as execute. Enquanto não houver, a tela do aluno abre

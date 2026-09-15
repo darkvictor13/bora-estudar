@@ -1,6 +1,10 @@
 # 24 — Revisão espaçada
 
-**Situação:** implementada · **Comparativo:** §12 item 9 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 e §9 · **Fluxos e2e:** F-REVE-01 a F-REVE-07
+**Situação:** implementada · **Comparativo:** §12 item 9 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §4 e §9 · **Fluxos e2e:** F-REV-01 e F-TREV-01
+
+> **Atualizada em 14/09/2026.** A grade passou a viver em `theory_review_rules` e `theory_reviews`, dentro do
+> fluxo da teoria; `review_spacings` e `review_cycles` não foram portadas. O
+> espaçamento continua sendo do professor, e o aluno continua sem editá-lo.
 
 ---
 
@@ -106,7 +110,7 @@ review_spacings (plano, disciplina)          ← escrita direta, RLS
 | RPCs | **uma nova:** `set_review_done` |
 | Migration | **uma:** duas tabelas, políticas, grants por coluna, a RPC |
 | Banco | `review_spacings` e `review_completions`, ambas novas |
-| Testes | `supabase/tests/11_review_spacing.sql`, `spacing.test.ts`, `apps/e2e` |
+| Testes | `supabase/tests/06_theory.sql`, `apps/e2e/tests/student-analysis.spec.ts` e `teacher.spec.ts` |
 
 **A auditoria é por gatilho, não por `insert` dentro da RPC.** `audit_log` tem
 colunas fixas — `table_name`, `record_id`, `action`, `old_value`, `new_value` —

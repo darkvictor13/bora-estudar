@@ -1,6 +1,6 @@
 # 02 — Acesso e assinatura
 
-**Situação:** implementada · **Fluxos e2e:** F-ALU-05, F-ALU-06, F-ALU-07
+**Situação:** implementada · **Fluxos e2e:** F-ESP-01, F-META-06, F-UI-10
 
 ---
 

@@ -1,6 +1,6 @@
 # 15 — Cadernos do planejamento
 
-**Situação:** implementada · **Comparativo:** §12 item 4 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-CAD-01 a F-CAD-06
+**Situação:** implementada · **Comparativo:** §12 item 4 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-CAD-01
 
 ---
 

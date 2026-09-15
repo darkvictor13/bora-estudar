@@ -1,6 +1,9 @@
 # 26 — Tópicos do bloco e resumo da bateria
 
-**Situação:** implementada · **Comparativo:** §12 item 11 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 · **Fluxos e2e:** F-RESU-01 a F-RESU-06
+**Situação:** implementada · **Comparativo:** §12 item 11 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §5 · **Fluxos e2e:** **sem cobertura** — depende do motor de baterias
+
+> **Atualizada em 14/09/2026.** O resumo por tópicos lê o ledger da bateria, e o motor saiu com a extensão.
+> `vw_session_topics` não foi portada.
 
 ---
 
@@ -93,7 +96,7 @@ quiz_session_questions ──► vw_session_topics
 | RPCs | **nenhuma nova** |
 | Migration | **uma:** `create view vw_session_topics` |
 | Banco | `catalog_questions` e `quiz_session_questions`, leitura |
-| Testes | `supabase/tests/13_session_topics.sql`, `apps/e2e` |
+| Testes | **sem cobertura** enquanto o motor de baterias não voltar |
 
 **A v96 baixava 1,97 MB de catálogo para responder isto.** Aqui são duas
 consultas agregadas, e a extensão continua sem catálogo embutido — o tópico

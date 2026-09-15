@@ -1,6 +1,10 @@
 # 17 — Ficha da turma
 
-**Situação:** implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-TURMA-01 a F-TURMA-05
+**Situação:** implementada · **Comparativo:** §12 item 12 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-PROF-02 e F-PROF-03
+
+> **Atualizada em 14/09/2026.** A classificação e os KPIs foram reescritos na Fase 6 e vivem em
+> `lib/domain/teacher.ts`; a ficha do aluno virou ROTA, e não mais um modal. As
+> regras desta spec continuam valendo.
 
 ---
 
@@ -90,7 +94,7 @@ professor abre /professor
 | Domínio | `classifyStudent` e os limiares, em `lib/domain/students.ts`, com teste de unidade |
 | RPCs | **nenhuma nova** |
 | Migration | **nenhuma** |
-| Testes | `apps/web/src/lib/domain/students.test.ts`, `apps/e2e/tests/teacher.spec.ts` |
+| Testes | `apps/web/src/lib/domain/teacher.test.ts`, `apps/e2e/tests/teacher.spec.ts` |
 
 **A linha passou a ter dois badges**, situação de estudo e situação de acesso, e
 as duas células levam classe — `td.situacao` e `td.acesso`. Sem isso,
@@ -108,7 +112,7 @@ e2e prova que a tela usa a função; o teste de unidade prova as bordas.
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | As quatro faixas saem dos limiares certos, incluindo as bordas exatas — 0,30, 0,55 e 70% | `apps/web/src/lib/domain/students.test.ts` |
+| CA-01 | As quatro faixas saem dos limiares certos, incluindo as bordas exatas — 0,30, 0,55 e 70% | `apps/web/src/lib/domain/teacher.test.ts` |
 | CA-02 | A lista mostra progresso, desempenho oficial e a faixa de cada aluno, e o resumo da turma bate com as linhas | F-TURMA-01 |
 | CA-03 | Um aluno com bateria concluída abaixo de 70% aparece como "Atenção", e o mesmo aluno acima do limiar aparece como "Em ritmo" | F-TURMA-02 |
 | CA-04 | `?busca=` casa nome e e-mail, sem acento; `?situacao=` e `?plano=` filtram | F-TURMA-03 |

@@ -1,6 +1,11 @@
 # 13 — Vínculo do aluno e liberação de acesso
 
-**Situação:** implementada · **Comparativo:** §12 item 2 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-VINC-01 a F-VINC-07
+**Situação:** implementada · **Comparativo:** §12 item 2 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 · **Fluxos e2e:** F-VINC (em `fixme`)
+
+> **Atualizada em 14/09/2026.** O vínculo virou `profiles.teacher_id`, e o acesso,
+> `profiles.access_status` com `access_expires_at` — os três FORA do `GRANT
+> UPDATE`. `link_student` não foi portada: vincular e liberar **precisam nascer
+> como RPC**, e os fluxos de `F-VINC` estão `fixme` até lá.
 
 ---
 
@@ -137,7 +142,7 @@ a liberação é recusada pelo `WITH CHECK` — o banco impõe a sequência.
 | Migration | **uma:** `student_has_teacher`, `link_student`, a policy `waitlist_teacher_read`, e os grants |
 | Banco | `student_teacher_links` (escrita só por RPC), `waitlist` (policy de leitura nova), `subscriptions` (escrita direta, já concedida) |
 | Protocolo | **nada muda** |
-| Testes | `supabase/tests/08_student_link.sql`, `apps/e2e/tests/teacher.spec.ts` |
+| Testes | `supabase/tests/01_grants.sql` e `02_rls.sql`, `apps/e2e/tests/teacher.spec.ts` |
 
 **Por que a liberação não vira RPC.** Seria coerência aparente — "toda escrita
 por RPC" — contra o que o `CLAUDE.md` de fato divide. `subscriptions` está na
@@ -164,15 +169,15 @@ capacidade de escolher o que se enxerga.
 | CA-05 | Liberar de novo quem já tem assinatura ativa **estende a mesma linha**, sem criar uma segunda | F-VINC-05 |
 | CA-06 | Suspender muda o badge, preserva a vigência, e o aluno volta a ser mandado para a lista de espera | F-VINC-06 |
 | CA-07 | Vincular duas vezes seguidas — duplo clique — devolve o mesmo vínculo, sem segunda linha e sem erro na tela | F-VINC-07 |
-| CA-08 | `link_student` recusa quem não é professor, e recusa alvo que não tenha `role = 'student'` | `supabase/tests/08_student_link.sql` |
-| CA-09 | `link_student` recusa aluno que já tem professor vigente, e o índice `active_link_uidx` continua impedindo o estado | `supabase/tests/08_student_link.sql` |
-| CA-10 | O vínculo criado é sempre com quem chamou: não há parâmetro de `teacher_id`, e a linha nasce com `auth.uid()` | `supabase/tests/08_student_link.sql` |
-| CA-11 | O professor continua **sem** `insert`, `update` e `delete` diretos em `student_teacher_links` | `supabase/tests/08_student_link.sql` |
-| CA-12 | A policy nova é só de leitura: o professor não escreve na lista de espera de ninguém | `supabase/tests/08_student_link.sql` |
-| CA-13 | Um professor não vê, na fila, candidato já reivindicado por outro | `supabase/tests/08_student_link.sql` |
-| CA-14 | Liberar acesso de aluno **sem vínculo** é recusado pelo `WITH CHECK` de `subscriptions` | `supabase/tests/08_student_link.sql` |
-| CA-15 | `student_id` continua fora do `grant update` de `subscriptions`, e `delete` continua não concedido | `supabase/tests/08_student_link.sql` |
-| CA-16 | Nenhuma das duas funções tem `execute` para `public`, e `student_has_teacher` tem para `authenticated` — sem esse grant a policy de `waitlist` quebraria | `supabase/tests/08_student_link.sql` |
+| CA-08 | `link_student` recusa quem não é professor, e recusa alvo que não tenha `role = 'student'` | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-09 | `link_student` recusa aluno que já tem professor vigente, e o índice `active_link_uidx` continua impedindo o estado | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-10 | O vínculo criado é sempre com quem chamou: não há parâmetro de `teacher_id`, e a linha nasce com `auth.uid()` | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-11 | O professor continua **sem** `insert`, `update` e `delete` diretos em `student_teacher_links` | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-12 | A policy nova é só de leitura: o professor não escreve na lista de espera de ninguém | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-13 | Um professor não vê, na fila, candidato já reivindicado por outro | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-14 | Liberar acesso de aluno **sem vínculo** é recusado pelo `WITH CHECK` de `subscriptions` | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-15 | `student_id` continua fora do `grant update` de `subscriptions`, e `delete` continua não concedido | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
+| CA-16 | Nenhuma das duas funções tem `execute` para `public`, e `student_has_teacher` tem para `authenticated` — sem esse grant a policy de `waitlist` quebraria | **sem cobertura**: `link_student` e `student_teacher_links` não foram portados |
 
 ---
 

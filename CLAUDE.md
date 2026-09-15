@@ -26,8 +26,9 @@ contexto. Já aconteceu duas vezes:
 
 - `fase` → `stage` (fase do concurso, em `study_plans`) mas `phase` (fase da
   questão, no ledger);
-- `resultado` → `outcome` (acerto/erro, no ledger) mas `result` (retorno
-  guardado da RPC, em `operations`).
+- `resultado` → `outcome` (acerto/erro, no ledger) mas `result` (o retorno
+  guardado de uma RPC idempotente — a tabela `operations` que o guardava saiu no
+  schema de 14/09/2026; o par de traduções, não).
 
 ---
 
@@ -51,16 +52,6 @@ npm run e2e:video     # a mesma suíte, gravando .webm por teste
 
 ## Banco
 
-> **Esta seção está atrasada em relação ao schema de 14/09/2026.** A tabela
-> abaixo cita `subscriptions`, `student_teacher_links`, `catalogs`,
-> `catalog_questions` e `student_preferences`, que **não existem mais**: o
-> acesso virou `profiles.access_status` + `access_expires_at`, o vínculo virou
-> `profiles.teacher_id`, e o catálogo se resumiu a `catalog_blocks`. O de-para
-> completo está em [`docs/de-para-schema.md`](docs/de-para-schema.md), e é ele
-> que vale até esta seção ser reescrita pela frente do banco. Os PRINCÍPIOS
-> abaixo — grant por coluna, ledger append-only, idempotência, nada apagado —
-> continuam valendo todos.
->
 > **Pendência que bloqueia cadastro:** o gatilho de criação de perfil em
 > `auth.users` não foi portado. Sem ele, quem se cadastra ganha usuário no
 > GoTrue e nenhuma linha em `profiles` — e o site o trata como não autenticado.
@@ -68,62 +59,86 @@ npm run e2e:video     # a mesma suíte, gravando .webm por teste
 > que registra também a decisão de produto que falta: a qual professor um aluno
 > sem metadado é anexado.
 
+O de-para coluna a coluna, contra o banco de origem, está em
+[`docs/de-para-schema.md`](docs/de-para-schema.md).
+
 **A fronteira da escrita é entre planejar e executar.**
 
 | | Quem escreve | Como |
 |---|---|---|
-| `study_plans`, `study_plan_blocks`, `goals`, `subscriptions` | professor | direto, com RLS |
-| `profiles`, `waitlist`, `student_preferences` | o próprio dono | direto, com RLS |
-| `catalogs`, `catalog_blocks`, `catalog_questions` | admin | direto, com RLS |
-| `quiz_sessions`, `quiz_session_questions`, `reinforcements`, `review_cycles` | ninguém | só RPC |
-| `operations`, `audit_log`, `student_teacher_links` | ninguém | só RPC ou service_role |
+| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna |
+| `goal_entries`, `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
+| `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
+| `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
+| `profiles.role`, `access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: **precisa de RPC** |
+| `catalog_blocks` | ninguém | leitura para autenticado; carga por `service_role` |
+| `coupons` | ninguém | RLS ligada, zero policy, zero grant |
+| `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 
 Escrita de execução continua fechada porque é onde moram a máquina de estados,
 a idempotência por `request_id` e o ledger append-only — coisas que uma tela
 não tem como respeitar sozinha. Se uma tela precisa mexer em execução e não
-existe RPC, crie a RPC; não afrouxe o grant.
+existe RPC, **crie a RPC; não afrouxe o grant.** As seis operações que hoje não
+têm RPC lançam com o motivo em `apps/web/src/lib/api/supabase/`, e é assim que
+devem continuar até a RPC existir.
 
 Três defesas sustentam a escrita direta, e as três precisam continuar valendo
 em qualquer tabela nova:
 
-1. **`WITH CHECK` em todo INSERT e UPDATE**, amarrando a linha ao professor
-   autenticado E a um aluno com vínculo vigente (`is_teacher_of`).
+1. **`WITH CHECK` em todo INSERT e UPDATE**, amarrando a linha a quem escreve —
+   e, quando o alvo é aluno de professor, a `is_teacher_of`, que confere o
+   vínculo pelo ALUNO e não pelo `teacher_id` que quem escreve escolheu.
 2. **`GRANT UPDATE` por coluna.** As colunas de contexto — `student_id`,
-   `teacher_id`, `study_plan_id` — ficam de fora do grant. A RLS sozinha
-   deixaria mover uma linha entre dois alunos do mesmo professor; o grant por
-   coluna não deixa.
-3. **`DELETE` não é concedido em lugar nenhum.** Remover é `UPDATE` em
-   `deleted_at`.
+   `teacher_id`, `study_plan_id`, o `goal_id` de `goal_entries` — ficam de fora
+   do grant. A RLS decide QUAL LINHA, nunca QUAL COLUNA: sem o grant por coluna,
+   um UPDATE legítimo carrega junto a troca de dono.
+3. **FK composta em todo contexto denormalizado.** `(study_plan_id, teacher_id,
+   student_id)` e parentes. A FK de coluna única garante que a linha EXISTE, não
+   que ela é de quem está escrevendo — foi assim que um aluno lançava registro
+   na meta de outro.
+
+**`DELETE` é concedido, e quem o restringe é a policy.** Mudou em 14/09/2026: o
+schema anterior não concedia DELETE em lugar nenhum e removia por `deleted_at`.
+Hoje o professor apaga o que planejou, o aluno apaga só o que ele mesmo criou
+(`goals_delete` decide pelo `type`), e o que não pode sumir do histórico —
+`profiles`, `quiz_sessions`, o ledger, `catalog_blocks`, `coupons` — simplesmente
+não tem DELETE para `authenticated`. Caderno continua sendo removido por marca
+(`study_plan_notebooks.deleted`), porque meta antiga aponta para ele.
 
 **Cuidado ao testar RLS: `UPDATE` e `DELETE` filtram em silêncio.** A linha não
 fica visível para a operação e o comando afeta zero linhas, sem erro. Só o
 `WITH CHECK`, no INSERT e no UPDATE, levanta `42501`. Um teste que espere
 exceção num UPDATE bloqueado passa por engano no dia em que a policy sumir —
-conte linhas com `get diagnostics ... row_count`.
+conte linhas com `get diagnostics ... row_count`. Privilégio de COLUNA é o
+oposto: levanta `42501` sempre, mesmo sem linha nenhuma casando.
 
-**`quiz_session_questions` é o ledger e a única fonte de desempenho.** É
-append-only, protegido por trigger. Todo número agregado vem de view. Nunca
-crie coluna de contador mantida à mão: o problema da versão anterior não era
-ter agregados, era ter três caminhos independentes escrevendo o mesmo número.
+**`quiz_session_questions` é o ledger e a única fonte de desempenho da
+bateria.** É append-only, sem policy de INSERT, UPDATE ou DELETE. Nunca crie
+coluna de contador mantida à mão: o problema da versão anterior não era ter
+agregados, era ter três caminhos independentes escrevendo o mesmo número — os
+nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** Há duas formas, e a
-escolha depende de a operação ter payload:
+**Toda RPC mutante precisa ser segura a retentativa.** Nenhuma existe no schema
+de 14/09/2026 — as do schema anterior não foram portadas —, então isto vale para
+a primeira que nascer:
 
-- **Com payload** — recebe `request_id` e passa por `reserve_operation`, que
-  compara o hash: mesmo id e mesmo payload devolve o resultado anterior sem
-  reexecutar; payload diferente é rejeitado. Usam isso `finish_quiz_session`,
-  `record_quiz_session_time`, `void_quiz_session` e `record_reinforcement`.
-- **Naturalmente idempotente** — o segundo `start_quiz_session` da mesma meta
-  devolve a sessão já aberta; `activate_study_plan` chega ao mesmo estado.
-  `apply_study_plan_batch` faz o replay pela própria chave do lote em
-  `study_plan_batches`.
+- **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
+  payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
+  reexecutar; payload diferente é rejeitado. `quiz_sessions.finish_request_id`
+  (UNIQUE) e `finish_payload` são as colunas que o schema já reserva para isso.
+- **Naturalmente idempotente** — o segundo "iniciar" da mesma meta devolve a
+  sessão já aberta, e é o índice
+  `quiz_sessions_one_open_per_plan_uidx` que o garante, não o código da RPC.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
-ela é naturalmente idempotente, escreva no comentário por quê.
+ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**
+— idempotência que mora só no código volta a falhar na primeira condição de
+corrida.
 
-**Nada é apagado fisicamente.** `deleted_at` mais a tabela `audit_log`. FKs de
-histórico usam `ON DELETE RESTRICT`, não `SET NULL` — uma bateria que perde o
-vínculo com a meta vira dado órfão que nenhuma tela consegue explicar.
+**O que não pode sumir do histórico usa `ON DELETE RESTRICT`**, não `SET NULL`:
+uma bateria que perde o vínculo com a meta vira dado órfão que nenhuma tela
+consegue explicar. `quiz_sessions` referencia `profiles` e o caderno assim, de
+propósito.
 
 **Nenhum dado de domínio em texto livre.** Tipo, origem e flag são enum ou FK.
 A versão anterior codificava `TIPO_REFORCO:1` e o resultado inteiro de uma
@@ -290,16 +305,29 @@ duas vezes ao renomear valor de enum.
 
 ## Testes
 
-`npm run db:test` recria o banco e roda as suítes de `supabase/tests/`.
+`npm run db:test` recria o banco e roda as oito suítes de `supabase/tests/`, na
+ordem: `00_fixtures` monta o cenário e as sete seguintes atacam uma DEFESA cada
+— grant por coluna, isolamento de RLS, os gatilhos da meta, o perfil, a lista de
+espera, a teoria e os invariantes do schema. Por defesa, e não por feature:
+feature muda de nome e de tela, defesa não.
 
+- **Encene quem está chamando com `app_test.act_as(<uuid>)`**, e não com
+  `set_config('request.jwt.claim.sub', …)`. Os gatilhos de proteção leem o papel
+  de `auth.jwt() ->> 'role'`: sem `request.jwt.claims` completo, `auth.jwt()`
+  volta nulo, todo gatilho trata a sessão como MANUTENÇÃO e o teste passa sem
+  exercitar nada. Teste que passa sempre é pior que teste nenhum.
 - **Teste de estado proibido usa `raise exception` se o banco aceitar.** É o
   que faz a suíte falhar quando uma constraint desaparece, e não só quando o
   código quebra.
-- **As suítes compartilham estado**, rodam em sequência na mesma base. Teste
-  novo que agrega por bloco precisa criar o próprio bloco, senão soma o que as
-  anteriores deixaram.
+- **As suítes compartilham estado**, rodam em sequência na mesma base. O que uma
+  apagar, a seguinte não encontra — por isso o cenário traz dois estudos extras
+  para o aluno, um para ser apagado e um para sobreviver.
+- **`db:test` apaga os usuários do seed.** Rode `npm run db:reset` depois, ou o
+  login local para de funcionar.
 - Testes de TypeScript ficam ao lado do código, em `*.test.ts`, e rodam pelo
-  runner nativo do Node.
+  runner nativo do Node — que exige **Node 24** (ver `.nvmrc`): o Node do
+  sistema pode ser um build sem suporte a TypeScript, e aí `node --test` falha
+  com `ERR_NO_TYPESCRIPT` antes de rodar asserção nenhuma.
 
 ### Ponta a ponta, com navegador
 

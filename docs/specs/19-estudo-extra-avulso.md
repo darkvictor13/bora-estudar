@@ -1,6 +1,11 @@
 # 19 — Estudo extra avulso
 
-**Situação:** implementada · **Comparativo:** §12 item 1 (segunda metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-EXTRA-01 a F-EXTRA-06
+**Situação:** implementada · **Comparativo:** §12 item 1 (segunda metade) · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-EXTRA-01
+
+> **Atualizada em 14/09/2026.** O enum `extra_activity_kind` não existe no schema de 14/09/2026, e
+> `record_extra_study` não foi portada. O estudo extra é hoje uma meta de tipo
+> `extra` mais o registro, criados na mesma operação pela tela — são cinco
+> tipos, os da v2, e o tipo vive no título da meta.
 
 ---
 
@@ -110,7 +115,7 @@ aluno abre /aluno, semana N
 | RPCs | **duas novas:** `record_extra_study` e `delete_extra_study` |
 | Migration | **uma:** `create type extra_activity_kind`, migração do dado, `alter column ... type`, `create or replace apply_study_plan_batch`, e as duas funções |
 | Banco | `goals` (coluna muda de tipo), `operations`, `audit_log` |
-| Testes | `supabase/tests/09_extra_study.sql`, `apps/e2e/tests/student.spec.ts` |
+| Testes | `supabase/tests/03_goals.sql`, `apps/e2e/tests/student-week.spec.ts` |
 
 **A conversão de `text` para enum é compatível com o bundle no ar** por um
 motivo verificável: o único caminho do site que escreve `extra_activity` é
@@ -129,12 +134,12 @@ veio do seed, e a migration o converte antes de trocar o tipo.
 | CA-04 | Remover marca `deleted_at` e a linha some da semana | F-EXTRA-04 |
 | CA-05 | O aluno **não** remove meta de estudo extra planejada pelo professor | F-EXTRA-05 |
 | CA-06 | Tempo fora de 1–240 é recusado com mensagem, e nada é gravado | F-EXTRA-06 |
-| CA-07 | `extra_activity` recusa valor fora dos sete, no próprio banco | `supabase/tests/09_extra_study.sql` |
-| CA-08 | Replay do mesmo `request_id` devolve a meta sem criar a segunda | `supabase/tests/09_extra_study.sql` |
-| CA-09 | O aluno não registra em planejamento alheio, nem em semana inexistente, nem com o plano fora de `active` | `supabase/tests/09_extra_study.sql` |
-| CA-10 | O aluno continua sem `insert` direto em `goals` | `supabase/tests/09_extra_study.sql` |
-| CA-11 | `apply_study_plan_batch` continua aceitando o texto do payload e gravando o enum | `supabase/tests/09_extra_study.sql` |
-| CA-12 | As duas funções não têm `execute` para `public` e declaram `search_path` fixo | `supabase/tests/09_extra_study.sql` |
+| CA-07 | `extra_activity` recusa valor fora dos sete, no próprio banco | **sem cobertura**: `record_extra_study` e o enum não foram portados |
+| CA-08 | Replay do mesmo `request_id` devolve a meta sem criar a segunda | **sem cobertura**: `record_extra_study` e o enum não foram portados |
+| CA-09 | O aluno não registra em planejamento alheio, nem em semana inexistente, nem com o plano fora de `active` | **sem cobertura**: `record_extra_study` e o enum não foram portados |
+| CA-10 | O aluno continua sem `insert` direto em `goals` | **sem cobertura**: `record_extra_study` e o enum não foram portados |
+| CA-11 | `apply_study_plan_batch` continua aceitando o texto do payload e gravando o enum | **sem cobertura**: `record_extra_study` e o enum não foram portados |
+| CA-12 | As duas funções não têm `execute` para `public` e declaram `search_path` fixo | **sem cobertura**: `record_extra_study` e o enum não foram portados |
 
 ---
 

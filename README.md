@@ -5,16 +5,18 @@ e o banco.
 
 | Pacote | O que é |
 |---|---|
-| `apps/web` | SPA em React + Vite — painéis de aluno e professor |
+| `apps/web` | SPA em React + MUI + Vite — painéis de aluno e professor |
 | `apps/e2e` | Suíte Playwright — o site num navegador de verdade |
+| `packages/ui` | `@bora/ui` — tokens, tema e primitivas, com playground |
 | `packages/database` | Tipos gerados do schema Supabase |
-| `supabase` | Migrations e seed |
+| `supabase` | Migrations, seed e as suítes de invariante |
 
-> **A extensão de navegador foi removida.** Ela conduzia a bateria de questões
-> no TEC Concursos, e com ela saíram o pacote `packages/protocol` e o caminho de
-> execução de bateria no site. O banco continua com as tabelas e RPCs do fluxo
-> (`quiz_sessions`, `start_quiz_session`, `finish_quiz_session`): quem for
-> desenhar a execução nova encontra o ledger intacto.
+> **A extensão de navegador foi removida**, e a execução de bateria saiu com
+> ela. O banco continua com as TABELAS do fluxo — `quiz_sessions`, o ledger
+> `quiz_session_questions` e os ciclos de reforço, com a máquina de estados
+> inteira —, mas nenhuma das RPCs foi portada para o schema de 14/09/2026. Quem
+> for desenhar a execução nova encontra o ledger intacto e a superfície vazia.
+> As telas que a pressupõem dizem isso, em vez de oferecer um botão que falha.
 
 A arquitetura e as razões por trás de cada limite estão em
 [`docs/arquitetura.md`](docs/arquitetura.md). Os fluxos da aplicação, no
@@ -27,7 +29,8 @@ texto de interface em português.
 
 ## Começando
 
-Requisitos: Node 22+ (`.nvmrc` fixa a 24), Docker em execução e o
+Requisitos: **Node 24** (`.nvmrc`; o runner de teste precisa de um build com
+suporte a TypeScript), Docker em execução e o
 [CLI do Supabase](https://supabase.com/docs/guides/local-development).
 
 ```bash
@@ -41,9 +44,8 @@ O `db:start` aplica migrations e seed. Usuários de desenvolvimento:
 
 | Papel | E-mail | Senha |
 |---|---|---|
-| Admin | `admin@boraestudar.local` | `BoraEstudar#2026!` |
-| Professor | `professor@boraestudar.local` | `BoraEstudar#2026!` |
-| Aluno | `aluno@boraestudar.local` | `BoraEstudar#2026!` |
+| Professor | `professor@local.dev` | `SenhaLocal#2026` |
+| Aluno | `aluno@local.dev` | `SenhaLocal#2026` |
 
 Credenciais públicas, exclusivas do ambiente local.
 
@@ -54,7 +56,7 @@ Credenciais públicas, exclusivas do ambiente local.
 | `npm run dev` | Sobe o site |
 | `npm run check` | `typecheck` + `lint` + `test` em todos os pacotes |
 | `npm run db:reset` | Recria o banco: migrations + seed |
-| `npm run db:test` | Recria o banco e roda as checagens de invariante |
+| `npm run db:test` | Recria o banco e roda as 86 asserções de invariante (**apaga o seed**: rode `db:reset` depois) |
 | `npm run e2e` | Suíte Playwright completa, no modo mais rápido |
 | `npm run e2e:video` | A mesma suíte, gravando um `.webm` por teste |
 | `npm run db:types` | Regenera `packages/database` a partir do schema local |
@@ -90,10 +92,10 @@ arquivo é listado no fim da execução.
 ### Como a suíte se isola
 
 Nenhum teste usa o aluno do seed. Cada um cria o **próprio** par
-professor/aluno, com planejamento, blocos e metas — daí não haver `db:reset`
-entre testes, e daí a suíte poder rodar tudo em paralelo. O que fica
-compartilhado é só o catálogo de questões, que é leitura, e o `global-setup`
-garante que exista.
+professor/aluno, com planejamento, cadernos e metas — daí não haver `db:reset`
+entre testes, e daí a suíte poder rodar tudo em paralelo. O `global-setup` só
+confere que o banco responde e que o schema está aplicado; ele não prepara
+catálogo, porque não há catálogo de questões neste schema.
 
 Duas consequências práticas:
 

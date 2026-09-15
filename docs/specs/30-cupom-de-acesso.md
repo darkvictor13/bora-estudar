@@ -1,6 +1,10 @@
 # 30 — Cupom de acesso
 
-**Situação:** implementada · **Comparativo:** §12 item 15 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-CUP-01 a F-CUP-07
+**Situação:** implementada · **Comparativo:** §12 item 15 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-CUP-01 (em `fixme`)
+
+> **Atualizada em 14/09/2026.** `coupons` está no schema de 14/09/2026 com RLS ligada, zero policy e zero
+> grant, de propósito: validar o código no cliente entregaria a lista de
+> códigos. O resgate **precisa nascer como RPC**, e `F-CUP-01` está `fixme`.
 
 ---
 
@@ -78,7 +82,7 @@ redeem_coupon(code, request_id)
 | RPCs | **uma nova:** `redeem_coupon(text, uuid)` |
 | Migration | **uma:** só a RPC — `select` em `coupons` já era concedido desde a migration inicial |
 | Banco | `coupons` e `subscriptions`, escrita só pela RPC |
-| Testes | `supabase/tests/15_coupon.sql`, `apps/e2e/tests/student.spec.ts` |
+| Testes | `supabase/tests/01_grants.sql` (a tabela sem grant), `apps/e2e/tests/student-analysis.spec.ts` |
 
 **O campo do código é controlado.** O React 19 reseta o formulário quando a
 action termina, **inclusive quando ela devolve erro**: com o campo solto, quem
