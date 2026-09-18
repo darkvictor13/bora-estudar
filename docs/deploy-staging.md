@@ -328,6 +328,17 @@ economizar as duas linhas.
   pipefail`, um `grep` sem casamento aborta o script no meio e as verificações
   seguintes nunca rodam — o CI falharia sem dizer o que estava errado. Foi
   encontrado rodando o caminho negativo, não lendo o código.
+- **A fumaça espera o asset propagar, e o content-type é quem diz que ele
+  chegou.** A publicação no Cloudflare não fica visível de uma vez: o
+  `index.html` já vinha da versão nova enquanto o pedido do bundle, noutra
+  conexão, ainda caía onde o manifesto era o antigo — e ali o hash novo não
+  existe, então o `not_found_handling: single-page-application` respondeu com o
+  `index.html`. Os dois são 200; o que separa é `text/javascript` de
+  `text/html`. Sem a espera, as checagens de conteúdo liam a casca em HTML e o
+  CI acusava "build sem as VITE_*" com o bundle correto no ar — diagnóstico
+  errado do problema certo, medido em 18/09/2026 onze segundos depois do
+  deploy. Seis tentativas, cinco segundos entre elas; se ainda vier HTML, é
+  falha de verdade e o texto do erro passou a dizer isso.
 - **`ci-banco.yml` roda `db:reset` entre `db:test` e `db:types`.** As suítes
   deixam a base truncada; é a mesma armadilha de ordem que o `CLAUDE.md`
   descreve entre `db:test` e `e2e`.
@@ -350,15 +361,31 @@ Por GitHub Environment (`staging`, e depois `producao`):
 | `VITE_SUPABASE_URL` | **var** | `https://<ref>.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | **var** | `sb_publishable_…` |
 | `SITE_URL` | var | domínio publicado do ambiente |
+| `VITE_SENTRY_DSN` | **var** | DSN do projeto do Sentry daquele ambiente |
+| `SENTRY_ORG` | var | slug da organização no Sentry |
+| `SENTRY_PROJECT` | var | slug do projeto no Sentry |
+| `SENTRY_AUTH_TOKEN` | secret | token com escopo de envio de sourcemap |
 
 Nada no nível do repositório. Não há flag de "produção ativa": o workflow de
 produção existe desde já e simplesmente não roda enquanto ninguém clicar.
 
-**As duas `VITE_*` vão como var, não como secret**, por dois motivos. Elas são
+**As `VITE_*` vão como var, não como secret**, por dois motivos. Elas são
 assadas num bundle público e não escondem nada — `apps/web/src` não tem uma
 única referência a `service_role`. E como secret o GitHub mascara a string no
 log, que é exatamente a saída do teste de fumaça que confere se a chave entrou
-no bundle.
+no bundle. O DSN do Sentry entra nessa mesma regra, e pelos mesmos dois
+motivos: a fumaça confere que ele está no bundle.
+
+**`SENTRY_AUTH_TOKEN` é a exceção, e é secret de verdade**: ele ENVIA. É também
+o que decide se o sourcemap chega a existir — sem token, `vite.config.ts` não o
+gera, porque `wrangler` publica o `dist` inteiro e um `.map` esquecido entrega o
+código-fonte. Um ambiente sem o token publica normalmente; o que se perde é o
+stack trace legível.
+
+**Os três `SENTRY_*` são opcionais para subir o ambiente.** Sem `VITE_SENTRY_DSN`
+o SDK é removido do bundle na compilação e o site funciona igual — o teste de
+fumaça é que vai acusar a ausência, e é a única checagem dele que se pode
+ignorar de propósito enquanto o projeto do Sentry não existir.
 
 No Environment `producao`, duas proteções:
 

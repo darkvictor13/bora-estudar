@@ -305,6 +305,83 @@ contexto entre navegações deixaria `hasAccess` velho, e o aluno cujo acesso o
 professor acabou de liberar continuaria empurrado para a lista de espera até
 recarregar a página.
 
+## O relato de erro
+
+Sentry, no navegador e só no navegador. Não há servidor de aplicação para
+instrumentar, e o banco tem os logs do Supabase — o que faltava era o único
+lugar onde um defeito acontece sem deixar rastro em canto nenhum: a máquina de
+quem está usando.
+
+### Ele não é um `init` num lugar só, e a razão é a forma deste código
+
+Uma instalação de manual liga os manipuladores globais e pronto. Aqui isso
+deixaria de fora os dois caminhos por onde o produto realmente falha:
+
+1. **Erro de loader não chega em `window.onerror`.** O React Router em modo
+   data captura a exceção e renderiza o `ErrorBoundary` — ela não é relançada.
+   Como quase toda leitura passa por loader, o modo de falha mais comum seria o
+   único invisível. Por isso `routes/RouteError.tsx` relata explicitamente, e é
+   o único ponto de onde esses erros podem ser vistos.
+2. **Erro de escrita nunca é lançado.** O contrato manda a escrita devolver
+   `Result`, de propósito. Uma gravação que falha jamais vira exceção, e sem
+   relatar de dentro de `lib/api/supabase/errors.ts` ela seria vista pela pessoa
+   que tentou gravar e por mais ninguém.
+
+O terceiro ponto é de ordem, não de cobertura: `lib/observability.ts` liga o SDK
+por **efeito de importação**, e o `main.tsx` o importa antes de tudo. Importação
+é hoisted, e `lib/env.ts` lança na avaliação do módulo quando falta uma `VITE_*`
+— um `init` escrito no corpo do `main.tsx` nunca rodaria justamente no deploy
+compilado sem as variáveis, que é o erro que mais interessa relatar. Pelo mesmo
+motivo o módulo não importa `@/lib/env`, e importa `@/lib/api/contract` em vez de
+`@/lib/api`: o `index.ts` da API monta o adaptador do Supabase, que puxa `env`
+junto.
+
+### O que é relatado
+
+`ApiErrorCode`, e nunca a frase. `throwDb` e `readFailure` lançam
+`ApiThrownError`, que carrega o código até o `ErrorBoundary`; `forbidden`,
+`not_found`, `unauthenticated`, `access_expired`, `offline` e `validation` são
+ESTADOS do produto — a tela já os explica, e relatá-los encheria o painel do que
+ninguém vai corrigir. Sobra o que ninguém previu.
+
+Sem o código no erro, o único discriminador seria casar a mensagem em português,
+que é texto de interface: o filtro se desligaria sozinho no dia em que alguém
+melhorasse a copy, em silêncio, e só seria notado quando o painel virasse ruído.
+
+Quando um evento é criado, `RouteError` mostra o id na tela (`error-code`). É
+para a pessoa poder dizer qual erro foi — e ele só aparece quando houve relato,
+porque um código que ninguém acha no painel é pior do que código nenhum.
+
+### O que não sai daqui
+
+`sendDefaultPii: false`, e a identidade é só `profileId` — UUID, que cruza com o
+banco sem transportar e-mail nem IP. Nome, desempenho e planejamento do aluno
+ficam onde estão. **Session Replay não entra**: gravaria a tela de estudo
+inteira, e isso é decisão de privacidade, não de infraestrutura. Tracing também
+não, e `__SENTRY_TRACING__` remove o código dele do bundle.
+
+### Ligado por ambiente, e removido do bundle quando não está
+
+`VITE_SENTRY_DSN` é o interruptor, e é `vars` do Environment e não `secret`: o
+DSN é público, como a publishable key — o Vite assa as duas no bundle. Vazio, o
+`init` não é chamado; e como o Vite faz substituição estática, o `if` vira
+código morto e **o SDK inteiro sai do bundle na compilação**. Em desenvolvimento
+e na suíte e2e não há transporte a interceptar, o que é uma garantia mais forte
+do que um SDK desligado. `F-OBS-01` confere.
+
+### Sourcemap: gerar e enviar são a mesma decisão
+
+`wrangler` publica `dist` inteiro, sem passo de seleção. Um `.map` esquecido vai
+para o ar e entrega o código-fonte. Por isso `vite.config.ts` só gera sourcemap
+quando há `SENTRY_AUTH_TOKEN` — o mesmo plugin que envia é o que apaga —, o
+workflow apaga de novo antes de publicar, e `scripts/fumaca.sh` confere no ar.
+Três camadas porque as duas primeiras são intenção e só a terceira é medida.
+
+O envio **não derruba o deploy** se o Sentry estiver fora. A ordem é banco →
+site: falhar o job `site` deixa o banco migrado com o bundle antigo no ar, e
+pagar esse preço por indisponibilidade de terceiro seria trocar um defeito
+conhecido por um risco maior.
+
 ## Decisões pendentes
 
 - ~~**Admin não enxerga dado de domínio.**~~ Sem efeito: `user_role` tem dois
