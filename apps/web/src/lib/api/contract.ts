@@ -135,6 +135,34 @@ export interface ApiError {
 export type Result<T> = { readonly ok: true; readonly data: T } | { readonly ok: false; readonly error: ApiError };
 
 /**
+ * O ERRO QUE UMA LEITURA LANÇA.
+ *
+ * `Result` cobre a escrita. A leitura lança, e quem pega é o `ErrorBoundary` da
+ * rota — o que faltava era o CÓDIGO sobreviver ao `throw`.
+ *
+ * Um `Error` comum só carrega a frase em português, e a diferença entre "seu
+ * acesso venceu" — estado normal, e o mais frequente de todos — e um defeito de
+ * verdade é exatamente o que precisa ser decidida fora da tela: quem relata
+ * erro precisa ignorar o primeiro e guardar o segundo. Sem o código aqui, o
+ * único discriminador seria casar a frase, que é texto de INTERFACE e muda no
+ * dia em que alguém melhorar a copy — um filtro que se desliga sozinho, em
+ * silêncio, e só é notado quando o painel de erro vira ruído.
+ *
+ * O campo é declarado e atribuído no corpo, e não `constructor(readonly code)`:
+ * `node --test` roda TypeScript em modo strip-only e não gera código para
+ * parameter property.
+ */
+export class ApiThrownError extends Error {
+  readonly code: ApiErrorCode;
+
+  constructor(code: ApiErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "ApiThrownError";
+    this.code = code;
+  }
+}
+
+/**
  * Chave de idempotência, gerada UMA VEZ, NA ORIGEM.
  *
  * Gerá-la no ponto de uso transforma a proteção do servidor em decoração: cada

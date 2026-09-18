@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 
 import { api, type Role, type Session } from "@/lib/api";
+import { identify } from "@/lib/observability";
 import { ROUTES, homeForRole } from "@/lib/routes";
 import { forgetTheme } from "@/lib/theme";
 
@@ -39,7 +40,15 @@ let inFlight: Promise<SessionContext | null> | null = null;
  */
 export function getSessionContext(): Promise<SessionContext | null> {
   if (!inFlight) {
-    const pending = api.loadSession().then((session) => (session ? withAccess(session) : null));
+    const pending = api.loadSession().then((session) => {
+      // Quem está usando, para o erro não chegar anônimo ao painel. SÓ O ID:
+      // `email` e `name` estão aqui e ficam aqui — ver `sendDefaultPii` em
+      // `lib/observability.ts`. Fica neste ponto porque é por onde TODA
+      // navegação passa, inclusive a primeira carga e a sessão que expirou no
+      // meio — que é quando `null` precisa apagar a identidade anterior.
+      identify(session ? session.profileId : null);
+      return session ? withAccess(session) : null;
+    });
     inFlight = pending;
     void pending.finally(() => {
       if (inFlight === pending) inFlight = null;

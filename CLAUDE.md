@@ -605,6 +605,50 @@ a cor do texto, não o hábito.
 
 ---
 
+## O relato de erro
+
+**Sentry, só no navegador.** O porquê de cada decisão está em
+[`docs/arquitetura.md`](docs/arquitetura.md#o-relato-de-erro). O que muda o jeito
+de escrever código aqui:
+
+**`lib/observability.ts` liga por EFEITO DE IMPORTAÇÃO, e o `main.tsx` o importa
+primeiro.** Não mova, e não transforme numa função chamada no corpo do
+`main.tsx`. Importação é hoisted: `import { router }` avalia `lib/env.ts`, que
+LANÇA quando falta uma `VITE_*`, antes da primeira linha do corpo. Um `init` no
+corpo nunca rodaria no deploy compilado sem as variáveis — que é a tela branca,
+e o erro que mais interessa relatar. Pelo mesmo motivo o módulo não importa
+`@/lib/env`, e importa `@/lib/api/contract` e não `@/lib/api`.
+
+**Erro de loader NÃO chega em `window.onerror`.** O React Router em modo data
+captura e renderiza o `ErrorBoundary`; os manipuladores globais do SDK não veem
+nada. Quem relata é `routes/RouteError.tsx`, explicitamente. Rota nova que
+declare o próprio `ErrorBoundary` sem passar por lá nasce sem relato.
+
+**Erro de escrita NÃO é lançado** — o contrato devolve `Result`. Quem relata é
+`fail`/`failure` em `lib/api/supabase/errors.ts`, quando o código é `unknown`.
+Adaptador novo que monte o `Result` na mão, sem passar por essas duas funções,
+grava um erro que ninguém vai ver.
+
+**Filtre por `ApiErrorCode`, nunca pela mensagem.** `throwDb` e `readFailure`
+lançam `ApiThrownError` justamente para o código sobreviver ao `throw`. Casar a
+frase em português acopla o filtro a texto de interface, e ele se desliga
+sozinho no dia em que alguém melhorar a copy.
+
+**`VITE_SENTRY_DSN` fica VAZIO em desenvolvimento e na suíte e2e** — inclusive
+no seu `.env.local`. Com o DSN vazio o SDK é removido do bundle na compilação,
+não só desligado; preenchê-lo faz a suíte despejar erro sintético no painel do
+ambiente publicado. `F-OBS-01` confere que nada sai.
+
+**Sourcemap só existe quando há `SENTRY_AUTH_TOKEN`.** `wrangler` publica o
+`dist` inteiro, sem filtro: gerar sem ter para onde enviar é publicar o
+código-fonte. Não ligue `build.sourcemap` incondicionalmente.
+
+**Nada de dado pessoal.** `sendDefaultPii: false` e identidade só por
+`profileId`. Session Replay e tracing estão fora, e a decisão é de privacidade —
+não a reabra sem decidir de novo.
+
+---
+
 ## Deploy
 
 **`main` publica staging a cada commit. Produção é disparo manual.**
