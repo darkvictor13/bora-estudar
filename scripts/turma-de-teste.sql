@@ -9,20 +9,20 @@
 --
 -- POR QUE ISTO NÃO É A TELA DO PROFESSOR.
 --
--- Três das coisas que a turma precisa NÃO TÊM COMO SER FEITAS PELO PRODUTO
--- hoje, e não por falta de tela:
+-- Três das coisas que a turma precisa não saem da tela AQUI, e por dois
+-- motivos diferentes:
 --
---   * promover alguém a professor — `create_profile_for_new_user` ignora o
---     `role` do metadado de propósito (quem mandasse `{"role":"teacher"}` no
---     cadastro nasceria professor);
---   * liberar acesso — `access_status` e `access_expires_at` estão fora do
---     `grant update` de `profiles`, e `grantAccess` LANÇA em
---     `lib/api/supabase/teacher-students.ts` dizendo isso;
---   * vincular aluno a professor — `teacher_id` está fora do mesmo grant, e a
---     regra de anexar ao professor mais antigo morreu na `20260914190000`.
+--   * promover alguém a professor — não existe caminho no produto, ponto.
+--     `create_profile_for_new_user` ignora o `role` do metadado de propósito
+--     (quem mandasse `{"role":"teacher"}` no cadastro nasceria professor), e
+--     abrir isso é spec própria;
+--   * liberar acesso e vincular aluno a professor — desde `20260918120000`
+--     existem `set_student_access` e `link_student`, e a tela do professor as
+--     chama. Só que as duas exigem um professor LOGADO, e aqui o professor é
+--     uma das contas que este script acabou de inventar.
 --
--- As três são trabalho privilegiado esperando virar RPC. Este script as faz
--- como DONO DO BANCO, que é o que `supabase/seed.sql` também faz: sem JWT,
+-- As três são trabalho privilegiado. Este script as faz como DONO DO BANCO,
+-- que é o que `supabase/seed.sql` também faz: sem JWT,
 -- `protect_profile_admin_fields` trata a sessão como manutenção e deixa passar.
 -- Nada aqui afrouxa grant ou policy.
 --

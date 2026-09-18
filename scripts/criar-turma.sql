@@ -13,11 +13,15 @@
 -- POR QUE ISTO NÃO É A TELA DO PROFESSOR.
 --
 -- Os passos 1 e 3 escrevem colunas de `profiles` que estão fora de todo
--- `GRANT UPDATE` — `teacher_id`, `access_status` e `access_expires_at` — e não
--- existe RPC que as escreva: `grantAccess` e `revokeAccess` LANÇAM em
--- `apps/web/src/lib/api/supabase/teacher-students.ts` dizendo exatamente isso.
--- É o que a spec 13 especifica como `link_student` e `set_student_access`, e
--- que ainda não foi implementado.
+-- `GRANT UPDATE` — `teacher_id`, `access_status` e `access_expires_at`. Desde
+-- `20260918120000` existem as RPCs que as escrevem, `link_student` e
+-- `set_student_access`, e a tela do professor as chama: UM aluno de cada vez,
+-- com o professor logado, procurando cada um pelo e-mail inteiro.
+--
+-- Este arquivo continua por causa do "de cada vez". Ele monta a turma INTEIRA
+-- num comando, a partir de uma lista de e-mails — é carga inicial de escola
+-- que está entrando, não operação do dia a dia. Trinta alunos pela tela são
+-- trinta buscas, trinta cliques em "Assumir" e trinta em "Liberar".
 --
 -- Os passos 2 e 4, ao contrário, são escrita que o professor JÁ PODE fazer
 -- pela API — `classes` e `class_students` têm policy, grant e FK composta

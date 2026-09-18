@@ -23,8 +23,9 @@
  * variável de ambiente trocada produz sozinha — e que não é desfazível por lá,
  * porque `quiz_sessions` referencia `profiles` com ON DELETE RESTRICT.
  * `promover-professor.sql` e `criar-turma.sql` operam sobre contas que já
- * existem, e são justamente o que se roda em produção enquanto as RPCs de
- * `docs/specs/13-vinculo-e-liberacao-de-acesso.md` não existem.
+ * existem, e são o que se roda em produção quando a tela não serve: promover a
+ * professor, que não tem caminho no produto, e a carga inicial de uma turma
+ * inteira a partir de uma lista de e-mails.
  *
  * Uma trava única para os três só teria dois destinos: ou proíbe produção, e
  * aí dois dos três arquivos passam a exigir `--forcar` todo dia, ou não proíbe
