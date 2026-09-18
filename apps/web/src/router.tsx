@@ -25,6 +25,7 @@ import { Waitlist, waitlistLoader } from "@/routes/student/Waitlist";
 
 import { TeacherStudents, teacherStudentsLoader } from "@/routes/teacher/Students";
 import { TeacherStudent, teacherStudentLoader } from "@/routes/teacher/Student";
+import { TeacherClasses, teacherClassesLoader } from "@/routes/teacher/Classes";
 import { TeacherPlans, teacherPlansLoader } from "@/routes/teacher/Plans";
 import { TeacherGoals, teacherGoalsLoader } from "@/routes/teacher/Goals";
 import { TeacherNotebooks, teacherNotebooksLoader } from "@/routes/teacher/Notebooks";
@@ -184,6 +185,12 @@ export const router = createBrowserRouter([
                 loader: teacherStudentLoader,
                 Component: TeacherStudent,
                 handle: { title: "Aluno · Bora Estudar" },
+              },
+              {
+                path: ROUTES.teacher.classes,
+                loader: teacherClassesLoader,
+                Component: TeacherClasses,
+                handle: { title: "Turmas · Bora Estudar" },
               },
               {
                 path: ROUTES.teacher.plans,

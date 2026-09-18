@@ -1,4 +1,5 @@
 import BarChartIcon from "@mui/icons-material/BarChartOutlined";
+import ClassIcon from "@mui/icons-material/ClassOutlined";
 import EventRepeatIcon from "@mui/icons-material/EventRepeatOutlined";
 import GroupIcon from "@mui/icons-material/GroupsOutlined";
 import LibraryIcon from "@mui/icons-material/LibraryBooksOutlined";
@@ -42,6 +43,11 @@ export function TeacherLayout() {
           href: ROUTES.teacher.students,
           label: "Meus alunos",
           icon: <GroupIcon fontSize="small" />,
+        },
+        {
+          href: ROUTES.teacher.classes,
+          label: "Turmas",
+          icon: <ClassIcon fontSize="small" />,
         },
       ],
     },

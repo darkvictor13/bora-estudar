@@ -25,9 +25,8 @@
  *   não tem por onde começar uma bateria, e é deliberado — ver CLAUDE.md.
  * - **Idempotência de verdade.** `operations` e `reserve_operation` saíram;
  *   `idempotency.ts` cobre o clique duplo e diz o que não cobre.
- * - **Liberar acesso e anular bateria.** O grant por coluna em `profiles` e a
- *   escrita fechada de `quiz_sessions` são a defesa certa; as duas operações
- *   precisam nascer como RPC. Ver `teacher-students.ts`.
+ * - **Anular bateria.** A escrita fechada de `quiz_sessions` é a defesa certa;
+ *   a operação precisa nascer como RPC. Ver `teacher-students.ts`.
  * - **Resgatar cupom.** `coupons` está sem policy e sem grant, de propósito.
  *   Ver `access.ts`.
  *
@@ -58,12 +57,23 @@ import {
   updatePlan,
 } from "./teacher-plans.ts";
 import {
+  findStudentByEmail,
   grantAccess,
+  linkStudent,
   listStudents,
   loadStudentFile,
   revokeAccess,
   voidQuizSession,
 } from "./teacher-students.ts";
+import {
+  createClass,
+  deleteClass,
+  enrollStudent,
+  listClasses,
+  moveStudent,
+  renameClass,
+  unenrollStudent,
+} from "./teacher-classes.ts";
 import {
   importMaster,
   linkCatalogToPlan,
@@ -106,10 +116,9 @@ import {
  * A lista esvaziou na Fase 6: o adaptador cobre todas as operações do
  * contrato. O que sobrou de pendência não é fase nenhuma — são três operações
  * que ESTE SCHEMA não permite, e que LANÇAM com o motivo em vez de recusar
- * educadamente:
+ * educadamente. **Eram cinco:** `grantAccess` e `revokeAccess` saíram da lista
+ * em 18/09/2026, com `set_student_access`.
  *
- * - `grantAccess` / `revokeAccess` — `access_status` fica fora do GRANT UPDATE
- *   de `profiles`; liberar acesso precisa nascer como RPC.
  * - `voidQuizSession` — `quiz_sessions` é SELECT; a RPC não foi portada.
  * - `redeemCoupon` — `coupons` está sem policy e sem grant, de propósito.
  * - `setSelectedSubjects` — a tabela de matérias do ciclo não foi portada.
@@ -153,6 +162,8 @@ export const supabaseApi: BoraApi = {
   /* --- Fase 6 --- */
   listStudents,
   loadStudentFile,
+  findStudentByEmail,
+  linkStudent,
   grantAccess,
   revokeAccess,
   voidQuizSession,
@@ -178,4 +189,13 @@ export const supabaseApi: BoraApi = {
   restoreNotebook,
   saveReviewSpacing,
   setSelectedSubjects,
+
+  /* --- Vínculo, acesso e turmas (18/09/2026) --- */
+  listClasses,
+  createClass,
+  renameClass,
+  deleteClass,
+  enrollStudent,
+  moveStudent,
+  unenrollStudent,
 };

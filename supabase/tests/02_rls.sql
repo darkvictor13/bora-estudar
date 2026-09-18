@@ -115,6 +115,17 @@ begin
   raise notice '08 OK  progresso de teoria e do dono';
 end $$;
 
+-- ---------- O histórico de acesso é do aluno e de quem o liberou ----------
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.access_grants;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Bruno enxergou % liberacoes, esperava a dele', v_total;
+  end if;
+  raise notice '08b OK  o aluno le a propria liberacao de acesso';
+end $$;
+
 -- ---------- Bateria de outro aluno ----------
 select app_test.act_as('33333333-3333-4333-8333-333333333333');  -- Carla
 do $$
@@ -125,6 +136,16 @@ begin
     raise exception 'FALHOU: Carla enxergou % baterias do Bruno', v_total;
   end if;
   raise notice '09 OK  a bateria de um aluno nao aparece para o colega de turma';
+end $$;
+
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.access_grants;
+  if v_total <> 0 then
+    raise exception 'FALHOU: Carla enxergou % liberacoes do Bruno', v_total;
+  end if;
+  raise notice '09b OK  a liberacao de um aluno nao aparece para o colega de turma';
 end $$;
 
 -- ---------- Professor: os próprios alunos, e nada além ----------
@@ -189,4 +210,44 @@ begin
     raise exception 'FALHOU: Davi enxergou % catalogos de teoria, esperava 1', v_total;
   end if;
   raise notice '14 OK  catalogo de teoria e do professor que o criou';
+end $$;
+
+-- ---------- Matricular aluno alheio: `is_teacher_of` de novo ----------
+--
+-- `teacher_id = auth.uid()` diz que quem escreve é o professor da LINHA, que é
+-- um valor que quem escreve escolheu. Quem confere pelo ALUNO é `is_teacher_of`.
+do $$ begin
+  insert into public.class_students (class_id, student_id, teacher_id)
+  values ('a9000000-0000-4000-8000-000000000002','22222222-2222-4222-8222-222222222222',
+          '44444444-4444-4444-8444-444444444444');
+  raise exception 'FALHOU: Davi matriculou o aluno da Ana na turma dele';
+exception when insufficient_privilege then
+  raise notice '15 OK  is_teacher_of recusa matricular aluno de outro professor';
+end $$;
+
+-- Contado, e não esperando exceção: `class_students_update` filtra a linha da
+-- Ana antes de o WITH CHECK ver qualquer coisa, e UPDATE recusado por policy
+-- afeta zero linhas em silêncio.
+do $$
+declare v_afetadas integer;
+begin
+  update public.class_students set class_id = 'a9000000-0000-4000-8000-000000000002'
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 0 then
+    raise exception 'FALHOU: Davi moveu % matricula(s) da turma da Ana', v_afetadas;
+  end if;
+  raise notice '16 OK  mover matricula alheia afeta 0 linhas (filtra, nao levanta)';
+end $$;
+
+-- A turma alheia também não é destino: a FK composta `class_students_class_fk`
+-- confere de quem é a TURMA, e não só de quem é o aluno.
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.classes;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Davi enxergou % turmas, esperava a dele', v_total;
+  end if;
+  raise notice '17 OK  turma e do professor que a criou';
 end $$;

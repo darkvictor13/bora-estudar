@@ -40,10 +40,13 @@
  *    nada a substituiu. `loadThemePreference`/`saveThemePreference` precisam de
  *    uma coluna em `profiles` ou de uma tabela própria; sem isso a regra de o
  *    tema vir da CONTA, e não do aparelho, não tem como valer (R-TEMA-11).
- * 2. **Não há tabela de assinatura.** O acesso é `profiles.access_status` mais
- *    `access_expires_at`; `redeemCoupon` e `grantAccess` mexem nessas duas
- *    colunas, e `coupons` não registra quem resgatou. Se o produto precisar do
- *    histórico de resgate, falta uma tabela.
+ * 2. ~~**Não há tabela de assinatura.**~~ **Resolvida em 18/09/2026.** O acesso
+ *    continua sendo `profiles.access_status` mais `access_expires_at`, mas quem
+ *    os escreve agora é a RPC `set_student_access`, e cada liberação e cada
+ *    bloqueio deixam uma linha em `access_grants` — que responde "desde quando
+ *    este aluno tem acesso" e "quem o liberou". O que continua faltando é o
+ *    registro de RESGATE DE CUPOM: `coupons` não guarda quem usou o código, e
+ *    `redeemCoupon` segue sem caminho (ver o item de `access.ts`).
  * 3. **Substituição segura é só regra de UI hoje.** `generateWeek` promete não
  *    tocar em meta concluída (LEIA-ME v108.3); nada no schema impede. Vale a
  *    pena um índice ou um gatilho, e até lá o adaptador é o único guardião.
@@ -650,6 +653,14 @@ export interface StudentCard {
   readonly email: string;
   readonly access: AccessStatus;
   readonly accessExpiresAt: IsoDate | null;
+  /**
+   * A turma do aluno, ou `null` — um aluno está em uma turma só (R-MATR-03).
+   *
+   * O id vem junto com o nome porque é por ele que `StudentListFilter.classId`
+   * recorta e que a tela marca a turma atual no seletor. Sem ele, filtrar por
+   * turma exigiria casar por NOME, que muda quando o professor renomeia.
+   */
+  readonly classId: Uuid | null;
   readonly className: string | null;
   readonly planName: string | null;
   readonly pace: StudentPace;
@@ -698,9 +709,45 @@ export interface TopicDifficulty {
   readonly score: number;
 }
 
+/**
+ * O que a busca por e-mail devolve — e o que ela NÃO devolve.
+ *
+ * Não existe lista de candidatos: o professor digita o e-mail INTEIRO de quem
+ * está na frente dele, e recebe no máximo uma pessoa (R-VINC-21). Casar por
+ * prefixo, ou listar quem ainda não tem professor, é enumeração com outro nome.
+ *
+ * `hasTeacher` diz que o aluno já é de alguém; QUAL professor não vem, e não é
+ * esquecimento — revelar transformaria a busca num mapa de quem é aluno de
+ * quem (R-VINC-22). `isMine` responde a única pergunta que a tela precisa fazer
+ * a seguir: oferecer "Assumir" ou dizer "já é seu aluno".
+ */
+export interface StudentSearchResult {
+  readonly studentId: Uuid;
+  readonly name: string | null;
+  readonly hasTeacher: boolean;
+  readonly isMine: boolean;
+}
+
 export interface TeacherStudentsApi {
   listStudents(filter: StudentListFilter): Promise<readonly StudentCard[]>;
   loadStudentFile(studentId: Uuid): Promise<StudentFile>;
+  /**
+   * O aluno com EXATAMENTE este e-mail. `ok` com `null` quando não há nenhum.
+   *
+   * Devolve `Result` apesar de ser leitura, e a exceção à regra é deliberada: a
+   * regra existe porque leitura que falha é trabalho do `ErrorBoundary` da
+   * ROTA, e esta leitura não sai de um loader — sai de um formulário. Um
+   * `throw` aqui trocaria "digite o e-mail inteiro" por uma tela de erro.
+   */
+  findStudentByEmail(email: string): Promise<Result<StudentSearchResult | null>>;
+  /**
+   * Assume um aluno sem professor.
+   *
+   * Sem `requestId`: não há payload a comparar, porque o único parâmetro já é a
+   * identidade do alvo. A retentativa é segura por construção — quem a sustenta
+   * é `profiles.teacher_id`, que cabe um valor só (R-VINC-12).
+   */
+  linkStudent(studentId: Uuid): Promise<Result<void>>;
   grantAccess(input: GrantAccessInput): Promise<Result<StudentCard>>;
   revokeAccess(studentId: Uuid, requestId: RequestId): Promise<Result<StudentCard>>;
   /** Anula uma bateria — some do desempenho sem sumir do histórico. */
@@ -710,6 +757,7 @@ export interface TeacherStudentsApi {
 export interface GrantAccessInput {
   readonly studentId: Uuid;
   readonly requestId: RequestId;
+  /** 1, 3, 6 ou 12 — `ACCESS_MONTHS`, em `validation.ts`. O padrão é 3. */
   readonly months: number;
 }
 
@@ -891,6 +939,50 @@ export interface TeacherNotebooksApi {
   restoreNotebook(blockId: Uuid, requestId: RequestId): Promise<Result<Notebook>>;
 }
 
+/* --- Turmas --- */
+
+export interface TeacherClass {
+  readonly id: Uuid;
+  readonly name: string;
+  readonly description: string | null;
+  /** Quantos alunos estão nela. É o que a tela precisa antes de oferecer "Apagar". */
+  readonly studentCount: number;
+}
+
+export interface ClassInput {
+  readonly name: string;
+  readonly description?: string;
+}
+
+/**
+ * TURMAS SÃO ESCRITA DIRETA, e é a única família de operações do professor que
+ * não passa por RPC.
+ *
+ * `classes` e `class_students` estão na linha de PLANEJAMENTO da tabela de
+ * fronteira do CLAUDE.md, com as três defesas montadas desde a migration
+ * inicial: `WITH CHECK` amarrando a linha a quem escreve, `is_teacher_of`
+ * conferindo pelo ALUNO, e a FK composta `(class_id, teacher_id)` conferindo
+ * que a turma de destino é de quem está escrevendo. Uma RPC ali não
+ * acrescentaria garantia nenhuma, e acrescentaria superfície.
+ *
+ * Por isso também não há `requestId` em matricular, mover e desmatricular: as
+ * três são idempotentes no banco — o índice único `class_students_one_per_
+ * student_uidx` transforma a segunda matrícula em erro, e mover duas vezes para
+ * a mesma turma grava o mesmo valor.
+ */
+export interface TeacherClassesApi {
+  listClasses(): Promise<readonly TeacherClass[]>;
+  createClass(input: ClassInput, requestId: RequestId): Promise<Result<TeacherClass>>;
+  renameClass(classId: Uuid, input: ClassInput, requestId: RequestId): Promise<Result<TeacherClass>>;
+  /** Recusado enquanto houver aluno dentro — a recusa é do banco (R-MATR-05). */
+  deleteClass(classId: Uuid, requestId: RequestId): Promise<Result<void>>;
+  /** Matricula quem ainda não está em turma nenhuma. */
+  enrollStudent(classId: Uuid, studentId: Uuid): Promise<Result<void>>;
+  /** Muda de turma. É um UPDATE: em dois comandos o aluno ficaria sem turma no meio. */
+  moveStudent(classId: Uuid, studentId: Uuid): Promise<Result<void>>;
+  unenrollStudent(studentId: Uuid): Promise<Result<void>>;
+}
+
 /* ------------------------------------------------------------------ *
  * A superfície inteira
  * ------------------------------------------------------------------ */
@@ -917,4 +1009,5 @@ export interface BoraApi
     TeacherPlansApi,
     TeacherGoalsApi,
     TeacherTheoryApi,
-    TeacherNotebooksApi {}
+    TeacherNotebooksApi,
+    TeacherClassesApi {}

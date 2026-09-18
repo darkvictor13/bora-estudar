@@ -24,6 +24,7 @@ import type {
   ApiError,
   ApiErrorCode,
   BoraApi,
+  ClassInput,
   Credentials,
   DayGroup,
   ExtraStudyInput,
@@ -53,10 +54,12 @@ import type {
   StudentCard,
   StudentFile,
   StudentListFilter,
+  StudentSearchResult,
   StudyEntry,
   StudyPlanInput,
   StudyPlanSummary,
   Subject,
+  TeacherClass,
   ThemePreference,
   TheoryCatalog,
   TheoryGoal,
@@ -75,7 +78,15 @@ import type {
   WeekSummary,
   Weekday,
 } from "./contract.ts";
-import { checkCredentials, checkName, checkPassword, checkSignUp } from "./validation.ts";
+import {
+  checkAccessMonths,
+  checkClassName,
+  checkCredentials,
+  checkName,
+  checkPassword,
+  checkSignUp,
+  checkStudentEmail,
+} from "./validation.ts";
 
 /* ------------------------------------------------------------------ *
  * Relógio e utilidades
@@ -88,6 +99,8 @@ const PLAN_ID = "11111111-1111-4111-8111-111111111111";
 const STUDENT_ID = "22222222-2222-4222-8222-222222222222";
 const TEACHER_ID = "33333333-3333-4333-8333-333333333333";
 const CATALOG_ID = "44444444-4444-4444-8444-444444444444";
+const CLASS_A_ID = "66666666-6666-4666-8666-000000000001";
+const CLASS_B_ID = "66666666-6666-4666-8666-000000000002";
 
 let sequence = 0;
 /** Id previsível: o mesmo cenário produz sempre os mesmos ids. */
@@ -170,6 +183,20 @@ interface State {
   reviews: TheoryReview[];
   waitlist: WaitlistEntry | null;
   selectedSubjects: Set<string>;
+  /**
+   * OS ALUNOS SÃO ESTADO, e não uma constante congelada.
+   *
+   * Eram um `readonly StudentCard[]` de módulo, e liberar acesso devolvia um
+   * objeto novo sem mudar a lista — a tela mostrava "liberado" no aviso e
+   * "aguardando" no cartão logo abaixo, que é exatamente o defeito que uma
+   * fixture existe para expor.
+   */
+  students: StudentCard[];
+  classes: TeacherClass[];
+  /** Quem ainda não é aluno de ninguém. É o que `findStudentByEmail` acha. */
+  candidates: StudentSearchResult[];
+  /** O e-mail de cada pessoa que a busca alcança, em minúsculas. */
+  emails: Map<string, Uuid>;
 }
 
 const LESSONS: readonly TheoryLesson[] = [
@@ -433,6 +460,10 @@ function seedState(): State {
     ],
     waitlist: null,
     selectedSubjects: new Set(["direito-tributario", "portugues"]),
+    students: seedStudents(),
+    classes: seedClasses(),
+    candidates: seedCandidates(),
+    emails: seedEmails(),
   };
 }
 
@@ -940,7 +971,8 @@ export const fixturesApi: BoraApi = {
 
   listStudents: (filter: StudentListFilter) =>
     later(
-      STUDENTS.filter((student) => {
+      state.students.filter((student) => {
+        if (filter.classId && student.classId !== filter.classId) return false;
         if (filter.pace && student.pace !== filter.pace) return false;
         if (filter.access && student.access !== filter.access) return false;
         if (filter.search) {
@@ -955,7 +987,8 @@ export const fixturesApi: BoraApi = {
     ),
 
   loadStudentFile: (studentId: Uuid) => {
-    const card = STUDENTS.find((student) => student.studentId === studentId) ?? STUDENTS[0]!;
+    const card =
+      state.students.find((student) => student.studentId === studentId) ?? state.students[0]!;
     return later<StudentFile>({
       card,
       plan: PLAN,
@@ -965,25 +998,104 @@ export const fixturesApi: BoraApi = {
     });
   },
 
+  /**
+   * A busca é pelo e-mail INTEIRO, e a fixture é tão exigente quanto o banco.
+   *
+   * Aceitar prefixo aqui faria a tela nascer com um campo de busca incremental
+   * que o adaptador do Supabase recusa — e o defeito só apareceria no dia da
+   * integração.
+   */
+  findStudentByEmail: (email: string) => {
+    const invalid = checkStudentEmail(email);
+    if (invalid) return later<Result<StudentSearchResult | null>>({ ok: false, error: invalid });
+
+    const id = state.emails.get(email.trim().toLowerCase());
+    if (!id) return later(done<StudentSearchResult | null>(null));
+
+    const mine = state.students.find((student) => student.studentId === id);
+    if (mine) {
+      return later(
+        done<StudentSearchResult | null>({
+          studentId: mine.studentId,
+          name: mine.name,
+          hasTeacher: true,
+          isMine: true,
+        }),
+      );
+    }
+
+    const candidate = state.candidates.find((person) => person.studentId === id);
+    return later(done<StudentSearchResult | null>(candidate ?? null));
+  },
+
+  linkStudent: (studentId: Uuid) =>
+    later<Result<void>>(
+      (() => {
+        // Já é seu: a segunda chamada não é erro, e não escreve de novo.
+        if (state.students.some((student) => student.studentId === studentId)) {
+          return done(undefined);
+        }
+
+        const candidate = state.candidates.find((person) => person.studentId === studentId);
+        if (!candidate) return fail<void>("not_found", "Aluno não encontrado.");
+        if (candidate.hasTeacher) return fail<void>("conflict", "Este aluno já tem professor.");
+
+        state.candidates = state.candidates.filter(
+          (person) => person.studentId !== studentId,
+        );
+        // Nasce SEM ACESSO: vincular diz de quem o aluno é, liberar diz se ele
+        // entra. São dois atos, e a tela precisa mostrar o segundo botão.
+        state.students = [
+          ...state.students,
+          {
+            studentId: candidate.studentId,
+            name: candidate.name,
+            email: "",
+            access: "pending",
+            accessExpiresAt: null,
+            classId: null,
+            className: null,
+            planName: null,
+            pace: "on_track",
+            progress: 0,
+            score: null,
+            questionsAnswered: 0,
+            studiedMinutes: 0,
+            lastActivityAt: null,
+          },
+        ];
+        return done(undefined);
+      })(),
+    ),
+
   grantAccess: (input: GrantAccessInput) =>
     later(
       once(input.requestId, () => {
-        const card = STUDENTS.find((student) => student.studentId === input.studentId);
+        const invalid = checkAccessMonths(input.months);
+        if (invalid) return { ok: false, error: invalid } as Result<StudentCard>;
+
+        const card = state.students.find((student) => student.studentId === input.studentId);
         if (!card) return fail<StudentCard>("not_found", "Aluno não encontrado.");
-        return done<StudentCard>({
-          ...card,
+
+        // SOMA AO QUE AINDA FALTA, como o banco: quem renova antes do fim não
+        // perde dia pago. Uma fixture que zerasse o prazo esconderia o caso.
+        const from =
+          card.accessExpiresAt && card.accessExpiresAt > TODAY ? card.accessExpiresAt : TODAY;
+        return done(patchStudent(card.studentId, {
           access: "active",
-          accessExpiresAt: addDays(TODAY, input.months * 30),
-        });
+          accessExpiresAt: addDays(from, input.months * 30),
+        }));
       }),
     ),
 
   revokeAccess: (studentId: Uuid, requestId: RequestId) =>
     later(
       once(requestId, () => {
-        const card = STUDENTS.find((student) => student.studentId === studentId);
+        const card = state.students.find((student) => student.studentId === studentId);
         if (!card) return fail<StudentCard>("not_found", "Aluno não encontrado.");
-        return done<StudentCard>({ ...card, access: "suspended", accessExpiresAt: null });
+        // A DATA FICA. Bloquear é mudança de status, e apagar a vigência
+        // obrigaria a redigitá-la para reativar.
+        return done(patchStudent(studentId, { access: "suspended" }));
       }),
     ),
 
@@ -1179,7 +1291,136 @@ export const fixturesApi: BoraApi = {
         return done<Notebook>({ ...notebook, deleted: false });
       }),
     ),
+
+  /* --- Turmas --- */
+
+  listClasses: () => later(state.classes.map(withCount)),
+
+  createClass: (input: ClassInput, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const invalid = checkClassName(input.name);
+        if (invalid) return { ok: false, error: invalid } as Result<TeacherClass>;
+
+        const created: TeacherClass = {
+          id: nextId("7"),
+          name: input.name.trim(),
+          description: input.description?.trim() || null,
+          studentCount: 0,
+        };
+        state.classes = [...state.classes, created];
+        return done(created);
+      }),
+    ),
+
+  renameClass: (classId: Uuid, input: ClassInput, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const invalid = checkClassName(input.name);
+        if (invalid) return { ok: false, error: invalid } as Result<TeacherClass>;
+
+        const turma = state.classes.find((candidate) => candidate.id === classId);
+        if (!turma) return fail<TeacherClass>("not_found", "Turma não encontrada.");
+
+        const renamed: TeacherClass = {
+          ...turma,
+          name: input.name.trim(),
+          description: input.description?.trim() || null,
+        };
+        state.classes = state.classes.map((candidate) =>
+          candidate.id === classId ? renamed : candidate,
+        );
+        // O nome está denormalizado no cartão do aluno, como no banco ele vem
+        // por junção: renomear precisa aparecer nas duas telas.
+        state.students = state.students.map((student) =>
+          student.classId === classId ? { ...student, className: renamed.name } : student,
+        );
+        return done(withCount(renamed));
+      }),
+    ),
+
+  deleteClass: (classId: Uuid, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const turma = state.classes.find((candidate) => candidate.id === classId);
+        if (!turma) return fail<void>("not_found", "Turma não encontrada.");
+        // A RECUSA É DO BANCO (gatilho `protect_class_with_students`), e a
+        // fixture a repete para o caminho de erro nascer com tela.
+        if (studentsOfClass(classId).length > 0) {
+          return fail<void>(
+            "conflict",
+            "Esvazie a turma antes de apagá-la: ainda há aluno matriculado.",
+          );
+        }
+        state.classes = state.classes.filter((candidate) => candidate.id !== classId);
+        return done(undefined);
+      }),
+    ),
+
+  enrollStudent: (classId: Uuid, studentId: Uuid) =>
+    later<Result<void>>(
+      (() => {
+        const student = state.students.find((candidate) => candidate.studentId === studentId);
+        if (!student) return fail<void>("not_found", "Aluno não encontrado.");
+        // UM ALUNO, UMA TURMA — no banco quem impõe é
+        // `class_students_one_per_student_uidx`.
+        if (student.classId) {
+          return fail<void>("conflict", "Este aluno já está em uma turma. Use “Mover de turma”.");
+        }
+        return enroll(classId, studentId);
+      })(),
+    ),
+
+  moveStudent: (classId: Uuid, studentId: Uuid) => later(enroll(classId, studentId)),
+
+  unenrollStudent: (studentId: Uuid) =>
+    later<Result<void>>(
+      (() => {
+        const student = state.students.find((candidate) => candidate.studentId === studentId);
+        if (!student) return fail<void>("not_found", "Aluno não encontrado.");
+        patchStudent(studentId, { classId: null, className: null });
+        return done(undefined);
+      })(),
+    ),
 };
+
+/* ------------------------------------------------------------------ *
+ * Escrita no cenário
+ * ------------------------------------------------------------------ */
+
+/**
+ * Altera um aluno EM LUGAR, e devolve o cartão novo.
+ *
+ * Devolver um objeto novo sem tocar em `state.students` é o defeito que uma
+ * fixture existe para não ter: a tela mostrava "liberado" no aviso e
+ * "aguardando" no cartão logo abaixo.
+ */
+function patchStudent(studentId: Uuid, patch: Partial<StudentCard>): StudentCard {
+  const updated = { ...state.students.find((s) => s.studentId === studentId)!, ...patch };
+  state.students = state.students.map((student) =>
+    student.studentId === studentId ? updated : student,
+  );
+  return updated;
+}
+
+function studentsOfClass(classId: Uuid): readonly StudentCard[] {
+  return state.students.filter((student) => student.classId === classId);
+}
+
+/** A contagem sai dos alunos, e não de um contador guardado ao lado. */
+function withCount(turma: TeacherClass): TeacherClass {
+  return { ...turma, studentCount: studentsOfClass(turma.id).length };
+}
+
+function enroll(classId: Uuid, studentId: Uuid): Result<void> {
+  const turma = state.classes.find((candidate) => candidate.id === classId);
+  if (!turma) return fail<void>("not_found", "Turma não encontrada.");
+  if (!state.students.some((candidate) => candidate.studentId === studentId)) {
+    return fail<void>("not_found", "Aluno não encontrado.");
+  }
+  patchStudent(studentId, { classId: turma.id, className: turma.name });
+  return done(undefined);
+}
 
 /* ------------------------------------------------------------------ *
  * Dados sem comportamento
@@ -1305,13 +1546,22 @@ const STATISTICS: Statistics = {
   ],
 };
 
-const STUDENTS: readonly StudentCard[] = [
+/**
+ * Os alunos do professor. FUNÇÃO, e não constante.
+ *
+ * `seedState()` roda na inicialização do módulo, antes de qualquer `const`
+ * declarado abaixo dele — uma constante aqui estaria na zona morta e o módulo
+ * quebraria ao carregar. Declaração de função sobe; `const` não.
+ */
+function seedStudents(): StudentCard[] {
+  return [
   {
     studentId: STUDENT_ID,
     name: "Aluna de Exemplo",
     email: "aluna@exemplo.com.br",
     access: "active",
     accessExpiresAt: addDays(TODAY, 120),
+    classId: CLASS_A_ID,
     className: "Fiscal 2027 · Turma A",
     planName: "Área Fiscal 2027",
     pace: "on_track",
@@ -1327,6 +1577,7 @@ const STUDENTS: readonly StudentCard[] = [
     email: "atencao@exemplo.com.br",
     access: "active",
     accessExpiresAt: addDays(TODAY, 30),
+    classId: CLASS_A_ID,
     className: "Fiscal 2027 · Turma A",
     planName: "Área Fiscal 2027",
     pace: "attention",
@@ -1342,6 +1593,7 @@ const STUDENTS: readonly StudentCard[] = [
     email: "atrasado@exemplo.com.br",
     access: "expired",
     accessExpiresAt: addDays(TODAY, -6),
+    classId: null,
     className: null,
     planName: null,
     pace: "behind",
@@ -1351,7 +1603,57 @@ const STUDENTS: readonly StudentCard[] = [
     studiedMinutes: 240,
     lastActivityAt: `${addDays(TODAY, -21)}T08:00:00.000Z`,
   },
-];
+  ];
+}
+
+function seedClasses(): TeacherClass[] {
+  return [
+    {
+      id: CLASS_A_ID,
+      name: "Fiscal 2027 · Turma A",
+      description: "Segunda e quarta, 19h",
+      studentCount: 2,
+    },
+    // VAZIA DE PROPÓSITO: é a turma que a tela consegue apagar, e sem ela o
+    // caminho de "apagar" nasceria sem cenário.
+    { id: CLASS_B_ID, name: "Fiscal 2027 · Turma B", description: null, studentCount: 0 },
+  ];
+}
+
+/**
+ * Quem ainda não é aluno de ninguém.
+ *
+ * Não existe lista de candidatos no produto — `findStudentByEmail` acha um por
+ * vez, pelo e-mail INTEIRO. Isto aqui é a base contra a qual a busca procura, e
+ * não uma fila que alguma tela liste.
+ */
+function seedCandidates(): StudentSearchResult[] {
+  return [
+    {
+      studentId: "22222222-2222-4222-8222-000000000004",
+      name: "Candidata Sem Professor",
+      hasTeacher: false,
+      isMine: false,
+    },
+    {
+      studentId: "22222222-2222-4222-8222-000000000005",
+      name: "Aluno de Outro Professor",
+      hasTeacher: true,
+      isMine: false,
+    },
+  ];
+}
+
+/** O e-mail de cada pessoa que a busca alcança. */
+function seedEmails(): Map<string, Uuid> {
+  return new Map([
+    ["aluna@exemplo.com.br", STUDENT_ID],
+    ["atencao@exemplo.com.br", "22222222-2222-4222-8222-000000000002"],
+    ["atrasado@exemplo.com.br", "22222222-2222-4222-8222-000000000003"],
+    ["candidata@exemplo.com.br", "22222222-2222-4222-8222-000000000004"],
+    ["de.outro@exemplo.com.br", "22222222-2222-4222-8222-000000000005"],
+  ]);
+}
 
 const SESSIONS: readonly QuizSessionSummary[] = [
   {

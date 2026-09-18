@@ -383,3 +383,174 @@ test("importar o MASTER relata as disciplinas que ficaram sem página", async ()
     "Tecnologia da Informação",
   ]);
 });
+
+/* ------------------------------------------------------------------ *
+ * Vínculo, acesso e turmas — spec 13
+ * ------------------------------------------------------------------ */
+
+test("a busca é pelo e-mail INTEIRO: prefixo não acha ninguém", async () => {
+  const pedaco = await api.findStudentByEmail("candidata");
+  assert.ok(!pedaco.ok, "sem `@`, é erro de formulário e não busca vazia");
+  assert.equal(pedaco.error.code, "validation");
+  assert.equal(pedaco.error.field, "email");
+
+  // Um e-mail bem formado que não é de ninguém: `ok` com `null`. A tela precisa
+  // separar "você digitou errado" de "esta pessoa não tem conta".
+  const ninguem = await api.findStudentByEmail("nao.existe@exemplo.com.br");
+  assert.ok(ninguem.ok);
+  assert.equal(ninguem.data, null);
+
+  const achada = await api.findStudentByEmail("  CANDIDATA@Exemplo.com.BR ");
+  assert.ok(achada.ok, "espaço e caixa não fazem parte do endereço");
+  assert.equal(achada.data?.hasTeacher, false);
+  assert.equal(achada.data?.isMine, false);
+});
+
+test("quem já tem professor é ENCONTRADO, e a busca não diz de quem ele é", async () => {
+  const alheio = await api.findStudentByEmail("de.outro@exemplo.com.br");
+  assert.ok(alheio.ok);
+  assert.equal(alheio.data?.hasTeacher, true);
+  assert.equal(alheio.data?.isMine, false);
+
+  // Dizer "não existe" faria a tela mentir para quem digitou o e-mail certo.
+  assert.ok(alheio.data !== null);
+  assert.equal(
+    Object.hasOwn(alheio.data!, "teacherId"),
+    false,
+    "qual professor não vem: revelar seria um mapa de quem é aluno de quem",
+  );
+
+  const recusado = await api.linkStudent(alheio.data!.studentId);
+  assert.ok(!recusado.ok);
+  assert.equal(recusado.error.code, "conflict");
+});
+
+test("assumir cria o vínculo, e assumir de novo não é erro", async () => {
+  const achada = await api.findStudentByEmail("candidata@exemplo.com.br");
+  assert.ok(achada.ok);
+  const studentId = achada.data!.studentId;
+
+  const primeira = await api.linkStudent(studentId);
+  assert.ok(primeira.ok);
+
+  const lista = await api.listStudents({});
+  assert.equal(lista.length, 4);
+  const nova = lista.find((student) => student.studentId === studentId);
+  // VINCULAR NÃO LIBERA ACESSO: são dois atos, e o aluno vinculado sem acesso
+  // continua vendo a lista de espera.
+  assert.equal(nova?.access, "pending");
+  assert.equal(nova?.classId, null);
+
+  // Duplo clique: o mesmo vínculo, sem segunda escrita e sem erro na tela.
+  const segunda = await api.linkStudent(studentId);
+  assert.ok(segunda.ok);
+  assert.equal((await api.listStudents({})).length, 4);
+
+  // E agora a busca a reconhece como sua.
+  const denovo = await api.findStudentByEmail("candidata@exemplo.com.br");
+  assert.ok(denovo.ok);
+  assert.equal(denovo.data?.isMine, true);
+});
+
+test("liberar SOMA ao que ainda falta, e o mesmo request_id não soma duas vezes", async () => {
+  const [aluna] = await api.listStudents({ access: "active" });
+  const antes = aluna!.accessExpiresAt!;
+
+  const chave = requestId();
+  const primeira = await api.grantAccess({ studentId: aluna!.studentId, requestId: chave, months: 3 });
+  assert.ok(primeira.ok);
+  assert.ok(primeira.data.accessExpiresAt! > antes, "quem renova antes do fim não perde dia pago");
+
+  const repetida = await api.grantAccess({ studentId: aluna!.studentId, requestId: chave, months: 3 });
+  assert.ok(repetida.ok);
+  assert.equal(repetida.data.accessExpiresAt, primeira.data.accessExpiresAt);
+
+  // E a lista enxerga a mudança: um `Result` que não muta esconde revalidação
+  // que não roda.
+  const relida = (await api.listStudents({})).find(
+    (student) => student.studentId === aluna!.studentId,
+  );
+  assert.equal(relida?.accessExpiresAt, primeira.data.accessExpiresAt);
+});
+
+test("a vigência é de 1, 3, 6 ou 12 meses — o resto é recusado", async () => {
+  const [aluna] = await api.listStudents({});
+  const recusada = await api.grantAccess({
+    studentId: aluna!.studentId,
+    requestId: requestId(),
+    months: 5,
+  });
+
+  assert.ok(!recusada.ok);
+  assert.equal(recusada.error.code, "validation");
+  assert.equal(recusada.error.field, "months");
+});
+
+test("bloquear PRESERVA a vigência", async () => {
+  const [aluna] = await api.listStudents({ access: "active" });
+  const validade = aluna!.accessExpiresAt;
+
+  const bloqueada = await api.revokeAccess(aluna!.studentId, requestId());
+  assert.ok(bloqueada.ok);
+  assert.equal(bloqueada.data.access, "suspended");
+  // Apagar a data obrigaria a redigitá-la para reativar, e apagaria o registro
+  // de até quando o acesso valia.
+  assert.equal(bloqueada.data.accessExpiresAt, validade);
+});
+
+test("um aluno está em UMA turma, e mover é uma operação própria", async () => {
+  const turmas = await api.listClasses();
+  const [turmaA, turmaB] = turmas;
+  assert.equal(turmaA!.studentCount, 2);
+  assert.equal(turmaB!.studentCount, 0);
+
+  const [semTurma] = await api.listStudents({ pace: "behind" });
+  assert.equal(semTurma!.classId, null);
+
+  assert.ok((await api.enrollStudent(turmaB!.id, semTurma!.studentId)).ok);
+
+  // Matricular de novo é recusado: no banco quem recusa é o índice único.
+  const denovo = await api.enrollStudent(turmaA!.id, semTurma!.studentId);
+  assert.ok(!denovo.ok);
+  assert.equal(denovo.error.code, "conflict");
+
+  assert.ok((await api.moveStudent(turmaA!.id, semTurma!.studentId)).ok);
+  const depois = (await api.listStudents({})).find(
+    (student) => student.studentId === semTurma!.studentId,
+  );
+  assert.equal(depois?.classId, turmaA!.id);
+  assert.equal(depois?.className, turmaA!.name);
+
+  assert.equal((await api.listStudents({ classId: turmaA!.id })).length, 3);
+  assert.equal((await api.listStudents({ classId: turmaB!.id })).length, 0);
+});
+
+test("apagar turma com aluno dentro é recusado; esvaziar e apagar funciona", async () => {
+  const [turmaA] = await api.listClasses();
+
+  const cheia = await api.deleteClass(turmaA!.id, requestId());
+  assert.ok(!cheia.ok);
+  assert.equal(cheia.error.code, "conflict");
+
+  for (const student of await api.listStudents({ classId: turmaA!.id })) {
+    assert.ok((await api.unenrollStudent(student.studentId)).ok);
+  }
+
+  assert.ok((await api.deleteClass(turmaA!.id, requestId())).ok);
+  assert.equal((await api.listClasses()).length, 1);
+});
+
+test("renomear a turma aparece também na linha do aluno", async () => {
+  const [turmaA] = await api.listClasses();
+
+  const curto = await api.renameClass(turmaA!.id, { name: "Tu" }, requestId());
+  assert.ok(!curto.ok);
+  assert.equal(curto.error.field, "name");
+
+  const salvo = await api.renameClass(turmaA!.id, { name: "Fiscal 2028" }, requestId());
+  assert.ok(salvo.ok);
+  assert.equal(salvo.data.studentCount, 2);
+
+  const alunos = await api.listStudents({ classId: turmaA!.id });
+  assert.deepEqual(new Set(alunos.map((student) => student.className)), new Set(["Fiscal 2028"]));
+});

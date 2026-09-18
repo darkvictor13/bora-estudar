@@ -24,6 +24,7 @@ export const STUDENT_ROUTES = [...STUDENT_STUDY_ROUTES, ...STUDENT_FREE_ROUTES] 
 
 export const TEACHER_ROUTES = [
   "/professor",
+  "/professor/turmas",
   "/professor/planejamentos",
   "/professor/metas",
   "/professor/teoria",
@@ -47,6 +48,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/aluno/conta": "Meus dados",
   "/aluno/lista-espera": "Lista de espera",
   "/professor": "Meus alunos",
+  "/professor/turmas": "Turmas",
   "/professor/planejamentos": "Planejamentos",
   "/professor/metas": "Gerar metas",
   "/professor/teoria": "Catálogo de teoria",

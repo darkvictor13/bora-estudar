@@ -62,8 +62,14 @@ npm run e2e:video     # a mesma suíte, gravando .webm por teste
 > A regra de origem — anexar quem se cadastra ao professor MAIS ANTIGO da base
 > — morreu com a migration `20260914190000`: o vínculo é ato de alguém, não
 > efeito colateral de um `order by created_at limit 1`. Em troca,
-> `waitlist.teacher_id` é **nulável**, e a fila de quem ainda não tem professor
-> é visível a qualquer professor enquanto `user_role` não tiver 'admin'.
+> `waitlist.teacher_id` é **nulável**: é a fila de quem ainda não tem professor.
+>
+> **Quem faz o vínculo é `link_student`**, de `20260918120000`, e o professor
+> acha o aluno pelo e-mail INTEIRO (`find_student_by_email`). NÃO EXISTE LISTA
+> DE CANDIDATOS: a cláusula que deixava `waitlist_select` mostrar a fila sem
+> dono a qualquer professor saiu junto, porque uma lista de nome, e-mail,
+> WhatsApp e nascimento de quem ainda não é aluno de ninguém é um diretório com
+> outro nome. Casar por prefixo, também não — é enumeração com outro nome.
 
 O de-para coluna a coluna, contra o banco de origem, está em
 [`docs/de-para-schema.md`](docs/de-para-schema.md).
@@ -76,7 +82,10 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `goal_entries`, `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
-| `profiles.role`, `access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: **precisa de RPC** |
+| `profiles.access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: `link_student` e `set_student_access` |
+| `profiles.role` | ninguém | fora de todo grant, e **sem RPC**: promover é spec própria |
+| `access_grants` | ninguém | SELECT e nada mais: escrita é de `set_student_access` |
+| `classes`, `class_students` | professor | direto, com RLS e grant por coluna |
 | `catalog_blocks` | ninguém | leitura para autenticado; carga por `service_role` |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
@@ -84,9 +93,17 @@ O de-para coluna a coluna, contra o banco de origem, está em
 Escrita de execução continua fechada porque é onde moram a máquina de estados,
 a idempotência por `request_id` e o ledger append-only — coisas que uma tela
 não tem como respeitar sozinha. Se uma tela precisa mexer em execução e não
-existe RPC, **crie a RPC; não afrouxe o grant.** As seis operações que hoje não
+existe RPC, **crie a RPC; não afrouxe o grant.** As três operações que hoje não
 têm RPC lançam com o motivo em `apps/web/src/lib/api/supabase/`, e é assim que
 devem continuar até a RPC existir.
+
+**Turma é planejamento, e por isso NÃO tem RPC.** `classes` e `class_students`
+têm as três defesas montadas desde a migration inicial — `WITH CHECK`,
+`is_teacher_of` conferindo pelo ALUNO, e a FK composta `(class_id, teacher_id)`
+conferindo a turma de destino. Uma RPC ali não acrescentaria garantia nenhuma, e
+acrescentaria superfície. O que mora no banco é o que não cabe numa tela: um
+aluno em uma turma só (`class_students_one_per_student_uidx`) e turma com aluno
+dentro que não se apaga (`protect_class_with_students`).
 
 Três defesas sustentam a escrita direta, e as três precisam continuar valendo
 em qualquer tabela nova:
@@ -107,9 +124,12 @@ em qualquer tabela nova:
 schema anterior não concedia DELETE em lugar nenhum e removia por `deleted_at`.
 Hoje o professor apaga o que planejou, o aluno apaga só o que ele mesmo criou
 (`goals_delete` decide pelo `type`), e o que não pode sumir do histórico —
-`profiles`, `quiz_sessions`, o ledger, `catalog_blocks`, `coupons` — simplesmente
-não tem DELETE para `authenticated`. Caderno continua sendo removido por marca
-(`study_plan_notebooks.deleted`), porque meta antiga aponta para ele.
+`profiles`, `quiz_sessions`, o ledger, `access_grants`, `catalog_blocks`,
+`coupons` — simplesmente não tem DELETE para `authenticated`. Caderno continua
+sendo removido por marca (`study_plan_notebooks.deleted`), porque meta antiga
+aponta para ele. Matrícula em turma, ao contrário, é apagada mesmo:
+`class_students` não é histórico, e guardar "em que turma o aluno estava no
+primeiro semestre" exigiria coluna de saída que ninguém pediu.
 
 **Cuidado ao testar RLS: `UPDATE` e `DELETE` filtram em silêncio.** A linha não
 fica visível para a operação e o comando afeta zero linhas, sem erro. Só o
@@ -124,17 +144,24 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** Nenhuma existe no schema
-de 14/09/2026 — as do schema anterior não foram portadas —, então isto vale para
-a primeira que nascer:
+**Toda RPC mutante precisa ser segura a retentativa.** As duas que existem —
+`link_student` e `set_student_access`, de `20260918120000` — nasceram assim, uma
+em cada forma:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
-  reexecutar; payload diferente é rejeitado. `quiz_sessions.finish_request_id`
-  (UNIQUE) e `finish_payload` são as colunas que o schema já reserva para isso.
-- **Naturalmente idempotente** — o segundo "iniciar" da mesma meta devolve a
-  sessão já aberta, e é o índice
-  `quiz_sessions_one_open_per_plan_uidx` que o garante, não o código da RPC.
+  reexecutar; payload diferente é rejeitado. É `set_student_access`, e o que a
+  sustenta é `access_grants_request_uidx`. O payload guardado são as PRÓPRIAS
+  colunas (`student_id`, `action`, `months`): repeti-lo num `jsonb` ao lado
+  seria um segundo caminho afirmando o mesmo fato.
+  `quiz_sessions.finish_request_id` (UNIQUE) e `finish_payload` são as colunas
+  que o schema reserva para a próxima.
+- **Naturalmente idempotente** — `link_student` não recebe `request_id`, porque
+  não há payload a comparar: o único parâmetro já é a identidade do alvo. Quem
+  garante é a COLUNA `profiles.teacher_id`, que cabe um valor só, com a escrita
+  num `update ... where teacher_id is null` único. O mesmo vale para o segundo
+  "iniciar" da mesma meta, que o índice `quiz_sessions_one_open_per_plan_uidx`
+  vai garantir.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
 ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**
@@ -143,8 +170,9 @@ corrida.
 
 **O que não pode sumir do histórico usa `ON DELETE RESTRICT`**, não `SET NULL`:
 uma bateria que perde o vínculo com a meta vira dado órfão que nenhuma tela
-consegue explicar. `quiz_sessions` referencia `profiles` e o caderno assim, de
-propósito.
+consegue explicar. `quiz_sessions` referencia `profiles` e o caderno assim, e
+`access_grants` referencia `profiles` pelo mesmo motivo — liberação órfã não
+responde "quem liberou este aluno".
 
 **Nenhum dado de domínio em texto livre.** Tipo, origem e flag são enum ou FK.
 A versão anterior codificava `TIPO_REFORCO:1` e o resultado inteiro de uma
@@ -392,10 +420,11 @@ defeito conhecido, o número do bug.
 banco entregou o schema.
 
 **O adaptador do Supabase cobre o contrato inteiro** — um módulo por assunto em
-`lib/api/supabase/`, composto em `index.ts`. Cinco operações LANÇAM com o motivo
+`lib/api/supabase/`, composto em `index.ts`. Três operações LANÇAM com o motivo
 em vez de recusar educadamente, porque não são erro de uso: são coisas que este
-schema não permite (liberar acesso, anular bateria, resgatar cupom, selecionar
-matérias do ciclo). Uma tela que finge ter tentado é pior do que uma que
+schema não permite (anular bateria, resgatar cupom, selecionar matérias do
+ciclo). **Eram cinco:** liberar e bloquear acesso saíram da lista em
+18/09/2026, com `set_student_access`. Uma tela que finge ter tentado é pior do que uma que
 explica, e a recusa muda no dia em que o banco mudar.
 
 **`VITE_API_IMPL=fixtures` continua servindo** para construir tela sem banco no

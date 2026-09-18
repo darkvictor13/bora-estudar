@@ -1,29 +1,39 @@
 /**
  * A LISTA DE ALUNOS E A FICHA, do lado do professor.
  *
- * ## Duas coisas que este schema ainda não permite, e por quê
+ * ## Achar, assumir, liberar — as três passam por RPC
  *
- * - **Liberar e bloquear acesso.** `profiles` concede `UPDATE (name)` e mais
- *   nada: `access_status`, `access_expires_at` e `teacher_id` ficam FORA do
- *   grant, de propósito — a RLS decide qual linha e nunca qual coluna, e sem o
- *   grant por coluna o professor promoveria aluno a professor. Liberar acesso
- *   precisa nascer como RPC, e `grantAccess`/`revokeAccess` recusam dizendo
- *   isso em vez de tentar e colher `42501`.
+ * `profiles` concede `UPDATE (name)` e mais nada: `teacher_id`,
+ * `access_status` e `access_expires_at` ficam FORA do grant, de propósito — a
+ * RLS decide qual linha e nunca qual coluna, e sem o grant por coluna o
+ * professor promoveria aluno a professor. Quem escreve essas três colunas é
+ * `link_student` e `set_student_access`, como `security definer`; quem acha o
+ * aluno pelo e-mail é `find_student_by_email`, porque o e-mail mora em
+ * `auth.users` e a API não expõe aquele schema.
+ *
+ * ## O que este schema ainda não permite
+ *
  * - **Anular bateria.** `quiz_sessions` é SELECT e nada mais; `void_quiz_session`
- *   não foi portada.
+ *   não foi portada, e `voidQuizSession` LANÇA dizendo isso em vez de tentar e
+ *   colher `42501`.
  */
 import { supabase } from "@/lib/supabase/client";
 import { classifyPace, progressUntil } from "@/lib/domain/teacher";
 
 import type {
+  GrantAccessInput,
   QuizSessionSummary,
+  RequestId,
   Result,
   StudentCard,
   StudentFile,
   StudentListFilter,
+  StudentSearchResult,
   Uuid,
 } from "../contract.ts";
-import { readFailure, throwDb } from "./errors.ts";
+import { checkAccessMonths, checkStudentEmail } from "../validation.ts";
+import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { once } from "./idempotency.ts";
 import { PLAN_COLUMNS, requireSession, today, toPlan, type PlanRow } from "./session.ts";
 import { loadStatistics } from "./statistics.ts";
 
@@ -72,7 +82,7 @@ export async function listStudents(
       .in("student_id", ids),
     supabase
       .from("class_students")
-      .select("student_id,classes(name)")
+      .select("student_id,class_id,classes(name)")
       .in("student_id", ids),
   ]);
 
@@ -87,10 +97,16 @@ export async function listStudents(
       row,
     ]),
   );
+  // O ID VAI JUNTO COM O NOME: é por ele que `?turma=` recorta a lista e que a
+  // ficha marca a turma atual. Casar por nome quebraria ao renomear a turma.
   const classByStudent = new Map(
-    ((classes.data ?? []) as unknown as { student_id: string; classes: { name: string } | null }[]).map(
-      (row) => [row.student_id, row.classes?.name ?? null],
-    ),
+    (
+      (classes.data ?? []) as unknown as {
+        student_id: string;
+        class_id: string;
+        classes: { name: string } | null;
+      }[]
+    ).map((row) => [row.student_id, { id: row.class_id, name: row.classes?.name ?? null }]),
   );
 
   const cards = (students as ProfileRow[]).map((student) => {
@@ -99,6 +115,7 @@ export async function listStudents(
       (goal) => goal.student_id === student.id,
     );
     const studentEntries = (entries.data ?? []).filter((entry) => entry.student_id === student.id);
+    const studentClass = classByStudent.get(student.id);
 
     const progress = plan
       ? progressUntil(
@@ -123,12 +140,13 @@ export async function listStudents(
       studentId: student.id,
       name: student.name,
       // `profiles` não guarda e-mail: ele mora em `auth.users`, que a API não
-      // expõe. O professor identifica o aluno pelo nome e pela turma; o e-mail
-      // aparece na lista de espera, que é onde ele foi informado.
+      // expõe. O professor identifica o aluno pelo nome e pela turma; achar
+      // pelo e-mail é `findStudentByEmail`, que passa por RPC.
       email: "",
       access: student.access_status,
       accessExpiresAt: student.access_expires_at,
-      className: classByStudent.get(student.id) ?? null,
+      classId: studentClass?.id ?? null,
+      className: studentClass?.name ?? null,
       planName: plan?.name ?? null,
       pace: classifyPace(progress.completed, progress.due),
       progress: progress.percent,
@@ -142,7 +160,7 @@ export async function listStudents(
   return applyFilter(cards, filter);
 }
 
-/** Os filtros da lista. Somam-se: busca E ritmo E acesso. */
+/** Os filtros da lista. Somam-se: busca E turma E ritmo E acesso. */
 function applyFilter(
   cards: readonly StudentCard[],
   filter: StudentListFilter,
@@ -151,6 +169,10 @@ function applyFilter(
 
   return cards
     .filter((card) => (search ? (card.name ?? "").toLowerCase().includes(search) : true))
+    // `classId` era declarado no contrato e IGNORADO aqui: filtrar por turma
+    // devolvia a lista inteira, sem erro. Um filtro que não filtra é pior do
+    // que filtro nenhum — a tela diz que recortou e não recortou.
+    .filter((card) => (filter.classId ? card.classId === filter.classId : true))
     .filter((card) => (filter.pace ? card.pace === filter.pace : true))
     .filter((card) => (filter.access ? card.access === filter.access : true))
     // Atrasado primeiro: a lista existe para o professor achar quem precisa
@@ -165,8 +187,7 @@ function applyFilter(
 }
 
 export async function loadStudentFile(studentId: Uuid): Promise<StudentFile> {
-  const cards = await listStudents();
-  const card = cards.find((candidate) => candidate.studentId === studentId);
+  const card = await cardOf(studentId);
   // Aluno de outro professor não é 404 por acaso: a RLS já o esconde, e a tela
   // precisa dizer "não existe para você" em vez de mostrar uma ficha vazia.
   if (!card) readFailure("Aluno não encontrado, ou sem vínculo com você.");
@@ -195,6 +216,12 @@ export async function loadStudentFile(studentId: Uuid): Promise<StudentFile> {
     // guardava o tópico — não foi portada. Volta com o motor de baterias.
     topicDifficulties: [],
   };
+}
+
+/** A ficha resumida de um aluno, relida do banco. `null` se ele não é seu. */
+async function cardOf(studentId: Uuid): Promise<StudentCard | null> {
+  const cards = await listStudents();
+  return cards.find((candidate) => candidate.studentId === studentId) ?? null;
 }
 
 /**
@@ -254,33 +281,114 @@ async function loadSessions(studentId: Uuid): Promise<readonly QuizSessionSummar
   });
 }
 
-/** A recusa das três operações que precisam de RPC. */
-function needsRpc(operation: string, what: string): never {
-  throw new Error(
-    `${operation} precisa nascer como RPC: ${what} O grant por coluna em ` +
-      `\`profiles\` e a escrita fechada de \`quiz_sessions\` são a defesa certa; ` +
-      `afrouxá-las para a tela funcionar abriria o buraco que elas fecham. ` +
-      `Ver docs/de-para-schema.md.`,
+/* ------------------------------------------------------------------ *
+ * Achar e assumir
+ * ------------------------------------------------------------------ */
+
+/**
+ * O aluno com EXATAMENTE este e-mail, ou `ok` com `null`.
+ *
+ * O formato é conferido ANTES da ida ao servidor, pelas mesmas funções que a
+ * fixture usa: quem digita metade do endereço precisa ler "digite o e-mail
+ * inteiro", e não "nenhum aluno com este e-mail" — que é o que a busca exata
+ * responderia, e que faria a pessoa procurar o erro no aluno.
+ */
+export async function findStudentByEmail(
+  email: string,
+): Promise<Result<StudentSearchResult | null>> {
+  const invalid = checkStudentEmail(email);
+  if (invalid) return failure(invalid);
+
+  const { data, error } = await supabase.rpc("find_student_by_email", { p_email: email.trim() });
+  if (error) return failure(translateDbError(error));
+
+  const row = (data ?? [])[0];
+  if (!row) return done(null);
+
+  return done({
+    studentId: row.student_id,
+    name: row.name,
+    hasTeacher: row.has_teacher,
+    isMine: row.is_mine,
+  });
+}
+
+/**
+ * Assume o aluno, e reivindica a linha dele na lista de espera.
+ *
+ * Sem `once()`: a idempotência aqui não é do cliente nem do código da RPC, é da
+ * COLUNA — `profiles.teacher_id` cabe um valor só, e a escrita é um `update ...
+ * where teacher_id is null` num comando só. Chamar de novo com o aluno já sendo
+ * seu devolve sucesso sem segunda escrita.
+ */
+export async function linkStudent(studentId: Uuid): Promise<Result<void>> {
+  const { error } = await supabase.rpc("link_student", { p_student_id: studentId });
+  if (error) return failure(translateDbError(error));
+  return done(undefined);
+}
+
+/* ------------------------------------------------------------------ *
+ * Liberar e bloquear
+ * ------------------------------------------------------------------ */
+
+/**
+ * Libera por N meses, SOMANDO ao que ainda falta.
+ *
+ * Quem renova antes do fim não perde dia pago, e a soma é feita no servidor —
+ * calcular a data nova aqui, a partir da que a tela carregou, produziria
+ * vencimento errado em toda aba que ficou aberta.
+ *
+ * O `once()` cobre o clique duplo dentro da aba; quem garante de verdade é
+ * `access_grants.request_id`, que é UNIQUE. É a primeira operação deste
+ * repositório em que a proteção do servidor existe — nas outras, `once()` é
+ * tudo o que há.
+ */
+export function grantAccess(input: GrantAccessInput): Promise<Result<StudentCard>> {
+  const invalid = checkAccessMonths(input.months);
+  if (invalid) return Promise.resolve(failure<StudentCard>(invalid));
+
+  return once(input.requestId, () =>
+    writeAccess(input.studentId, "grant", input.months, input.requestId),
   );
 }
 
-export function grantAccess(): Promise<Result<StudentCard>> {
-  return needsRpc(
-    "Liberar acesso",
-    "`access_status` e `access_expires_at` ficam fora do GRANT UPDATE de `profiles`.",
-  );
+/** Bloqueia, PRESERVANDO a vigência: dá para reativar sem redigitar. */
+export function revokeAccess(studentId: Uuid, requestId: RequestId): Promise<Result<StudentCard>> {
+  return once(requestId, () => writeAccess(studentId, "suspend", null, requestId));
 }
 
-export function revokeAccess(): Promise<Result<StudentCard>> {
-  return needsRpc(
-    "Bloquear acesso",
-    "`access_status` fica fora do GRANT UPDATE de `profiles`.",
-  );
+async function writeAccess(
+  studentId: Uuid,
+  action: "grant" | "suspend",
+  months: number | null,
+  requestId: RequestId,
+): Promise<Result<StudentCard>> {
+  const { error } = await supabase.rpc("set_student_access", {
+    p_student_id: studentId,
+    p_action: action,
+    // Nulo em `suspend`, e o gerador de tipos do Supabase declara todo
+    // parâmetro como não-nulo. O cast diz ao compilador o que o schema já
+    // permite: `p_months integer`, sem `not null`.
+    p_months: months as number,
+    p_request_id: requestId,
+  });
+
+  if (error) return failure(translateDbError(error));
+
+  // A ficha é RELIDA, e não montada com o que a RPC devolveu: o cartão carrega
+  // progresso, desempenho e turma, e remendar só as duas colunas do acesso
+  // deixaria a tela com um objeto meio velho.
+  const card = await cardOf(studentId);
+  if (!card) return fail("not_found", "Aluno não encontrado, ou sem vínculo com você.");
+  return done(card);
 }
 
+/** A recusa da operação que ainda precisa de RPC. */
 export function voidQuizSession(): Promise<Result<QuizSessionSummary>> {
-  return needsRpc(
-    "Anular bateria",
-    "`quiz_sessions` é SELECT e nada mais, e `void_quiz_session` não foi portada.",
+  throw new Error(
+    "Anular bateria precisa nascer como RPC: `quiz_sessions` é SELECT e nada mais, " +
+      "e `void_quiz_session` não foi portada. A escrita fechada é a defesa certa; " +
+      "afrouxá-la para a tela funcionar abriria o buraco que ela fecha. " +
+      "Ver docs/de-para-schema.md.",
   );
 }

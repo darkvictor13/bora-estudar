@@ -47,3 +47,44 @@ export function checkName(name: string): ApiError | null {
   if (name.trim().length < MIN_NAME_LENGTH) return invalid("Informe seu nome completo.", "name");
   return null;
 }
+
+/**
+ * O e-mail da busca do professor.
+ *
+ * Exige o `@` porque a busca casa o endereço INTEIRO: quem digita metade não
+ * recebe "nenhum aluno com este e-mail", recebe a explicação de que a busca é
+ * pelo endereço completo. Sem isto, a recusa do servidor e o engano de quem
+ * digitou chegam com a mesma frase.
+ */
+export function checkStudentEmail(email: string): ApiError | null {
+  const value = email.trim();
+  if (!value) return invalid("Informe o e-mail do aluno.", "email");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    return invalid("Digite o e-mail inteiro do aluno, como ele o cadastrou.", "email");
+  }
+  return null;
+}
+
+/**
+ * As vigências que o professor escolhe, e a `check` que o banco impõe.
+ *
+ * Três é o padrão — o valor que a v96 passava como literal em
+ * `liberarAlunoAcesso`. Os quatro estão aqui, e não só na tela, porque
+ * `access_grants_months_check` recusa qualquer outro: uma lista que exista só
+ * no `<select>` diverge do banco na primeira tela nova.
+ */
+export const ACCESS_MONTHS: readonly number[] = [1, 3, 6, 12];
+export const DEFAULT_ACCESS_MONTHS = 3;
+
+export function checkAccessMonths(months: number): ApiError | null {
+  if (!ACCESS_MONTHS.includes(months)) {
+    return invalid("A vigência é de 1, 3, 6 ou 12 meses.", "months");
+  }
+  return null;
+}
+
+/** O nome da turma. Mesmo mínimo de um nome de pessoa: duas letras não nomeiam. */
+export function checkClassName(name: string): ApiError | null {
+  if (name.trim().length < MIN_NAME_LENGTH) return invalid("Dê um nome à turma.", "name");
+  return null;
+}

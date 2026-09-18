@@ -17,6 +17,12 @@ dois sentidos** por script: toda coluna de origem tem destino ou motivo de
 remoção, e toda coluna nova tem origem ou marca de acréscimo. São 25 tabelas e
 326 colunas de origem, 24 tabelas e 294 colunas de destino.
 
+**Terceira revisão, 18/09/2026.** A migration `20260918120000` acrescentou o que
+a spec 13 pediu: a tabela `access_grants`, o enum `access_grant_action` e as três
+funções de vínculo e acesso. O destino passou a ter **25 tabelas e 302 colunas** —
+`access_grants` não tem origem, e por isso aparece na tabela abaixo como
+acréscimo.
+
 O que o mapa **não** cobre: dado. Nenhuma linha foi lida, copiada ou contada —
 contar linha exige conexão direta ao banco, e este trabalho foi todo feito pela
 API de gerenciamento.
@@ -61,6 +67,7 @@ consultas que encontram essas linhas antes de a carga rodar.
 | `teoria_regras_revisao` | `theory_review_rules` |
 | `teoria_revisoes` | `theory_reviews` |
 | `turmas` | `classes` |
+| — | `access_grants` — **acréscimo de 18/09/2026**, ver a spec 13 |
 | `backup_metas_gabriel_antes_zerar` | **não recriada** |
 
 A que não veio era um backup manual, com 23 colunas todas anuláveis, nenhuma FK,
@@ -629,11 +636,18 @@ lançando. Ver a seção da segunda rodada.
 | — | `public.has_active_access()` — **nova**, idem |
 | — | `public.my_teacher()` — **nova**, idem |
 | — | `app_private.protect_goal_planning_fields()` — **novo gatilho**, idem |
+| — | `public.find_student_by_email(text)` — **nova** (`20260918120000`), achar o aluno pelo e-mail inteiro |
+| `bora_vincular_aluno_professor()` | `public.link_student(uuid)` (`20260918120000`) — **sem parâmetro de professor**: o vínculo é sempre com quem chama |
+| `liberarAlunoAcesso` (era código do cliente) | `public.set_student_access(uuid, access_grant_action, integer, uuid)` (`20260918120000`) |
+| — | `app_private.replay_access_grant(...)` — **nova**, o resultado guardado de um `request_id` já visto |
+| — | `app_private.protect_class_with_students()` — **novo gatilho** (`20260918120000`), turma com aluno dentro não é apagada |
 
 O schema `bora_private` virou `app_private`.
 
-As quatro últimas não têm origem: nasceram na segunda rodada de auditoria, para
-fechar buraco que o banco antigo também tinha e ninguém tinha nomeado.
+Quatro delas não têm origem na segunda rodada de auditoria: nasceram para fechar
+buraco que o banco antigo também tinha e ninguém tinha nomeado. As cinco de
+18/09/2026 nascem com a spec 13 — e duas delas fazem o que a v96 fazia no
+CLIENTE, com um UUID de professor fixo no bundle.
 
 ### Uma mudança de lógica dentro dos gatilhos
 
@@ -692,11 +706,18 @@ lia "Entramos, mas seu perfil não foi encontrado." no login.
   professor enxerga aluno. Toda conta nasce ALUNO e `pending`; promover entra na
   mesma fila de "liberar acesso precisa nascer como RPC", logo abaixo.
 
-**A liberação de acesso.** Com o grant por coluna em `profiles`, nem o dono nem
-o professor alteram `role`, `access_status`, `access_expires_at`, `plan`,
-`coupon_used`, `access_origin` ou `teacher_id` pelo PostgREST. Isso fecha a
-escalação de privilégio e, de quebra, o professor promovendo aluno a professor —
-mas significa que **liberar acesso precisa nascer como RPC**.
+**A liberação de acesso — RESOLVIDA em `20260918120000`.** Com o grant por
+coluna em `profiles`, nem o dono nem o professor alteram `role`,
+`access_status`, `access_expires_at`, `plan`, `coupon_used`, `access_origin` ou
+`teacher_id` pelo PostgREST. Isso fecha a escalação de privilégio e, de quebra, o
+professor promovendo aluno a professor — e significava que liberar acesso
+precisava nascer como RPC. `link_student` e `set_student_access` são essa RPC, e
+`access_grants` guarda o histórico que faltava.
+
+**Promover a professor continua fora.** `role` é a única das sete colunas que
+segue sem escritor no produto, e de propósito: resolver exige decidir se nasce um
+papel `admin` em `user_role`, e quem concede o primeiro. Até lá é o `update`
+deliberado que a `20260914190000` documenta no comentário.
 
 **O resgate de cupom.** `coupons` deixou de ser legível por qualquer um; só o
 professor lê. O resgate, que no banco de origem não existia como RPC, também
@@ -863,20 +884,25 @@ os dois estavam errados — 102 CHECKs (são 68) e 53 índices (são 85).
 A coluna da direita foi medida depois da segunda rodada; a do meio é o que a
 primeira rodada tinha produzido, para o diff ficar legível.
 
-| | origem | 1ª rodada | agora |
-|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 |
-| Colunas | 326 | 294 | 294 |
-| Policies | 79 | 63 | 62 |
-| Tipos enumerados | 0 | 12 | 12 |
-| CHECK constraints | 68 | 46 | 46 |
-| Foreign keys | 49 | 53 | 53 |
-| Índices | 85 | 81 | 92 |
-| Views | 0 | 1 | 1 |
-| Gatilhos | 12 | 27 | 28 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 |
+A coluna **18/09** é o schema depois de `20260914190000` (o gatilho de perfil) e
+`20260918120000` (vínculo, acesso e turmas). É ela que `supabase/tests/07_schema.sql`
+confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
+junto.
+
+| | origem | 1ª rodada | 2ª rodada | 18/09 |
+|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 |
+| Colunas | 326 | 294 | 294 | 302 |
+| Policies | 79 | 63 | 62 | 64 |
+| Tipos enumerados | 0 | 12 | 12 | 13 |
+| CHECK constraints | 68 | 46 | 46 | 47 |
+| Foreign keys | 49 | 53 | 53 | 55 |
+| Índices | 85 | 81 | 92 | 97 |
+| Views | 0 | 1 | 1 | 1 |
+| Gatilhos | 12 | 27 | 28 | 29 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.

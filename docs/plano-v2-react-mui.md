@@ -227,10 +227,11 @@ não sumirem de vista:
 2. **O tema não tem onde morar na conta.** `user_preferences` saiu e nada a
    substituiu; a escolha vale por aparelho. `F-TEMA-02` e `F-TEMA-04` estão
    `fixme`. O pedido é uma coluna `theme_preference` em `profiles`.
-3. **Liberar acesso e resgatar cupom precisam nascer como RPC.** O grant por
-   coluna em `profiles` — que é a defesa certa — deixa `access_status` fora do
-   alcance de `authenticated`. É trabalho das fases 5 e 6, e o de-para já o
-   lista.
+3. ~~**Liberar acesso e resgatar cupom precisam nascer como RPC.**~~ Liberar
+   acesso nasceu em 18/09/2026 (`set_student_access`, com `link_student` ao
+   lado); resgatar cupom continua faltando. O grant por coluna em `profiles` —
+   que é a defesa certa — segue deixando `access_status` fora do alcance de
+   `authenticated`.
 
 Fora isso, `npm run check` continua vermelho nas telas das fases 3 a 6 e em
 `lib/data/*`: 488 erros de tipo, todos por o schema ter mudado debaixo delas.
@@ -397,9 +398,9 @@ Todas as sete fases estão entregues. O estado, medido e não afirmado:
 
 | | |
 |---|---|
-| `npm run check` | verde — typecheck, lint e 74 testes de unidade (exige Node 24) |
-| `npm run e2e` | **171 verdes**, 8 `fixme` documentados, zero falhas |
-| `npm run db:test` | verde — **86 asserções** em 8 suítes, reescritas em 14/09 contra o schema novo |
+| `npm run check` | verde — typecheck, lint e 83 testes de unidade (exige Node 24) |
+| `npm run e2e` | **188 verdes**, 4 `fixme` documentados, zero falhas |
+| `npm run db:test` | verde — **128 asserções** em 8 suítes, reescritas em 14/09 e ampliadas em 18/09 |
 | Seletor de classe CSS na suíte | zero (`grep -c 'locator("\.'` em `apps/e2e`) |
 | `globals.css` | apagado; não existe mais CSS próprio |
 | `lib/data/` | apagado; toda tela fala com `lib/api` |
@@ -407,24 +408,28 @@ Todas as sete fases estão entregues. O estado, medido e não afirmado:
 
 ### O que o banco ainda não permite
 
-São **seis** — a sexta é `setSelectedSubjects`, no fim da lista — e todas
-**lançam com o motivo** em vez de recusar educadamente —
+São **três**, e todas **lançam com o motivo** em vez de recusar educadamente —
 uma tela que finge ter tentado é pior do que uma que explica. Nenhuma é decisão
 da interface: em todas, a defesa do banco é a certa, e afrouxá-la para a tela
 funcionar abriria o buraco que ela fecha.
 
-1. **Liberar e bloquear acesso.** `profiles` concede `UPDATE (name)` e mais
-   nada — `access_status`, `access_expires_at` e `teacher_id` ficam fora do
-   grant para que ninguém se promova nem estenda o próprio acesso. Precisa
-   nascer como RPC. (`F-VINC-*`)
+**Eram seis.** Saíram, nesta ordem: **cadastro público não cria perfil**
+(item 4), com a migration `20260914190000`; e **liberar e bloquear acesso**
+(item 1), com `20260918120000` — que trouxe junto vincular aluno e as turmas,
+pela spec 13. Ficam abaixo, riscados, para o histórico não sumir.
+
+1. ~~**Liberar e bloquear acesso.**~~ **Resolvida em 18/09/2026.**
+   `access_status`, `access_expires_at` e `teacher_id` continuam fora do grant —
+   quem os escreve é `link_student` e `set_student_access`. (`F-VINC-01` a
+   `F-VINC-08`)
 2. **Anular bateria.** `quiz_sessions` é SELECT; `void_quiz_session` não foi
    portada. (`F-ANUL-*`)
 3. **Resgatar cupom.** `coupons` está com RLS ligada, zero policy e zero grant,
    de propósito: validar o código no cliente entregaria a lista de códigos.
    (`F-CUP-*`)
-4. **Cadastro público não cria perfil.** O gatilho em `auth.users` não foi
-   portado, e embute uma decisão de produto que falta: a qual professor um aluno
-   sem metadado é anexado. (`F-AUTH-08`)
+4. ~~**Cadastro público não cria perfil.**~~ **Resolvida em 14/09/2026** pela
+   migration `20260914190000`: o perfil nasce com a conta, aluno, pendente e
+   **sem professor**. (`F-AUTH-08`)
 5. **Tema na conta.** `user_preferences` saiu; a escolha vale por aparelho até
    existir uma coluna `theme_preference` em `profiles`. (`F-TEMA-02`, `F-TEMA-04`)
 6. **Selecionar as matérias do ciclo.** A v2 guardava a seleção; o schema de

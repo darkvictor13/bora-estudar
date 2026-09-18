@@ -231,6 +231,23 @@ export async function createUser(
   return { id, email, password: TEST_PASSWORD, name };
 }
 
+/**
+ * Põe a pessoa na fila SEM PROFESSOR — o estado de quem acabou de se cadastrar.
+ *
+ * INSERT direto, como dono do banco, e é o caso em que isso é legítimo: a tela
+ * que grava esta linha é a do ALUNO, e o que o teste exercita depois é o que o
+ * PROFESSOR faz com ela. Fabricar a inscrição pela tela do aluno custaria um
+ * login a mais por teste e não provaria nada sobre o vínculo.
+ */
+export async function joinWaitlist(person: Person): Promise<void> {
+  await query(
+    `insert into public.waitlist
+       (student_id, teacher_id, name, email, whatsapp, interest_area, target_exam)
+     values ($1, null, $2, $3, '41999990000', 'Fiscal', 'Receita Federal')`,
+    [person.id, person.name, person.email],
+  );
+}
+
 /** Remove o usuário e tudo que pende dele. Só serve para quem não tem histórico. */
 export async function deleteUser(userId: string): Promise<void> {
   // `student_teacher_links` deixou de existir: o vínculo virou `profiles.teacher_id`,
