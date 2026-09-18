@@ -52,29 +52,62 @@ else
   # não caber de uma vez — deploy vermelho com o bundle certo no ar.
   bundle=$(mktemp)
   trap 'rm -f "$bundle"' EXIT
-  curl -sS --max-time 60 "$URL$asset" -o "$bundle" || true
 
-  # A chave é assada no bundle pelo Vite. Se ela não está aqui, o build rodou
-  # sem as VITE_*, e o produto sobe com tela branca.
-  if grep -q "$HOST" "$bundle"; then
-    ok "a URL do Supabase do ambiente está no bundle"
-  else
-    erro "o bundle não cita $HOST — build sem as VITE_* do ambiente?"
-  fi
-
-  # Nenhum segredo pode ter entrado no bundle. O padrão exige material de chave
-  # DEPOIS do prefixo: `@supabase/supabase-js` carrega o literal `sb_secret_`
-  # num validador de formato, e um grep pelo prefixo sozinho reprova todo
-  # deploy. Medido contra o bundle publicado.
+  # E o que chega precisa SER o bundle. A publicação no Cloudflare não fica
+  # visível de uma vez: o index.html já vem da versão nova enquanto o pedido do
+  # asset, noutra conexão, ainda cai onde o manifesto é o antigo. Ali o hash
+  # novo não existe, e o `not_found_handling: single-page-application` responde
+  # com o index.html.
   #
-  # Esta é a checagem que mais precisava sair do pipe: sem casamento o
-  # `printf` terminava inteiro e ela passava, então ela só funcionava no caso
-  # em que não acusava nada — um segredo vazado cairia no mesmo SIGPIPE e
-  # seria reportado como "nenhum segredo".
-  if grep -qE 'sb_secret_[A-Za-z0-9_-]{10,}|service_role' "$bundle"; then
-    erro "chave secreta no bundle"
+  # Sem esta espera, TODA checagem de conteúdo daqui para baixo lê a casca em
+  # HTML: a URL do Supabase "não está no bundle" com o bundle certo no ar, e
+  # "nenhum segredo" é dito sobre um arquivo que nunca foi o bundle. É
+  # diagnóstico errado do problema certo — deploy vermelho mandando procurar
+  # VITE_* que estão configuradas. Medido em 18/09/2026, onze segundos depois
+  # do deploy.
+  #
+  # Status não distingue nada: os dois são 200. Quem distingue é o
+  # content-type, `text/javascript` no asset contra `text/html` no fallback. Se
+  # ao fim das tentativas ainda vier HTML, aí é falha de verdade — o deploy não
+  # publicou o asset que o index.html promete — e o erro passa a dizer isso, em
+  # vez de acusar as VITE_*.
+  tipo=""
+  for tentativa in 1 2 3 4 5 6; do
+    tipo=$(curl -sS --max-time 60 -o "$bundle" -w '%{content_type}' "$URL$asset" || true)
+    case "$tipo" in *javascript*) break ;; esac
+    [ "$tentativa" = 6 ] || sleep 5
+  done
+
+  case "$tipo" in
+    *javascript*) baixou=sim ;;
+    *)            baixou=nao ;;
+  esac
+
+  if [ "$baixou" = nao ]; then
+    erro "$asset respondeu ${tipo:-<sem content-type>} em vez de JavaScript — o fallback de SPA atendeu no lugar do bundle, e as checagens de conteúdo não têm o que ler"
   else
-    ok "nenhum segredo no bundle"
+    # A chave é assada no bundle pelo Vite. Se ela não está aqui, o build rodou
+    # sem as VITE_*, e o produto sobe com tela branca.
+    if grep -q "$HOST" "$bundle"; then
+      ok "a URL do Supabase do ambiente está no bundle"
+    else
+      erro "o bundle não cita $HOST — build sem as VITE_* do ambiente?"
+    fi
+
+    # Nenhum segredo pode ter entrado no bundle. O padrão exige material de
+    # chave DEPOIS do prefixo: `@supabase/supabase-js` carrega o literal
+    # `sb_secret_` num validador de formato, e um grep pelo prefixo sozinho
+    # reprova todo deploy. Medido contra o bundle publicado.
+    #
+    # Esta é a checagem que mais precisava sair do pipe: sem casamento o
+    # `printf` terminava inteiro e ela passava, então ela só funcionava no caso
+    # em que não acusava nada — um segredo vazado cairia no mesmo SIGPIPE e
+    # seria reportado como "nenhum segredo".
+    if grep -qE 'sb_secret_[A-Za-z0-9_-]{10,}|service_role' "$bundle"; then
+      erro "chave secreta no bundle"
+    else
+      ok "nenhum segredo no bundle"
+    fi
   fi
 fi
 
