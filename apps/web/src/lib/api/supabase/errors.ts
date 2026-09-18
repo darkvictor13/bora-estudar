@@ -8,10 +8,28 @@
  */
 import type { AuthError, PostgrestError } from "@supabase/supabase-js";
 
-import type { ApiError, ApiErrorCode, Result } from "../contract.ts";
+import { captureUnexpectedFailure } from "@/lib/observability";
+
+import { ApiThrownError, type ApiError, type ApiErrorCode, type Result } from "../contract.ts";
+
+/**
+ * `unknown` é a única confissão que este arquivo faz.
+ *
+ * Os dois tradutores abaixo terminam em `unknown` quando não reconhecem o erro,
+ * e as cinco chamadas de `fail("unknown", …)` espalhadas pelo adaptador dizem a
+ * mesma coisa à mão: a gravação não aconteceu e ninguém sabe por quê. Como o
+ * contrato manda a ESCRITA devolver `Result` em vez de lançar, nada disso chega
+ * a um `ErrorBoundary` — sem relatar aqui, o caso é visto pela pessoa que
+ * tentou gravar e por mais ninguém.
+ */
+function reportIfUnknown(error: ApiError, cause?: unknown): void {
+  if (error.code === "unknown") captureUnexpectedFailure(error.message, cause);
+}
 
 export function fail<T>(code: ApiErrorCode, message: string, field?: string): Result<T> {
-  return { ok: false, error: { code, message, ...(field ? { field } : {}) } satisfies ApiError };
+  const error = { code, message, ...(field ? { field } : {}) } satisfies ApiError;
+  reportIfUnknown(error);
+  return { ok: false, error };
 }
 
 export function done<T>(data: T): Result<T> {
@@ -19,6 +37,7 @@ export function done<T>(data: T): Result<T> {
 }
 
 export function failure<T>(error: ApiError): Result<T> {
+  reportIfUnknown(error);
   return { ok: false, error };
 }
 
@@ -102,10 +121,22 @@ export function translateDbError(error: PostgrestError): ApiError {
  * loader a um try/catch que ninguém lembra de escrever.
  */
 export function throwDb(error: PostgrestError): never {
-  throw new Error(translateDbError(error).message, { cause: error });
+  const translated = translateDbError(error);
+  // `ApiThrownError` e não `Error`: o código precisa sobreviver ao `throw`.
+  // Quem pega isto — o `ErrorBoundary` da rota — decide entre mostrar e
+  // RELATAR, e a diferença entre `forbidden` (o acesso venceu, dezenas de vezes
+  // por dia) e `unknown` não pode depender de casar a frase em português.
+  throw new ApiThrownError(translated.code, translated.message, { cause: error });
 }
 
-/** Um erro de leitura escrito à mão, com a mesma forma dos de cima. */
-export function readFailure(message: string): never {
-  throw new Error(message);
+/**
+ * Um erro de leitura escrito à mão, com a mesma forma dos de cima.
+ *
+ * O código padrão é `not_found` porque é o que as chamadas de hoje significam —
+ * planejamento que ainda não existe, aluno sem vínculo com quem pergunta. São
+ * ESTADOS do produto, que a tela explica e ninguém precisa corrigir; passe um
+ * código diferente quando a ausência for defeito.
+ */
+export function readFailure(message: string, code: ApiErrorCode = "not_found"): never {
+  throw new ApiThrownError(code, message);
 }
