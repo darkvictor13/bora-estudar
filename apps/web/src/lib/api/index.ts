@@ -17,6 +17,16 @@ import { supabaseApi } from "./supabase/index.ts";
 export * from "./contract.ts";
 
 /**
+ * As vigências que o professor escolhe, e o padrão.
+ *
+ * Saem de `validation.ts` porque é lá que a regra mora — `access_grants_months_
+ * check` recusa qualquer outro valor —, e são reexportadas aqui porque a tela
+ * precisa delas para montar o seletor. Uma lista que existisse só no `<select>`
+ * divergiria do banco na primeira tela nova.
+ */
+export { ACCESS_MONTHS, DEFAULT_ACCESS_MONTHS } from "./validation.ts";
+
+/**
  * O PADRÃO É O BANCO, desde que a frente do banco entregou.
  *
  * Era `fixtures` enquanto o schema não existia. A inversão importa por um

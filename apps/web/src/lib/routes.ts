@@ -43,6 +43,7 @@ export const ROUTES = {
   teacher: {
     students: "/professor",
     student: (id: string) => `/professor/alunos/${id}`,
+    classes: "/professor/turmas",
     plans: "/professor/planejamentos",
     theory: "/professor/teoria",
     notebooks: "/professor/cadernos",

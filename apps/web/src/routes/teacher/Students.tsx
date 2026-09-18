@@ -3,10 +3,11 @@ import LinearProgress from "@mui/material/LinearProgress";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { Badge, Empty, Metric, PageHeader, type BadgeTone } from "@bora/ui";
+import { Badge, Card, Empty, Metric, PageHeader, type BadgeTone } from "@bora/ui";
 import { Link as RouterLink, useLoaderData, useSearchParams } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
+import { FindStudentForm } from "@/components/teacher/FindStudentForm";
 import { api, type StudentCard, type StudentPace } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
 import { ROUTES } from "@/lib/routes";
@@ -22,6 +23,10 @@ import { formatMinutes } from "@/lib/domain/week";
  * Os filtros moram na URL pelo mesmo motivo do seletor de semana: o endereço
  * fica compartilhável, o botão voltar funciona, e recarregar não perde o
  * recorte que o professor acabou de montar.
+ *
+ * É TAMBÉM ONDE UM ALUNO VIRA ALUNO. O perfil nasce sem professor, e sem a
+ * caixa de "Assumir" esta lista ficaria vazia para sempre — era o estado do
+ * produto até 18/09/2026.
  */
 export async function teacherStudentsLoader({ request }: { request: Request }) {
   await requireRole("teacher");
@@ -29,13 +34,23 @@ export async function teacherStudentsLoader({ request }: { request: Request }) {
   const params = new URL(request.url).searchParams;
   const search = params.get("busca") ?? "";
   const pace = params.get("ritmo") as StudentPace | null;
+  const asked = params.get("turma") ?? "";
+
+  // AS TURMAS VÊM PRIMEIRO, e as duas leituras não correm em paralelo de
+  // propósito: `?turma=` de um valor que não é turma deste professor é
+  // IGNORADO, e a lista volta inteira (R-TURMA-10). Sem saber quais turmas
+  // existem, um id inventado recortaria a lista até o vazio e a tela diria
+  // "nenhum aluno com esse recorte" — a query string viraria uma porta.
+  const classes = await api.listClasses();
+  const classId = classes.some((turma) => turma.id === asked) ? asked : "";
 
   const students = await api.listStudents({
     ...(search ? { search } : {}),
     ...(pace ? { pace } : {}),
+    ...(classId ? { classId } : {}),
   });
 
-  return { students, search, pace: pace ?? "" };
+  return { students, classes, search, pace: pace ?? "", classId };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentsLoader>>;
@@ -124,7 +139,7 @@ function StudentTile({ student }: { student: StudentCard }) {
 }
 
 export function TeacherStudents() {
-  const { students, search, pace } = useLoaderData() as LoaderData;
+  const { students, classes, search, pace, classId } = useLoaderData() as LoaderData;
   const [params, setParams] = useSearchParams();
 
   function setParam(key: string, value: string) {
@@ -150,6 +165,22 @@ export function TeacherStudents() {
               onChange={(event) => setParam("busca", event.target.value)}
               sx={{ minWidth: 220 }}
             />
+            <TextField
+              select
+              size="small"
+              label="Turma"
+              value={classId}
+              slotProps={{ select: { inputProps: { "data-testid": "class-filter" } } }}
+              onChange={(event) => setParam("turma", event.target.value)}
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {classes.map((turma) => (
+                <MenuItem key={turma.id} value={turma.id}>
+                  {turma.name}
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               select
               size="small"
@@ -186,11 +217,20 @@ export function TeacherStudents() {
           />
         </Box>
 
+        <Box sx={{ mb: 1.75 }}>
+          <Card
+            title="Assumir um aluno"
+            sub="Pelo e-mail inteiro — não existe lista de candidatos"
+          >
+            <FindStudentForm />
+          </Card>
+        </Box>
+
         {students.length === 0 ? (
           <Empty icon="🧑‍🎓">
-            {search || pace
+            {search || pace || classId
               ? "Nenhum aluno com esse recorte."
-              : "Nenhum aluno vinculado a você ainda."}
+              : "Nenhum aluno vinculado a você ainda. Assuma o primeiro pelo e-mail."}
           </Empty>
         ) : (
           <Box

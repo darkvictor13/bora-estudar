@@ -159,8 +159,10 @@ arquitetura assume hoje:
   student_id)` e parentes. A FK de coluna única garantia que a linha EXISTE, não
   que ela é de quem está escrevendo;
 - o que é administrativo (`role`, `access_status`, `access_expires_at`,
-  `teacher_id`) fica fora de todo grant: liberar acesso, resgatar cupom e anular
-  bateria **precisam nascer como RPC**.
+  `teacher_id`) fica fora de todo grant. `teacher_id`, `access_status` e
+  `access_expires_at` ganharam RPC em `20260918120000` (`link_student` e
+  `set_student_access`); `role` continua sem escritor no produto, e resgatar
+  cupom e anular bateria **ainda precisam nascer como RPC**.
 
 ### Linha de base do schema
 
@@ -310,12 +312,17 @@ recarregar a página.
   admin para acomodar, e `can_view_context` deu lugar a `can_access_teacher` e
   `is_teacher_of`. Uma área de administração, se nascer, nasce com um papel novo
   e uma decisão nova.
-- **As seis operações que o banco ainda não permite.** Liberar acesso, suspender
-  acesso, vincular candidato, anular bateria, resgatar cupom e selecionar as
-  matérias do ciclo lançam com o motivo em `lib/api/supabase/`, em vez de
-  recusar em silêncio. Nas seis a defesa do banco é a certa: o que falta é a RPC
-  `security definer` que valida do lado do servidor. A sétima, o tema na conta,
-  espera uma coluna `theme_preference` em `profiles`.
+- **As três operações que o banco ainda não permite.** Anular bateria, resgatar
+  cupom e selecionar as matérias do ciclo lançam com o motivo em
+  `lib/api/supabase/`, em vez de recusar em silêncio. Nas três a defesa do banco
+  é a certa: o que falta é a RPC `security definer` que valida do lado do
+  servidor. A quarta, o tema na conta, espera uma coluna `theme_preference` em
+  `profiles`.
+
+  **Eram seis.** Liberar acesso, suspender acesso e vincular candidato saíram em
+  18/09/2026, com a migration `20260918120000` e a spec 13 — e promover a
+  professor, que nunca esteve nesta lista, continua sendo o `update` deliberado
+  de quem tem a chave do banco.
 - **Como o aluno responde uma bateria.** É a pendência que a remoção da
   extensão abriu, e a maior: o banco tem a sessão, o ledger e as três fases;
   não há superfície que as execute. Enquanto não houver, a tela do aluno abre

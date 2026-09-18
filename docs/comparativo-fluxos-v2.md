@@ -148,8 +148,10 @@ navegador.
 | Histórico de baterias do aluno | `abrirBateriasAluno` | ❌ | — |
 | **Anular bateria** | `anularBateriaAluno` | ❌ | `void_quiz_session` existe no banco e ninguém chama |
 | Dificuldades por tópico | `abrirDificuldadesAluno` | ❌ | O catálogo tem tópico por questão (`catalog_questions`); falta a agregação e a tela |
-| **Liberar acesso por 3 meses** | `liberarAlunoAcesso` | ❌ | RLS e grant já permitem ao professor escrever em `subscriptions`; falta a tela |
-| **Bloquear acesso** | `bloquearAlunoAcesso` | ❌ | Idem |
+| **Liberar acesso por 3 meses** | `liberarAlunoAcesso` | ✅ | `set_student_access`, na ficha do aluno. Soma ao que ainda falta, e deixa linha em `access_grants`. Spec 13, F-VINC-05 e F-VINC-06 |
+| **Bloquear acesso** | `bloquearAlunoAcesso` | ✅ | Mesma RPC, ação `suspend`: preserva a vigência. F-VINC-08 |
+| **Vincular aluno ao professor** | amarrado a um UUID fixo no bundle (`PROFESSOR_PADRAO_ID`) | ✅ | `find_student_by_email` mais `link_student`, em `/professor`. Sem lista de candidatos: o e-mail vai inteiro. F-VINC-01 a F-VINC-04 |
+| **Turmas: criar, matricular, mover** | `turmas` | ✅ | `/professor/turmas` e o seletor na ficha do aluno. Um aluno em uma turma, e turma com aluno não se apaga. F-MATR-01 a F-MATR-05 |
 
 ---
 
@@ -259,9 +261,11 @@ ao professor, por último o que é conforto.
 1. **Concluir meta de teoria e registrar estudo extra** (§2). Sem isso, três das
    cinco metas semanais do seed (2 de teoria e 1 de estudo extra) são
    impossíveis de fechar.
-2. **Vincular aluno a professor e liberar acesso** (§6). Quem se cadastra hoje
-   fica na lista de espera para sempre — é o mesmo ponto do BUG-07 e do §7 de
-   `fluxos-e2e.md`.
+2. ~~**Vincular aluno a professor e liberar acesso** (§6).~~ **Fechada em
+   18/09/2026**, pela spec 13 e pela migration `20260918120000`. Era o item que
+   deixava quem se cadastrava na lista de espera para sempre: o professor agora
+   acha o aluno pelo e-mail inteiro, assume e libera, e as turmas vieram junto.
+   **Promover alguém a professor continua fora** — é spec própria.
 3. **Criar e ativar planejamento, cadastrar blocos** (§7). Fora do seed, um
    professor novo não tem por onde começar.
 
@@ -270,7 +274,7 @@ ao professor, por último o que é conforto.
 4. Gerenciar cadernos: ativar/desativar bloco sem mexer nas metas concluídas.
 5. Editar, arquivar e excluir planejamento.
 6. Anular bateria (`void_quiz_session` já existe).
-7. Suspender acesso.
+7. ~~Suspender acesso.~~ Entrou junto com liberar, no item 2.
 
 **Fecha o ciclo de estudo**
 

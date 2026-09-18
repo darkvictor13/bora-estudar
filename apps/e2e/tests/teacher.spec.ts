@@ -3,26 +3,25 @@
  *
  * REESCRITO NA FASE 6, e não convertido: as telas mudaram de forma junto com o
  * schema. A ficha do aluno era um modal e virou rota; gerar metas ganhou prévia
- * obrigatória; e três ações da v2 saíram porque o banco não as permite mais.
+ * obrigatória; e três ações da v2 saíram porque o banco não as permitia.
  *
- * O QUE NÃO ESTÁ AQUI, E POR QUÊ — nos três casos a defesa do banco é a certa,
- * e afrouxá-la para a tela funcionar abriria o buraco que ela fecha:
+ * DUAS DELAS VOLTARAM EM 18/09/2026, com a spec 13: vincular e liberar acesso.
+ * Os três `test.fixme` que guardavam a falta deram lugar a `F-VINC-01` a
+ * `F-VINC-08` e a `F-MATR-01` a `F-MATR-05` — as turmas entraram junto porque
+ * `classes` e `class_students` já estavam no banco e nunca tinham ganhado tela.
  *
- * - **F-VINC-04/05/06 · liberar, estender e suspender acesso.** `profiles`
- *   concede `UPDATE (name)` e mais nada; `access_status` e `access_expires_at`
- *   ficam fora do grant para que ninguém se promova nem estenda o próprio
- *   acesso. Precisa nascer como RPC.
- * - **F-ANUL-\* · anular bateria.** `quiz_sessions` é SELECT e nada mais, e
- *   `void_quiz_session` não foi portada.
- * - **F-VINC-01/02/03 · vincular candidato.** O vínculo virou
- *   `profiles.teacher_id`, também fora do grant.
- *
- * Os três estão marcados `fixme` no fim do arquivo, para a falta continuar
- * visível na saída da suíte.
+ * O QUE CONTINUA FALTANDO, e por quê: **anular bateria**. `quiz_sessions` é
+ * SELECT e nada mais, e `void_quiz_session` não foi portada. A defesa do banco
+ * é a certa, e afrouxá-la para a tela funcionar abriria o buraco que ela fecha;
+ * o `fixme` no fim do arquivo mantém a falta visível na saída da suíte.
  */
+import { randomUUID } from "node:crypto";
+
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "../fixtures/index.ts";
-import { count, one, query } from "../fixtures/db.ts";
-import { addTheoryCatalog, addWeek } from "../fixtures/scenario.ts";
+import { asUser, count, one, query } from "../fixtures/db.ts";
+import { addTheoryCatalog, addWeek, createUser, joinWaitlist } from "../fixtures/scenario.ts";
 import { alert, content, field, testId } from "../support/ui.ts";
 import { PAGE_TITLES, TEACHER_ROUTES } from "../support/routes.ts";
 
@@ -94,16 +93,21 @@ test.describe("F-PROF-03 · a ficha do aluno", () => {
     await expect(content(teacherPage)).toContainText("Aluno não encontrado");
   });
 
-  test("diz o que ainda não dá para fazer, em vez de oferecer e falhar", async ({
+  test("oferece o que o banco cumpre, e diz o que ainda falta", async ({
     teacherPage,
     scenario,
   }) => {
     await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
 
-    // Um botão que sempre colhe `42501` é pior do que botão nenhum.
-    await expect(alert(teacherPage, "info")).toContainText("Liberar e bloquear acesso");
-    await expect(content(teacherPage).getByRole("button", { name: /Liberar acesso/ })).toHaveCount(0);
+    // Liberar e bloquear existem desde que `set_student_access` nasceu; a
+    // turma, desde que `class_students` ganhou tela.
+    await expect(testId(teacherPage, "access-form")).toBeVisible();
+    await expect(testId(teacherPage, "grant-access")).toBeVisible();
+
+    // O que continua sem caminho diz o motivo em vez de oferecer e falhar: um
+    // botão que sempre colhe `42501` é pior do que botão nenhum.
     await expect(testId(teacherPage, "topic-difficulties-empty")).toContainText("catálogo de tópicos");
+    await expect(content(teacherPage).getByRole("button", { name: /Anular/ })).toHaveCount(0);
   });
 });
 
@@ -563,36 +567,6 @@ test.describe("F-TEST-01 · estatísticas do professor", () => {
   });
 });
 
-/* ------------------------------------------------------------------ *
- * O que este banco ainda não permite
- * ------------------------------------------------------------------ */
-
-test.describe("F-VINC · acesso e vínculo", () => {
-  /*
-   * `profiles` concede `UPDATE (name)` e mais nada. `access_status`,
-   * `access_expires_at` e `teacher_id` ficam FORA do grant — a RLS decide qual
-   * linha e nunca qual coluna, e sem o grant por coluna o professor promoveria
-   * aluno a professor. As três operações precisam nascer como RPC.
-   */
-  test.fixme("liberar acesso por N meses", async ({ teacherPage, scenario }) => {
-    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
-    await teacherPage.getByRole("button", { name: "Liberar acesso" }).click();
-    await expect(alert(teacherPage, "success")).toContainText("Acesso liberado");
-  });
-
-  test.fixme("suspender acesso", async ({ teacherPage, scenario }) => {
-    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
-    await teacherPage.getByRole("button", { name: "Suspender" }).click();
-    await expect(alert(teacherPage, "success")).toBeVisible();
-  });
-
-  test.fixme("vincular candidato da lista de espera", async ({ teacherPage }) => {
-    await teacherPage.goto("/professor");
-    await teacherPage.getByRole("button", { name: "Vincular" }).first().click();
-    await expect(alert(teacherPage, "success")).toBeVisible();
-  });
-});
-
 test.describe("F-ANUL · anular bateria", () => {
   /*
    * `quiz_sessions` é SELECT e nada mais; a escrita é de RPC, e
@@ -608,3 +582,446 @@ test.describe("F-ANUL · anular bateria", () => {
     await expect(alert(teacherPage, "success")).toBeVisible();
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Vínculo, acesso e turmas — spec 13
+ * ------------------------------------------------------------------ */
+
+test.describe("F-VINC · achar e assumir um aluno", () => {
+  test("F-VINC-01 · a busca é pelo e-mail INTEIRO", async ({ teacherPage }) => {
+    const candidato = await createUser("student", "Candidato Sem Professor", "cand");
+
+    await teacherPage.goto("/professor");
+
+    // Um pedaço do endereço não acha ninguém: casar parcial seria enumeração
+    // com outro nome, e é por isso que a fila sem dono deixou de ser legível.
+    await field(teacherPage, "email").fill(candidato.email.slice(0, 8));
+    await testId(teacherPage, "find-student-submit").click();
+    await expect(testId(teacherPage, "student-search-result")).toHaveCount(0);
+
+    await field(teacherPage, "email").fill(candidato.email);
+    await testId(teacherPage, "find-student-submit").click();
+
+    const achado = testId(teacherPage, "student-search-result");
+    await expect(achado).toHaveAttribute("data-student-id", candidato.id);
+    await expect(achado).toContainText(candidato.name);
+    await expect(achado).toHaveAttribute("data-has-teacher", "false");
+  });
+
+  test("F-VINC-02 · assumir vincula e reivindica a inscrição da fila", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const candidato = await createUser("student", "Candidato Da Fila", "cand");
+    await joinWaitlist(candidato);
+
+    await teacherPage.goto("/professor");
+    await field(teacherPage, "email").fill(candidato.email);
+    await testId(teacherPage, "find-student-submit").click();
+    await testId(teacherPage, "link-student").click();
+
+    // O cartão aparece na lista — e aparece AGUARDANDO: vincular diz de quem o
+    // aluno é, liberar diz se ele entra. São dois atos.
+    const cartao = teacherPage.locator(
+      `[data-testid="student-card"][data-student-id="${candidato.id}"]`,
+    );
+    await expect(cartao).toBeVisible();
+    await expect(cartao).toContainText("Aguardando");
+
+    const perfil = await one<{ teacher_id: string; access_status: string }>(
+      "select teacher_id, access_status::text from public.profiles where id = $1",
+      [candidato.id],
+    );
+    expect(perfil.teacher_id).toBe(scenario.teacher.id);
+    expect(perfil.access_status).toBe("pending");
+
+    // E a linha da fila foi reivindicada no mesmo ato: sem isso a inscrição
+    // ficaria sem dono para sempre, invisível para quem assumiu o aluno.
+    const fila = await one<{ teacher_id: string }>(
+      "select teacher_id from public.waitlist where student_id = $1",
+      [candidato.id],
+    );
+    expect(fila.teacher_id).toBe(scenario.teacher.id);
+  });
+
+  test("F-VINC-03 · quem já tem professor é ENCONTRADO, e a tela não diz de quem", async ({
+    teacherPage,
+  }) => {
+    const outro = await createUser("teacher", "Professor Vizinho", "prof");
+    const aluno = await createUser("student", "Aluno Do Vizinho", "aluno");
+    // Pré-condição pela RPC REAL: se a regra de vínculo regredir, o cenário
+    // falha aqui em vez de fabricar um estado impossível.
+    await asUser(outro.id, (client) => client.query("select public.link_student($1)", [aluno.id]));
+
+    await teacherPage.goto("/professor");
+    await field(teacherPage, "email").fill(aluno.email);
+    await testId(teacherPage, "find-student-submit").click();
+
+    const achado = testId(teacherPage, "student-search-result");
+    await expect(achado).toHaveAttribute("data-has-teacher", "true");
+    await expect(achado).toContainText("Já tem professor");
+    // Responder "não existe" faria a tela mentir para quem digitou o e-mail
+    // certo do próprio aluno; dizer QUEM é o professor daria um mapa de quem é
+    // aluno de quem.
+    await expect(achado).not.toContainText(outro.name);
+    await expect(testId(teacherPage, "link-student")).toHaveCount(0);
+  });
+
+  test("F-VINC-04 · assumir duas vezes devolve o mesmo vínculo", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const candidato = await createUser("student", "Candidato Clicado Duas Vezes", "cand");
+
+    await teacherPage.goto("/professor");
+    await field(teacherPage, "email").fill(candidato.email);
+    await testId(teacherPage, "find-student-submit").click();
+    await testId(teacherPage, "link-student").click();
+
+    await expect(
+      teacherPage.locator(`[data-testid="student-card"][data-student-id="${candidato.id}"]`),
+    ).toBeVisible();
+
+    // O segundo "assumir" chega ao banco como um `update ... where teacher_id
+    // is null` que não acha linha. Não é erro: o aluno já é seu.
+    await field(teacherPage, "email").fill(candidato.email);
+    await testId(teacherPage, "find-student-submit").click();
+    await expect(testId(teacherPage, "student-search-result")).toHaveAttribute(
+      "data-is-mine",
+      "true",
+    );
+    await expect(alert(content(teacherPage), "error")).toHaveCount(0);
+
+    expect(
+      await count("select count(*) from public.profiles where teacher_id = $1", [
+        scenario.teacher.id,
+      ]),
+    ).toBe(2);
+  });
+});
+
+test.describe("F-VINC · liberar e bloquear", () => {
+  test.use({ scenarioOptions: { access: "pending" } });
+
+  test("F-VINC-05 · liberar abre as telas de estudo do aluno", async ({
+    teacherPage,
+    signIn,
+    scenario,
+  }) => {
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await testId(teacherPage, "grant-access").click();
+
+    await expect(alert(teacherPage, "success")).toContainText("Acesso liberado");
+
+    const perfil = await one<{ status: string; vence: string }>(
+      `select access_status::text as status,
+              to_char(access_expires_at, 'YYYY-MM-DD') as vence
+         from public.profiles where id = $1`,
+      [scenario.student.id],
+    );
+    expect(perfil.status).toBe("active");
+    // Três meses é o padrão, o mesmo valor que a v96 passava como literal.
+    const esperado = new Date();
+    esperado.setMonth(esperado.getMonth() + 3);
+    expect(perfil.vence).toBe(esperado.toISOString().slice(0, 10));
+
+    // E o aluno deixa de ser mandado para a lista de espera.
+    await signIn(scenario.student);
+    await teacherPage.goto("/aluno");
+    await expect(teacherPage).toHaveURL(/\/aluno$/);
+    await expect(teacherPage.locator("h1")).toHaveText("Metas da semana");
+  });
+
+  test("F-VINC-06 · liberar de novo SOMA ao que ainda falta", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+
+    await teacherPage.getByRole("combobox", { name: "Vigência" }).click();
+    await teacherPage.getByRole("option", { name: "1 mês" }).click();
+    await testId(teacherPage, "grant-access").click();
+    await expect(alert(teacherPage, "success")).toContainText("1 mês");
+
+    const primeira = await one<{ vence: string }>(
+      "select to_char(access_expires_at, 'YYYY-MM-DD') as vence from public.profiles where id = $1",
+      [scenario.student.id],
+    );
+
+    await teacherPage.getByRole("combobox", { name: "Vigência" }).click();
+    await teacherPage.getByRole("option", { name: "3 meses" }).click();
+    await testId(teacherPage, "grant-access").click();
+    await expect(alert(teacherPage, "success")).toContainText("3 meses");
+
+    const segunda = await one<{ vence: string }>(
+      "select to_char(access_expires_at, 'YYYY-MM-DD') as vence from public.profiles where id = $1",
+      [scenario.student.id],
+    );
+    // Quem renova antes do fim não perde dia pago: quatro meses, não três.
+    const esperado = new Date();
+    esperado.setMonth(esperado.getMonth() + 4);
+    expect(segunda.vence).toBe(esperado.toISOString().slice(0, 10));
+    expect(segunda.vence > primeira.vence).toBe(true);
+
+    // Duas liberações, duas linhas no histórico: é ele que responde "desde
+    // quando este aluno tem acesso".
+    expect(
+      await count("select count(*) from public.access_grants where student_id = $1", [
+        scenario.student.id,
+      ]),
+    ).toBe(2);
+  });
+
+  test("F-VINC-07 · o mesmo request_id não grava duas vezes", async ({ scenario }) => {
+    /*
+     * PELA RPC, E NÃO PELA TELA — e é o ponto da regra. O `request_id` é gerado
+     * UMA VEZ, na origem, e a tela não tem como emitir duas chamadas com o
+     * mesmo id de propósito: a proteção existe para a RETENTATIVA, que é a aba
+     * que recarrega no meio da gravação ou a rede que repete o pedido. O que se
+     * exercita aqui é o que aconteceria nessas duas situações.
+     */
+    const chave = randomUUID();
+    const liberar = (months: number, requestId: string) =>
+      asUser(scenario.teacher.id, (client) =>
+        client.query("select * from public.set_student_access($1, 'grant', $2, $3)", [
+          scenario.student.id,
+          months,
+          requestId,
+        ]),
+      );
+
+    const primeira = await liberar(3, chave);
+    const repetida = await liberar(3, chave);
+
+    expect(repetida.rows[0]).toEqual(primeira.rows[0]);
+    expect(
+      await count("select count(*) from public.access_grants where request_id = $1", [chave]),
+    ).toBe(1);
+
+    // Mesmo id com outro payload é rejeitado: aceitar seria devolver o
+    // resultado de um pedido que ninguém fez.
+    await expect(liberar(6, chave)).rejects.toThrow(/outro pedido/);
+  });
+
+  test("F-VINC-08 · bloquear preserva a vigência e devolve o aluno à lista de espera", async ({
+    teacherPage,
+    signIn,
+    scenario,
+  }) => {
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await testId(teacherPage, "grant-access").click();
+    await expect(alert(teacherPage, "success")).toBeVisible();
+
+    const liberado = await one<{ vence: string }>(
+      "select to_char(access_expires_at, 'YYYY-MM-DD') as vence from public.profiles where id = $1",
+      [scenario.student.id],
+    );
+
+    await testId(teacherPage, "revoke-access").click();
+    await expect(alert(teacherPage, "success")).toContainText("bloqueado");
+    await expect(content(teacherPage)).toContainText("Suspenso");
+
+    const bloqueado = await one<{ status: string; vence: string }>(
+      `select access_status::text as status,
+              to_char(access_expires_at, 'YYYY-MM-DD') as vence
+         from public.profiles where id = $1`,
+      [scenario.student.id],
+    );
+    expect(bloqueado.status).toBe("suspended");
+    // A data FICA: dá para reativar sem redigitar, e fica auditável até quando
+    // o acesso valia.
+    expect(bloqueado.vence).toBe(liberado.vence);
+
+    await signIn(scenario.student);
+    await teacherPage.goto("/aluno");
+    await expect(teacherPage).toHaveURL(/\/aluno\/lista-espera$/);
+  });
+});
+
+test.describe("F-MATR · turmas", () => {
+  test("F-MATR-01 · criar, renomear e matricular", async ({ teacherPage, scenario }) => {
+    const nome = `Turma ${scenario.planId.slice(0, 8)}`;
+
+    await teacherPage.goto("/professor/turmas");
+    await teacherPage.getByRole("button", { name: "Nova turma" }).click();
+    await field(teacherPage, "name").fill(nome);
+    await testId(teacherPage, "class-dialog").getByRole("button", { name: "Criar" }).click();
+    await expect(testId(teacherPage, "class-dialog")).toHaveCount(0);
+
+    const turma = await one<{ id: string }>("select id from public.classes where name = $1", [
+      nome,
+    ]);
+
+    await teacherPage
+      .locator(`[data-testid="class-row"][data-class-id="${turma.id}"]`)
+      .getByTestId("class-rename")
+      .click();
+    await field(teacherPage, "name").fill(`${nome} (manhã)`);
+    await testId(teacherPage, "class-dialog").getByRole("button", { name: "Salvar" }).click();
+    await expect(testId(teacherPage, "class-dialog")).toHaveCount(0);
+    await expect(
+      teacherPage.locator(`[data-testid="class-row"][data-class-id="${turma.id}"]`),
+    ).toBeVisible();
+
+    // MATRICULAR É NA FICHA DO ALUNO: a pergunta "em que turma este aluno está"
+    // é sobre o aluno, e resolvê-la na tela de turmas obrigaria a abrir a turma
+    // certa antes de saber qual é.
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await escolherTurma(teacherPage, `${nome} (manhã)`);
+
+    await teacherPage.goto("/professor");
+    await expect(
+      teacherPage.locator(`[data-testid="student-card"][data-student-id="${scenario.student.id}"]`),
+    ).toContainText(`${nome} (manhã)`);
+  });
+
+  test("F-MATR-02 · matricular quem já está em outra turma MOVE", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const turmas = await criarTurmas(teacherPage, scenario.planId, 2);
+    const primeira = turmas[0]!;
+    const segunda = turmas[1]!;
+
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await escolherTurma(teacherPage, primeira.nome);
+    await escolherTurma(teacherPage, segunda.nome);
+
+    // O índice único `class_students_one_per_student_uidx` impede as duas
+    // matrículas coexistirem — e é por isso que mover é UM update, e não um par
+    // apagar/inserir que deixaria o aluno sem turma no meio do caminho.
+    const matriculas = await query<{ class_id: string }>(
+      "select class_id from public.class_students where student_id = $1",
+      [scenario.student.id],
+    );
+    expect(matriculas).toHaveLength(1);
+    expect(matriculas[0]!.class_id).toBe(segunda.id);
+  });
+
+  test("F-MATR-03 · apagar turma com aluno dentro é recusado", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const turma = (await criarTurmas(teacherPage, scenario.planId, 1))[0]!;
+
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await escolherTurma(teacherPage, turma.nome);
+
+    await teacherPage.goto("/professor/turmas");
+    const linha = teacherPage.locator(`[data-testid="class-row"][data-class-id="${turma.id}"]`);
+    await expect(linha).toHaveAttribute("data-students", "1");
+    await linha.getByTestId("class-delete").click();
+
+    // A recusa é do GATILHO, e a tela repassa a frase dele em português.
+    await expect(alert(content(teacherPage), "error")).toContainText("Esvazie a turma");
+    expect(await count("select count(*) from public.classes where id = $1", [turma.id])).toBe(1);
+
+    await linha.getByTestId("member-remove").click();
+    await expect(linha).toHaveAttribute("data-students", "0");
+    await linha.getByTestId("class-delete").click();
+
+    await expect(
+      teacherPage.locator(`[data-testid="class-row"][data-class-id="${turma.id}"]`),
+    ).toHaveCount(0);
+    expect(await count("select count(*) from public.classes where id = $1", [turma.id])).toBe(0);
+  });
+
+  test("F-MATR-04 · `?turma=` recorta, e valor inválido devolve a lista inteira", async ({
+    teacherPage,
+    scenario,
+    consoleErrors,
+  }) => {
+    const turmas = await criarTurmas(teacherPage, scenario.planId, 2);
+    const comAluno = turmas[0]!;
+    const vazia = turmas[1]!;
+
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await escolherTurma(teacherPage, comAluno.nome);
+
+    await teacherPage.goto(`/professor?turma=${comAluno.id}`);
+    await expect(testId(teacherPage, "student-card")).toHaveCount(1);
+
+    await teacherPage.goto(`/professor?turma=${vazia.id}`);
+    await expect(testId(teacherPage, "empty")).toContainText("Nenhum aluno com esse recorte");
+
+    // A QUERY STRING NÃO É UMA PORTA: um id inventado é ignorado, e a lista
+    // volta inteira em vez de virar erro de tela.
+    await teacherPage.goto("/professor?turma=11111111-1111-4111-8111-999999999999");
+    await expect(testId(teacherPage, "student-card")).toHaveCount(1);
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test("F-MATR-05 · turma e matrícula de outro professor não existem para este", async ({
+    teacherPage,
+    signIn,
+    scenario,
+  }) => {
+    const turma = (await criarTurmas(teacherPage, scenario.planId, 1))[0]!;
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await escolherTurma(teacherPage, turma.nome);
+
+    // `teacherPage` e `studentPage` são a MESMA aba: quem precisa de dois
+    // papéis troca de identidade com `signIn`.
+    const vizinho = await createUser("teacher", "Professora Vizinha", "prof");
+    await signIn(vizinho);
+
+    await teacherPage.goto("/professor/turmas");
+    await expect(testId(teacherPage, "class-row")).toHaveCount(0);
+    await expect(testId(teacherPage, "empty")).toContainText("Nenhuma turma");
+
+    // Não existe status 404 neste servidor: o teste verifica a TELA e a
+    // ausência do dado no HTML.
+    await teacherPage.goto(`/professor?turma=${turma.id}`);
+    await expect(testId(teacherPage, "student-card")).toHaveCount(0);
+    await expect(content(teacherPage)).not.toContainText(scenario.student.name);
+
+    // E as duas recusas de escrita continuam sendo do banco — `is_teacher_of`
+    // no WITH CHECK, e a FK composta na turma de destino. Ver
+    // `supabase/tests/02_rls.sql`.
+    await expect(
+      asUser(vizinho.id, (client) =>
+        client.query(
+          `insert into public.class_students (class_id, student_id, teacher_id)
+           values ($1, $2, $3)`,
+          [turma.id, scenario.student.id, vizinho.id],
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+/** Cria N turmas pela TELA, com nome único por cenário. */
+async function criarTurmas(
+  page: Page,
+  mark: string,
+  quantidade: number,
+): Promise<{ id: string; nome: string }[]> {
+  const criadas: { id: string; nome: string }[] = [];
+
+  await page.goto("/professor/turmas");
+  for (let indice = 1; indice <= quantidade; indice += 1) {
+    const nome = `Turma ${indice} ${mark.slice(0, 8)}`;
+    await page.getByRole("button", { name: "Nova turma" }).click();
+    await field(page, "name").fill(nome);
+    await testId(page, "class-dialog").getByRole("button", { name: "Criar" }).click();
+    await expect(testId(page, "class-dialog")).toHaveCount(0);
+
+    const turma = await one<{ id: string }>("select id from public.classes where name = $1", [
+      nome,
+    ]);
+    criadas.push({ id: turma.id, nome });
+  }
+
+  return criadas;
+}
+
+/** Escolhe a turma na ficha do aluno e salva. */
+async function escolherTurma(page: Page, nome: string): Promise<void> {
+  await page.getByRole("combobox", { name: "Turma" }).click();
+  await page.getByRole("option", { name: nome }).click();
+  await testId(page, "save-class").click();
+  // ESPERA A GRAVAÇÃO, e não o `<select>`: o valor do seletor muda no `change`,
+  // ANTES de a escrita sair. Navegar nesse instante aborta a requisição em voo,
+  // e o teste passa a acusar "sem turma" quando o que faltou foi esperar.
+  await expect(alert(testId(page, "class-form"), "success")).toContainText("Turma salva");
+}

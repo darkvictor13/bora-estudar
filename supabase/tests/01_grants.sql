@@ -140,20 +140,45 @@ exception when insufficient_privilege then
   raise notice '14 OK  theory_reviews.review_number fora do grant update';
 end $$;
 
+-- ---------- access_grants: histórico que ninguém escreve nem corrige ----------
+do $$ begin
+  insert into public.access_grants (student_id, teacher_id, action, months, request_id)
+  values ('22222222-2222-4222-8222-222222222222','11111111-1111-4111-8111-111111111111',
+          'grant', 12, gen_random_uuid());
+  raise exception 'FALHOU: o aluno escreveu a propria liberacao de acesso';
+exception when insufficient_privilege then
+  raise notice '15 OK  access_grants nao aceita INSERT (quem escreve e set_student_access)';
+end $$;
+
+do $$ begin
+  update public.access_grants set months = 12
+   where id = 'aa000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: uma liberacao foi corrigida depois de gravada';
+exception when insufficient_privilege then
+  raise notice '16 OK  access_grants nao aceita UPDATE: historico nao se corrige';
+end $$;
+
+do $$ begin
+  delete from public.access_grants where id = 'aa000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: uma liberacao foi apagada do historico';
+exception when insufficient_privilege then
+  raise notice '17 OK  access_grants nao aceita DELETE';
+end $$;
+
 -- ---------- Execução: leitura e nada mais ----------
 do $$ begin
   update public.quiz_sessions set status = 'voided'
    where id = 'a7000000-0000-4000-8000-000000000001';
   raise exception 'FALHOU: a bateria foi anulada sem RPC';
 exception when insufficient_privilege then
-  raise notice '15 OK  quiz_sessions e somente leitura (anular precisa de RPC)';
+  raise notice '18 OK  quiz_sessions e somente leitura (anular precisa de RPC)';
 end $$;
 
 do $$ begin
   delete from public.quiz_sessions where id = 'a7000000-0000-4000-8000-000000000001';
   raise exception 'FALHOU: a bateria foi apagada pelo PostgREST';
 exception when insufficient_privilege then
-  raise notice '16 OK  quiz_sessions nao aceita DELETE';
+  raise notice '19 OK  quiz_sessions nao aceita DELETE';
 end $$;
 
 do $$ begin
@@ -167,7 +192,7 @@ do $$ begin
     1, 1, 0, 'main', 'correct', now());
   raise exception 'FALHOU: o ledger aceitou escrita direta';
 exception when insufficient_privilege then
-  raise notice '17 OK  o ledger e append-only por RPC, nao pelo cliente';
+  raise notice '20 OK  o ledger e append-only por RPC, nao pelo cliente';
 end $$;
 
 -- ---------- Catálogo comum: leitura para todos, escrita para ninguém ----------
@@ -178,14 +203,65 @@ begin
   if v_total <> 2 then
     raise exception 'FALHOU: o aluno viu % blocos do catalogo, esperava 2', v_total;
   end if;
-  raise notice '18 OK  catalog_blocks e catalogo comum, legivel por qualquer autenticado';
+  raise notice '21 OK  catalog_blocks e catalogo comum, legivel por qualquer autenticado';
 end $$;
 
 do $$ begin
   update public.catalog_blocks set active_questions = 0 where catalog_key = 'pcpr26_forenses_01';
   raise exception 'FALHOU: o catalogo comum aceitou escrita do cliente';
 exception when insufficient_privilege then
-  raise notice '19 OK  catalog_blocks nao aceita escrita';
+  raise notice '22 OK  catalog_blocks nao aceita escrita';
+end $$;
+
+-- ---------- Turmas: o grant de `classes` passou a ser por coluna ----------
+--
+-- O `WITH CHECK` de `classes_update` já impedia a transferência, mas a RLS
+-- decide QUAL LINHA e nunca QUAL COLUNA, e um grant que a interface não usa é o
+-- mais barato de restringir. `class_students` ganhou `update (class_id)` para
+-- que mudar de turma seja UM comando — em dois, o aluno fica fora de turma
+-- nenhuma no meio do caminho.
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+
+do $$ begin
+  update public.classes set name = 'Turma da Ana (2027)', description = 'Terça e quinta'
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  raise notice '23 OK  o professor renomeia a propria turma';
+end $$;
+
+do $$ begin
+  update public.classes set teacher_id = '44444444-4444-4444-8444-444444444444'
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: a turma trocou de dono pelo PostgREST';
+exception when insufficient_privilege then
+  raise notice '24 OK  classes.teacher_id fora do grant update';
+end $$;
+
+do $$ begin
+  update public.class_students set student_id = '33333333-3333-4333-8333-333333333333'
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  raise exception 'FALHOU: a matricula trocou de aluno pelo PostgREST';
+exception when insufficient_privilege then
+  raise notice '25 OK  class_students.student_id fora do grant update';
+end $$;
+
+do $$ begin
+  update public.class_students set teacher_id = '44444444-4444-4444-8444-444444444444'
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  raise exception 'FALHOU: a matricula trocou de professor pelo PostgREST';
+exception when insufficient_privilege then
+  raise notice '26 OK  class_students.teacher_id fora do grant update';
+end $$;
+
+do $$
+declare v_afetadas integer;
+begin
+  update public.class_students set class_id = 'a9000000-0000-4000-8000-000000000001'
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 1 then
+    raise exception 'FALHOU: o professor nao consegue mover o proprio aluno de turma';
+  end if;
+  raise notice '27 OK  class_id e a unica coluna de class_students no grant update';
 end $$;
 
 -- ---------- `anon` não tem tabela nenhuma ----------
@@ -211,7 +287,7 @@ begin
   if v_sobra <> '' then
     raise exception 'FALHOU: anon ainda alcanca:%', v_sobra;
   end if;
-  raise notice '20 OK  anon nao tem privilegio em nenhuma tabela de public';
+  raise notice '28 OK  anon nao tem privilegio em nenhuma tabela de public';
 end $$;
 
 -- ---------- `coupons` não foi concedida a ninguém ----------
@@ -219,5 +295,5 @@ do $$ begin
   if has_table_privilege('authenticated', 'public.coupons', 'select') then
     raise exception 'FALHOU: authenticated enxerga a tabela de cupons';
   end if;
-  raise notice '21 OK  coupons sem grant: o resgate precisa nascer como RPC';
+  raise notice '29 OK  coupons sem grant: o resgate precisa nascer como RPC';
 end $$;

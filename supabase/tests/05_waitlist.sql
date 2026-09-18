@@ -114,7 +114,8 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Gil (7777…) vem da suíte 04: cadastrou-se, ganhou perfil pelo gatilho e está
 -- `pending` SEM PROFESSOR — que é o estado de toda conta nova desde a migration
--- `20260914190000`. É a inscrição que o `not null` de `teacher_id` recusava, e
+-- `20260914190000`. A suíte 04 vinculou HELENA, e não ele, justamente para que
+-- esta continue tendo uma inscrição sem dono para exercitar. É a inscrição que o `not null` de `teacher_id` recusava, e
 -- que o `p.teacher_id = waitlist.teacher_id` da policy recusaria depois dele:
 -- `null = null` é `null`, e WITH CHECK que não é `true` barra.
 -- ---------------------------------------------------------------------------
@@ -137,16 +138,22 @@ do $$ begin
   raise notice '11 OK  quem acabou de se cadastrar entra na fila sem professor';
 end $$;
 
--- ---------- A fila sem dono aparece para quem é professor ----------
+-- ---------- A fila sem dono deixou de ser um diretório ----------
+--
+-- Até 18/09/2026 `waitlist_select` mostrava toda inscrição sem professor a
+-- QUALQUER professor — nome, e-mail, WhatsApp e nascimento de quem ainda não é
+-- aluno de ninguém. Era o preço de a fila ser visível, e ele deixou de se pagar
+-- quando `find_student_by_email` entrou no lugar da lista: a busca casa o
+-- endereço INTEIRO e devolve no máximo uma pessoa.
 select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
 do $$
 declare v_total integer;
 begin
   select count(*) into v_total from public.waitlist where teacher_id is null;
-  if v_total <> 1 then
-    raise exception 'FALHOU: Davi enxergou % inscricoes sem professor, esperava 1', v_total;
+  if v_total <> 0 then
+    raise exception 'FALHOU: Davi ainda enxerga % inscricoes sem professor', v_total;
   end if;
-  raise notice '12 OK  a inscricao sem professor e visivel a qualquer professor';
+  raise notice '12 OK  a fila sem dono nao e legivel por professor nenhum';
 end $$;
 
 -- ---------- E não aparece para outro aluno ----------
@@ -203,4 +210,61 @@ begin
     raise exception 'FALHOU: a manutencao nao conseguiu assumir a inscricao';
   end if;
   raise notice '15 OK  a manutencao (e a RPC que rodar como definer) assume a inscricao';
+end $$;
+
+-- ---------- A RPC assume a inscrição; o gatilho continua barrando o resto ----------
+--
+-- É a exceção de R-VINC-26, e ela é estreita: `teacher_id` NULO virando o
+-- `auth.uid()` de quem é professor, com aluno e e-mail intactos. Íris entra aqui
+-- em vez de Gil porque o teste 15 já assumiu a inscrição dele como manutenção —
+-- e um `update ... where teacher_id is null` que não acha linha não prova nada.
+reset role;
+insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data)
+values ('00000000-0000-0000-0000-000000000000','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'authenticated','authenticated','iris@x.com','{"name":"Iris"}');
+
+set role authenticated;
+select app_test.act_as('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');  -- Íris
+insert into public.waitlist (student_id, teacher_id, name, email, whatsapp, interest_area, target_exam)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', null,
+        'Iris da Silva','iris@x.com','41999992222','Fiscal','Receita Federal');
+
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_teacher uuid; v_total integer;
+begin
+  perform public.link_student('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+
+  select teacher_id into v_teacher from public.waitlist
+   where student_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  if v_teacher is distinct from '11111111-1111-4111-8111-111111111111' then
+    raise exception 'FALHOU: a RPC nao reivindicou a linha da fila (ficou %)',
+      coalesce(v_teacher::text, '<nulo>');
+  end if;
+
+  -- E agora a inscrição aparece para Ana, porque ela tem dono.
+  select count(*) into v_total from public.waitlist
+   where student_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  if v_total <> 1 then
+    raise exception 'FALHOU: a inscricao assumida nao aparece para quem a assumiu';
+  end if;
+  raise notice '16 OK  link_student assume a inscricao apesar do gatilho';
+end $$;
+
+do $$ begin
+  update public.waitlist set email = 'outra@x.com'
+   where student_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  raise exception 'FALHOU: a excecao da RPC abriu o e-mail do cadastro';
+exception when raise_exception then
+  if sqlerrm not like '%vinculos do cadastro%' then raise; end if;
+  raise notice '17 OK  a excecao vale so para teacher_id nulo, e so uma vez';
+end $$;
+
+do $$ begin
+  update public.waitlist set teacher_id = '44444444-4444-4444-8444-444444444444'
+   where student_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  raise exception 'FALHOU: a inscricao ja assumida trocou de professor';
+exception when raise_exception then
+  if sqlerrm not like '%vinculos do cadastro%' then raise; end if;
+  raise notice '18 OK  inscricao com dono nao muda de dono';
 end $$;

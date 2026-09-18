@@ -41,7 +41,7 @@ de lá vira uma spec nova antes de virar código.
 | 10 | [Conta e lista de espera](10-conta-e-lista-de-espera.md) | Dados do aluno, inscrição, preferências |
 | 11 | [Tema claro e escuro](11-tema-claro-escuro.md) | Preferência de interface, hoje por aparelho — ver a nota da spec |
 | 12 | [Conclusão de meta sem bateria](12-conclusao-de-meta.md) | O aluno fecha meta de teoria, estudo extra e reforço |
-| 13 | [Vínculo e liberação de acesso](13-vinculo-e-liberacao-de-acesso.md) | O professor encontra, vincula e libera o aluno |
+| 13 | [Vínculo, acesso e turmas](13-vinculo-e-liberacao-de-acesso.md) | O professor encontra, assume, libera e organiza o aluno em turmas |
 | 14 | [Gestão do planejamento](14-gestao-do-planejamento.md) | Criar, ativar e arquivar planejamento, com os blocos do catálogo |
 | 15 | [Cadernos do planejamento](15-cadernos-do-planejamento.md) | Ativar, desativar, editar, incluir, excluir e restaurar bloco |
 | 16 | [Histórico e anulação de bateria](16-historico-e-anulacao-de-bateria.md) | O professor vê as baterias do aluno e anula a que não conta |

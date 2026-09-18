@@ -163,6 +163,119 @@ begin
   raise notice '07 OK  tabela criada por migration nao nasce com grant para anon nem authenticated';
 end $$;
 
+-- ---------- As RPCs novas: `execute` nominal, e nunca para `public` ----------
+--
+-- O default do Postgres concede EXECUTE a PUBLIC, que não é `anon` nem
+-- `authenticated`: revogar dos dois papéis não tira nada, porque o privilégio
+-- vem do grantee vazio que ambos herdam. Foi assim que `reserve_operation` ficou
+-- chamável por qualquer autenticado apesar do `revoke` — BUG-14. A função morreu
+-- com o schema anterior; a regra que ela custou, não.
+do $$
+declare
+  v_nome text;
+  v_oid  oid;
+  v_erro text := '';
+begin
+  foreach v_nome in array array[
+    'find_student_by_email', 'link_student', 'set_student_access'
+  ] loop
+    select p.oid into v_oid from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = v_nome;
+
+    if v_oid is null then
+      v_erro := v_erro || ' ' || v_nome || '(sumiu)';
+    else
+      -- `public` não é um papel: `has_function_privilege` não o enxerga. Quem o
+      -- delata é o ACL — um item com GRANTEE VAZIO (`=X/postgres`) é o PUBLIC,
+      -- e um `proacl` nulo é o default do Postgres, que também o concede.
+      if (select p.proacl is null from pg_proc p where p.oid = v_oid)
+         or exists (
+           select 1 from pg_proc p, unnest(p.proacl) acl
+            where p.oid = v_oid and acl::text like '=%'
+         ) then
+        v_erro := v_erro || ' ' || v_nome || '(PUBLIC executa)';
+      end if;
+      if has_function_privilege('anon', v_oid, 'execute') then
+        v_erro := v_erro || ' ' || v_nome || '(anon executa)';
+      end if;
+      if not has_function_privilege('authenticated', v_oid, 'execute') then
+        v_erro := v_erro || ' ' || v_nome || '(authenticated nao executa)';
+      end if;
+    end if;
+  end loop;
+
+  if v_erro <> '' then
+    raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
+  end if;
+  raise notice '08 OK  as tres RPCs sao chamaveis so por authenticated, nominalmente';
+end $$;
+
+-- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
+--
+-- Invariante que cabe em constraint mora no banco: `set_student_access` não
+-- repete a regra, e por isso o teste ataca a `check` diretamente.
+do $$ begin
+  insert into public.access_grants (student_id, teacher_id, action, months, request_id)
+  values ('22222222-2222-4222-8222-222222222222','11111111-1111-4111-8111-111111111111',
+          'grant', 5, gen_random_uuid());
+  raise exception 'FALHOU: access_grants aceitou uma vigencia de 5 meses';
+exception when check_violation then
+  raise notice '09 OK  access_grants_months_check recusa vigencia fora de 1/3/6/12';
+end $$;
+
+do $$ begin
+  insert into public.access_grants (student_id, teacher_id, action, months, request_id)
+  values ('22222222-2222-4222-8222-222222222222','11111111-1111-4111-8111-111111111111',
+          'suspend', 3, gen_random_uuid());
+  raise exception 'FALHOU: um bloqueio nasceu com meses';
+exception when check_violation then
+  raise notice '10 OK  bloquear nao tem prazo a somar';
+end $$;
+
+-- ---------- Um aluno está em UMA turma ----------
+--
+-- É o índice que transforma a corrida de "mover de turma" em erro, e não o
+-- código do adaptador. Sem ele, dois cliques em telas diferentes deixam o aluno
+-- em duas turmas e a lista passa a mostrá-lo duas vezes.
+do $$
+declare v_unico boolean;
+begin
+  select indisunique into v_unico
+    from pg_index i join pg_class c on c.oid = i.indexrelid
+   where c.relname = 'class_students_one_per_student_uidx';
+
+  if v_unico is null then
+    raise exception 'FALHOU: sumiu class_students_one_per_student_uidx';
+  end if;
+  if not v_unico then
+    raise exception 'FALHOU: class_students_one_per_student_uidx deixou de ser unico';
+  end if;
+
+  insert into public.class_students (class_id, student_id, teacher_id)
+  values ('a9000000-0000-4000-8000-000000000001','22222222-2222-4222-8222-222222222222',
+          '11111111-1111-4111-8111-111111111111');
+  raise exception 'FALHOU: o aluno entrou numa segunda turma';
+exception when unique_violation then
+  raise notice '11 OK  um aluno, uma turma';
+end $$;
+
+-- ---------- Turma com aluno dentro não é apagada ----------
+--
+-- Por gatilho, e não por FK `restrict`: o `on delete cascade` de
+-- `class_students` precisa continuar valendo quando a conta do professor for
+-- removida em cascata a partir de `auth.users`.
+do $$
+declare v_acao text;
+begin
+  select confdeltype::text into v_acao from pg_constraint
+   where conname = 'class_students_class_fk';
+  if v_acao <> 'c' then
+    raise exception 'FALHOU: class_students_class_fk deixou de cascatear (%)', v_acao;
+  end if;
+  raise notice '12 OK  a matricula continua cascateando quando a turma sai';
+end $$;
+
 -- ---------- Os números do de-para ----------
 do $$
 declare v_tabelas integer; v_enums integer; v_fks integer; v_views integer;
@@ -176,12 +289,12 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 24 or v_enums <> 12 or v_fks <> 53 or v_views <> 1 then
+  if v_tabelas <> 25 or v_enums <> 13 or v_fks <> 55 or v_views <> 1 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '08 OK  24 tabelas, 12 enums, 53 FKs e 1 view — como o de-para registra';
+  raise notice '13 OK  25 tabelas, 13 enums, 55 FKs e 1 view — como o de-para registra';
 end $$;

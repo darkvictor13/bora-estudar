@@ -1,10 +1,15 @@
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Empty, Metric, PageHeader, RankedBars, type BadgeTone } from "@bora/ui";
-import { useLoaderData, useParams } from "react-router";
+import { useState } from "react";
+import { useLoaderData, useParams, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, type QuizSessionSummary, type StudentCard } from "@/lib/api";
+import { AccessForm } from "@/components/teacher/AccessForm";
+import { api, type ApiError, type QuizSessionSummary, type StudentCard } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
 import { formatMinutes } from "@/lib/domain/week";
 
@@ -14,15 +19,24 @@ import { formatMinutes } from "@/lib/domain/week";
  * Virar rota resolve de graça o que o modal não tinha: endereço para mandar a
  * alguém, botão voltar, e título de aba dizendo de quem é a ficha.
  *
- * DUAS AÇÕES DA v2 NÃO ESTÃO AQUI, e a ausência é do banco, não da tela:
- * liberar/bloquear acesso e anular bateria precisam nascer como RPC —
- * `access_status` fica fora do GRANT UPDATE de `profiles`, e `quiz_sessions` é
- * SELECT e nada mais. Um botão que sempre falha é pior do que botão nenhum; a
- * tela diz o que falta.
+ * LIBERAR, BLOQUEAR E ESCOLHER A TURMA moram aqui desde 18/09/2026. As duas
+ * primeiras passam por `set_student_access`, porque `access_status` e
+ * `access_expires_at` continuam fora do GRANT UPDATE de `profiles`; a terceira
+ * é escrita direta em `class_students`, com RLS — e a diferença está explicada
+ * em `lib/api/supabase/teacher-classes.ts`.
+ *
+ * UMA AÇÃO DA v2 CONTINUA DE FORA, e a ausência é do banco, não da tela: anular
+ * bateria precisa nascer como RPC, porque `quiz_sessions` é SELECT e nada mais.
+ * Um botão que sempre falha é pior do que botão nenhum; a tela diz o que falta.
  */
 export async function teacherStudentLoader({ params }: { params: { studentId?: string } }) {
   await requireRole("teacher");
-  return { file: await api.loadStudentFile(params.studentId!) };
+
+  const [file, classes] = await Promise.all([
+    api.loadStudentFile(params.studentId!),
+    api.listClasses(),
+  ]);
+  return { file, classes };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentLoader>>;
@@ -47,9 +61,39 @@ function formatDateTime(value: string): string {
 }
 
 export function TeacherStudent() {
-  const { file } = useLoaderData() as LoaderData;
+  const { file, classes } = useLoaderData() as LoaderData;
   const { studentId } = useParams();
+  const { revalidate } = useRevalidator();
   const { card, plan, statistics, sessions } = file;
+
+  const [classError, setClassError] = useState<ApiError | null>(null);
+  const [classMessage, setClassMessage] = useState<string | null>(null);
+  const [chosenClass, setChosenClass] = useState(card.classId ?? "");
+
+  /**
+   * Matricular e MOVER são operações diferentes, e a tela escolhe qual chamar
+   * pelo que o aluno já tem.
+   *
+   * Mover é um `UPDATE` de `class_id`: em dois comandos — apagar e inserir — o
+   * aluno fica fora de turma nenhuma no meio do caminho, e uma falha entre eles
+   * o deixa lá.
+   */
+  async function saveClass() {
+    const result = !chosenClass
+      ? await api.unenrollStudent(card.studentId)
+      : card.classId
+        ? await api.moveStudent(chosenClass, card.studentId)
+        : await api.enrollStudent(chosenClass, card.studentId);
+
+    if (!result.ok) {
+      setClassError(result.error);
+      setClassMessage(null);
+      return;
+    }
+    setClassError(null);
+    setClassMessage(chosenClass ? "Turma salva." : "Aluno tirado da turma.");
+    await revalidate();
+  }
 
   return (
     <>
@@ -86,17 +130,56 @@ export function TeacherStudent() {
           action={<Badge tone={ACCESS[card.access].tone}>{ACCESS[card.access].label}</Badge>}
           sub={card.accessExpiresAt ? `Válido até ${card.accessExpiresAt}` : "Sem prazo"}
         >
-          {/*
-            O BOTÃO DE LIBERAR NÃO ESTÁ AQUI, e é deliberado: `profiles`
-            concede `UPDATE (name)` e mais nada — `access_status` e
-            `access_expires_at` ficam fora do grant para que ninguém se promova
-            nem estenda o próprio acesso. Liberar precisa nascer como RPC.
-          */}
-          <Alert status="info">
-            Liberar e bloquear acesso está sendo movido para o servidor, onde a regra pode ser
-            garantida. Enquanto isso, fale com quem administra o banco.
-          </Alert>
+          <AccessForm card={card} />
         </Card>
+
+        <Box sx={{ mt: 1.75 }} data-testid="class-form">
+          <Card
+            title="Turma"
+            sub="Um aluno está em uma turma — quem impõe é o índice único do banco"
+          >
+            {classError && <Alert status="error">{classError.message}</Alert>}
+            {classMessage && <Alert status="success">{classMessage}</Alert>}
+
+            {classes.length === 0 ? (
+              <Empty icon="🏫">Nenhuma turma criada ainda. Crie a primeira em “Turmas”.</Empty>
+            ) : (
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Turma"
+                  value={chosenClass}
+                  slotProps={{ select: { inputProps: { "data-testid": "student-class" } } }}
+                  // O aviso da gravação anterior SAI ao mudar a escolha: um
+                  // "Turma salva." ao lado de um seletor que já aponta para
+                  // outra turma diz o contrário do que aconteceu.
+                  onChange={(event) => {
+                    setChosenClass(event.target.value);
+                    setClassMessage(null);
+                    setClassError(null);
+                  }}
+                  sx={{ minWidth: 220 }}
+                >
+                  <MenuItem value="">Sem turma</MenuItem>
+                  {classes.map((turma) => (
+                    <MenuItem key={turma.id} value={turma.id}>
+                      {turma.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="contained"
+                  size="small"
+                  data-testid="save-class"
+                  onClick={() => void saveClass()}
+                >
+                  Salvar turma
+                </Button>
+              </Box>
+            )}
+          </Card>
+        </Box>
 
         {statistics.bySubject.length > 0 && (
           <Box sx={{ mt: 1.75 }}>

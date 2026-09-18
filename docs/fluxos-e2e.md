@@ -15,8 +15,10 @@ que o teste **não** diz: o índice, o ambiente, e o registro do que saiu.
 > isso que ids não são renumerados — ver as convenções em
 > [`specs/README.md`](specs/README.md).
 
-Estado medido em 14/09/2026, com `npm run e2e`: **172 verdes, 7 `fixme`, zero
-falhas** — `F-AUTH-08` passou a rodar com a migration `20260914190000`.
+Estado medido em 18/09/2026, com `npm run e2e`: **188 verdes, 4 `fixme`, zero
+falhas** — os três de `F-VINC` passaram a rodar com a migration
+`20260918120000`, e treze testes novos entraram com ela (`F-VINC-01` a
+`F-VINC-08` e `F-MATR-01` a `F-MATR-05`).
 
 ---
 
@@ -236,7 +238,8 @@ diff mostra a omissão.
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
 | F-TREV-01 | é na tela do professor que o espaçamento se configura |
 | F-TEST-01 | estatísticas do professor: as mesmas do aluno, apontadas para o planejamento dele |
-| F-VINC | liberar acesso, suspender, vincular candidato — **3 `fixme`** |
+| F-VINC-01 a F-VINC-08 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
+| F-MATR-01 a F-MATR-05 | turmas: criar, renomear, matricular, mover, recusar apagar turma com aluno, filtrar por `?turma=` — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
 
 ### Isolamento — `tests/isolation.spec.ts`
@@ -264,9 +267,9 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 
 ---
 
-## Os sete `fixme`, e por que continuam visíveis
+## Os quatro `fixme`, e por que continuam visíveis
 
-Nenhum é bug de interface: os cinco primeiros esperam o banco, e os dois do tema
+Nenhum é bug de interface: os dois primeiros esperam o banco, e os dois do tema
 esperam a mesma coluna. Ficam como `fixme` em vez de apagados porque um teste
 que some leva a falta junto — e um que passa sem exercitar nada é pior ainda.
 
@@ -275,10 +278,16 @@ repôs o gatilho de criação de perfil e resolveu a decisão de produto que ele
 embutia: o perfil nasce **sem professor**, e a lista de espera passou a aceitar
 inscrição sem vínculo.
 
+**Os três de `F-VINC` saíram em 18/09/2026**, com a migration `20260918120000` e
+a spec [13](specs/13-vinculo-e-liberacao-de-acesso.md). `link_student` e
+`set_student_access` são as RPCs que faltavam, e no lugar dos três `fixme`
+entraram `F-VINC-01` a `F-VINC-08` mais `F-MATR-01` a `F-MATR-05` — turmas vieram
+junto porque `classes` e `class_students` já estavam no banco e nunca tinham
+ganhado tela.
+
 | Fluxo | O que falta |
 |---|---|
 | F-CUP-01 | a RPC de resgate. `coupons` está com RLS ligada, zero policy e zero grant, de propósito |
-| F-VINC (3) | liberar e suspender acesso precisam nascer como RPC: `access_status` e `access_expires_at` estão fora do `GRANT UPDATE` de `profiles` |
 | F-ANUL | `void_quiz_session` não foi portada, e `quiz_sessions` é SELECT |
 | F-TEMA-02, F-TEMA-04 | uma coluna `theme_preference` em `profiles`. Enquanto não existir, a escolha vale por aparelho |
 
@@ -321,7 +330,7 @@ id antigo num comentário de código ou numa mensagem de commit:
 | F-REVE-\* (revisão espaçada) | F-REV-01, e F-TREV-01 do lado do professor |
 | F-TEMP-\* (tempo e série) | F-EST-01 |
 | F-PREV-\* (prévia e distribuição) | F-PROF-04 e F-PROF-05 |
-| F-TURMA-\* (ficha da turma) | F-PROF-02 |
+| F-TURMA-\* (ficha da turma) | F-PROF-02, e F-MATR-04 para o recorte por turma |
 | F-GPLAN-02 a 07 | F-GPLAN-01 |
 | F-CAD-02 a 06 | F-CAD-01 |
 | F-RCIC-\*, F-RESU-\*, F-DIFI-\* | sem cobertura: dependem do motor de baterias |

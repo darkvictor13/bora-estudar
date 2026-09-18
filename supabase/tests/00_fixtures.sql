@@ -152,6 +152,36 @@ insert into public.study_plans (id, teacher_id, student_id, name, starts_on, sta
   ('a2000000-0000-4000-8000-000000000004','11111111-1111-4111-8111-111111111111','66666666-6666-4666-8666-666666666666','Plano da Fabi',  current_date,'active');
 
 -- ---------------------------------------------------------------------------
+-- Turmas
+--
+-- Ana tem uma turma com Bruno dentro; Davi tem a dele, vazia. É o par que a
+-- suíte 02 usa para provar que `is_teacher_of` recusa matricular aluno alheio,
+-- e que a suíte 01 usa para conferir o grant por coluna de `classes`.
+-- ---------------------------------------------------------------------------
+insert into public.classes (id, teacher_id, name, description) values
+  ('a9000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111','Turma da Ana','Segunda e quarta, 19h'),
+  ('a9000000-0000-4000-8000-000000000002','44444444-4444-4444-8444-444444444444','Turma do Davi', null);
+
+insert into public.class_students (class_id, student_id, teacher_id) values
+  ('a9000000-0000-4000-8000-000000000001','22222222-2222-4222-8222-222222222222',
+   '11111111-1111-4111-8111-111111111111');
+
+-- ---------------------------------------------------------------------------
+-- Uma liberação de acesso no histórico
+--
+-- Inserida aqui, como dono do banco, porque `access_grants` é SELECT para
+-- `authenticated` e quem escreve é `set_student_access`. Serve à suíte 02:
+-- provar que Carla não lê a linha de Bruno, e que Bruno lê a dele.
+-- ---------------------------------------------------------------------------
+insert into public.access_grants (
+  id, student_id, teacher_id, action, months, expires_at, request_id
+) values (
+  'aa000000-0000-4000-8000-000000000001',
+  '22222222-2222-4222-8222-222222222222','11111111-1111-4111-8111-111111111111',
+  'grant', 3, now() + interval '3 months', 'ab000000-0000-4000-8000-000000000001'
+);
+
+-- ---------------------------------------------------------------------------
 -- Cadernos
 -- ---------------------------------------------------------------------------
 insert into public.study_plan_notebooks (

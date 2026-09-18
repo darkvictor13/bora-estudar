@@ -9,6 +9,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      access_grants: {
+        Row: {
+          action: Database["public"]["Enums"]["access_grant_action"]
+          created_at: string
+          expires_at: string | null
+          id: string
+          months: number | null
+          request_id: string
+          student_id: string
+          teacher_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["access_grant_action"]
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          months?: number | null
+          request_id: string
+          student_id: string
+          teacher_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["access_grant_action"]
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          months?: number | null
+          request_id?: string
+          student_id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_grants_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_blocks: {
         Row: {
           active: boolean
@@ -1610,9 +1658,19 @@ export type Database = {
     }
     Functions: {
       can_access_teacher: { Args: { p_teacher: string }; Returns: boolean }
+      find_student_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          has_teacher: boolean
+          is_mine: boolean
+          name: string
+          student_id: string
+        }[]
+      }
       has_active_access: { Args: never; Returns: boolean }
       is_teacher: { Args: never; Returns: boolean }
       is_teacher_of: { Args: { p_student: string }; Returns: boolean }
+      link_student: { Args: { p_student_id: string }; Returns: undefined }
       my_teacher: {
         Args: never
         Returns: {
@@ -1620,8 +1678,21 @@ export type Database = {
           name: string
         }[]
       }
+      set_student_access: {
+        Args: {
+          p_action: Database["public"]["Enums"]["access_grant_action"]
+          p_months: number
+          p_request_id: string
+          p_student_id: string
+        }
+        Returns: {
+          access_expires_at: string
+          access_status: Database["public"]["Enums"]["access_status"]
+        }[]
+      }
     }
     Enums: {
+      access_grant_action: "grant" | "suspend"
       access_status: "pending" | "active" | "suspended" | "expired"
       goal_status: "pending" | "in_progress" | "completed" | "skipped"
       goal_type:
@@ -1776,6 +1847,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      access_grant_action: ["grant", "suspend"],
       access_status: ["pending", "active", "suspended", "expired"],
       goal_status: ["pending", "in_progress", "completed", "skipped"],
       goal_type: [
