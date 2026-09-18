@@ -328,6 +328,17 @@ economizar as duas linhas.
   pipefail`, um `grep` sem casamento aborta o script no meio e as verificações
   seguintes nunca rodam — o CI falharia sem dizer o que estava errado. Foi
   encontrado rodando o caminho negativo, não lendo o código.
+- **A fumaça espera o asset propagar, e é o content-type que diz que ele
+  chegou.** A publicação no Cloudflare não fica visível de uma vez: o
+  `index.html` já vinha da versão nova enquanto o pedido do bundle, noutra
+  conexão, ainda caía onde o manifesto era o antigo — e ali o hash novo não
+  existe, então o `not_found_handling: single-page-application` respondeu com o
+  `index.html`. Os dois são 200; o que separa é `text/javascript` de
+  `text/html`. Sem a espera, as checagens de conteúdo liam a casca em HTML e o
+  CI acusava "build sem as VITE_*" com o bundle correto no ar — diagnóstico
+  errado do problema certo, medido em 18/09/2026 onze segundos depois do
+  deploy. Seis tentativas, cinco segundos entre elas; se ainda vier HTML, é
+  falha de verdade, e o texto do erro passou a dizer isso.
 - **`ci-banco.yml` roda `db:reset` entre `db:test` e `db:types`.** As suítes
   deixam a base truncada; é a mesma armadilha de ordem que o `CLAUDE.md`
   descreve entre `db:test` e `e2e`.
