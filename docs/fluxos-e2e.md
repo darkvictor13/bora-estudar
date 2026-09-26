@@ -15,10 +15,11 @@ que o teste **não** diz: o índice, o ambiente, e o registro do que saiu.
 > isso que ids não são renumerados — ver as convenções em
 > [`specs/README.md`](specs/README.md).
 
-Estado medido em 18/09/2026, com `npm run e2e`: **188 verdes, 4 `fixme`, zero
+Estado medido em 18/09/2026, com `npm run e2e`: **189 verdes, 4 `fixme`, zero
 falhas** — os três de `F-VINC` passaram a rodar com a migration
-`20260918120000`, e treze testes novos entraram com ela (`F-VINC-01` a
-`F-VINC-08` e `F-MATR-01` a `F-MATR-05`).
+`20260918120000`, treze testes novos entraram com ela (`F-VINC-01` a
+`F-VINC-08` e `F-MATR-01` a `F-MATR-05`), e `F-OBS-01` entrou com o relato de
+erro.
 
 ---
 
@@ -117,6 +118,7 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 | Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `goals-confirm`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
 | Conta | `account-form`, `waitlist-form` |
+| Erro | `error-code` — o identificador do evento relatado, e só existe quando houve relato |
 
 ### Duas armadilhas do harness
 
@@ -134,6 +136,13 @@ O site linka para `https://www.tecconcursos.com.br` no caderno e na revisão. A
 suíte intercepta `**://*.tecconcursos.com.br/**` automaticamente, em todo
 teste, e responde localmente — nenhuma requisição pode sair para o site de
 terceiro, inclusive num teste novo escrito por quem não leu isto.
+
+O relato de erro é o OUTRO terceiro com quem o produto falaria, e ele não é
+interceptado: fica calado porque `VITE_SENTRY_DSN` está vazio, e com o DSN
+vazio o SDK é removido do bundle na compilação — não há transporte a
+interceptar. `F-OBS-01` é quem confere que continua assim. **Não preencha o DSN
+no seu `.env.local`**: a suíte passaria a despejar erro sintético no painel do
+ambiente publicado.
 
 ---
 
@@ -264,6 +273,19 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 | F-TEMA-06 | os dois papéis |
 | F-TEMA-07 | contraste AA nos dois temas, medido em cada tela |
 | F-TEMA-08 | sem escolha, abre claro mesmo com o sistema no escuro |
+
+### Relato de erro — `tests/observability.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-OBS-01 | no ambiente local nada sai para o serviço de relato, nem na navegação normal nem na rota que falha |
+
+**Este id não tem spec, e é a exceção que a regra abaixo tolera.** Relato de
+erro não é comportamento de produto: não há tela a descrever nem regra de
+negócio a acordar com quem usa. As decisões — o que é relatado, o que é
+ignorado, e por que nenhum dado pessoal sai — vivem em
+[`../docs/arquitetura.md`](arquitetura.md#o-relato-de-erro), que é onde o teste
+vai buscar seu critério de aceitação.
 
 ---
 

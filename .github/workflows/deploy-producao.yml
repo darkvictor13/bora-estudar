@@ -125,11 +125,41 @@ jobs:
       - name: Instalar
         run: npm ci
 
+      # As VITE_* precisam existir AQUI, no ambiente do build: o Vite faz
+      # substituição estática e a chave é assada no bundle. Configuradas como
+      # variável do Worker ficariam corretas no painel e inúteis no produto.
+      #
+      # O DSN do Sentry entra pela mesma porta e pelo mesmo motivo, e é `vars` e
+      # não `secrets` porque é público — o bundle o carrega em texto claro, como
+      # a publishable key. Sem ele o SDK é removido do bundle na compilação, e
+      # não só desligado.
+      #
+      # `SENTRY_AUTH_TOKEN` é secret de verdade: ele ENVIA. É também o que liga
+      # o sourcemap — sem token, `vite.config.ts` nem o gera, para não publicar
+      # o código-fonte junto com o bundle.
+      #
+      # `VITE_APP_VERSION` sai do `resolver`, e NÃO de `github.sha`: produção
+      # publica o commit que o dispatch escolheu, que raramente é a ponta da
+      # `main`. Marcar a release com o SHA errado desalinha todo stack trace.
       - name: Compilar o site
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENVIRONMENT: producao
+          VITE_APP_VERSION: ${{ needs.resolver.outputs.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: npm run build --workspace @bora/web
+
+      # CINTO E SUSPENSÓRIO. O plugin do Sentry apaga os `.map` depois de
+      # enviar, mas o envio pode falhar sem derrubar o build (é de propósito:
+      # ver `errorHandler` em vite.config.ts). O que não pode acontecer em
+      # NENHUMA hipótese é o passo seguinte publicar sourcemap — `assets` do
+      # wrangler leva o `dist` inteiro, sem filtro.
+      - name: Nenhum sourcemap vai para o ar
+        run: find apps/web/dist -name '*.map' -print -delete
 
       - name: Publicar no Cloudflare
         env:

@@ -108,7 +108,34 @@ else
     else
       ok "nenhum segredo no bundle"
     fi
+
+    # O relato de erro está ligado? Sem o DSN assado aqui, o `init` não é
+    # chamado e o SDK inteiro é REMOVIDO do bundle na compilação — o ambiente
+    # sobe sem relatar nada, e o sintoma é silêncio: nada quebra, nada aparece,
+    # e ninguém nota até o dia em que faz falta.
+    #
+    # O host do DSN pode ter região no meio — `ingest.us.sentry.io` é o desta
+    # organização. Casar só `ingest.sentry.io` reprovava um bundle correto.
+    if grep -qE 'ingest\.([a-z0-9-]+\.)?sentry\.io' "$bundle"; then
+      ok "o relato de erro está no bundle"
+    else
+      erro "o bundle não cita o host de ingestão do Sentry — build sem VITE_SENTRY_DSN?"
+    fi
   fi
+
+  # E o sourcemap NÃO pode estar no ar: ele entrega o código-fonte a qualquer
+  # um. `wrangler` publica o `dist` inteiro, sem filtro, e há três coisas
+  # impedindo — o plugin apaga depois de enviar, o workflow apaga de novo, e
+  # esta checagem confere no ar. As duas primeiras são intenção; esta é medida.
+  #
+  # Não dá para conferir por status: o fallback de SPA devolve 200 com o
+  # index.html para qualquer caminho. O que distingue é o CONTEÚDO — um
+  # sourcemap de verdade começa com `{"version":3`.
+  mapa=$(curl -sS --max-time 30 "$URL$asset.map" | head -c 200 || true)
+  case "$mapa" in
+    '{"version":3'*) erro "SOURCEMAP PUBLICADO em $asset.map — o código-fonte está no ar" ;;
+    *)               ok "nenhum sourcemap publicado" ;;
+  esac
 fi
 
 echo "→ cache"
