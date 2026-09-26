@@ -20,7 +20,7 @@ import type {
   ThemePreference,
 } from "../contract.ts";
 import { checkCredentials, checkName, checkPassword, checkSignUp } from "../validation.ts";
-import { done, fail, failure, translateAuthError, translateDbError } from "./errors.ts";
+import { done, fail, failure, throwDb, translateAuthError, translateDbError } from "./errors.ts";
 import { currentSession } from "./session.ts";
 
 export const authApi = {
@@ -90,13 +90,13 @@ export const authApi = {
     const session = await currentSession();
     if (!session) throw new Error("Sem sessão.");
 
+    // Por `my_teacher()`, e não por `profiles`: `profiles_select` não deixa o
+    // aluno ler a linha do professor, e a consulta direta voltava vazia em
+    // silêncio — a tela dizia "Ainda sem professor" a quem tinha um.
     let teacherName: string | null = null;
     if (session.teacherId) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("name")
-        .eq("id", session.teacherId)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("my_teacher").maybeSingle();
+      if (error) throwDb(error);
       teacherName = data?.name ?? null;
     }
 
