@@ -278,6 +278,43 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
   assert.equal(sobreviveu.spentMinutes, 95, "e com os registros dela");
 });
 
+test("gerar semana no modo seguro preserva a meta em andamento, com o registro", async () => {
+  const antes = await api.loadWeek("plano", 1);
+  const pendente = antes.days.flatMap((day) => day.goals).find((goal) => goal.status === "pending")!;
+
+  const registrada = await api.recordStudy({
+    goalId: pendente.id,
+    requestId: requestId(),
+    minutes: 30,
+    questions: 0,
+    correctAnswers: 0,
+  });
+  assert.ok(registrada.ok);
+  assert.equal(registrada.data.status, "in_progress");
+
+  const previa = await api.previewWeek({
+    studyPlanId: "plano",
+    requestId: requestId(),
+    weekNumber: 1,
+    mode: "safe",
+  });
+  assert.equal(previa.goalsPreserved, 2, "a concluída e a que acabou de receber registro");
+
+  const gerada = await api.generateWeek({
+    studyPlanId: "plano",
+    requestId: requestId(),
+    weekNumber: 1,
+    mode: "safe",
+  });
+  assert.ok(gerada.ok);
+
+  const sobreviveu = gerada.data.days
+    .flatMap((day) => day.goals)
+    .find((goal) => goal.id === pendente.id);
+  assert.ok(sobreviveu, "o tempo que o aluno lançou não some com a semana regenerada");
+  assert.equal(sobreviveu.spentMinutes, 30);
+});
+
 test("replanejar a semana inteira é o caminho que apaga a concluída", async () => {
   const antes = await api.loadWeek("plano", 1);
   const concluida = antes.days.flatMap((day) => day.goals).find((g) => g.status === "completed")!;

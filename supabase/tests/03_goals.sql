@@ -99,7 +99,7 @@ end $$;
 
 -- ---------- O aluno registra execução na meta do professor ----------
 do $$ begin
-  update public.goals set status = 'completed', spent_minutes = 45, completed_at = now()
+  update public.goals set status = 'completed', completed_at = now()
    where id = 'a5000000-0000-4000-8000-000000000002';
   raise notice '08 OK  executar a meta do professor continua sendo do aluno';
 end $$;
@@ -123,8 +123,12 @@ exception
 end $$;
 
 -- ---------- Resultado de bateria é do motor ----------
+--
+-- As colunas de NÚMERO (`questions_answered`, `correct_answers`,
+-- `spent_minutes`) saíram do grant em `20260926120000`, e a suíte 08 confere
+-- isso. O que resta ao gatilho guardar, e o que se ataca aqui, é o ESTADO.
 do $$ begin
-  update public.goals set questions_answered = 15, correct_answers = 15
+  update public.goals set status = 'completed', completed_at = now()
    where id = 'a5000000-0000-4000-8000-000000000001';
   raise exception 'FALHOU: o aluno escreveu o proprio resultado de bateria';
 exception when raise_exception then
@@ -134,7 +138,7 @@ end $$;
 
 select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
 do $$ begin
-  update public.goals set correct_answers = 15
+  update public.goals set status = 'completed', completed_at = now()
    where id = 'a5000000-0000-4000-8000-000000000001';
   raise exception 'FALHOU: o professor escreveu o resultado da bateria';
 exception when raise_exception then

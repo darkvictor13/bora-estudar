@@ -70,15 +70,24 @@ set role authenticated;
 select app_test.act_as('77777777-7777-4777-8777-777777777777');
 
 do $$
-declare v_role public.user_role; v_status public.access_status; v_plan text; v_cupom text;
+declare
+  v_role public.user_role; v_status public.access_status; v_plan text; v_cupom text;
+  v_teacher uuid;
 begin
-  insert into public.profiles (id, name, role, access_status, access_expires_at, plan, coupon_used)
-  values ('77777777-7777-4777-8777-777777777777','Gil','teacher','active',
+  -- Com `teacher_id` junto: sem zerá-lo, quem criasse o próprio perfil pela API
+  -- escolheria o professor e pularia `link_student`.
+  insert into public.profiles (id, name, role, teacher_id, access_status, access_expires_at, plan, coupon_used)
+  values ('77777777-7777-4777-8777-777777777777','Gil','teacher',
+          '11111111-1111-4111-8111-111111111111','active',
           now() + interval '10 years','Premium','BORA3M');
 
-  select role, access_status, plan, coupon_used
-    into v_role, v_status, v_plan, v_cupom
+  select role, access_status, plan, coupon_used, teacher_id
+    into v_role, v_status, v_plan, v_cupom, v_teacher
     from public.profiles where id = '77777777-7777-4777-8777-777777777777';
+
+  if v_teacher is not null then
+    raise exception 'FALHOU: a conta nasceu vinculada ao professor %', v_teacher;
+  end if;
 
   if v_role <> 'student' then
     raise exception 'FALHOU: a conta nasceu com papel %', v_role;
@@ -89,7 +98,7 @@ begin
   if v_plan is not null or v_cupom is not null then
     raise exception 'FALHOU: a conta nasceu com plano/cupom carimbados';
   end if;
-  raise notice '02 OK  o INSERT do cliente tambem nasce aluno e pendente';
+  raise notice '02 OK  o INSERT do cliente tambem nasce aluno, pendente e sem professor';
 end $$;
 
 -- ---------- Ninguém cria perfil para outro ----------

@@ -7,14 +7,17 @@
  * respondida na versão anterior — uma hora de estudo do aluno, que não pode ser
  * recriada.
  *
- * Quem cumpria essa promessa era `reserve_operation`, que comparava o hash do
- * payload na tabela `operations`. **As duas saíram no schema de 14/09/2026.**
- * Enquanto não voltarem, o que existe é isto: uma memória do processo, que
- * cobre o caso comum — clique duplo, retentativa dentro da mesma aba — e não
- * cobre o caso caro: a aba que recarrega no meio da gravação, ou duas abas.
+ * A defesa de verdade é do banco, e existe por RPC: `set_student_access`
+ * guarda o `request_id` em `access_grants`, e `replace_week_goals` em
+ * `week_batches`, cada uma comparando o payload pelas próprias colunas. O
+ * padrão anterior — uma tabela `operations` genérica com `reserve_operation` —
+ * saiu no schema de 14/09/2026 e não volta.
  *
- * É defesa parcial, e está escrito aqui para ninguém confundir com a de verdade.
- * O pedido à frente do banco é `operations` + `reserve_operation` de volta.
+ * O que existe AQUI é uma memória do processo, que cobre o caso comum — clique
+ * duplo, retentativa dentro da mesma aba — nas escritas diretas que não passam
+ * por RPC. Não cobre o caso caro: a aba que recarrega no meio da gravação, ou
+ * duas abas. É defesa parcial, e está escrito aqui para ninguém confundir com a
+ * de verdade: escrita que não pode duplicar precisa de RPC com `request_id`.
  */
 import type { RequestId, Result } from "../contract.ts";
 

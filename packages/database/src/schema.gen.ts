@@ -1610,6 +1610,59 @@ export type Database = {
           },
         ]
       }
+      week_batches: {
+        Row: {
+          created_at: string
+          goals_created: number
+          goals_hash: string
+          goals_preserved: number
+          goals_removed: number
+          id: string
+          keep_studied: boolean
+          request_id: string
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          week_number: number
+        }
+        Insert: {
+          created_at?: string
+          goals_created: number
+          goals_hash: string
+          goals_preserved: number
+          goals_removed: number
+          id?: string
+          keep_studied: boolean
+          request_id: string
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          week_number: number
+        }
+        Update: {
+          created_at?: string
+          goals_created?: number
+          goals_hash?: string
+          goals_preserved?: number
+          goals_removed?: number
+          id?: string
+          keep_studied?: boolean
+          request_id?: string
+          student_id?: string
+          study_plan_id?: string
+          teacher_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "week_batches_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "teacher_id", "student_id"]
+          },
+        ]
+      }
     }
     Views: {
       vw_quiz_session_performance: {
@@ -1676,6 +1729,20 @@ export type Database = {
         Returns: {
           id: string
           name: string
+        }[]
+      }
+      replace_week_goals: {
+        Args: {
+          p_goals: Json
+          p_keep_studied: boolean
+          p_request_id: string
+          p_study_plan_id: string
+          p_week_number: number
+        }
+        Returns: {
+          goals_created: number
+          goals_preserved: number
+          goals_removed: number
         }[]
       }
       set_student_access: {

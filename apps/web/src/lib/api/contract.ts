@@ -47,9 +47,9 @@
  *    este aluno tem acesso" e "quem o liberou". O que continua faltando é o
  *    registro de RESGATE DE CUPOM: `coupons` não guarda quem usou o código, e
  *    `redeemCoupon` segue sem caminho (ver o item de `access.ts`).
- * 3. **Substituição segura é só regra de UI hoje.** `generateWeek` promete não
- *    tocar em meta concluída (LEIA-ME v108.3); nada no schema impede. Vale a
- *    pena um índice ou um gatilho, e até lá o adaptador é o único guardião.
+ * 3. ~~**Substituição segura é só regra de UI hoje.**~~ **Resolvida em
+ *    26/09/2026.** `replace_week_goals` substitui a semana numa transação só e
+ *    preserva, no modo seguro, meta concluída ou com registro de estudo.
  */
 
 /* ------------------------------------------------------------------ *
@@ -860,14 +860,14 @@ export interface GenerateWeekPreview {
   readonly days: readonly DayGroup[];
   readonly goalsToCreate: number;
   readonly goalsToReplace: number;
-  /** Metas concluídas que o modo `safe` vai preservar. */
+  /** Metas que o modo `safe` vai preservar: concluídas, ou com registro de estudo. */
   readonly goalsPreserved: number;
 }
 
 export interface TeacherGoalsApi {
   previewWeek(input: GenerateWeekInput): Promise<GenerateWeekPreview>;
   generateWeek(input: GenerateWeekInput): Promise<Result<Week>>;
-  /** Limpa as metas pendentes da semana, sem tocar nas concluídas. */
+  /** Limpa as metas pendentes da semana, sem tocar no que o aluno estudou. */
   clearPendingGoals(studyPlanId: Uuid, weekNumber: number, requestId: RequestId): Promise<Result<Week>>;
 }
 

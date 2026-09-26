@@ -116,7 +116,8 @@ begin
     'study_plan_theory_catalogs_study_plan_fk',
     'study_plan_theory_catalogs_catalog_fk',
     'theory_progress_study_plan_fk',
-    'theory_reviews_study_plan_fk'
+    'theory_reviews_study_plan_fk',
+    'week_batches_study_plan_fk'
   ] loop
     select array_length(conkey, 1) into v_colunas
       from pg_constraint where conname = v_nome and contype = 'f';
@@ -131,7 +132,7 @@ begin
   if v_simples <> '' then
     raise exception 'FALHOU: FK que precisa ser composta:%', v_simples;
   end if;
-  raise notice '06 OK  as catorze FKs compostas da auditoria continuam compostas';
+  raise notice '06 OK  as quinze FKs compostas continuam compostas';
 end $$;
 
 -- ---------- Nada de `GRANT ALL` por default ----------
@@ -177,7 +178,7 @@ declare
   v_erro text := '';
 begin
   foreach v_nome in array array[
-    'find_student_by_email', 'link_student', 'set_student_access'
+    'find_student_by_email', 'link_student', 'set_student_access', 'replace_week_goals'
   ] loop
     select p.oid into v_oid from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
@@ -208,7 +209,7 @@ begin
   if v_erro <> '' then
     raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
   end if;
-  raise notice '08 OK  as tres RPCs sao chamaveis so por authenticated, nominalmente';
+  raise notice '08 OK  as quatro RPCs sao chamaveis so por authenticated, nominalmente';
 end $$;
 
 -- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
@@ -289,12 +290,12 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 25 or v_enums <> 13 or v_fks <> 55 or v_views <> 1 then
+  if v_tabelas <> 26 or v_enums <> 13 or v_fks <> 56 or v_views <> 1 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '13 OK  25 tabelas, 13 enums, 55 FKs e 1 view — como o de-para registra';
+  raise notice '13 OK  26 tabelas, 13 enums, 56 FKs e 1 view — como o de-para registra';
 end $$;

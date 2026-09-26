@@ -2,6 +2,19 @@
 
 **Situação:** implementada · **Fluxos e2e:** F-PROF-04 a F-PROF-06
 
+
+> **Atualizada em 26/09/2026.** A reconstrução de 14/09/2026 não portou
+> `apply_study_plan_batch` nem `study_plan_batches`, e o adaptador voltou a
+> fazer DELETE e INSERT em duas requisições — o defeito descrito abaixo. A
+> migration `20260926120000` devolve a garantia com outro nome:
+> `replace_week_goals`, que trava o planejamento, apaga e insere numa transação,
+> calcula a posição depois da maior sobrevivente do dia (R-GEN-06) e guarda o
+> `request_id` em `week_batches`. O `request_id` é gerado uma vez na origem, não
+> derivado do conteúdo (R-GEN-03): o payload é comparado pelo hash das metas.
+> Os modos são dois, `safe` e `full`; o seguro preserva meta concluída **ou com
+> registro de estudo**, e nenhum dos dois apaga meta com bateria. Não há soft
+> delete: `goals` perdeu `deleted_at` em 14/09/2026.
+
 ---
 
 ## Problema

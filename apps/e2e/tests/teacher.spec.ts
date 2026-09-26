@@ -176,7 +176,7 @@ test.describe("F-PROF-05 · a substituição segura", () => {
     await expect(alert(teacherPage, "success")).toBeVisible();
 
     // A meta concluída continua de pé, com o registro. É a regra do LEIA-ME
-    // v108.3, e o banco NÃO a garante — o adaptador é o único guardião.
+    // v108.3, e quem a garante é `replace_week_goals`, numa transação só.
     const sobreviveu = await one<{ status: string }>(
       "select status::text from public.goals where id = $1",
       [concluida.id],
@@ -184,6 +184,36 @@ test.describe("F-PROF-05 · a substituição segura", () => {
     expect(sobreviveu.status).toBe("completed");
     expect(
       await count("select count(*) from public.goal_entries where goal_id = $1", [concluida.id]),
+    ).toBe(1);
+  });
+
+  test("o modo seguro preserva a meta EM ANDAMENTO e o registro dela", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    // Meta em andamento tem registro por definição. Antes, o modo seguro só
+    // preservava a concluída, e o registro saía junto por cascata: o tempo que o
+    // aluno lançou sumia das estatísticas dele.
+    const emAndamento = scenario.goals[0]!;
+    await query(
+      `insert into public.goal_entries (goal_id, student_id, teacher_id, minutes, questions, correct_answers)
+       values ($1, $2, $3, 35, 0, 0)`,
+      [emAndamento.id, scenario.student.id, scenario.teacher.id],
+    );
+
+    await teacherPage.goto("/professor/metas");
+    await testId(teacherPage, "goals-preview").click();
+    await expect(testId(teacherPage, "week-preview")).toContainText("Preservadas");
+    await testId(teacherPage, "goals-generate").click();
+    await expect(alert(teacherPage, "success")).toBeVisible();
+
+    const sobreviveu = await one<{ status: string }>(
+      "select status::text from public.goals where id = $1",
+      [emAndamento.id],
+    );
+    expect(sobreviveu.status).toBe("in_progress");
+    expect(
+      await count("select count(*) from public.goal_entries where goal_id = $1", [emAndamento.id]),
     ).toBe(1);
   });
 

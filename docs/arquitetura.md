@@ -23,7 +23,7 @@ bora-estudar/
 │   ├── config.toml
 │   ├── migrations/          # Schema versionado
 │   ├── seed.sql             # Usuários e dados de desenvolvimento
-│   └── tests/               # 86 asserções de invariante, em 8 suítes (npm run db:test)
+│   └── tests/               # asserções de invariante, em 9 suítes (npm run db:test)
 └── docs/
 ```
 
@@ -78,7 +78,7 @@ por variável de ambiente, no carregamento do módulo.
 
 A camada nasceu na reconstrução da v2 por uma razão de cronograma — as telas
 foram escritas enquanto o schema ainda mudava —, mas o que a mantém é outra
-coisa: **é onde a falta fica visível**. As seis operações que o banco não
+coisa: **é onde a falta fica visível**. As operações que o banco ainda não
 permite lançam ali, com o motivo e o caminho do de-para na mensagem, em vez de
 cada tela inventar o próprio jeito de recusar. Quando a RPC nascer, muda um
 arquivo de `lib/api/supabase/` e nenhuma tela.
@@ -158,6 +158,9 @@ arquitetura assume hoje:
 - as FKs que carregam contexto são **compostas** — `(study_plan_id, teacher_id,
   student_id)` e parentes. A FK de coluna única garantia que a linha EXISTE, não
   que ela é de quem está escrevendo;
+- gerar a semana é a exceção dentro do planejamento: apaga e insere dezenas
+  de metas de uma vez, e por isso é a RPC `replace_week_goals`, numa transação
+  só, com o `request_id` guardado em `week_batches`;
 - o que é administrativo (`role`, `access_status`, `access_expires_at`,
   `teacher_id`) fica fora de todo grant. `teacher_id`, `access_status` e
   `access_expires_at` ganharam RPC em `20260918120000` (`link_student` e
@@ -171,27 +174,28 @@ alguém precisar saber se algo regrediu:
 
 | | |
 |---|---|
-| Tabelas | 24, todas com RLS habilitada |
-| Policies | 62 |
+| Tabelas | 26, todas com RLS habilitada |
+| Policies | 65 |
 | Views | 1 (`vw_quiz_session_performance`), com `security_invoker = true` |
-| Tipos enumerados | 12 |
-| Foreign keys | 53, sendo 14 compostas |
+| Tipos enumerados | 13 |
+| Foreign keys | 56, sendo 18 compostas |
 | Privilégio para `anon` | zero, em tabela nenhuma |
-| Funções | 14 (`public` + `app_private`), das quais 5 com `execute` para `authenticated` |
-| Gatilho de criação de perfil | **ausente** — não foi portado |
+| Funções | 23 (`public` + `app_private`), das quais 9 com `execute` para `authenticated` |
+| Gatilho de criação de perfil | `create_profile_for_new_user`, de `20260914190000` |
 
-As cinco funções com grant são os predicados que as policies usam —
+As nove funções com grant são os cinco predicados que as policies usam —
 `is_teacher`, `is_teacher_of`, `can_access_teacher`, `has_active_access` e
-`my_teacher`. As de gatilho vivem em `app_private` e não recebem `execute` de
-ninguém: rodam pelo gatilho, com o privilégio do dono.
+`my_teacher` — e as quatro RPCs: `find_student_by_email`, `link_student`,
+`set_student_access` e `replace_week_goals`. As de gatilho vivem em
+`app_private` e não recebem `execute` de ninguém: rodam pelo gatilho.
 
-A ausência do gatilho de perfil é o que mantém `F-AUTH-08` em `fixme` — o
-cadastro cria o usuário no GoTrue e para aí. Ele embute uma decisão de produto
-que ainda falta: a qual professor um aluno sem metadado é anexado.
+O perfil nasce com a conta, sempre aluno, pendente e sem professor. O vínculo
+é ato do professor, por `link_student` — ver o CLAUDE.md.
 
-Todos estes números são conferidos por `supabase/tests/07_schema.sql`, que falha
-quando um deles muda — e a mensagem manda atualizar a tabela equivalente do
-de-para junto.
+Tabelas, enums, FKs e views são conferidos por `supabase/tests/07_schema.sql`,
+que falha quando um deles muda — e a mensagem manda atualizar a tabela
+equivalente do de-para junto. Os outros números desta tabela não têm asserção:
+confira com o catálogo antes de confiar neles.
 
 ### Duas medidas de desempenho — histórico
 
@@ -214,10 +218,10 @@ O reforço automático a cada três sessões continua avaliando **somente** as
 principais — `record_reinforcement` soma `main_count`/`main_correct` e exige
 revisão apenas dos erros de `phase = 'main'`.
 
-`npm run db:test` recria a base e roda **86 asserções** em oito suítes,
+`npm run db:test` recria a base e roda as asserções em nove suítes,
 organizadas por DEFESA e não por feature: grant por coluna, isolamento de RLS,
-os cinco gatilhos que protegem a meta, o perfil, a lista de espera, a teoria e
-os invariantes do schema inteiro. Cada asserção que testa um estado proibido usa
+os gatilhos que protegem a meta, o perfil, a lista de espera, a teoria, os
+invariantes do schema inteiro e a geração da semana. Cada asserção que testa um estado proibido usa
 `raise exception` se o banco aceitar — então a suíte falha quando uma constraint
 desaparece, não só quando o código quebra.
 

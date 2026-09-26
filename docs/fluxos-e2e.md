@@ -240,7 +240,7 @@ diff mostra a omissão.
 | F-PROF-02 | a lista abre pelos atrasados; filtros somam; o recorte fica na URL |
 | F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer |
 | F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
-| F-PROF-05 | a substituição segura preserva a meta concluída; replanejar a semana exige confirmação |
+| F-PROF-05 | a substituição segura preserva a meta concluída e a em andamento, com os registros; replanejar a semana exige confirmação |
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
 | F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno |
 | F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |

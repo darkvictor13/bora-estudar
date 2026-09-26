@@ -7,20 +7,28 @@
  *
  * 1. **A prévia vem antes da escrita.** `previewWeek` monta exatamente o que
  *    `generateWeek` faria e não grava nada. A tela mostra, o professor confere.
- * 2. **O modo `safe` só substitui meta PENDENTE, EM ANDAMENTO ou PULADA.**
- *    Meta concluída fica de pé, com os registros dela. É o padrão.
+ * 2. **O modo `safe` preserva o que o aluno ESTUDOU** — meta concluída ou com
+ *    registro de estudo, com os registros dela. É o padrão. Meta em andamento
+ *    tem registro por definição, e antes saía junto: o tempo que o aluno
+ *    lançou sumia das estatísticas dele.
  * 3. **`full` é caminho separado** — "Replanejar semana inteira" —, e a tela
  *    exige confirmação antes de chegar aqui. Um `boolean force` não serviria:
  *    quem lê a chamada precisa ver qual dos dois caminhos está sendo tomado.
  *
- * O banco NÃO garante isto hoje: não há constraint que impeça apagar meta
- * concluída. Enquanto não houver, este adaptador é o único guardião — e é o
- * motivo de a regra estar escrita aqui em vez de espalhada pela tela.
+ * Quem garante é o banco: `replace_week_goals` apaga e insere numa transação
+ * só, calcula a posição das metas novas depois das que sobreviveram, e guarda o
+ * `request_id` em `week_batches`. Antes eram duas requisições daqui, e um
+ * INSERT que falhava depois do DELETE deixava a semana vazia.
+ *
+ * O que continua aqui é a MONTAGEM das metas (a distribuição por peso, a cópia
+ * de outra semana) e a prévia, que precisa repetir a regra de preservação para
+ * contar o que vai ficar.
  */
 import { supabase } from "@/lib/supabase/client";
 import { groupIntoDays, weekBounds } from "@/lib/domain/week";
 import { planWeek, type SubjectWeight } from "@/lib/domain/teacher";
 import { WEEKDAY_NAMES } from "@bora/ui";
+import type { Json } from "@bora/database";
 
 import type {
   GenerateWeekInput,
@@ -39,9 +47,22 @@ import { loadWeek } from "./week.ts";
 /** Os dias em que a v2 distribui: segunda a sábado. Domingo fica de folga. */
 const DEFAULT_WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5, 6];
 
-/** Meta que o modo `safe` PRESERVA. */
-function isPreserved(status: string): boolean {
-  return status === "completed";
+/**
+ * Meta que o modo `safe` PRESERVA: concluída, ou com registro de estudo.
+ *
+ * É a mesma regra do DELETE de `replace_week_goals`, repetida aqui só para a
+ * prévia contar. Quem decide o que sai é o banco.
+ */
+function isPreserved(goal: ExistingGoal): boolean {
+  return goal.status === "completed" || goal.entries > 0;
+}
+
+interface ExistingGoal {
+  id: string;
+  status: string;
+  subject: string;
+  weekday: number;
+  entries: number;
 }
 
 interface Context {
@@ -51,7 +72,7 @@ interface Context {
   startsOn: string;
   weeklyGoals: number;
   subjects: readonly SubjectWeight[];
-  existing: readonly { id: string; status: string; subject: string; weekday: number }[];
+  existing: readonly ExistingGoal[];
 }
 
 async function context(input: GenerateWeekInput): Promise<Context> {
@@ -74,7 +95,7 @@ async function context(input: GenerateWeekInput): Promise<Context> {
 
   const { data: existing, error: existingError } = await supabase
     .from("goals")
-    .select("id,status,subject,weekday")
+    .select("id,status,subject,weekday,goal_entries(id)")
     .eq("study_plan_id", input.studyPlanId)
     .eq("week_number", input.weekNumber);
 
@@ -92,7 +113,13 @@ async function context(input: GenerateWeekInput): Promise<Context> {
       // geração — é o "peso por matéria" da v2.
       weight: input.weights?.[row.name] ?? row.weight,
     })),
-    existing: existing ?? [],
+    existing: (existing ?? []).map((goal) => ({
+      id: goal.id,
+      status: goal.status,
+      subject: goal.subject,
+      weekday: goal.weekday,
+      entries: goal.goal_entries.length,
+    })),
   };
 }
 
@@ -159,7 +186,7 @@ export async function previewWeek(input: GenerateWeekInput): Promise<GenerateWee
   const rows = await build(input, ctx);
 
   const preserved =
-    input.mode === "safe" ? ctx.existing.filter((goal) => isPreserved(goal.status)).length : 0;
+    input.mode === "safe" ? ctx.existing.filter((goal) => isPreserved(goal)).length : 0;
   const replaced = ctx.existing.length - preserved;
 
   const bounds = weekBounds(ctx.startsOn, input.weekNumber);
@@ -196,6 +223,40 @@ export async function previewWeek(input: GenerateWeekInput): Promise<GenerateWee
   };
 }
 
+/**
+ * Substitui a semana pela RPC. `mode` vira `p_keep_studied`: o modo seguro
+ * preserva o que o aluno estudou, o completo apaga tudo — menos meta com
+ * bateria, que o banco nunca apaga.
+ */
+function replaceWeek(
+  studyPlanId: Uuid,
+  weekNumber: number,
+  keepStudied: boolean,
+  rows: readonly PlannedRow[],
+  requestId: RequestId,
+) {
+  const goals = rows.map((row) => ({
+    weekday: row.weekday,
+    weekday_name: WEEKDAY_NAMES[row.weekday - 1]!,
+    day_position: row.day_position,
+    type: row.type,
+    subject: row.subject,
+    title: row.title,
+    planned_minutes: row.planned_minutes,
+    lesson: row.lesson ?? null,
+    block: row.block ?? null,
+    notebook_block_id: row.notebook_block_id ?? null,
+  })) satisfies Json;
+
+  return supabase.rpc("replace_week_goals", {
+    p_study_plan_id: studyPlanId,
+    p_week_number: weekNumber,
+    p_keep_studied: keepStudied,
+    p_goals: goals,
+    p_request_id: requestId,
+  });
+}
+
 export function generateWeek(input: GenerateWeekInput): Promise<Result<Week>> {
   return once(input.requestId, async () => {
     const ctx = await context(input);
@@ -208,46 +269,15 @@ export function generateWeek(input: GenerateWeekInput): Promise<Result<Week>> {
       );
     }
 
-    // A SUBSTITUIÇÃO SEGURA, aqui. No modo `safe` a meta concluída sobrevive —
-    // com os registros dela, que têm FK para ela e sumiriam junto.
-    const toRemove = ctx.existing
-      .filter((goal) => input.mode === "full" || !isPreserved(goal.status))
-      .map((goal) => goal.id);
-
-    if (toRemove.length > 0) {
-      const { error } = await supabase.from("goals").delete().in("id", toRemove);
-      if (error) return failure<Week>(translateDbError(error));
-    }
-
-    // As posições recomeçam de onde as preservadas pararam: duas metas na mesma
-    // (semana, dia, posição) colidem no índice único.
-    const preservedPerDay = new Map<number, number>();
-    if (input.mode === "safe") {
-      for (const goal of ctx.existing.filter((candidate) => isPreserved(candidate.status))) {
-        preservedPerDay.set(goal.weekday, (preservedPerDay.get(goal.weekday) ?? 0) + 1);
-      }
-    }
-
-    const { error } = await supabase.from("goals").insert(
-      rows.map((row) => ({
-        study_plan_id: ctx.studyPlanId,
-        teacher_id: ctx.teacherId,
-        student_id: ctx.studentId,
-        week_number: input.weekNumber,
-        weekday: row.weekday,
-        weekday_name: WEEKDAY_NAMES[row.weekday - 1]!,
-        day_position: row.day_position + (preservedPerDay.get(row.weekday) ?? 0),
-        type: row.type,
-        subject: row.subject,
-        title: row.title,
-        planned_minutes: row.planned_minutes,
-        lesson: row.lesson ?? null,
-        block: row.block ?? null,
-        notebook_block_id: row.notebook_block_id ?? null,
-      })),
+    const { error } = await replaceWeek(
+      ctx.studyPlanId,
+      input.weekNumber,
+      input.mode === "safe",
+      rows,
+      input.requestId,
     );
-
     if (error) return failure<Week>(translateDbError(error));
+
     return done(await loadWeek(ctx.studyPlanId, input.weekNumber));
   });
 }
@@ -255,9 +285,10 @@ export function generateWeek(input: GenerateWeekInput): Promise<Result<Week>> {
 /**
  * Limpa as metas PENDENTES da semana.
  *
- * Nunca toca nas concluídas — é o mesmo princípio da substituição segura, e é
- * por isso que esta operação existe separada de "replanejar": o professor que
- * quer esvaziar a semana quase sempre quer manter o que o aluno já fez.
+ * Nunca toca no que o aluno estudou — é o mesmo princípio da substituição
+ * segura, e é por isso que esta operação existe separada de "replanejar": o
+ * professor que quer esvaziar a semana quase sempre quer manter o que o aluno
+ * já fez. É a mesma RPC, com a lista de metas novas vazia.
  */
 export function clearPendingGoals(
   studyPlanId: Uuid,
@@ -265,19 +296,8 @@ export function clearPendingGoals(
   requestId: RequestId,
 ): Promise<Result<Week>> {
   return once(requestId, async () => {
-    const { data, error } = await supabase
-      .from("goals")
-      .select("id,status")
-      .eq("study_plan_id", studyPlanId)
-      .eq("week_number", weekNumber);
-
+    const { error } = await replaceWeek(studyPlanId, weekNumber, true, [], requestId);
     if (error) return failure<Week>(translateDbError(error));
-
-    const toRemove = (data ?? []).filter((goal) => !isPreserved(goal.status)).map((goal) => goal.id);
-    if (toRemove.length > 0) {
-      const { error: deleteError } = await supabase.from("goals").delete().in("id", toRemove);
-      if (deleteError) return failure<Week>(translateDbError(deleteError));
-    }
 
     return done(await loadWeek(studyPlanId, weekNumber));
   });

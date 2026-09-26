@@ -89,6 +89,12 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `catalog_blocks` | ninguém | leitura para autenticado; carga por `service_role` |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
+| `week_batches` | ninguém | SELECT e nada mais: escrita é de `replace_week_goals` |
+
+Gerar a semana é a exceção dentro do planejamento: apaga e insere dezenas de
+metas de uma vez, e por isso passa por `replace_week_goals`, numa transação só.
+O estado `pending`/`in_progress` da meta não é escrito pelo cliente: é o gatilho
+`sync_goal_status_from_entries` que o deriva de `goal_entries`.
 
 Escrita de execução continua fechada porque é onde moram a máquina de estados,
 a idempotência por `request_id` e o ledger append-only — coisas que uma tela
@@ -144,16 +150,18 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** As duas que existem —
-`link_student` e `set_student_access`, de `20260918120000` — nasceram assim, uma
-em cada forma:
+**Toda RPC mutante precisa ser segura a retentativa.** As três que existem —
+`link_student` e `set_student_access`, de `20260918120000`, e
+`replace_week_goals`, de `20260926120000` — nasceram assim:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
   reexecutar; payload diferente é rejeitado. É `set_student_access`, e o que a
   sustenta é `access_grants_request_uidx`. O payload guardado são as PRÓPRIAS
   colunas (`student_id`, `action`, `months`): repeti-lo num `jsonb` ao lado
-  seria um segundo caminho afirmando o mesmo fato.
+  seria um segundo caminho afirmando o mesmo fato. `replace_week_goals` segue
+  a mesma forma com `week_batches_request_uidx`, comparando planejamento,
+  semana, modo e o hash das metas pedidas.
   `quiz_sessions.finish_request_id` (UNIQUE) e `finish_payload` são as colunas
   que o schema reserva para a próxima.
 - **Naturalmente idempotente** — `link_student` não recebe `request_id`, porque
@@ -162,6 +170,13 @@ em cada forma:
   num `update ... where teacher_id is null` único. O mesmo vale para o segundo
   "iniciar" da mesma meta, que o índice `quiz_sessions_one_open_per_plan_uidx`
   vai garantir.
+
+**Trave e reserve antes de escrever.** A linha-alvo leva `for update` antes da
+conferência do `request_id`, e a linha que guarda o `request_id` entra ANTES do
+efeito. O `exception when unique_violation` só desfaz o que está dentro do
+bloco: um UPDATE feito antes dele fica. Foi assim que `set_student_access`, na
+versão de `20260918120000`, podia somar os meses duas vezes numa retentativa
+concorrente — corrigido em `20260926120000`.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
 ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**
@@ -251,11 +266,13 @@ catálogo que alimentavam o payload (`getBlockQuestions`, `getQuestionHistory`).
 
 O que **ficou de pé**, e é onde uma execução nova se apoia:
 
-- **o banco inteiro** — `quiz_sessions`, o ledger `quiz_session_questions`,
-  `start_quiz_session`, `finish_quiz_session`, `record_quiz_session_time` e
-  `void_quiz_session`. Nenhuma migration foi escrita para desfazer nada;
-- **o fechamento da bateria na tela do aluno** — registrar tempo e cancelar,
-  que é o que destrava um planejamento com sessão aberta;
+- **as tabelas** — `quiz_sessions`, o ledger `quiz_session_questions` e
+  `reinforcement_cycles`, com a máquina de estados nos CHECKs e nos índices.
+  **As RPCs que as escreviam não existem**: `start_quiz_session`,
+  `finish_quiz_session`, `record_quiz_session_time` e `void_quiz_session` não
+  foram portadas para o schema de 14/09/2026, e hoje nada escreve nessas
+  tabelas. Pelo mesmo motivo não há, na tela do aluno, como registrar o tempo
+  de uma bateria nem cancelá-la;
 - **o caderno de erros e o reforço**, que linkam para o TEC como páginas
   comuns. `TEC_QUESTION_URL` continua sendo isso, e só isso.
 
@@ -339,11 +356,11 @@ duas vezes ao renomear valor de enum.
 
 ## Testes
 
-`npm run db:test` recria o banco e roda as oito suítes de `supabase/tests/`, na
-ordem: `00_fixtures` monta o cenário e as sete seguintes atacam uma DEFESA cada
+`npm run db:test` recria o banco e roda as nove suítes de `supabase/tests/`, na
+ordem: `00_fixtures` monta o cenário e as oito seguintes atacam uma DEFESA cada
 — grant por coluna, isolamento de RLS, os gatilhos da meta, o perfil, a lista de
-espera, a teoria e os invariantes do schema. Por defesa, e não por feature:
-feature muda de nome e de tela, defesa não.
+espera, a teoria, os invariantes do schema e a geração da semana. Por defesa, e
+não por feature: feature muda de nome e de tela, defesa não.
 
 - **Encene quem está chamando com `app_test.act_as(<uuid>)`**, e não com
   `set_config('request.jwt.claim.sub', …)`. Os gatilhos de proteção leem o papel

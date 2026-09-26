@@ -336,15 +336,10 @@ export function recordStudy(input: RecordStudyInput): Promise<Result<Goal>> {
 
     // REGISTRAR NÃO CONCLUI. Uma meta pode receber vários registros antes de
     // fechar, e é a separação que o `registro-modal` da v2 tem. O que muda é
-    // só "pendente" virar "em andamento".
-    if (context.status === "pending") {
-      const { error: statusError } = await supabase
-        .from("goals")
-        .update({ status: "in_progress" })
-        .eq("id", input.goalId);
-      if (statusError) return failure<Goal>(translateDbError(statusError));
-    }
-
+    // só "pendente" virar "em andamento" — e quem muda é o gatilho
+    // `sync_goal_status_from_entries`, no mesmo INSERT. Um segundo UPDATE daqui
+    // podia falhar depois do primeiro e deixar a meta num estado que os
+    // registros desmentem.
     return reloadGoal(input.goalId);
   });
 }
@@ -364,16 +359,8 @@ export function removeStudyEntry(entryId: Uuid, requestId: RequestId): Promise<R
     if (deleteError) return failure<Goal>(translateDbError(deleteError));
 
     // O estado da meta acompanha o que SOBROU: apagar o último registro de uma
-    // meta em andamento devolve "pendente", senão a tela mostra "em andamento"
-    // numa linha sem nada registrado.
-    const context = await goalContext(data.goal_id);
-    if (context && context.status === "in_progress") {
-      await supabase
-        .from("goals")
-        .update({ status: statusFromEntries(context.entries) })
-        .eq("id", data.goal_id);
-    }
-
+    // meta em andamento devolve "pendente". Quem faz é o gatilho
+    // `sync_goal_status_from_entries`, no mesmo DELETE.
     return reloadGoal(data.goal_id);
   });
 }
@@ -473,6 +460,8 @@ export function recordExtraStudy(input: ExtraStudyInput): Promise<Result<Goal>> 
         weekday_name: WEEKDAY_NAMES[weekday - 1]!,
         // Depois de tudo que já existe no dia: estudo extra é acréscimo, e
         // entra no fim da lista em vez de empurrar o que o professor planejou.
+        // Se a casa 99 já estiver ocupada — o segundo estudo extra do dia —,
+        // `place_goal_at_end_of_day` passa para a próxima livre.
         day_position: 99,
         type: "extra",
         subject: input.subject.trim(),

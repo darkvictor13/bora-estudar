@@ -208,7 +208,7 @@ export function TeacherGoals() {
                   }}
                   sx={{ minWidth: 260 }}
                 >
-                  <MenuItem value="safe">Segura — preserva o que foi concluído</MenuItem>
+                  <MenuItem value="safe">Segura — preserva o que o aluno já estudou</MenuItem>
                   <MenuItem value="full">Replanejar semana inteira — apaga tudo</MenuItem>
                 </TextField>
 

@@ -174,6 +174,16 @@ interface GoalRow {
   subjectKey: string | null;
 }
 
+/**
+ * O que a substituição segura preserva: meta concluída, ou com registro.
+ *
+ * É a regra do DELETE de `replace_week_goals`. Meta em andamento tem registro
+ * por definição, e apagá-la levava junto o tempo que o aluno lançou.
+ */
+function wasStudied(row: GoalRow): boolean {
+  return row.status === "completed" || state.entries.some((entry) => entry.goalId === row.id);
+}
+
 interface State {
   session: Session | null;
   theme: ThemePreference | null;
@@ -1142,12 +1152,12 @@ export const fixturesApi: BoraApi = {
 
   previewWeek: (input: GenerateWeekInput) => {
     const existing = state.goals.filter((row) => row.weekNumber === input.weekNumber);
-    const preserved = existing.filter((row) => row.status === "completed");
+    const preserved = existing.filter(wasStudied);
     return later<GenerateWeekPreview>({
       weekNumber: input.weekNumber,
       days: buildWeek(input.weekNumber).days,
       goalsToCreate: 7,
-      // No modo seguro, meta concluída não é substituída — é preservada.
+      // No modo seguro, o que o aluno estudou não é substituído — é preservado.
       goalsToReplace:
         input.mode === "full" ? existing.length : existing.length - preserved.length,
       goalsPreserved: input.mode === "full" ? 0 : preserved.length,
@@ -1158,9 +1168,9 @@ export const fixturesApi: BoraApi = {
     later(
       once(input.requestId, () => {
         if (input.mode === "safe") {
-          // Só sai o que ainda não foi concluído.
+          // Só sai o que o aluno não estudou.
           state.goals = state.goals.filter(
-            (row) => row.weekNumber !== input.weekNumber || row.status === "completed",
+            (row) => row.weekNumber !== input.weekNumber || wasStudied(row),
           );
         } else {
           state.goals = state.goals.filter((row) => row.weekNumber !== input.weekNumber);
@@ -1174,7 +1184,7 @@ export const fixturesApi: BoraApi = {
     later(
       once(requestId, () => {
         state.goals = state.goals.filter(
-          (row) => row.weekNumber !== weekNumber || row.status === "completed",
+          (row) => row.weekNumber !== weekNumber || wasStudied(row),
         );
         return done(buildWeek(weekNumber));
       }),

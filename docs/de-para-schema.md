@@ -885,24 +885,27 @@ A coluna da direita foi medida depois da segunda rodada; a do meio é o que a
 primeira rodada tinha produzido, para o diff ficar legível.
 
 A coluna **18/09** é o schema depois de `20260914190000` (o gatilho de perfil) e
-`20260918120000` (vínculo, acesso e turmas). É ela que `supabase/tests/07_schema.sql`
-confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
-junto.
+`20260918120000` (vínculo, acesso e turmas). A coluna **26/09** acrescenta
+`20260926120000`: a tabela `week_batches` (com a policy, a FK composta e os
+três índices dela), a RPC `replace_week_goals` e os gatilhos
+`sync_goal_status_from_entries` e `place_goal_at_end_of_day`. É a coluna mais à
+direita que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em
+que um número mudar sem esta tabela mudar junto.
 
-| | origem | 1ª rodada | 2ª rodada | 18/09 |
-|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 |
-| Colunas | 326 | 294 | 294 | 302 |
-| Policies | 79 | 63 | 62 | 64 |
-| Tipos enumerados | 0 | 12 | 12 | 13 |
-| CHECK constraints | 68 | 46 | 46 | 47 |
-| Foreign keys | 49 | 53 | 53 | 55 |
-| Índices | 85 | 81 | 92 | 97 |
-| Views | 0 | 1 | 1 | 1 |
-| Gatilhos | 12 | 27 | 28 | 29 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 |
+| | origem | 1ª rodada | 2ª rodada | 18/09 | 26/09 |
+|---|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 26 / 26 |
+| Colunas | 326 | 294 | 294 | 302 | 314 |
+| Policies | 79 | 63 | 62 | 64 | 65 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 47 |
+| Foreign keys | 49 | 53 | 53 | 55 | 56 |
+| Índices | 85 | 81 | 92 | 97 | 100 |
+| Views | 0 | 1 | 1 | 1 | 1 |
+| Gatilhos | 12 | 27 | 28 | 29 | 31 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 23 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.
