@@ -54,21 +54,23 @@ else
   trap 'rm -f "$bundle"' EXIT
 
   # E o que chega precisa SER o bundle. A publicação no Cloudflare não fica
-  # visível de uma vez: o index.html pode vir da versão nova enquanto o pedido
-  # do asset, noutra conexão, ainda cai onde o manifesto ainda é o antigo. Ali
-  # o hash novo não existe, o `not_found_handling: single-page-application`
-  # responde com o index.html, e 200 é o que chega nos dois casos.
+  # visível de uma vez: o index.html já vem da versão nova enquanto o pedido do
+  # asset, noutra conexão, ainda cai onde o manifesto é o antigo. Ali o hash
+  # novo não existe, e o `not_found_handling: single-page-application` responde
+  # com o index.html.
   #
   # Sem esta espera, TODA checagem de conteúdo daqui para baixo lê a casca em
   # HTML: a URL do Supabase "não está no bundle" com o bundle certo no ar, e
   # "nenhum segredo" é dito sobre um arquivo que nunca foi o bundle. É
-  # diagnóstico errado do problema certo — deploy vermelho mandando o time
-  # procurar VITE_* que estão configuradas. Medido em 18/09/2026, onze segundos
-  # depois do deploy.
+  # diagnóstico errado do problema certo — deploy vermelho mandando procurar
+  # VITE_* que estão configuradas. Medido em 18/09/2026, onze segundos depois
+  # do deploy.
   #
-  # Quem distingue é o content-type: `text/javascript` no asset, `text/html` no
-  # fallback. Se depois das tentativas ainda vier HTML, aí é falha de verdade —
-  # o deploy não publicou o asset que o index.html promete.
+  # Status não distingue nada: os dois são 200. Quem distingue é o
+  # content-type, `text/javascript` no asset contra `text/html` no fallback. Se
+  # ao fim das tentativas ainda vier HTML, aí é falha de verdade — o deploy não
+  # publicou o asset que o index.html promete — e o erro passa a dizer isso, em
+  # vez de acusar as VITE_*.
   tipo=""
   for tentativa in 1 2 3 4 5 6; do
     tipo=$(curl -sS --max-time 60 -o "$bundle" -w '%{content_type}' "$URL$asset" || true)
@@ -82,7 +84,7 @@ else
   esac
 
   if [ "$baixou" = nao ]; then
-    erro "$asset respondeu ${tipo:-<sem content-type>} em vez de JavaScript — o fallback de SPA atendeu no lugar do bundle, e nada abaixo tem o que ler"
+    erro "$asset respondeu ${tipo:-<sem content-type>} em vez de JavaScript — o fallback de SPA atendeu no lugar do bundle, e as checagens de conteúdo não têm o que ler"
   else
     # A chave é assada no bundle pelo Vite. Se ela não está aqui, o build rodou
     # sem as VITE_*, e o produto sobe com tela branca.
