@@ -113,10 +113,13 @@ else
     # chamado e o SDK inteiro é REMOVIDO do bundle na compilação — o ambiente
     # sobe sem relatar nada, e o sintoma é silêncio: nada quebra, nada aparece,
     # e ninguém nota até o dia em que faz falta.
-    if grep -q 'ingest\.sentry\.io' "$bundle"; then
+    #
+    # O host do DSN pode ter região no meio — `ingest.us.sentry.io` é o desta
+    # organização. Casar só `ingest.sentry.io` reprovava um bundle correto.
+    if grep -qE 'ingest\.([a-z0-9-]+\.)?sentry\.io' "$bundle"; then
       ok "o relato de erro está no bundle"
     else
-      erro "o bundle não cita ingest.sentry.io — build sem VITE_SENTRY_DSN?"
+      erro "o bundle não cita o host de ingestão do Sentry — build sem VITE_SENTRY_DSN?"
     fi
   fi
 
