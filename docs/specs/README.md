@@ -65,6 +65,7 @@ de lá vira uma spec nova antes de virar código.
 | 34 | [Cronograma, leis e flashcards](34-cronograma-leis-flashcards.md) | Agenda interativa das metas; Leis e Flashcards com aviso de lançamento futuro |
 | 35 | [Simulados presenciais](35-simulados-presenciais.md) | Cadastro pelo professor, lançamento de notas e ranking publicado por turma |
 | 36 | [Aulas PRF e desempenho diário](36-aulas-prf-e-desempenho-diario.md) | Publicação pelo professor, links de apoio e acertos/erros por dia; atualiza o fluxo da spec 32 |
+| 38 | [Biblioteca de flashcards no banco](38-biblioteca-de-flashcards-no-banco.md) | Cartões, matérias, aliases e carga idempotente — **não implementada**; o site ainda lê do arquivo |
 
 ---
 
