@@ -50,6 +50,13 @@ de deck e o catálogo de chaves `library_flashcard_decks`. Nenhuma dessas tabela
 tem origem no banco anterior. Os totais estão na coluna 30/09 de "Estado dos
 dois lados".
 
+**Acréscimo de 01/10/2026:** `20261001120000_library_flashcard_content` traz o
+conteúdo da biblioteca PF 2029 para o banco (spec 38) — `library_flashcard_subjects`,
+`library_flashcards`, `library_flashcard_aliases` e as duas tabelas de
+referência, `library_flashcard_origins` e `library_flashcard_statuses`. Também
+sem origem no banco anterior: o conteúdo vinha de um JSON publicado com o site.
+Coluna 01/10.
+
 | origem | destino |
 |---|---|
 | `aluno_turmas` | `class_students` |
@@ -896,25 +903,27 @@ primeira rodada tinha produzido, para o diff ficar legível.
 A coluna **18/09** é o schema depois de `20260914190000` (o gatilho de perfil) e
 `20260918120000` (vínculo, acesso e turmas). A coluna **30/09** acrescenta as
 doze migrations de simulados, cartões, biblioteca e comparações, de
-`20260924210319` a `20260930120000`. É a última que `supabase/tests/07_schema.sql`
-confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
+`20260924210319` a `20260930120000`. A coluna **01/10** acrescenta
+`20261001120000`, o conteúdo da biblioteca de flashcards (spec 38): cinco
+tabelas, o enum do aviso editorial, seis FKs e `vw_library_flashcard_decks`. É a
+última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
 
-| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 |
-|---|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 |
-| Colunas | 326 | 294 | 294 | 302 | 401 |
-| Policies | 79 | 63 | 62 | 64 | 99 |
-| Tipos enumerados | 0 | 12 | 12 | 13 | 13 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 |
-| Índices | 85 | 81 | 92 | 97 | 128 |
-| Views | 0 | 1 | 1 | 1 | 1 |
-| Gatilhos | 12 | 27 | 28 | 29 | 39 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 |
+| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 |
+|---|---|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 41 / 41 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 435 |
+| Policies | 79 | 63 | 62 | 64 | 99 | 104 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 14 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 100 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 77 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 137 |
+| Views | 0 | 1 | 1 | 1 | 1 | 2 |
+| Gatilhos | 12 | 27 | 28 | 29 | 39 | 45 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.

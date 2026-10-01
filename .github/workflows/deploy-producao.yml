@@ -106,6 +106,13 @@ jobs:
       - name: Estado final das migrations
         run: npx supabase migration list --linked
 
+      # Depois das migrations e antes do site (spec 38, R-BIB-22): o conteúdo da
+      # biblioteca vem do JSON do commit, numa transação só. Falha se houver
+      # revisão de um cartão que o arquivo não tem — aí o site não publica.
+      # A conexão é a do `supabase link` acima, com a mesma senha do push.
+      - name: Carregar a biblioteca de flashcards
+        run: node scripts/load-library-flashcards.mjs --linked
+
   site:
     needs: [resolver, banco]
     runs-on: ubuntu-latest

@@ -479,17 +479,94 @@ export type Database = {
           },
         ]
       }
+      library_flashcard_aliases: {
+        Row: {
+          card_id: string
+          created_at: string
+          deck_id: string
+          old_card_id: string
+          old_deck_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          deck_id: string
+          old_card_id: string
+          old_deck_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          deck_id?: string
+          old_card_id?: string
+          old_deck_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_flashcard_aliases_deck_id_card_id_fkey"
+            columns: ["deck_id", "card_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcards"
+            referencedColumns: ["deck_id", "id"]
+          },
+          {
+            foreignKeyName: "library_flashcard_aliases_old_deck_id_old_card_id_fkey"
+            columns: ["old_deck_id", "old_card_id"]
+            isOneToOne: true
+            referencedRelation: "library_flashcards"
+            referencedColumns: ["deck_id", "id"]
+          },
+        ]
+      }
       library_flashcard_decks: {
         Row: {
           created_at: string
+          historical: boolean
           id: string
+          number: string | null
+          position: number | null
+          subject_id: string | null
+          title: string | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
+          historical?: boolean
           id: string
+          number?: string | null
+          position?: number | null
+          subject_id?: string | null
+          title?: string | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
+          historical?: boolean
+          id?: string
+          number?: string | null
+          position?: number | null
+          subject_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_flashcard_decks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcard_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      library_flashcard_origins: {
+        Row: {
+          id: string
+        }
+        Insert: {
+          id: string
+        }
+        Update: {
           id?: string
         }
         Relationships: []
@@ -552,10 +629,145 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "library_flashcard_reviews_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "vw_library_flashcard_decks"
+            referencedColumns: ["deck_id"]
+          },
+          {
             foreignKeyName: "library_flashcard_reviews_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      library_flashcard_statuses: {
+        Row: {
+          editorial_notice:
+            | Database["public"]["Enums"]["library_flashcard_notice"]
+            | null
+          id: string
+        }
+        Insert: {
+          editorial_notice?:
+            | Database["public"]["Enums"]["library_flashcard_notice"]
+            | null
+          id: string
+        }
+        Update: {
+          editorial_notice?:
+            | Database["public"]["Enums"]["library_flashcard_notice"]
+            | null
+          id?: string
+        }
+        Relationships: []
+      }
+      library_flashcard_subjects: {
+        Row: {
+          audit_label: string
+          audit_partial: boolean
+          created_at: string
+          id: string
+          name: string
+          position: number
+          source_file: string
+          updated_at: string
+        }
+        Insert: {
+          audit_label: string
+          audit_partial?: boolean
+          created_at?: string
+          id: string
+          name: string
+          position: number
+          source_file: string
+          updated_at?: string
+        }
+        Update: {
+          audit_label?: string
+          audit_partial?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          source_file?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      library_flashcards: {
+        Row: {
+          back: string
+          created_at: string
+          deck_id: string
+          front: string
+          id: string
+          origin_id: string
+          position: number
+          retired_at: string | null
+          source_number: string | null
+          status_id: string | null
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          back: string
+          created_at?: string
+          deck_id: string
+          front: string
+          id: string
+          origin_id: string
+          position: number
+          retired_at?: string | null
+          source_number?: string | null
+          status_id?: string | null
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          back?: string
+          created_at?: string
+          deck_id?: string
+          front?: string
+          id?: string
+          origin_id?: string
+          position?: number
+          retired_at?: string | null
+          source_number?: string | null
+          status_id?: string | null
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_flashcards_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcard_decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "library_flashcards_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "vw_library_flashcard_decks"
+            referencedColumns: ["deck_id"]
+          },
+          {
+            foreignKeyName: "library_flashcards_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcard_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "library_flashcards_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcard_statuses"
             referencedColumns: ["id"]
           },
         ]
@@ -2130,6 +2342,44 @@ export type Database = {
       }
     }
     Views: {
+      vw_library_flashcard_decks: {
+        Row: {
+          active_cards: number | null
+          deck_id: string | null
+          historical: boolean | null
+          number: string | null
+          position: number | null
+          subject_id: string | null
+          title: string | null
+        }
+        Insert: {
+          active_cards?: never
+          deck_id?: string | null
+          historical?: boolean | null
+          number?: string | null
+          position?: number | null
+          subject_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          active_cards?: never
+          deck_id?: string | null
+          historical?: boolean | null
+          number?: string | null
+          position?: number | null
+          subject_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_flashcard_decks_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcard_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_quiz_session_performance: {
         Row: {
           block_id: string | null
@@ -2274,6 +2524,11 @@ export type Database = {
         | "reinforcement"
         | "mock_exam"
         | "extra"
+      library_flashcard_notice:
+        | "revoked"
+        | "pending_check"
+        | "future_effect"
+        | "version_caveat"
       question_outcome: "correct" | "incorrect"
       question_phase: "main" | "reinforcement" | "extra"
       quiz_session_origin: "goal" | "error_notebook"
@@ -2429,6 +2684,12 @@ export const Constants = {
         "reinforcement",
         "mock_exam",
         "extra",
+      ],
+      library_flashcard_notice: [
+        "revoked",
+        "pending_check",
+        "future_effect",
+        "version_caveat",
       ],
       question_outcome: ["correct", "incorrect"],
       question_phase: ["main", "reinforcement", "extra"],

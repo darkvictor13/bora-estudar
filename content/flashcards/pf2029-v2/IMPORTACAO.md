@@ -33,4 +33,6 @@ O importador recusa cartões incompletos, IDs duplicados, contagens divergentes 
 
 A migração `20260929205400_police_flashcard_decks.sql` amplia os decks aceitos na tabela `library_flashcard_reviews`, preservando as linhas, permissões e políticas de acesso existentes. Ela depende das migrações anteriores de revisões e FSRS. A atualização do código não aplica a migração automaticamente.
 
+Desde 01/10/2026 (spec 38) o conteúdo também vai para o banco: `scripts/load-library-flashcards.mjs` lê o JSON gerado acima e o carrega em `library_flashcards`, numa transação só e sem reescrever o que não mudou. Corrigir frente ou verso mantém o id e a memória dos alunos; mover cartão de deck é recusado, e o caminho é retirar o antigo, criar o novo e registrar o par em `previousReviews`. O deploy roda a carga depois das migrations; localmente, `npm run db:reset`.
+
 Os ZIPs de Vade Mecum e de propostas de arquitetura não fazem parte desta importação.

@@ -297,3 +297,40 @@ do $$ begin
   end if;
   raise notice '29 OK  coupons sem grant: o resgate precisa nascer como RPC';
 end $$;
+
+-- ---------- biblioteca de flashcards: só leitura (spec 38, CA-10) ----------
+do $$
+declare
+  v_tabela text;
+  v_sobra  text := '';
+begin
+  foreach v_tabela in array array['library_flashcard_origins', 'library_flashcard_statuses',
+    'library_flashcard_subjects', 'library_flashcard_decks', 'library_flashcards',
+    'library_flashcard_aliases', 'vw_library_flashcard_decks']
+  loop
+    if not has_table_privilege('authenticated', 'public.' || v_tabela, 'select') then
+      raise exception 'FALHOU: authenticated nao le %', v_tabela;
+    end if;
+    if has_table_privilege('authenticated', 'public.' || v_tabela, 'insert')
+       or has_table_privilege('authenticated', 'public.' || v_tabela, 'update')
+       or has_table_privilege('authenticated', 'public.' || v_tabela, 'delete')
+       or has_any_column_privilege('authenticated', 'public.' || v_tabela, 'insert')
+       or has_any_column_privilege('authenticated', 'public.' || v_tabela, 'update') then
+      v_sobra := v_sobra || ' ' || v_tabela;
+    end if;
+  end loop;
+  if v_sobra <> '' then
+    raise exception 'FALHOU: authenticated escreve em conteudo da biblioteca:%', v_sobra;
+  end if;
+  raise notice '30 OK  conteudo da biblioteca e so leitura para authenticated';
+end $$;
+
+set role authenticated;
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana, professora
+do $$ begin
+  update public.library_flashcards set front = 'Trocado' where id = '95e686a3-6c71-4ad9-927f-8036025d3f7d';
+  raise exception 'FALHOU: um professor editou um cartao da biblioteca';
+exception when insufficient_privilege then
+  raise notice '31 OK  nem o professor edita cartao da biblioteca';
+end $$;
+reset role;

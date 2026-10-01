@@ -18,7 +18,7 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset",
+    "db:reset": "supabase db reset && node scripts/load-library-flashcards.mjs",
     "db:test": "bash supabase/tests/run.sh",
     "db:types": "npm run generate --workspace @bora/database",
     "e2e": "npm run e2e --workspace @bora/e2e",

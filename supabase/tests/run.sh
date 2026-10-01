@@ -11,6 +11,12 @@ cd "$(dirname "$0")/../.."
 echo "→ recriando a base"
 supabase db reset >/dev/null
 
+# O conteúdo da biblioteca não está no seed: vem do arquivo, pela mesma carga
+# que o deploy roda. `17_library_content` parte dele, e o truncate abaixo não o
+# toca — nada dele pende de usuário.
+echo "→ carregando a biblioteca de flashcards"
+node scripts/load-library-flashcards.mjs >/dev/null
+
 CONTAINER="supabase_db_$(grep -m1 '^project_id' supabase/config.toml | cut -d'"' -f2)"
 
 # `catalogs` e `audit_log` saíram do schema em 14/09/2026, e o truncate delas
@@ -38,6 +44,12 @@ for suite in supabase/tests/[0-9]*.sql; do
     | grep -vE "^ *set_config *$|^ [0-9a-f]{8}-[0-9a-f]{4}" \
     | grep -v "^$"
 done
+
+# A carga em si: cada teste roda numa transação desfeita no fim, e por isso
+# vem depois das suítes, sobre a base que elas deixaram.
+echo
+echo "══ load-library-flashcards.test.mjs"
+node --test --test-reporter=dot scripts/load-library-flashcards.test.mjs
 
 echo
 echo "✓ todas as suítes passaram"
