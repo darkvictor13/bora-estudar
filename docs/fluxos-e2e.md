@@ -268,6 +268,14 @@ diff mostra a omissão.
 | F-FLASH-04 | spec [39](specs/39-biblioteca-de-flashcards-lida-do-banco.md): a lista de decks e a busca por tópico chegam sem o texto dos cartões |
 | F-FLASH-05 | spec 39: cartão corrigido no banco aparece corrigido no deck, sem build novo |
 
+### Leis — `tests/laws.spec.ts`
+
+| Fluxo | O que prova |
+|---|---|
+| F-LEI-01 | *(reservado, spec [40](specs/40-leis-editais-e-marcacoes-no-banco.md))* a marcação feita numa sessão aparece em outra sessão do mesmo aluno |
+| F-LEI-02 | *(reservado, spec 40)* corrigido o texto antes do grifo, o grifo continua no mesmo trecho; apagado o trecho, o leitor avisa |
+| F-LEI-03 | *(reservado, spec 40)* o mapa de edital marca como disponível a norma que tem texto na biblioteca, e abre a lei |
+
 ### Isolamento — `tests/isolation.spec.ts`
 
 | Id | Cobre |
