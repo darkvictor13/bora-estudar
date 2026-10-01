@@ -241,6 +241,22 @@ test("passo 8 · duas regras na mesma aula viram duas revisões", () => {
   );
 });
 
+test("em dia com as aulas PUBLICADAS não é disciplina encerrada", () => {
+  // O aluno só enxerga o que o professor publicou. Concluir as duas no ar
+  // vence a revisão da primeira pelo espaçamento, e só ela: a da segunda
+  // espera a próxima aula, que ainda não foi publicada.
+  const aulas = [0, 1].map((i) => lesson({ id: `a${i}`, position: i + 1, lessonCode: `A0${i}` }));
+  const feitas = new Map(
+    ["a0", "a1"].map((id) => [id, progress({ lessonId: id, lessonDone: true })]),
+  );
+
+  const parcial = dueReviews(aulas, feitas, [rule({ lessonSpacing: 1 })], false);
+  assert.deepEqual(parcial.map((d) => d.lesson.id), ["a0"]);
+
+  // A mesma lista dada como a disciplina inteira vence as duas.
+  assert.equal(dueReviews(aulas, feitas, [rule({ lessonSpacing: 1 })]).length, 2);
+});
+
 test("aula não concluída não gera revisão, mesmo com a disciplina avançada", () => {
   const aulas = [0, 1, 2, 3, 4].map((i) =>
     lesson({ id: `a${i}`, position: i + 1, lessonCode: `A0${i}` }),

@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createUser, expect, setAccess, test } from "../fixtures/index.ts";
-import { count, query } from "../fixtures/db.ts";
+import { count, one, query } from "../fixtures/db.ts";
 import { alert, content } from "../support/ui.ts";
 
 test.describe("F-SIM-01 · o ranking do aluno não tem nome de colega", () => {
@@ -89,5 +89,79 @@ test.describe("F-SIM-01 · o ranking do aluno não tem nome de colega", () => {
     const html = await page.content();
     expect(html).not.toContain(colleague.name);
     expect(html).not.toContain(colleague.id);
+  });
+});
+
+test.describe("F-SIM-02 · lançar nota e acertos do simulado", () => {
+  /*
+   * O aviso de "salvo" é a única confirmação que o professor tem de que a nota
+   * gravou. Ele morava num formulário cuja `key` carregava a nota: a
+   * revalidação depois de salvar remontava o formulário, e o aviso sumia antes
+   * de aparecer. O teste espera o aviso NA TELA, e só depois confere o banco.
+   */
+  test("o aviso aparece e fica, e o valor gravado continua no campo", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const turma = randomUUID();
+    const simulado = randomUUID();
+    await query("insert into public.classes (id, teacher_id, name) values ($1, $2, $3)", [
+      turma,
+      scenario.teacher.id,
+      `Turma ${scenario.planId.slice(0, 8)}`,
+    ]);
+    await query(
+      "insert into public.class_students (class_id, student_id, teacher_id) values ($1, $2, $3)",
+      [turma, scenario.student.id, scenario.teacher.id],
+    );
+    await query(
+      `insert into public.mock_exams (id, teacher_id, class_id, title, exam_date, max_score)
+       values ($1, $2, $3, 'Simulado e2e', current_date, 100)`,
+      [simulado, scenario.teacher.id, turma],
+    );
+    await query(
+      `insert into public.mock_exam_subjects (exam_id, teacher_id, subject, question_count)
+       values ($1, $2, 'Direito Penal', 20)`,
+      [simulado, scenario.teacher.id],
+    );
+
+    await teacherPage.goto(`/professor/simulados?simulado=${simulado}`);
+
+    // O `has` do filtro é relativo ao `<form>`: ancorado em `content` ele não
+    // casaria nunca, porque `content` não está dentro do formulário.
+    const nota = teacherPage.getByLabel(`Nota de ${scenario.student.name}`);
+    const formNota = content(teacherPage).locator("form").filter({ has: nota });
+    await nota.fill("72.5");
+    await formNota.getByRole("button", { name: "Salvar nota" }).click();
+    await expect(formNota.getByRole("status")).toHaveText("Salva");
+
+    const salva = await one<{ score: string }>(
+      "select score::text from public.mock_exam_results where exam_id = $1 and student_id = $2",
+      [simulado, scenario.student.id],
+    );
+    expect(salva.score).toBe("72.50");
+    // Depois da revalidação o aviso continua, e o campo mostra a nota do banco.
+    await expect(formNota.getByRole("status")).toHaveText("Salva");
+    await expect(nota).toHaveValue("72.5");
+
+    const acertos = teacherPage.getByLabel("Acertos");
+    const formAcertos = content(teacherPage).locator("form").filter({ has: acertos });
+    await acertos.fill("15");
+    await formAcertos.getByRole("button", { name: "Salvar acertos" }).click();
+    await expect(formAcertos.getByRole("status")).toHaveText("Salvos");
+
+    const lancado = await one<{ correct_answers: number }>(
+      `select correct_answers from public.mock_exam_subject_results
+        where exam_id = $1 and student_id = $2 and subject = 'Direito Penal'`,
+      [simulado, scenario.student.id],
+    );
+    expect(lancado.correct_answers).toBe(15);
+    await expect(formAcertos.getByRole("status")).toHaveText("Salvos");
+    await expect(acertos).toHaveValue("15");
+
+    // Editar de novo apaga o aviso: ele fala do que está gravado, não do que
+    // está digitado.
+    await nota.fill("80");
+    await expect(formNota.getByRole("status")).toHaveCount(0);
   });
 });

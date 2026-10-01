@@ -35,6 +35,14 @@ function ScoreForm({ name, score, maxScore, disabled, onSave }: {
 }) {
   const [value, setValue] = useState(score === null ? "" : String(score));
   const [saved, setSaved] = useState(false);
+  // A nota que vem do banco depois de salvar substitui o que foi digitado, mas
+  // SEM remontar o formulário: com a nota na `key`, a revalidação desmontava o
+  // formulário antes de o "Salva" aparecer, e o aviso nunca chegava à tela.
+  const [shown, setShown] = useState(score);
+  if (score !== shown) {
+    setShown(score);
+    setValue(score === null ? "" : String(score));
+  }
   return <Box component="form" onSubmit={(event) => { event.preventDefault();
     setSaved(false);
     void onSave(value.trim() === "" ? null : Number(value.replace(",", "."))).then(setSaved);
@@ -54,6 +62,12 @@ function SubjectScoreForm({ name, correct, questionCount, disabled, onSave }: {
 }) {
   const [value, setValue] = useState(correct === null ? "" : String(correct));
   const [saved, setSaved] = useState(false);
+  // O mesmo de `ScoreForm`: sincroniza com o banco sem remontar o formulário.
+  const [shown, setShown] = useState(correct);
+  if (correct !== shown) {
+    setShown(correct);
+    setValue(correct === null ? "" : String(correct));
+  }
   return <Box component="form" onSubmit={(event) => {
     event.preventDefault(); setSaved(false);
     void onSave(value.trim() === "" ? null : Number(value)).then(setSaved);
@@ -117,7 +131,7 @@ export function TeacherMockExams() {
           <Card title="Lançamento de notas" sub="Deixe a nota vazia e salve para retirar o aluno do ranking. Zero conta como nota.">
             {roster.length === 0 ? <Empty>Nenhum aluno vinculado a esta turma.</Empty> : roster.map((student) => {
               const score = results.find((row) => row.studentId === student.studentId)?.score ?? null;
-              return <ScoreForm key={`${selected.id}:${student.studentId}:${score}`} name={student.name ?? "Aluno"} score={score} maxScore={selected.maxScore}
+              return <ScoreForm key={`${selected.id}:${student.studentId}`} name={student.name ?? "Aluno"} score={score} maxScore={selected.maxScore}
                 disabled={pending || selected.published} onSave={(value) => run(() => api.saveMockExamScore(selected.id, student.studentId, value))} />;
             })}
           </Card>
@@ -139,7 +153,7 @@ export function TeacherMockExams() {
               <Typography fontWeight={700}>{subject.subject} · {subject.questionCount} questões</Typography>
               {roster.map((student) => {
                 const correct = subjectResults.find((row) => row.subject === subject.subject && row.studentId === student.studentId)?.correctAnswers ?? null;
-                return <SubjectScoreForm key={`${selected.id}:${subject.subject}:${student.studentId}:${correct}`} name={student.name ?? "Aluno"}
+                return <SubjectScoreForm key={`${selected.id}:${subject.subject}:${student.studentId}`} name={student.name ?? "Aluno"}
                   correct={correct} questionCount={subject.questionCount} disabled={pending || selected.published}
                   onSave={(value) => run(() => api.saveMockExamSubjectScore(selected.id, student.studentId, subject.subject, value))} />;
               })}

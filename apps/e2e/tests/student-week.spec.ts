@@ -15,6 +15,7 @@
 import { expect, test } from "../fixtures/index.ts";
 import { one, maybeOne } from "../fixtures/db.ts";
 import { addWeek, type Scenario, type ScenarioGoal } from "../fixtures/scenario.ts";
+import { STUDENT_WEEK_ALL_DAYS } from "../support/routes.ts";
 import { alert, content, field, goalRow, testId } from "../support/ui.ts";
 
 function theoryGoalOf(scenario: Scenario): ScenarioGoal {
@@ -43,14 +44,16 @@ async function record(
 
 test.describe("F-META-01 · o cabeçalho da semana", () => {
   test("os quatro números saem dos registros, não das metas", async ({ studentPage, scenario }) => {
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
     await expect(testId(studentPage, "week-hero")).toBeVisible();
 
+    const cartoes = testId(studentPage, "week-stat");
     const valores = testId(studentPage, "week-stat-value");
-    // Semana nova: nenhum registro, e desempenho é TRAÇO, não zero — zero por
-    // cento é uma afirmação, e ausência de resposta não é.
-    await expect(valores.nth(0)).toHaveText("—");
-    await expect(valores.nth(2)).toHaveText("0");
+    // Semana nova: nenhum registro, e o aproveitamento não vira porcentagem —
+    // zero por cento é uma afirmação, e ausência de resposta não é.
+    await expect(valores.nth(0)).toHaveText("0/0");
+    await expect(cartoes.nth(0)).toContainText("Ainda sem questões");
+    await expect(valores.nth(1)).toHaveText("0");
 
     await record(studentPage, theoryGoalOf(scenario).id, {
       minutes: "40",
@@ -58,11 +61,12 @@ test.describe("F-META-01 · o cabeçalho da semana", () => {
       correct: "8",
     });
 
-    await expect(valores.nth(0)).toHaveText("80%");
-    await expect(valores.nth(1)).toHaveText("40min");
-    await expect(valores.nth(2)).toHaveText("10");
+    await expect(valores.nth(0)).toHaveText("8/10");
+    await expect(cartoes.nth(0)).toContainText("80% de aproveitamento");
+    await expect(valores.nth(1)).toHaveText("10");
+    await expect(valores.nth(2)).toHaveText("40min");
     // Registrar não conclui: a contagem de metas não se mexe.
-    await expect(testId(studentPage, "week-stat").nth(2)).toContainText("0/5 metas");
+    await expect(testId(studentPage, "week-hero")).toContainText("0 de 5 atividades");
   });
 });
 
@@ -74,7 +78,7 @@ test.describe("F-META-02 · a semana escolhida mora na URL", () => {
     // O seletor só tem para onde ir com mais de uma semana planejada.
     await addWeek(scenario, 2);
 
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
     await expect(testId(studentPage, "week-hero")).toContainText("Semana 1");
 
     // O `data-testid` fica no input escondido do Select; quem abre o menu é o
@@ -108,7 +112,8 @@ test.describe("F-META-02 · a semana escolhida mora na URL", () => {
     await studentPage.goto("/aluno?semana=40");
 
     await expect(testId(studentPage, "week-hero")).toContainText("Semana 40");
-    await expect(testId(studentPage, "empty")).toContainText("Nenhuma meta para esta semana");
+    // A tela abre num dia só; um dia sem meta é "dia livre", não erro.
+    await expect(testId(studentPage, "empty")).toContainText("Dia livre");
   });
 });
 
@@ -116,7 +121,7 @@ test.describe("F-META-03 · registrar estudo", () => {
   test("o registro entra no ledger e NÃO conclui a meta", async ({ studentPage, scenario }) => {
     const goal = theoryGoalOf(scenario);
 
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
     await expect(goalRow(studentPage, goal.id)).toHaveAttribute("data-status", "pending");
 
     await record(studentPage, goal.id, {
@@ -157,7 +162,7 @@ test.describe("F-META-03 · registrar estudo", () => {
     scenario,
   }) => {
     const goal = theoryGoalOf(scenario);
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     await record(studentPage, goal.id, { minutes: "30", questions: "10", correct: "5" });
     await expect(goalRow(studentPage, goal.id)).toContainText("30min");
@@ -174,7 +179,7 @@ test.describe("F-META-03 · registrar estudo", () => {
     scenario,
   }) => {
     const goal = theoryGoalOf(scenario);
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     await record(studentPage, goal.id, { minutes: "30", questions: "10", correct: "30" });
 
@@ -190,7 +195,7 @@ test.describe("F-META-03 · registrar estudo", () => {
 
   test("sem tempo e sem questão não é registro nenhum", async ({ studentPage, scenario }) => {
     const goal = theoryGoalOf(scenario);
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     await record(studentPage, goal.id, { minutes: "0", questions: "0", correct: "0" });
 
@@ -206,7 +211,7 @@ test.describe("F-META-04 · concluir e reabrir", () => {
     scenario,
   }) => {
     const goal = theoryGoalOf(scenario);
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     // Sem registro: concluir e reabrir volta a PENDENTE.
     await goalRow(studentPage, goal.id).locator('[data-testid="goal-check"]').click();
@@ -230,15 +235,14 @@ test.describe("F-META-04 · concluir e reabrir", () => {
   });
 
   test("concluir muda a contagem da semana", async ({ studentPage, scenario }) => {
-    await studentPage.goto("/aluno");
-    await expect(testId(studentPage, "week-stat").nth(2)).toContainText("0/5 metas");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await expect(testId(studentPage, "week-hero")).toContainText("0 de 5 atividades · 0%");
 
     await goalRow(studentPage, theoryGoalOf(scenario).id)
       .locator('[data-testid="goal-check"]')
       .click();
 
-    await expect(testId(studentPage, "week-stat").nth(2)).toContainText("1/5 metas");
-    await expect(testId(studentPage, "week-hero")).toContainText("20%");
+    await expect(testId(studentPage, "week-hero")).toContainText("1 de 5 atividades · 20%");
   });
 });
 
@@ -251,7 +255,7 @@ test.describe("F-META-05 · meta de bateria não se mexe pela tela", () => {
    */
   test("sem botão de registrar, e a caixa desabilitada", async ({ studentPage, scenario }) => {
     const quiz = scenario.quizGoal;
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     const row = goalRow(studentPage, quiz.id);
     await expect(row).toHaveAttribute("data-type", "question_block");
@@ -263,7 +267,7 @@ test.describe("F-META-05 · meta de bateria não se mexe pela tela", () => {
 
 test.describe("F-EXTRA-01 · estudo fora das metas", () => {
   test("cria a meta e o registro numa operação só", async ({ studentPage, scenario }) => {
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
     const dialog = testId(studentPage, "extra-study-dialog");
@@ -298,7 +302,7 @@ test.describe("F-EXTRA-01 · estudo fora das metas", () => {
   });
 
   test("entra no tempo e no desempenho da semana", async ({ studentPage }) => {
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
     const valores = testId(studentPage, "week-stat-value");
 
     await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
@@ -310,12 +314,13 @@ test.describe("F-EXTRA-01 · estudo fora das metas", () => {
       .getByRole("button", { name: "Lançar estudo" })
       .click();
 
-    await expect(valores.nth(1)).toHaveText("50min");
-    await expect(valores.nth(0)).toHaveText("100%");
+    await expect(valores.nth(2)).toHaveText("50min");
+    await expect(valores.nth(0)).toHaveText("10/10");
+    await expect(testId(studentPage, "week-stat").nth(0)).toContainText("100% de aproveitamento");
   });
 
   test("matéria vazia é recusada", async ({ studentPage }) => {
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
 
     await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
     const dialog = testId(studentPage, "extra-study-dialog");
@@ -341,7 +346,7 @@ test.describe("F-META-07 · planejamento em rascunho não é visto pelo aluno", 
   test.use({ scenarioOptions: { planStatus: "paused" } });
 
   test("um planejamento não ativo é o mesmo que nenhum", async ({ studentPage }) => {
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
     await expect(alert(studentPage, "info")).toContainText("Nenhum planejamento ativo");
   });
 });
@@ -350,7 +355,7 @@ test.describe("F-PLAN-01 · o planejamento, como o aluno o vê", () => {
   test("identidade, números e ciclo por peso", async ({ studentPage, scenario }) => {
     await studentPage.goto("/aluno/planejamento");
 
-    await expect(studentPage.locator("h1")).toHaveText("Planejamento");
+    await expect(studentPage.locator("h1")).toHaveText("Meu curso");
     await expect(content(studentPage)).toContainText(scenario.planName);
     await expect(content(studentPage)).toContainText("PCPR — Investigador");
     await expect(content(studentPage)).toContainText("Avanço progressivo");

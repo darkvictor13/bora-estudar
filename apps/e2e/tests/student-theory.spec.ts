@@ -20,18 +20,19 @@ import {
   type Scenario,
   type TheoryCatalog,
 } from "../fixtures/scenario.ts";
+import { STUDENT_WEEK_ALL_DAYS } from "../support/routes.ts";
 import { alert, field, goalRow, testId } from "../support/ui.ts";
 
 type Page = import("@playwright/test").Page;
 
 async function openTheory(page: Page, goalId: string): Promise<void> {
-  await page.goto("/aluno");
+  await page.goto(STUDENT_WEEK_ALL_DAYS);
   await goalRow(page, goalId).locator('[data-testid="goal-theory"]').click();
   await expect(testId(page, "theory-dialog")).toBeVisible();
 }
 
 async function closeDialog(page: Page): Promise<void> {
-  await testId(page, "theory-dialog").getByRole("button", { name: "Fechar" }).click();
+  await testId(page, "theory-dialog").getByRole("button", { name: "Fechar", exact: true }).click();
   await expect(testId(page, "theory-dialog")).toHaveCount(0);
 }
 
@@ -90,7 +91,7 @@ test.describe("F-TEO-01 · passos 1 e 2 · abrir a meta e confirmar a aula", () 
     await addTheoryCatalog(scenario);
     const goalId = await addTheoryGoal(scenario, "Disciplina Que Ninguém Cadastrou");
 
-    await studentPage.goto("/aluno");
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
     // Sem aula resolvida não há o que abrir: a linha cai no registro comum.
     await expect(goalRow(studentPage, goalId).locator('[data-testid="goal-theory"]')).toHaveCount(0);
     await expect(goalRow(studentPage, goalId).getByRole("button", { name: "Registrar" })).toBeVisible();
@@ -209,6 +210,10 @@ test.describe("F-TEO-04 · passos 5 a 7 · questões medem a prática, professor
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
 
     await expect(testId(studentPage, "theory-dialog")).toContainText(catalog.lessons[0]!.title);
+    // ESPERA A TELA antes de ler o banco: o título da aula já estava ali antes
+    // do clique, e não prova que a gravação terminou.
+    await tab(studentPage, "Questões");
+    await expect(testId(studentPage, "initial-questions-count")).toHaveText("15/15");
 
     const done = await one<{ lesson_done: boolean; initial_questions_done: number }>(
       `select lesson_done, initial_questions_done
@@ -410,6 +415,6 @@ test.describe("F-TEO-07 · o controle por disciplina", () => {
 
   test("sem catálogo vinculado, a tela explica em vez de ficar vazia", async ({ studentPage }) => {
     await studentPage.goto("/aluno/teoria");
-    await expect(testId(studentPage, "empty")).toContainText("catálogo de teoria");
+    await expect(testId(studentPage, "empty")).toContainText("ainda não tem aulas vinculadas");
   });
 });

@@ -15,6 +15,17 @@ import { one, query } from "../fixtures/db.ts";
 import { addTheoryCatalog, addTheoryGoal, setAccess } from "../fixtures/scenario.ts";
 import { alert, content, field, testId } from "../support/ui.ts";
 
+type Page = import("@playwright/test").Page;
+
+/**
+ * Abre o `<details>` das séries. Os gráficos de evolução ficam recolhidos por
+ * padrão: dentro de um `<details>` fechado eles existem no DOM mas não são
+ * visíveis, e `toBeVisible` falharia acusando o gráfico.
+ */
+async function openSeries(page: Page): Promise<void> {
+  await content(page).getByText("Evolução semanal, tempo e colunas por disciplina").click();
+}
+
 test.describe("F-EST-01 · os números vêm do ledger", () => {
   test("registro na tela aparece nos KPIs e nas séries", async ({ studentPage, scenario }) => {
     const goal = scenario.goals.find((candidate) => candidate.type === "theory")!;
@@ -33,11 +44,12 @@ test.describe("F-EST-01 · os números vêm do ledger", () => {
 
     // 24 de 30 é 80%.
     await expect(content(studentPage)).toContainText("80%");
-    await expect(content(studentPage)).toContainText("24/30 acertos");
+    await expect(content(studentPage)).toContainText("24 acertos · 6 erros");
     await expect(content(studentPage)).toContainText("1h30");
 
-    // Dois dias com registro: o gráfico de tempo por dia tem duas colunas.
-    await expect(testId(studentPage, "chart-minutes-day").locator('[data-testid="chart-bar"]')).toHaveCount(2);
+    // Dois dias com registro: a linha do tempo por dia tem dois pontos.
+    await openSeries(studentPage);
+    await expect(testId(studentPage, "chart-minutes-day").locator('[data-testid="chart-point"]')).toHaveCount(2);
   });
 
   test("toda figura traz a tabela dos números", async ({ studentPage, scenario }) => {
@@ -51,6 +63,7 @@ test.describe("F-EST-01 · os números vêm do ledger", () => {
     );
 
     await studentPage.goto("/aluno/estatisticas");
+    await openSeries(studentPage);
     // ESPERA ANTES DE CONTAR. `count()` devolve o que casa NAQUELE instante, e
     // o conteúdo só existe depois de os loaders da rota resolverem — que é
     // depois do `load` que o `goto` aguarda. Sem esta linha o contador lê zero
@@ -61,7 +74,7 @@ test.describe("F-EST-01 · os números vêm do ledger", () => {
     // quer o número sem passar o ponteiro por doze barras.
     const tabelas = testId(studentPage, "chart-table");
     expect(await tabelas.count()).toBeGreaterThan(0);
-    await expect(tabelas.first()).toContainText("min");
+    await expect(testId(studentPage, "chart-minutes-day").locator('[data-testid="chart-table"]')).toContainText("min");
   });
 
   test("um ponto só vira número, e não um gráfico de uma barra", async ({
@@ -89,7 +102,8 @@ test.describe("F-EST-01 · os números vêm do ledger", () => {
 
     // Zero por cento é uma afirmação; ausência de resposta não é.
     await expect(content(studentPage)).toContainText("—");
-    await expect(testId(studentPage, "empty")).toContainText("Nenhum registro");
+    await openSeries(studentPage);
+    await expect(testId(studentPage, "empty").filter({ hasText: "Nenhum registro" })).toBeVisible();
   });
 });
 
@@ -119,7 +133,13 @@ test.describe("F-REV-01 · a grade de revisão", () => {
     });
     const goalId = await addTheoryGoal(scenario, catalog.subject);
 
-    await query("update public.theory_lessons set published = true where id = $1", [catalog.lessons[1]!.id]);
+    // A terceira aula também publicada, e ainda não feita: com só as duas no
+    // ar, o aluno estaria em dia com tudo o que foi publicado, e o motor trata
+    // isso como disciplina encerrada — todas as revisões vencem juntas, e o
+    // teste deixaria de exercitar o espaçamento.
+    await query("update public.theory_lessons set published = true where id = any($1::uuid[])", [
+      [catalog.lessons[1]!.id, catalog.lessons[2]!.id],
+    ]);
 
     // Fecha duas aulas para a revisão da primeira vencer.
     for (const [index, lesson] of catalog.lessons.slice(0, 2).entries()) {

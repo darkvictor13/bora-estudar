@@ -256,6 +256,7 @@ diff mostra a omissão.
 | Id | Cobre |
 |---|---|
 | F-SIM-01 | o professor cadastra, lança nota geral e acertos por matéria e publica; o aluno vê a própria linha com nome e cada colega como "Colega", sem nome nem id do colega em lugar nenhum do HTML — spec [35](specs/35-simulados-presenciais.md) |
+| F-SIM-02 | o aviso de nota e de acertos salvos aparece e continua depois da revalidação, com o valor do banco no campo — spec [35](specs/35-simulados-presenciais.md) |
 
 ### Flashcards — `tests/flashcards.spec.ts`
 

@@ -357,7 +357,9 @@ async function reviewsOf(
   const dueKeys = new Set<string>();
   for (const [subjectKey, rules] of context.reviewRules) {
     const lessons = lessonsOfSubject(context, subjectKey).map(toEngineLesson);
-    for (const item of dueReviews(lessons, context.progress, rules)) {
+    // `false`: o contexto só carrega as aulas PUBLICADAS — a RLS esconde as
+    // outras do aluno —, então não dá para saber se a disciplina terminou.
+    for (const item of dueReviews(lessons, context.progress, rules, false)) {
       dueKeys.add(`${item.lesson.id}|${item.rule.reviewNumber}`);
     }
   }

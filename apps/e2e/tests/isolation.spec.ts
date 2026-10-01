@@ -18,7 +18,7 @@
 import { expect, test } from "../fixtures/index.ts";
 import { query } from "../fixtures/db.ts";
 import { addTheoryCatalog, createScenario } from "../fixtures/scenario.ts";
-import { STUDENT_STUDY_ROUTES, studentPageOf } from "../support/routes.ts";
+import { STUDENT_STUDY_ROUTES, STUDENT_WEEK_ALL_DAYS, studentPageOf } from "../support/routes.ts";
 import { alert, content, testId } from "../support/ui.ts";
 
 /** Dá ao aluno do cenário um registro de estudo reconhecível. */
@@ -65,7 +65,7 @@ test.describe("F-ISO-01 · leitura", () => {
     const outro = await createScenario();
 
     await signIn(outro.student);
-    await page.goto("/aluno");
+    await page.goto(STUDENT_WEEK_ALL_DAYS);
 
     await expect(content(page)).toContainText(outro.planName);
     await expect(page.locator("body")).not.toContainText(scenario.planName);
@@ -140,7 +140,7 @@ test.describe("F-ISO-02 · a query string não é uma porta", () => {
     const outro = await createScenario();
 
     await signIn(outro.student);
-    await page.goto("/aluno?semana=1");
+    await page.goto(`${STUDENT_WEEK_ALL_DAYS}&semana=1`);
 
     await expect(page.locator("body")).not.toContainText(scenario.goals[0]!.title);
   });

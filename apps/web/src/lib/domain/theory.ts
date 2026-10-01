@@ -210,11 +210,18 @@ export interface DueReview {
  *
  * Quando a disciplina INTEIRA termina, as revisões restantes vencem juntas —
  * senão a matéria nunca fecharia, porque não há aula nova para empurrá-las.
+ *
+ * `wholeSubject` diz se `lessons` é MESMO a disciplina inteira. Com as aulas
+ * publicadas aos poucos, quem lê só enxerga as publicadas: estar em dia com
+ * elas é o estado normal de quem acompanha a turma, não o fim da matéria, e
+ * tratar como fim venceria todas as revisões a cada aula concluída — inclusive
+ * a da aula que acabou de fechar. Sem a lista inteira, o atalho fica desligado.
  */
 export function dueReviews(
   lessons: readonly EngineLesson[],
   progressById: ReadonlyMap<string, EngineProgress>,
   rules: readonly ReviewRule[],
+  wholeSubject = true,
 ): readonly DueReview[] {
   const ordered = sortLessons(lessons);
   if (ordered.length === 0) return [];
@@ -228,6 +235,7 @@ export function dueReviews(
   });
 
   const courseFinished =
+    wholeSubject &&
     highest === ordered.length - 1 && ordered.every((l) => progressById.get(l.id)?.lessonDone);
 
   const due: DueReview[] = [];

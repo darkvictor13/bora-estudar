@@ -58,6 +58,7 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const done = goal.status === "completed";
   const isQuiz = goal.type === "question_block";
+  const opensLesson = goal.type === "theory" && Boolean(goal.theory);
   const displayTitle = goal.title.replace(/^(Aula|Bateria|Revisão|Reforço|Simulado|Extra)\s*[—-]\s*/i, "");
 
   const score =
@@ -168,7 +169,7 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
               meta de teoria perde a página em que a pessoa parou, e é a página
               que faz a meta da semana seguinte continuar de onde esta acabou.
             */}
-            {goal.type === "theory" && goal.theory ? (
+            {opensLesson ? (
               <Button
                 size="small"
                 variant="contained"
@@ -178,7 +179,13 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
                 Abrir aula
               </Button>
             ) : null}
-            {goal.type !== "theory" && <Button size="small" variant="outlined" onClick={() => actions.onRecord(goal)}>Registrar</Button>}
+            {/* Sem aula resolvida não há fluxo a abrir: a meta de teoria cai no
+                registro comum, senão a linha fica sem ação nenhuma à vista. */}
+            {!opensLesson && (
+              <Button size="small" variant="outlined" onClick={() => actions.onRecord(goal)}>
+                Registrar
+              </Button>
+            )}
             <IconButton
               size="small"
               aria-label={`Mais ações para ${goal.title}`}
@@ -187,7 +194,7 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
               <MoreVertIcon fontSize="small" />
             </IconButton>
             <Menu anchorEl={menu} open={Boolean(menu)} onClose={() => setMenu(null)}>
-              {goal.type === "theory" && (
+              {opensLesson && (
                 <MenuItem onClick={() => { setMenu(null); actions.onRecord(goal); }}>
                   Registrar estudo
                 </MenuItem>
