@@ -66,6 +66,7 @@ de lá vira uma spec nova antes de virar código.
 | 35 | [Simulados presenciais](35-simulados-presenciais.md) | Cadastro pelo professor, lançamento de notas e ranking publicado por turma |
 | 36 | [Aulas PRF e desempenho diário](36-aulas-prf-e-desempenho-diario.md) | Publicação pelo professor, links de apoio e acertos/erros por dia; atualiza o fluxo da spec 32 |
 | 38 | [Biblioteca de flashcards no banco](38-biblioteca-de-flashcards-no-banco.md) | Cartões, matérias, aliases e carga idempotente no deploy; o site ainda lê do arquivo até a 39 |
+| 39 | [Biblioteca de flashcards lida do banco](39-biblioteca-de-flashcards-lida-do-banco.md) | FK da revisão para o cartão, catálogo sem texto, deck sob demanda — **não implementada** |
 
 ---
 

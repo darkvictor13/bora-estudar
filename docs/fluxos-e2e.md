@@ -265,6 +265,8 @@ diff mostra a omissão.
 | F-FLASH-01 | cartões de aula: o professor cria pelo editor, o aluno revisa, o professor reescreve um e remove o revisado; o removido fica MARCADO, o reescrito mantém o id, e a revisão do aluno continua — spec [34](specs/34-cronograma-leis-flashcards.md) |
 | F-FLASH-02 | deck pessoal: criar deck e cartão, revisar duas vezes (INSERT e depois UPDATE) |
 | F-FLASH-03 | biblioteca editorial: revisar o mesmo cartão duas vezes (INSERT e depois UPDATE) |
+| F-FLASH-04 | *(reservado, spec [39](specs/39-biblioteca-de-flashcards-lida-do-banco.md))* a lista de decks e a busca por tópico chegam sem o texto dos cartões |
+| F-FLASH-05 | *(reservado, spec 39)* cartão corrigido no banco aparece corrigido no deck, sem build novo |
 
 ### Isolamento — `tests/isolation.spec.ts`
 
