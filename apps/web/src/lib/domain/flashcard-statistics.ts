@@ -7,7 +7,8 @@ export interface FlashcardStatisticsDeck {
   readonly id: string;
   readonly source: FlashcardSource;
   readonly subject: string;
-  readonly cards: readonly FlashcardCard[];
+  /** Só o id conta para a estatística: a biblioteca chega sem o texto. */
+  readonly cards: readonly Pick<FlashcardCard, "id">[];
   readonly reviews: readonly FlashcardReview[];
 }
 

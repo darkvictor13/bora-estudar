@@ -25,7 +25,7 @@ export function flashcardRecallProbability(review: FlashcardReview, now = new Da
   return clamp(Math.pow(1 + factor * days / review.stability, -W[20]), 0, 1);
 }
 
-export function flashcardStudyStats(cards: readonly FlashcardCard[], reviews: readonly FlashcardReview[], now = new Date()) {
+export function flashcardStudyStats(cards: readonly Pick<FlashcardCard, "id">[], reviews: readonly FlashcardReview[], now = new Date()) {
   const byCard = new Map(reviews.map((review) => [review.cardId, review]));
   let fresh = 0; let learning = 0; let due = 0; let consolidated = 0;
   for (const card of cards) {
@@ -136,7 +136,7 @@ export function isFlashcardDue(review: FlashcardReview | undefined, now = new Da
 }
 
 /** Revisões vencidas primeiro; depois um lote limitado de cartões novos. */
-export function flashcardSessionQueue(cards: readonly FlashcardCard[], reviews: readonly FlashcardReview[], now = new Date(), newLimit = 20): string[] {
+export function flashcardSessionQueue(cards: readonly Pick<FlashcardCard, "id">[], reviews: readonly FlashcardReview[], now = new Date(), newLimit = 20): string[] {
   const byCard = new Map(reviews.map((review) => [review.cardId, review]));
   const due = cards.filter((card) => {
     const review = byCard.get(card.id);
@@ -147,7 +147,7 @@ export function flashcardSessionQueue(cards: readonly FlashcardCard[], reviews: 
 }
 
 export function flashcardDeckProgress(
-  cards: readonly FlashcardCard[],
+  cards: readonly Pick<FlashcardCard, "id">[],
   reviews: readonly FlashcardReview[],
   now = new Date(),
 ): { total: number; studied: number; due: number; progressPercent: number } {

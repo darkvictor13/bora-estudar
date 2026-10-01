@@ -11,7 +11,7 @@ import { ContentBody } from "@/components/AppShell";
 import { api, type FlashcardReview } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
 import { buildFlashcardStatistics, type FlashcardStatisticsDeck } from "@/lib/domain/flashcard-statistics";
-import { LIBRARY_DECKS, librarySubject, lessonReviewFromLibrary } from "@/lib/domain/library-flashcards";
+import { lessonReviewFromLibrary, libraryDeckCards } from "@/lib/domain/library-flashcards";
 import { ROUTES } from "@/lib/routes";
 
 export async function flashcardStatisticsLoader() {
@@ -19,13 +19,15 @@ export async function flashcardStatisticsLoader() {
   const plan = await api.loadActivePlanOrNull();
   const lessons = plan ? (await api.loadTheoryControl(plan.id)).flatMap((subject) => subject.lessons).filter((lesson) => lesson.published && (lesson.flashcardCards ?? []).length > 0) : [];
   const personalDecks = await api.listPersonalFlashcardDecks();
+  const catalog = await api.loadLibraryFlashcardCatalog();
+  const libraryDecks = catalog.subjects.flatMap((subject) => subject.decks.map((deck) => ({ deck, subject: subject.name })));
   const [lessonReviews, libraryReviews, personalReviews] = await Promise.all([
     api.loadFlashcardReviewsForLessons(lessons.map((lesson) => lesson.id)),
-    api.loadLibraryFlashcardReviews(LIBRARY_DECKS.map((deck) => deck.id)),
+    api.loadLibraryFlashcardReviews(libraryDecks.map(({ deck }) => deck.id)),
     api.loadPersonalFlashcardReviews(personalDecks.map((deck) => deck.id)),
   ]);
   const decks: FlashcardStatisticsDeck[] = [
-    ...LIBRARY_DECKS.map((deck) => ({ id: deck.id, source: "Biblioteca editorial" as const, subject: librarySubject(deck.subjectId)?.subject ?? "Área Policial", cards: deck.cards, reviews: libraryReviews.filter((review) => review.deckId === deck.id).map(lessonReviewFromLibrary) })),
+    ...libraryDecks.map(({ deck, subject }) => ({ id: deck.id, source: "Biblioteca editorial" as const, subject, cards: libraryDeckCards(deck), reviews: libraryReviews.filter((review) => review.deckId === deck.id).map(lessonReviewFromLibrary) })),
     ...lessons.map((lesson) => ({ id: lesson.id, source: "Aulas do professor" as const, subject: lesson.subject, cards: lesson.flashcardCards ?? [], reviews: lessonReviews.filter((review) => review.lessonId === lesson.id) })),
     ...personalDecks.map((deck) => ({ id: deck.id, source: "Meus decks" as const, subject: deck.subject, cards: deck.cards, reviews: personalReviews.filter((review) => review.deckId === deck.id).map((review): FlashcardReview => ({ ...review, lessonId: review.deckId })) })),
   ];

@@ -23,11 +23,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLoaderData, useNavigate, useRevalidator, type LoaderFunctionArgs } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, newRequestId, type FlashcardCard, type FlashcardGrade, type FlashcardReview, type PersonalFlashcardDeck, type Result, type TheoryLesson } from "@/lib/api";
+import { api, newRequestId, type FlashcardCard, type FlashcardGrade, type FlashcardReview, type LibraryFlashcardDeckSummary, type LibraryFlashcardNotice, type LibraryFlashcardSubject, type PersonalFlashcardDeck, type Result, type TheoryLesson } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
 import { flashcardDeckProgress, flashcardIntervalLabel, flashcardSessionQueue, flashcardStudyStats, scheduleFlashcardReview } from "@/lib/domain/flashcards";
-import { libraryDeck, librarySubject, lessonReviewFromLibrary, flashcardEditorialNote, POLICE_FLASHCARDS, LIBRARY_DECKS } from "@/lib/domain/library-flashcards";
-import type { LibraryDeck, LibrarySubject } from "@/lib/domain/library-flashcards";
+import { flashcardEditorialNote, lessonReviewFromLibrary, libraryCardCount, libraryDeckCards } from "@/lib/domain/library-flashcards";
 import { ROUTES } from "@/lib/routes";
 
 export async function flashcardsLoader({ request }: LoaderFunctionArgs) {
@@ -35,7 +34,9 @@ export async function flashcardsLoader({ request }: LoaderFunctionArgs) {
   const lessonId = new URL(request.url).searchParams.get("aula");
   const deckId = new URL(request.url).searchParams.get("deck");
   const personalDeckId = new URL(request.url).searchParams.get("meuDeck");
-  const selectedDeck = deckId ? libraryDeck(deckId) ?? null : null;
+  // A lista chega sem o texto; o texto, só do deck aberto (spec 39).
+  const catalog = await api.loadLibraryFlashcardCatalog();
+  const selectedDeck = deckId ? await api.loadLibraryFlashcardDeck(deckId) : null;
   const plan = await api.loadActivePlanOrNull();
   const subjects = plan ? await api.loadTheoryControl(plan.id) : [];
   const lessons = subjects.flatMap((subject) => subject.lessons).filter((item) => item.published);
@@ -43,11 +44,11 @@ export async function flashcardsLoader({ request }: LoaderFunctionArgs) {
   const reviews = lesson
     ? await api.loadFlashcardReviews(lesson.id)
     : !lessonId ? await api.loadFlashcardReviewsForLessons(lessons.filter((item) => (item.flashcardCards ?? []).length > 0).map((item) => item.id)) : [];
-  const libraryReviews = (await api.loadLibraryFlashcardReviews(selectedDeck ? [selectedDeck.id] : LIBRARY_DECKS.map((item) => item.id))).map(lessonReviewFromLibrary);
+  const libraryReviews = (await api.loadLibraryFlashcardReviews(selectedDeck ? [selectedDeck.id] : catalog.subjects.flatMap((subject) => subject.decks.map((item) => item.id)))).map(lessonReviewFromLibrary);
   const personalDecks = await api.listPersonalFlashcardDecks();
   const selectedPersonalDeck = personalDeckId ? personalDecks.find((item) => item.id === personalDeckId) ?? null : null;
   const personalReviews = (await api.loadPersonalFlashcardReviews(selectedPersonalDeck ? [selectedPersonalDeck.id] : personalDecks.map((item) => item.id))).map((review): FlashcardReview => ({ ...review, lessonId: review.deckId }));
-  return { hasPlan: Boolean(plan), lessons, lesson, reviews, requestedLesson: Boolean(lessonId), selectedDeck, requestedDeck: Boolean(deckId), libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck: Boolean(personalDeckId), personalReviews };
+  return { catalog, hasPlan: Boolean(plan), lessons, lesson, reviews, requestedLesson: Boolean(lessonId), selectedDeck, requestedDeck: Boolean(deckId), libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck: Boolean(personalDeckId), personalReviews };
 }
 
 type LoaderData = Awaited<ReturnType<typeof flashcardsLoader>>;
@@ -62,7 +63,7 @@ interface SessionDeck {
   readonly id: string;
   readonly subject: string;
   readonly lessonCode: string;
-  readonly flashcardCards: readonly (FlashcardCard & { readonly status?: string })[];
+  readonly flashcardCards: readonly (FlashcardCard & { readonly notice?: LibraryFlashcardNotice | null })[];
 }
 
 function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: SessionDeck; initialReviews: readonly FlashcardReview[]; onGrade: (cardId: string, grade: FlashcardGrade) => Promise<Result<FlashcardReview>> }) {
@@ -76,7 +77,7 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
   const [error, setError] = useState<string | null>(null);
   const card = cards.find((item) => item.id === queue[0]);
   const currentReview = card ? reviews.find((item) => item.cardId === card.id) : undefined;
-  const editorialNote = flashcardEditorialNote(card?.status);
+  const editorialNote = flashcardEditorialNote(card?.notice);
   const position = answered + 1;
   const sessionTotal = answered + queue.length;
   const studyStats = flashcardStudyStats(cards, reviews);
@@ -367,13 +368,13 @@ function DeckGroup({
 }
 
 function LibrarySubjectGroup({ subject, decks, reviews, initiallyOpen }: {
-  subject: LibrarySubject;
-  decks: readonly LibraryDeck[];
+  subject: LibraryFlashcardSubject;
+  decks: readonly LibraryFlashcardDeckSummary[];
   reviews: readonly FlashcardReview[];
   initiallyOpen: boolean;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
-  const total = decks.reduce((sum, deck) => sum + deck.cards.length, 0);
+  const total = decks.reduce((sum, deck) => sum + deck.cardIds.length, 0);
   return (
     <Box sx={(theme) => ({ mb: 3, overflow: "hidden", border: `1px solid ${theme.vars.palette.surface.borderStrong}`, borderRadius: `${theme.brand.radius.lg}px`, backgroundColor: theme.vars.palette.surface.raised, boxShadow: theme.shadows[1] })}>
       <Box component="button" type="button" aria-expanded={open} aria-controls={`decks-${subject.id}`} onClick={() => setOpen((current) => !current)}
@@ -382,7 +383,7 @@ function LibrarySubjectGroup({ subject, decks, reviews, initiallyOpen }: {
           <StyleIcon aria-hidden="true" />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>{subject.subject}</Typography>
+          <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>{subject.name}</Typography>
           <Typography variant="body2" color="text.secondary">{decks.length} decks por assunto · {total} cartões</Typography>
         </Box>
         <ExpandMoreIcon aria-hidden="true" sx={{ color: "text.secondary", transform: open ? "rotate(180deg)" : "none", transition: "transform 180ms" }} />
@@ -395,8 +396,9 @@ function LibrarySubjectGroup({ subject, decks, reviews, initiallyOpen }: {
           </Box>
           {decks.map((deck) => {
             const deckReviews = reviews.filter((review) => review.lessonId === deck.id);
-            const progress = flashcardDeckProgress(deck.cards, deckReviews);
-            const memory = flashcardStudyStats(deck.cards, deckReviews);
+            const cards = libraryDeckCards(deck);
+            const progress = flashcardDeckProgress(cards, deckReviews);
+            const memory = flashcardStudyStats(cards, deckReviews);
             const known = deckReviews.filter((review) => review.lastGrade === "good" || review.lastGrade === "easy").length;
             const unknown = deckReviews.filter((review) => review.lastGrade === "again").length;
             const doubt = deckReviews.filter((review) => review.lastGrade === "hard").length;
@@ -452,7 +454,7 @@ function PersonalDeckGroup({ decks, reviews }: { decks: readonly PersonalFlashca
 }
 
 export function Flashcards() {
-  const { hasPlan, lessons, lesson, reviews, requestedLesson, selectedDeck, requestedDeck, libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck, personalReviews } = useLoaderData() as LoaderData;
+  const { catalog, hasPlan, lessons, lesson, reviews, requestedLesson, selectedDeck, requestedDeck, libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck, personalReviews } = useLoaderData() as LoaderData;
   const [search, setSearch] = useState("");
   const [deckDialog, setDeckDialog] = useState(false);
   const [cardDialog, setCardDialog] = useState(false);
@@ -465,7 +467,7 @@ export function Flashcards() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const selectedSubject = selectedDeck ? librarySubject(selectedDeck.subjectId) : undefined;
+  const selectedSubject = selectedDeck?.subject;
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const query = normalize(search.trim());
   const deckLessons = lessons.filter((item) => (item.flashcardCards ?? []).length > 0);
@@ -475,9 +477,9 @@ export function Flashcards() {
   for (const item of visibleDecks) groups.set(item.subject, [...(groups.get(item.subject) ?? []), item]);
   const reviewsByLesson = new Map<string, FlashcardReview[]>();
   for (const review of reviews) reviewsByLesson.set(review.lessonId, [...(reviewsByLesson.get(review.lessonId) ?? []), review]);
-  const libraryQuery = POLICE_FLASHCARDS.subjects.map((subject) => ({ subject, decks: subject.decks.filter((item) => !query || normalize(`${subject.subject} ${item.title} ${item.number} ${item.cards.map((card) => card.topic).join(" ")}`).includes(query)) })).filter((group) => group.decks.length > 0);
+  const libraryQuery = catalog.subjects.map((subject) => ({ subject, decks: subject.decks.filter((item) => !query || normalize(`${subject.name} ${item.title} ${item.number} ${item.topics.join(" ")}`).includes(query)) })).filter((group) => group.decks.length > 0);
   const visiblePersonalDecks = personalDecks.filter((item) => !query || normalize(`${item.subject} ${item.title} ${item.cards.map((card) => card.topic).join(" ")}`).includes(query));
-  const subjectOptions = [...new Set([...POLICE_FLASHCARDS.subjects.map((item) => item.subject), ...lessons.map((item) => item.subject), ...personalDecks.map((item) => item.subject)])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const subjectOptions = [...new Set([...catalog.subjects.map((item) => item.name), ...lessons.map((item) => item.subject), ...personalDecks.map((item) => item.subject)])].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   async function submitDeck(event: FormEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -505,7 +507,7 @@ export function Flashcards() {
     <>
       <PageHeader
         title={lesson ? `Flashcards · ${lesson.lessonCode}` : selectedDeck ? `Flashcards · ${selectedDeck.title}` : selectedPersonalDeck ? `Flashcards · ${selectedPersonalDeck.title}` : "Flashcards"}
-        description={lesson ? `${lesson.subject} · ${lesson.title}` : selectedDeck ? `${selectedSubject?.subject} · ${selectedDeck.cards.length} cartões` : selectedPersonalDeck ? `${selectedPersonalDeck.subject} · deck pessoal` : "Disciplinas e decks por tópico para revisar os estudos"}
+        description={lesson ? `${lesson.subject} · ${lesson.title}` : selectedDeck ? `${selectedSubject?.name} · ${selectedDeck.cards.length} cartões` : selectedPersonalDeck ? `${selectedPersonalDeck.subject} · deck pessoal` : "Disciplinas e decks por tópico para revisar os estudos"}
       />
       <ContentBody>
         {requestedLesson && !lesson && <Alert status="warning">Aula não encontrada ou ainda não publicada pelo professor.</Alert>}
@@ -533,7 +535,7 @@ export function Flashcards() {
         {selectedDeck && (
           <>
           {selectedSubject?.auditPartial && <Box sx={{ mb: 2 }}><Alert status="info">Status informado no material: {selectedSubject.auditLabel}. Os cartões sinalizados para conferência mantêm essa indicação durante o estudo.</Alert></Box>}
-          <FlashcardSession key={selectedDeck.id} lesson={{ id: selectedDeck.id, subject: selectedSubject?.subject ?? "Área Policial", lessonCode: selectedDeck.title, flashcardCards: selectedDeck.cards }} initialReviews={libraryReviews} onGrade={async (cardId, grade) => {
+          <FlashcardSession key={selectedDeck.id} lesson={{ id: selectedDeck.id, subject: selectedSubject?.name ?? "Área Policial", lessonCode: selectedDeck.title, flashcardCards: selectedDeck.cards }} initialReviews={libraryReviews} onGrade={async (cardId, grade) => {
             const result = await api.gradeLibraryFlashcard({ deckId: selectedDeck.id, cardId, grade, requestId: newRequestId() });
             return result.ok ? { ok: true, data: lessonReviewFromLibrary(result.data) } : result;
           }} />
@@ -557,7 +559,7 @@ export function Flashcards() {
             <Box sx={{ display: "flex", alignItems: { xs: "stretch", sm: "center" }, flexDirection: { xs: "column", sm: "row" }, gap: 1.5, mb: 2 }}>
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 800 }}>Flashcards – Área Policial</Typography>
-                <Typography variant="body2" color="text.secondary">{POLICE_FLASHCARDS.subjects.length} disciplinas · {LIBRARY_DECKS.length} decks por tópico · {POLICE_FLASHCARDS.totalCards.toLocaleString("pt-BR")} cartões</Typography>
+                <Typography variant="body2" color="text.secondary">{catalog.subjects.length} disciplinas · {catalog.subjects.reduce((sum, subject) => sum + subject.decks.length, 0)} decks por tópico · {libraryCardCount(catalog).toLocaleString("pt-BR")} cartões</Typography>
               </Box>
               <TextField size="small" label="Buscar disciplina ou tópico" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ minWidth: { sm: 280 } }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }} />
               <Button component={Link} to={ROUTES.student.flashcardStatistics} variant="outlined" startIcon={<BarChartIcon />} sx={{ whiteSpace: "nowrap" }}>Estatísticas</Button>

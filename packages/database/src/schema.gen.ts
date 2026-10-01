@@ -622,6 +622,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "library_flashcard_reviews_card_fk"
+            columns: ["deck_id", "card_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcards"
+            referencedColumns: ["deck_id", "id"]
+          },
+          {
             foreignKeyName: "library_flashcard_reviews_deck_id_fkey"
             columns: ["deck_id"]
             isOneToOne: false
@@ -2345,30 +2352,36 @@ export type Database = {
       vw_library_flashcard_decks: {
         Row: {
           active_cards: number | null
+          card_ids: string[] | null
           deck_id: string | null
           historical: boolean | null
           number: string | null
           position: number | null
           subject_id: string | null
           title: string | null
+          topics: string[] | null
         }
         Insert: {
           active_cards?: never
+          card_ids?: never
           deck_id?: string | null
           historical?: boolean | null
           number?: string | null
           position?: number | null
           subject_id?: string | null
           title?: string | null
+          topics?: never
         }
         Update: {
           active_cards?: never
+          card_ids?: never
           deck_id?: string | null
           historical?: boolean | null
           number?: string | null
           position?: number | null
           subject_id?: string | null
           title?: string | null
+          topics?: never
         }
         Relationships: [
           {

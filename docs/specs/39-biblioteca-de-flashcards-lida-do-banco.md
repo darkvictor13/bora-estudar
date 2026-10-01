@@ -1,6 +1,6 @@
 # 39 — Biblioteca de flashcards lida do banco
 
-**Situação:** não implementada · **Fluxos e2e:** F-FLASH-04 e F-FLASH-05; F-FLASH-03 continua como regressão
+**Situação:** implementada em 01/10/2026 · **Fluxos e2e:** F-FLASH-04 e F-FLASH-05; F-FLASH-03 continua como regressão
 
 Segunda de três (ver a 38). A 38 pôs o conteúdo no banco; esta amarra a
 revisão ao cartão e faz o site ler de lá.
@@ -59,6 +59,7 @@ revisar                     → gradeLibraryFlashcard       → confere cartão 
 | Adaptadores | `lib/api/supabase/library-flashcards.ts`; `lib/api/fixtures-library.ts` (novo, import dinâmico) |
 | Domínio | `lib/domain/library-flashcards.ts` sem o JSON; aliases por parâmetro |
 | Rotas | `routes/student/Flashcards.tsx`, `routes/student/FlashcardStatistics.tsx` |
+| Testes | `supabase/tests/17_library_content.sql` (11 a 18), `11_library_flashcards.sql` passa a usar um cartão real; `apps/e2e/tests/flashcards.spec.ts` (F-FLASH-04, 05) |
 
 ---
 
@@ -66,12 +67,12 @@ revisar                     → gradeLibraryFlashcard       → confere cartão 
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | Revisão para cartão que não existe no deck é recusada pelo banco. | `supabase/tests/17_library_content.sql` |
-| CA-02 | Revisão nova e atualização de revisão em cartão retirado são recusadas com `42501`; a revisão antiga continua legível. | `17_library_content.sql` |
-| CA-03 | Cartão com revisão não se apaga. | `17_library_content.sql` |
-| CA-04 | Depois da carga a FK está validada (`convalidated`). | `17_library_content.sql` |
-| CA-05 | A view entrega os ids e os tópicos de cada deck, e nada além disso do texto. | `17_library_content.sql` |
-| CA-06 | O catálogo, o deck e a revisão obedecem ao mesmo contrato nas duas implementações. | `lib/api/fixtures.test.ts` |
+| CA-01 | Revisão para cartão que não existe no deck é recusada pelo banco. | `supabase/tests/17_library_content.sql` (12, 14) |
+| CA-02 | Revisão nova e atualização de revisão em cartão retirado são recusadas com `42501`; a revisão antiga continua legível. | `17_library_content.sql` (15, 16, 17) |
+| CA-03 | Cartão com revisão não se apaga. | `17_library_content.sql` (13) |
+| CA-04 | Depois da carga a FK está validada (`convalidated`). | `17_library_content.sql` (11) |
+| CA-05 | A view entrega os ids e os tópicos de cada deck, e nada além disso do texto. | `17_library_content.sql` (18) |
+| CA-06 | O catálogo, o deck e a revisão obedecem ao mesmo contrato nas duas implementações. | `lib/api/fixtures.test.ts` ("o catálogo traz ids e tópicos…") |
 | CA-07 | A lista de decks e a busca por tópico funcionam sem baixar o texto dos cartões. | F-FLASH-04 |
 | CA-08 | Um cartão corrigido no banco aparece corrigido no deck sem build novo do site. | F-FLASH-05 |
 | CA-09 | A revisão de um cartão da biblioteca continua gravando duas vezes, pelo INSERT e pelo UPDATE. | F-FLASH-03 (regressão) |

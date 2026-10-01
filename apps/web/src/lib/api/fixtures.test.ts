@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
 import { fixturesApi as api, resetFixtures, setFixtureRole } from "./fixtures.ts";
-import { POLICE_FLASHCARDS } from "../domain/library-flashcards.ts";
+import { FIXTURE_STATUS_NOTICES } from "./fixtures-library.ts";
 
 beforeEach(() => {
   resetFixtures();
@@ -26,16 +26,17 @@ let counter = 0;
 const requestId = () => `req-${(counter += 1)}`;
 
 test("Informática V2 mantém nove decks e salva revisões por deck", async () => {
-  const informatica = POLICE_FLASHCARDS.subjects.find((subject) => subject.id === "informatica")!;
+  const catalog = await api.loadLibraryFlashcardCatalog();
+  const informatica = catalog.subjects.find((subject) => subject.id === "informatica")!;
   assert.equal(informatica.decks.length, 9);
-  assert.equal(informatica.decks.reduce((sum, deck) => sum + deck.cards.length, 0), 1175);
+  assert.equal(informatica.decks.reduce((sum, deck) => sum + deck.cardIds.length, 0), 1175);
   const [first, second] = informatica.decks;
   assert.ok(first && second);
-  const firstCard = first.cards[0];
+  const firstCard = first.cardIds[0];
   assert.ok(firstCard);
-  const invalid = await api.gradeLibraryFlashcard({ deckId: second.id, cardId: firstCard.id, grade: "good", requestId: requestId() });
+  const invalid = await api.gradeLibraryFlashcard({ deckId: second.id, cardId: firstCard, grade: "good", requestId: requestId() });
   assert.equal(invalid.ok, false);
-  const graded = await api.gradeLibraryFlashcard({ deckId: first.id, cardId: firstCard.id, grade: "good", requestId: requestId() });
+  const graded = await api.gradeLibraryFlashcard({ deckId: first.id, cardId: firstCard, grade: "good", requestId: requestId() });
   assert.ok(graded.ok);
   assert.equal(graded.data.reviewCount, 1);
   assert.equal((await api.loadLibraryFlashcardReviews([first.id])).length, 1);
@@ -43,17 +44,41 @@ test("Informática V2 mantém nove decks e salva revisões por deck", async () =
 });
 
 test("cada uma das 14 matérias aceita avaliação sem misturar o histórico", async () => {
-  assert.equal(POLICE_FLASHCARDS.subjects.length, 14);
-  for (const subject of POLICE_FLASHCARDS.subjects) {
+  const catalog = await api.loadLibraryFlashcardCatalog();
+  assert.equal(catalog.subjects.length, 14);
+  for (const subject of catalog.subjects) {
     const deck = subject.decks[0]!;
-    const card = deck.cards[0]!;
+    const card = { id: deck.cardIds[0]! };
     const result = await api.gradeLibraryFlashcard({ deckId: deck.id, cardId: card.id, grade: "again", requestId: requestId() });
-    assert.ok(result.ok, subject.subject);
+    assert.ok(result.ok, subject.name);
     const reviews = await api.loadLibraryFlashcardReviews([deck.id]);
     assert.equal(reviews.length, 1);
     assert.equal(reviews[0]?.cardId, card.id);
     assert.equal(reviews[0]?.state, "learning");
   }
+});
+
+// Spec 39, CA-06: o catálogo chega sem texto, e o texto chega por deck.
+test("o catálogo traz ids e tópicos; o deck traz o texto, com o aviso editorial", async () => {
+  const catalog = await api.loadLibraryFlashcardCatalog();
+  const summary = catalog.subjects.flatMap((subject) => subject.decks).find((deck) => deck.id === "pf2029-informatica-01")!;
+  assert.ok(summary.cardIds.length > 0 && summary.topics.length > 0);
+  assert.equal("cards" in summary, false);
+  const deck = await api.loadLibraryFlashcardDeck(summary.id);
+  assert.ok(deck);
+  assert.deepEqual(deck.cards.map((card) => card.id), summary.cardIds);
+  assert.equal(deck.subject.name, "Informática");
+  assert.equal(await api.loadLibraryFlashcardDeck("pf2029-nao-existe"), null);
+  const notices = new Set(Object.values(FIXTURE_STATUS_NOTICES));
+  const flagged = (await Promise.all(catalog.subjects.flatMap((subject) => subject.decks).map((item) => api.loadLibraryFlashcardDeck(item.id))))
+    .flatMap((item) => item?.cards ?? []).filter((card) => card.notice !== null);
+  assert.ok(flagged.length > 0);
+  assert.ok(flagged.every((card) => notices.has(card.notice!)));
+});
+
+test("o catálogo traz os oito aliases da consolidação de Informática", async () => {
+  const { aliases } = await api.loadLibraryFlashcardCatalog();
+  assert.equal(aliases.length, 8);
 });
 
 test("deck pessoal cria cartões e revisões sem alterar a biblioteca editorial", async () => {
@@ -68,7 +93,8 @@ test("deck pessoal cria cartões e revisões sem alterar a biblioteca editorial"
   assert.ok(grade.ok);
   assert.equal((await api.listPersonalFlashcardDecks()).length, before.length + 1);
   assert.equal((await api.loadPersonalFlashcardReviews([deckId])).length, 1);
-  assert.equal((await api.loadLibraryFlashcardReviews(POLICE_FLASHCARDS.subjects.flatMap((subject) => subject.decks.map((item) => item.id)))).length, 0);
+  const catalog = await api.loadLibraryFlashcardCatalog();
+  assert.equal((await api.loadLibraryFlashcardReviews(catalog.subjects.flatMap((subject) => subject.decks.map((item) => item.id)))).length, 0);
 });
 
 test("piloto PMPR cria um catálogo único e mantém aulas novas em rascunho", async () => {

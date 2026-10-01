@@ -21,7 +21,8 @@
 import { createMockExamFixtures } from "./fixtures-mock-exams.ts";
 import { validateLessonMaterialBlocks, validateLessonResources } from "../domain/lesson-resources.ts";
 import { scheduleFlashcardReview, validateFlashcardCards } from "../domain/flashcards.ts";
-import { libraryDeck, normalizeLibraryReviews } from "../domain/library-flashcards.ts";
+import { normalizeLibraryReviews } from "../domain/library-flashcards.ts";
+import { fixtureLibrary } from "./fixtures-library.ts";
 import { questionsByDay } from "../domain/question-performance.ts";
 import { localDate } from "../domain/schedule.ts";
 import { streakDays as countStreakDays } from "../domain/week.ts";
@@ -1177,21 +1178,27 @@ export const fixturesApi: BoraApi = {
     return done(review);
   })),
 
-  loadLibraryFlashcardReviews: (deckIds: readonly string[]) => {
+  loadLibraryFlashcardCatalog: async () => later((await fixtureLibrary()).catalog),
+  loadLibraryFlashcardDeck: async (deckId: string) => later((await fixtureLibrary()).decks.get(deckId) ?? null),
+  loadLibraryFlashcardReviews: async (deckIds: readonly string[]) => {
+    const { aliases } = (await fixtureLibrary()).catalog;
     const ids = new Set(deckIds);
-    return later(normalizeLibraryReviews([...libraryFlashcardReviews.values()]).filter((review) => ids.has(review.deckId)));
+    return later(normalizeLibraryReviews([...libraryFlashcardReviews.values()], aliases).filter((review) => ids.has(review.deckId)));
   },
-  gradeLibraryFlashcard: (input: GradeLibraryFlashcardInput) => later(once(input.requestId, () => {
-    if (!libraryDeck(input.deckId)?.cards.some((card) => card.id === input.cardId)) {
-      return fail<LibraryFlashcardReview>("not_found", "Cartão não encontrado neste deck.");
-    }
-    const key = `${input.deckId}:${input.cardId}`;
-    const previous = normalizeLibraryReviews([...libraryFlashcardReviews.values()]).find((review) => review.deckId === input.deckId && review.cardId === input.cardId);
-    const scheduled = scheduleFlashcardReview(input.deckId, input.cardId, input.grade, previous ? { ...previous, lessonId: previous.deckId } : undefined);
-    const review: LibraryFlashcardReview = { deckId: input.deckId, cardId: scheduled.cardId, dueAt: scheduled.dueAt, intervalMinutes: scheduled.intervalMinutes, reviewCount: scheduled.reviewCount, lastGrade: scheduled.lastGrade, state: scheduled.state, step: scheduled.step, stability: scheduled.stability, difficulty: scheduled.difficulty, lapses: scheduled.lapses, lastReviewedAt: scheduled.lastReviewedAt };
-    libraryFlashcardReviews.set(key, review);
-    return done(review);
-  })),
+  gradeLibraryFlashcard: async (input: GradeLibraryFlashcardInput) => {
+    const library = await fixtureLibrary();
+    return later(once(input.requestId, () => {
+      if (!library.decks.get(input.deckId)?.cards.some((card) => card.id === input.cardId)) {
+        return fail<LibraryFlashcardReview>("not_found", "Cartão não encontrado neste deck.");
+      }
+      const key = `${input.deckId}:${input.cardId}`;
+      const previous = normalizeLibraryReviews([...libraryFlashcardReviews.values()], library.catalog.aliases).find((review) => review.deckId === input.deckId && review.cardId === input.cardId);
+      const scheduled = scheduleFlashcardReview(input.deckId, input.cardId, input.grade, previous ? { ...previous, lessonId: previous.deckId } : undefined);
+      const review: LibraryFlashcardReview = { deckId: input.deckId, cardId: scheduled.cardId, dueAt: scheduled.dueAt, intervalMinutes: scheduled.intervalMinutes, reviewCount: scheduled.reviewCount, lastGrade: scheduled.lastGrade, state: scheduled.state, step: scheduled.step, stability: scheduled.stability, difficulty: scheduled.difficulty, lapses: scheduled.lapses, lastReviewedAt: scheduled.lastReviewedAt };
+      libraryFlashcardReviews.set(key, review);
+      return done(review);
+    }));
+  },
 
   listPersonalFlashcardDecks: () => later(personalFlashcardDecks.map((deck) => ({ ...deck, cards: [...deck.cards] }))),
   createPersonalFlashcardDeck: (input: CreatePersonalFlashcardDeckInput) => later(once(input.requestId, () => {

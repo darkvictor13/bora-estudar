@@ -131,3 +131,49 @@ test.describe("F-FLASH-03 · biblioteca editorial", () => {
     await gradeTwice(studentPage, "/aluno/flashcards?deck=pf2029-informatica-01", "library_flashcard_reviews", scenario.student.id);
   });
 });
+
+test.describe("F-FLASH-04 · lista da biblioteca sem o texto", () => {
+  // Spec 39, CA-07: a lista e a busca chegam pela view, sem nenhuma leitura de
+  // `library_flashcards` — é ela que carrega frente e verso.
+  test("a lista e a busca por tópico chegam sem o texto dos cartões", async ({ studentPage }) => {
+    const textReads: string[] = [];
+    studentPage.on("request", (request) => {
+      if (/\/rest\/v1\/library_flashcards\?/.test(request.url())) textReads.push(request.url());
+    });
+    await studentPage.goto("/aluno/flashcards");
+    const decks = studentPage.getByTestId("library-flashcard-deck");
+    await expect(studentPage.getByText(/14 disciplinas · 101 decks por tópico · 5\.108 cartões/)).toBeVisible();
+
+    await studentPage.getByLabel("Buscar disciplina ou tópico").fill("Tanatologia");
+    await expect(decks.first()).toBeVisible();
+    await expect(decks).toHaveCount(1);
+    await expect(decks.first()).toContainText("Tanatologia");
+
+    // Um tópico que só existe dentro dos cartões, e não no título do deck.
+    await studentPage.getByLabel("Buscar disciplina ou tópico").fill("Conceito e Finalidade");
+    await expect(decks.filter({ hasText: "Inquérito Policial" })).toHaveCount(1);
+
+    expect(textReads).toEqual([]);
+    expect(await studentPage.content()).not.toContain("Procedimento administrativo preliminar, informativo e inquisitivo");
+  });
+});
+
+test.describe("F-FLASH-05 · cartão corrigido no banco", () => {
+  // Spec 39, CA-08: a correção chega ao aluno sem build. O deck é um que
+  // nenhum outro teste abre, e o texto volta ao original no fim.
+  test("o deck mostra o texto que está no banco", async ({ studentPage }) => {
+    const card = await one<{ id: string; front: string }>(
+      `select id, front from public.library_flashcards
+        where deck_id = 'pf2029-medicina-legal-sexologia' and retired_at is null
+        order by position limit 1`,
+    );
+    const corrected = `${card.front} [corrigido ${crypto.randomUUID().slice(0, 8)}]`;
+    await query("update public.library_flashcards set front = $1 where id = $2", [corrected, card.id]);
+    try {
+      await studentPage.goto("/aluno/flashcards?deck=pf2029-medicina-legal-sexologia");
+      await expect(studentPage.getByText(corrected)).toBeVisible();
+    } finally {
+      await query("update public.library_flashcards set front = $1 where id = $2", [card.front, card.id]);
+    }
+  });
+});

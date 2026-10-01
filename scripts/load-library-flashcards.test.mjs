@@ -115,6 +115,9 @@ test("CA-07: revisão de um cartão que a biblioteca não tem faz a carga falhar
      values ('00000000-0000-0000-0000-000000000000', $1, 'authenticated', 'authenticated', 'orfa.biblioteca@x.com', '{"name":"Órfã"}')`,
     [student],
   );
+  // A FK da spec 39 já impede a órfã de nascer. A conferência da carga existe
+  // para o banco que ainda não tem a FK validada — então é sem ela que se testa.
+  await client.query("alter table public.library_flashcard_reviews drop constraint library_flashcard_reviews_card_fk");
   await client.query(
     `insert into public.library_flashcard_reviews (student_id, deck_id, card_id, due_at, interval_minutes, review_count, last_grade)
      values ($1, $2, $3, now(), 10, 1, 'good')`,

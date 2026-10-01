@@ -905,7 +905,9 @@ A coluna **18/09** é o schema depois de `20260914190000` (o gatilho de perfil) 
 doze migrations de simulados, cartões, biblioteca e comparações, de
 `20260924210319` a `20260930120000`. A coluna **01/10** acrescenta
 `20261001120000`, o conteúdo da biblioteca de flashcards (spec 38): cinco
-tabelas, o enum do aviso editorial, seis FKs e `vw_library_flashcard_decks`. É a
+tabelas, o enum do aviso editorial, seis FKs e `vw_library_flashcard_decks`; e
+`20261001150000` (spec 39), a FK da revisão para o cartão, com o índice
+`(deck_id, card_id)` no lugar do de `deck_id`, que era prefixo dele. É a
 última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
@@ -917,7 +919,7 @@ foram conferidas de novo antes de medir a 30/09.
 | Policies | 79 | 63 | 62 | 64 | 99 | 104 |
 | Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 14 |
 | CHECK constraints | 68 | 46 | 46 | 47 | 90 | 100 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 | 77 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 78 |
 | Índices | 85 | 81 | 92 | 97 | 128 | 137 |
 | Views | 0 | 1 | 1 | 1 | 1 | 2 |
 | Gatilhos | 12 | 27 | 28 | 29 | 39 | 45 |

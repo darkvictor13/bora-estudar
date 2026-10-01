@@ -36,7 +36,7 @@
 import type { BoraApi } from "../contract.ts";
 import { mockExamsApi } from "./mock-exams.ts";
 import { gradeFlashcard, loadFlashcardReviews, loadFlashcardReviewsForLessons } from "./flashcards.ts";
-import { gradeLibraryFlashcard, loadLibraryFlashcardReviews } from "./library-flashcards.ts";
+import { gradeLibraryFlashcard, loadLibraryFlashcardCatalog, loadLibraryFlashcardDeck, loadLibraryFlashcardReviews } from "./library-flashcards.ts";
 import { createPersonalFlashcard, createPersonalFlashcardDeck, gradePersonalFlashcard, listPersonalFlashcardDecks, loadPersonalFlashcardReviews } from "./personal-flashcards.ts";
 import { authApi } from "./auth.ts";
 import { joinWaitlist, loadWaitlistEntry, redeemCoupon } from "./access.ts";
@@ -157,6 +157,8 @@ export const supabaseApi: BoraApi = {
   loadFlashcardReviews,
   loadFlashcardReviewsForLessons,
   gradeFlashcard,
+  loadLibraryFlashcardCatalog,
+  loadLibraryFlashcardDeck,
   loadLibraryFlashcardReviews,
   gradeLibraryFlashcard,
   listPersonalFlashcardDecks,

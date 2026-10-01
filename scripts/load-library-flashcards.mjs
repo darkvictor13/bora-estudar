@@ -215,6 +215,17 @@ export async function loadLibrary(client, library) {
     throw new Error(`Há ${orphans.length} cartões revisados que a biblioteca não tem:\n- ${list.join("\n- ")}`);
   }
 
+  // A FK da spec 39 nasce `not valid` (R-BIB-25): com o conteúdo carregado e
+  // nenhuma órfã, é aqui que as revisões antigas passam a ser conferidas.
+  // Antes da migration da 39 a constraint não existe e nada acontece.
+  const { rows: pending } = await client.query(`
+    select 1 from pg_constraint
+     where conname = 'library_flashcard_reviews_card_fk' and not convalidated
+  `);
+  if (pending.length > 0) {
+    await client.query("alter table public.library_flashcard_reviews validate constraint library_flashcard_reviews_card_fk");
+  }
+
   return changed;
 }
 

@@ -52,7 +52,7 @@ insert into public.library_flashcard_reviews
   (student_id, deck_id, card_id, due_at, interval_minutes, review_count, last_grade, state, step)
 values
   ('22222222-2222-4222-8222-222222222222', 'pf2029-portugues-morfologia',
-   '88888888-8888-4888-8888-000000000001', now() + interval '10 minutes', 10, 1, 'good', 'learning', 1);
+   '02e98a0f-d220-4695-ba1e-e319d0781fc2', now() + interval '10 minutes', 10, 1, 'good', 'learning', 1);
 do $$ begin
   if not exists (select 1 from public.library_flashcard_reviews where deck_id = 'pf2029-portugues-morfologia') then
     raise exception 'FALHOU: revisao de nova materia nao foi salva';

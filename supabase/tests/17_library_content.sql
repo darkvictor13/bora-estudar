@@ -127,4 +127,106 @@ do $$ begin
 end $$;
 
 reset role;
+
+-- =============================================================================
+-- Spec 39: a revisão aponta para um cartão de verdade
+-- =============================================================================
+
+-- ---------- CA-04: a carga validou a FK ----------
+do $$ begin
+  if not exists (select 1 from pg_constraint
+                  where conname = 'library_flashcard_reviews_card_fk' and convalidated) then
+    raise exception 'FALHOU: a FK das revisoes continua not valid depois da carga';
+  end if;
+  raise notice '11 OK  a carga validou library_flashcard_reviews_card_fk';
+end $$;
+
+-- ---------- CA-01: cartão que não existe no deck ----------
+do $$ begin
+  insert into public.library_flashcard_reviews
+    (student_id, deck_id, card_id, due_at, interval_minutes, review_count, last_grade)
+  values ('22222222-2222-4222-8222-222222222222', 'pf2029-informatica-02',
+          '95e686a3-6c71-4ad9-927f-8036025d3f7d', now(), 10, 1, 'good');
+  raise exception 'FALHOU: a manutencao gravou revisao de cartao em outro deck';
+exception when foreign_key_violation then
+  raise notice '12 OK  a FK recusa cartao que nao e do deck';
+end $$;
+
+-- Uma revisão de Bruno num cartão retirado, gravada pela manutenção, e uma
+-- num cartão ativo: a primeira para o UPDATE recusado, a segunda para o
+-- DELETE do cartão.
+insert into public.library_flashcard_reviews
+  (student_id, deck_id, card_id, due_at, interval_minutes, review_count, last_grade)
+values
+  ('22222222-2222-4222-8222-222222222222', 'pf2029-informatica-01',
+   '7373fee7-2f87-42eb-a3b9-a2ff2eee7bf6', now(), 10, 1, 'good'),
+  ('22222222-2222-4222-8222-222222222222', 'pf2029-informatica-01',
+   '95e686a3-6c71-4ad9-927f-8036025d3f7d', now(), 10, 1, 'good');
+
+-- ---------- CA-03: cartão com revisão não se apaga ----------
+do $$ begin
+  delete from public.library_flashcards where id = '95e686a3-6c71-4ad9-927f-8036025d3f7d';
+  raise exception 'FALHOU: um cartao revisado foi apagado';
+exception when foreign_key_violation then
+  raise notice '13 OK  cartao com revisao nao se apaga';
+end $$;
+
+set role authenticated;
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+
+do $$ begin
+  insert into public.library_flashcard_reviews
+    (student_id, deck_id, card_id, due_at, interval_minutes, review_count, last_grade)
+  values ('22222222-2222-4222-8222-222222222222', 'pf2029-informatica-01',
+          '00000000-0000-4000-8000-000000000000', now(), 10, 1, 'good');
+  raise exception 'FALHOU: o aluno gravou revisao de cartao inexistente';
+exception when insufficient_privilege then
+  raise notice '14 OK  o aluno nao revisa cartao inexistente';
+end $$;
+
+-- ---------- CA-02: cartão retirado ----------
+do $$ begin
+  insert into public.library_flashcard_reviews
+    (student_id, deck_id, card_id, due_at, interval_minutes, review_count, last_grade)
+  values ('22222222-2222-4222-8222-222222222222', 'pf2029-informatica-02',
+          'b09528e5-9bf2-4fe2-a8aa-6771101bcbce', now(), 10, 1, 'good');
+  raise exception 'FALHOU: o aluno gravou revisao nova num cartao retirado';
+exception when insufficient_privilege then
+  raise notice '15 OK  cartao retirado nao aceita revisao nova';
+end $$;
+
+do $$ begin
+  update public.library_flashcard_reviews set review_count = 2
+   where deck_id = 'pf2029-informatica-01' and card_id = '7373fee7-2f87-42eb-a3b9-a2ff2eee7bf6';
+  raise exception 'FALHOU: o aluno atualizou a revisao de um cartao retirado';
+exception when insufficient_privilege then
+  raise notice '16 OK  cartao retirado nao aceita atualizacao da revisao';
+end $$;
+
+do $$ begin
+  if (select count(*) from public.library_flashcard_reviews
+       where card_id = '7373fee7-2f87-42eb-a3b9-a2ff2eee7bf6') <> 1 then
+    raise exception 'FALHOU: a revisao do cartao retirado sumiu da leitura';
+  end if;
+  raise notice '17 OK  a revisao do cartao retirado continua legivel';
+end $$;
+
+-- ---------- CA-05: a view sem o texto ----------
+do $$
+declare v_bad integer;
+begin
+  select count(*) into v_bad from public.vw_library_flashcard_decks
+   where cardinality(card_ids) <> active_cards or cardinality(topics) = 0;
+  if v_bad <> 0 then
+    raise exception 'FALHOU: % decks com card_ids ou topics fora da contagem', v_bad;
+  end if;
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'vw_library_flashcard_decks'
+                and column_name in ('front', 'back')) then
+    raise exception 'FALHOU: a view de decks expoe o texto dos cartoes';
+  end if;
+  raise notice '18 OK  a view traz ids e topicos, e nenhum texto';
+end $$;
+
+reset role;
 rollback;

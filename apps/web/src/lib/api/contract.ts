@@ -479,6 +479,62 @@ export interface GradeFlashcardInput {
   readonly requestId: RequestId;
 }
 
+/**
+ * O aviso editorial de um cartão da biblioteca (spec 38, R-BIB-09). A frase
+ * que o aluno lê mora no front, uma por valor.
+ */
+export type LibraryFlashcardNotice = "revoked" | "pending_check" | "future_effect" | "version_caveat";
+
+/** Um deck da lista, sem o texto dos cartões (spec 39, R-BIB-28). */
+export interface LibraryFlashcardDeckSummary {
+  readonly id: string;
+  readonly subjectId: string;
+  readonly number: string;
+  readonly title: string;
+  readonly historical: boolean;
+  /** Os cartões ativos, na ordem do deck: é o que o progresso conta. */
+  readonly cardIds: readonly Uuid[];
+  /** Os tópicos distintos, para a busca. */
+  readonly topics: readonly string[];
+}
+
+export interface LibraryFlashcardSubject {
+  readonly id: string;
+  readonly name: string;
+  readonly sourceFile: string;
+  /** O status de auditoria que o MATERIAL declara — não é auditoria da plataforma. */
+  readonly auditLabel: string;
+  readonly auditPartial: boolean;
+  readonly decks: readonly LibraryFlashcardDeckSummary[];
+}
+
+/** O par antigo cuja memória vale para o cartão atual (spec 38, R-BIB-08). */
+export interface LibraryFlashcardAlias {
+  readonly oldDeckId: string;
+  readonly oldCardId: Uuid;
+  readonly deckId: string;
+  readonly cardId: Uuid;
+}
+
+export interface LibraryFlashcardCatalog {
+  readonly subjects: readonly LibraryFlashcardSubject[];
+  readonly aliases: readonly LibraryFlashcardAlias[];
+}
+
+export interface LibraryFlashcard extends FlashcardCard {
+  readonly notice: LibraryFlashcardNotice | null;
+}
+
+/** Um deck aberto para estudo: o texto chega só aqui (R-BIB-29). */
+export interface LibraryFlashcardDeck {
+  readonly id: string;
+  readonly number: string;
+  readonly title: string;
+  readonly historical: boolean;
+  readonly subject: Omit<LibraryFlashcardSubject, "decks">;
+  readonly cards: readonly LibraryFlashcard[];
+}
+
 /** Revisões dos decks editoriais, independentes das aulas do professor. */
 export interface LibraryFlashcardReview extends Omit<FlashcardReview, "lessonId"> {
   readonly deckId: string;
@@ -607,6 +663,10 @@ export interface TheoryApi {
   loadFlashcardReviews(lessonId: Uuid): Promise<readonly FlashcardReview[]>;
   loadFlashcardReviewsForLessons(lessonIds: readonly Uuid[]): Promise<readonly FlashcardReview[]>;
   gradeFlashcard(input: GradeFlashcardInput): Promise<Result<FlashcardReview>>;
+  /** Matérias, decks e aliases da biblioteca, sem o texto dos cartões. */
+  loadLibraryFlashcardCatalog(): Promise<LibraryFlashcardCatalog>;
+  /** Os cartões ativos de um deck; `null` quando o deck não existe. */
+  loadLibraryFlashcardDeck(deckId: string): Promise<LibraryFlashcardDeck | null>;
   loadLibraryFlashcardReviews(deckIds: readonly string[]): Promise<readonly LibraryFlashcardReview[]>;
   gradeLibraryFlashcard(input: GradeLibraryFlashcardInput): Promise<Result<LibraryFlashcardReview>>;
   listPersonalFlashcardDecks(): Promise<readonly PersonalFlashcardDeck[]>;

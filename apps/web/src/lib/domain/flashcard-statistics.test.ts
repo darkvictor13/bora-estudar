@@ -12,8 +12,8 @@ const review = (cardId: string, lastGrade: FlashcardReview["lastGrade"], reviewC
 test("separa fontes e calcula retenção pela última resposta de cada cartão", () => {
   const stats = buildFlashcardStatistics([
     { id: "deck-1", source: "Biblioteca editorial", subject: "Informática", cards: [
-      { id: "card-1", topic: "", front: "a", back: "b" },
-      { id: "card-2", topic: "", front: "c", back: "d" },
+      { id: "card-1" },
+      { id: "card-2" },
     ], reviews: [review("card-1", "good", 3), review("card-2", "again", 1)] },
     { id: "deck-2", source: "Meus decks", subject: "Informática", cards: [], reviews: [] },
   ], new Date("2026-09-30T00:00:00.000Z"));

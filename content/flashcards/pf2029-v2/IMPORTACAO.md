@@ -16,7 +16,7 @@ Os outros oito foram consolidados pelo material V2. `previousReviews` relaciona 
 
 O adaptador busca essas referências e usa o estado de memória mais recente. Nenhuma linha antiga de revisão é apagada e a importação não reinicia os intervalos. As respostas seguintes são gravadas na referência atual.
 
-O JSON antigo `pf2029-informatica-flashcards.json` permanece como base de compatibilidade; o catálogo exibido é `pf2029-policial-flashcards.json`.
+O JSON antigo `pf2029-informatica-flashcards.json` permanece como base de compatibilidade: a carga tira dele os oito cartões consolidados. Desde a spec 39 o site lê o catálogo do banco; `pf2029-policial-flashcards.json` é a fonte da carga e, por import dinâmico, da implementação `fixtures`.
 
 ## Reprodução e verificação
 
