@@ -14,7 +14,7 @@ import { useTheme } from "@mui/material/styles";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { StudyTimerBar } from "@/components/StudyTimer";
 import type { Theme } from "@/lib/theme";
 
 /**
@@ -34,6 +34,7 @@ export interface NavItem {
   readonly href: string;
   readonly label: string;
   readonly icon: ReactNode;
+  readonly comingSoon?: boolean;
   /** `false` deixa o item visível mas inerte, para o aluno sem acesso liberado. */
   readonly enabled?: boolean | undefined;
 }
@@ -73,57 +74,44 @@ function Brand({
         display: "flex",
         alignItems: "center",
         gap: 1,
-        minHeight: 64,
+        minHeight: 76,
         px: collapsed ? 1 : 1.25,
-        py: 1.75,
+        py: 1.5,
         borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
       })}
     >
       {!collapsed && (
       <Box
         aria-hidden="true"
-        sx={(theme) => ({
-          flex: "0 0 30px",
-          width: 30,
-          height: 30,
+        sx={{
+          flex: "0 0 44px",
+          width: 44,
+          height: 44,
           display: "grid",
           placeItems: "center",
-          borderRadius: "50%",
-          backgroundColor: theme.vars.palette.fill.primary,
-          color: theme.vars.palette.fill.primaryText,
-          fontFamily: theme.typography.numeric.fontFamily,
-          fontWeight: 500,
-          fontSize: "0.6875rem",
-          letterSpacing: "-0.06em",
-        })}
+          borderRadius: "4px",
+        }}
       >
-        BE
+        <Box component="img" src="/fronteira-mark.svg" alt="" sx={{ width: 44, height: 44 }} />
       </Box>
       )}
 
       {!collapsed && (
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          {/*
-            EM MONO, EM PESO 500 — a v2 pedia 700 aqui, e DM Mono não publica
-            negrito: o navegador sintetizava um falso-negrito, com traço
-            engordado de forma irregular. A ênfase vem do espacejamento, que é
-            o que a marca sempre teve.
-          */}
           <Typography
-            variant="numeric"
             component="div"
-            sx={{ fontSize: "0.59375rem", letterSpacing: "0.105em", lineHeight: 1.2 }}
+            sx={{ fontSize: "0.875rem", fontWeight: 800, letterSpacing: "0.015em", lineHeight: 1.05 }}
           >
-            BORA ESTUDAR
+            FRONTEIRA
           </Typography>
           <Typography
-            variant="numeric"
             component="div"
             sx={(theme) => ({
-              fontSize: "0.53125rem",
-              letterSpacing: "0.17em",
-              lineHeight: 1.2,
-              marginTop: "2px",
+              fontSize: "0.65625rem",
+              fontWeight: 700,
+              letterSpacing: "0.105em",
+              lineHeight: 1.25,
+              marginTop: "3px",
               color: theme.vars.palette.accent.secondary,
             })}
           >
@@ -170,6 +158,8 @@ export function AppShell({
   groups,
   userName,
   roleLabel,
+  timerHref,
+  timerRecordHref,
   profileId,
   theme,
   signOutAction,
@@ -180,6 +170,8 @@ export function AppShell({
   groups: readonly NavGroup[];
   userName: string | null;
   roleLabel: string;
+  timerHref?: string;
+  timerRecordHref?: string;
   profileId: string;
   theme: Theme;
   signOutAction: () => Promise<void>;
@@ -254,15 +246,11 @@ export function AppShell({
                       component="p"
                       variant="overline"
                       sx={(muiTheme) => ({
-                        fontSize: "0.5625rem",
+                        fontSize: "0.625rem",
                         letterSpacing: "0.1em",
                         px: 1.25,
                         mt: 2.25,
                         mb: 0.5,
-                        // `text.secondary`, e não `text.disabled`. O cinza mais
-                        // claro da v2 dava 2.64:1 no claro e 2.98:1 no escuro —
-                        // os dois reprovam o AA que o F-TEMA-07 mede, e num
-                        // rótulo de 9px a reprovação é literal: não se lê.
                         color: muiTheme.vars.palette.text.secondary,
                       })}
                     >
@@ -282,6 +270,7 @@ export function AppShell({
                       data-testid="nav-item"
                       data-active={active}
                       data-enabled={!disabled}
+                      aria-label={`${item.label}${item.comingSoon ? " · Em breve" : ""}`}
                       // SEM DESTINO quando desabilitado, e não um <Link> com
                       // `aria-disabled`: o Link continua navegando no clique, o
                       // loader redireciona de volta, e a pessoa dá a volta
@@ -294,9 +283,14 @@ export function AppShell({
                         borderRadius: `${muiTheme.brand.radius.md}px`,
                         mb: "2px",
                         px: compact ? 0 : 1.25,
-                        py: 1,
+                        py: 0.75,
+                        minHeight: 40,
                         justifyContent: compact ? "center" : "flex-start",
                         ...(active && { fontWeight: 600 }),
+                        ...(active && muiTheme.applyStyles("dark", {
+                          backgroundImage: `linear-gradient(90deg, ${muiTheme.vars.palette.accent.primarySoftHover}, ${muiTheme.vars.palette.surface.raised})`,
+                          boxShadow: `inset 3px 0 0 ${muiTheme.vars.palette.accent.primary}`,
+                        })),
                       })}
                     >
                       <ListItemIcon
@@ -319,13 +313,26 @@ export function AppShell({
                           }}
                         />
                       )}
+                      {!compact && item.comingSoon && (
+                        <Box component="span" aria-hidden="true" sx={(theme) => ({
+                          ml: 0.5,
+                          px: 0.6,
+                          py: 0.2,
+                          flexShrink: 0,
+                          borderRadius: 1,
+                          fontSize: "0.625rem",
+                          whiteSpace: "nowrap",
+                          color: theme.vars.palette.text.secondary,
+                          backgroundColor: theme.vars.palette.surface.sunken,
+                        })}>Em breve</Box>
+                      )}
                     </ListItemButton>
                   );
 
                   // Recolhida, o rótulo some da tela e o único jeito de saber
                   // para onde um ícone leva é parar o ponteiro em cima dele.
                   return compact ? (
-                    <Tooltip key={item.href} title={item.label} placement="right">
+                    <Tooltip key={item.href} title={`${item.label}${item.comingSoon ? " · Em breve" : ""}`} placement="right">
                       <span>{button}</span>
                     </Tooltip>
                   ) : (
@@ -339,10 +346,6 @@ export function AppShell({
           <Divider />
 
           <Box data-testid="sidebar-foot" sx={{ p: compact ? 1 : 1.5 }}>
-            {/* Acima do bloco de identidade: é preferência da conta, e a conta
-                é o que este rodapé representa. */}
-            <ThemeToggle profileId={profileId} initial={theme} collapsed={compact} />
-
             <Box
               data-testid="user-chip"
               sx={(muiTheme) => ({
@@ -435,8 +438,12 @@ export function AppShell({
           minWidth: 0,
           overflowY: "auto",
           backgroundColor: muiTheme.vars.palette.surface.base,
+          ...muiTheme.applyStyles("dark", {
+            backgroundImage: `radial-gradient(ellipse at 85% 0%, ${muiTheme.vars.palette.accent.primarySoft}, transparent 48%)`,
+          }),
         })}
       >
+        <StudyTimerBar timerHref={timerHref} {...(timerRecordHref ? { recordHref: timerRecordHref } : {})} profileId={profileId} theme={theme} />
         {children}
       </Box>
     </Box>

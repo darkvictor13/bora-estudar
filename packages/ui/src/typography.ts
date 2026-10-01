@@ -56,8 +56,8 @@ export const typography: TypographyVariantsOptions = {
   subtitle1: { fontSize: '0.875rem', lineHeight: 1.5, fontWeight: fontWeight.medium },
   subtitle2: { fontSize: '0.8125rem', lineHeight: 1.5, fontWeight: fontWeight.medium },
 
-  body1: { fontSize: '0.875rem', lineHeight: 1.6 },
-  body2: { fontSize: '0.8125rem', lineHeight: 1.6, color: 'var(--mui-palette-text-secondary)' },
+  body1: { fontSize: '0.875rem', lineHeight: 1.6, fontWeight: 450 },
+  body2: { fontSize: '0.8125rem', lineHeight: 1.6, fontWeight: fontWeight.medium, color: 'var(--mui-palette-text-secondary)' },
 
   button: {
     fontSize: '0.8125rem',
@@ -65,7 +65,7 @@ export const typography: TypographyVariantsOptions = {
     fontWeight: fontWeight.medium,
     textTransform: 'none',
   },
-  caption: { fontSize: '0.75rem', lineHeight: 1.45, color: 'var(--mui-palette-text-secondary)' },
+  caption: { fontSize: '0.75rem', lineHeight: 1.45, fontWeight: fontWeight.medium, color: 'var(--mui-palette-text-secondary)' },
   overline: {
     fontSize: '0.6875rem',
     lineHeight: 1.4,

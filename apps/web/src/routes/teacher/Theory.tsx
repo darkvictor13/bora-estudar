@@ -1,22 +1,28 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
+import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Empty, Field, Metric, PageHeader } from "@bora/ui";
 import { useRef, useState } from "react";
-import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
+import { Link as RouterLink, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
 import {
   api,
   newRequestId,
   type ApiError,
+  type FlashcardCard,
   type ImportMasterResult,
+  type LessonMaterialBlock,
   type TheoryLesson,
   type TheorySubjectRule,
 } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { PMPR_SOLDADO_2025 } from "@/lib/domain/pmpr-soldado";
+import { ROUTES } from "@/lib/routes";
 
 /**
  * Catálogo de teoria — o `p-disciplinas` do professor.
@@ -36,16 +42,17 @@ export async function teacherTheoryLoader({ request }: { request: Request }) {
   const catalogId = new URL(request.url).searchParams.get("catalogo") ?? catalogs[0]?.id ?? null;
 
   if (!catalogId) {
-    return { catalogs, catalogId: null, lessons: [], rules: [], plans: [] };
+    return { catalogs, catalogId: null, lessons: [], rules: [], plans: [], classes: [] };
   }
 
-  const [lessons, rules, plans] = await Promise.all([
+  const [lessons, rules, plans, classes] = await Promise.all([
     api.loadCatalogLessons(catalogId),
     api.loadSubjectRules(catalogId),
     api.listPlans(),
+    api.listClasses(),
   ]);
 
-  return { catalogs, catalogId, lessons, rules, plans };
+  return { catalogs, catalogId, lessons, rules, plans, classes };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherTheoryLoader>>;
@@ -87,7 +94,7 @@ function SubjectRuleCard({
           }}
         >
           <Field
-            label="Questões iniciais para liberar a próxima aula"
+            label="Meta de questões por aula"
             name="initialQuestions"
             type="number"
             min={1}
@@ -169,9 +176,21 @@ function LessonRow({
   onSave,
 }: {
   lesson: TheoryLesson;
-  onSave: (lesson: TheoryLesson) => void;
+  onSave: (lesson: TheoryLesson) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
+  const [blocks, setBlocks] = useState<LessonMaterialBlock[]>(() => lesson.materialBlocks.length > 0
+    ? [...lesson.materialBlocks]
+    : (lesson.resources.pdf || lesson.resources.tecQuestions || lesson.resources.qcQuestions)
+      ? [{ title: lesson.title, pdf: lesson.resources.pdf, tecQuestions: lesson.resources.tecQuestions, qcQuestions: lesson.resources.qcQuestions }]
+      : []);
+  const [cards, setCards] = useState<FlashcardCard[]>(() => [...(lesson.flashcardCards ?? [])]);
+  const updateBlock = (index: number, field: keyof LessonMaterialBlock, value: string) => {
+    setBlocks((current) => current.map((block, i) => i === index ? { ...block, [field]: field === "title" ? value : value || null } : block));
+  };
+  const updateCard = (index: number, field: "topic" | "front" | "back", value: string) => {
+    setCards((current) => current.map((card, i) => i === index ? { ...card, [field]: value } : card));
+  };
 
   return (
     <Box
@@ -186,6 +205,9 @@ function LessonRow({
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
         <Badge tone="neutral">{lesson.lessonCode}</Badge>
+        <Badge tone={lesson.published ? "success" : "neutral"}>
+          {lesson.published ? "Disponível para alunos" : "Rascunho"}
+        </Badge>
         <Typography sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem" }} noWrap>
           {lesson.title}
         </Typography>
@@ -195,7 +217,7 @@ function LessonRow({
           </Badge>
         ) : (
           // SEM PÁGINA AUDITADA É AVISO, não silêncio: é o que o aluno vai ver
-          // como diagnóstico no lugar do controle por página.
+          // sem o controle de leitura por página, mantendo os materiais.
           <Badge tone="warning">sem páginas</Badge>
         )}
         <Button size="small" variant="text" onClick={() => setOpen(!open)}>
@@ -215,7 +237,8 @@ function LessonRow({
               const raw = String(data.get(name) ?? "").trim();
               return raw === "" ? null : Number(raw);
             };
-            onSave({
+            const link = (name: string) => String(data.get(name) ?? "").trim() || null;
+            void onSave({
               ...lesson,
               title: String(data.get("title") ?? lesson.title),
               position: Number(data.get("position") ?? lesson.position),
@@ -223,11 +246,26 @@ function LessonRow({
               theoryEndPage: number("theoryEndPage"),
               pdfTotalPages: number("pdfTotalPages"),
               hasTheory: number("theoryEndPage") !== null,
+              published: data.get("published") === "on",
+              resources: {
+                pdf: null,
+                flashcards: link("flashcardsUrl"),
+                flashSummary: link("flashSummaryUrl"),
+                tecQuestions: null,
+                qcQuestions: null,
+              },
+              materialBlocks: blocks.map((block) => ({ ...block, title: block.title.trim() })),
+              flashcardCards: cards.map((card) => ({ ...card, topic: card.topic.trim(), front: card.front.trim(), back: card.back.trim() })),
+            }).then((saved) => {
+              if (saved) setOpen(false);
             });
-            setOpen(false);
           }}
         >
           <Field label="Título" name="title" defaultValue={lesson.title} />
+          <FormControlLabel
+            control={<Switch name="published" defaultChecked={lesson.published} />}
+            label="Disponibilizar esta aula aos alunos"
+          />
           <Field label="Ordem" name="position" type="number" min={1} defaultValue={lesson.position} />
           <Field
             label="Início da teoria"
@@ -250,6 +288,73 @@ function LessonRow({
             min={1}
             defaultValue={lesson.pdfTotalPages ?? ""}
           />
+          <Box sx={{ flexBasis: "100%" }}>
+            <Typography variant="body2" component="p" sx={{ fontWeight: 600, mb: 1 }}>
+              Blocos de materiais desta aula
+            </Typography>
+            <Typography variant="caption" component="p" sx={{ mb: 1.5 }}>
+              Cada bloco liga um tópico ao PDF e aos cadernos corretos. Use links permanentes, sem tokens de acesso.
+            </Typography>
+            <Box sx={{ display: "grid", gap: 1.25, mb: 1.25 }}>
+              {blocks.map((block, index) => (
+                <Box key={index} data-testid="teacher-material-block" sx={(theme) => ({ p: 1.5, border: `1px solid ${theme.vars.palette.surface.borderStrong}`, borderRadius: `${theme.brand.radius.md}px` })}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>Bloco {String(index + 1).padStart(2, "0")}</Typography>
+                    <Button type="button" size="small" variant="text" onClick={() => setBlocks((current) => current.filter((_, i) => i !== index))}>Remover</Button>
+                  </Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+                    <Field label="Tópico" name={`blockTitle-${index}`} value={block.title} onChange={(event) => updateBlock(index, "title", event.target.value)} />
+                    <Field label="PDF do tópico" name={`blockPdf-${index}`} value={block.pdf ?? ""} onChange={(event) => updateBlock(index, "pdf", event.target.value)} />
+                    <Field label="Caderno TEC" name={`blockTec-${index}`} value={block.tecQuestions ?? ""} onChange={(event) => updateBlock(index, "tecQuestions", event.target.value)} />
+                    <Field label="Caderno QConcursos" name={`blockQc-${index}`} value={block.qcQuestions ?? ""} onChange={(event) => updateBlock(index, "qcQuestions", event.target.value)} />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+            <Button type="button" size="small" variant="outlined" disabled={blocks.length >= 30} onClick={() => setBlocks((current) => [...current, { title: "", pdf: null, tecQuestions: null, qcQuestions: null }])}>
+              Adicionar bloco
+            </Button>
+          </Box>
+          <Box sx={{ flexBasis: "100%" }}>
+            <Typography variant="body2" component="p" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Flashcards desta aula
+            </Typography>
+            <Typography variant="caption" component="p" sx={{ mb: 1.25 }}>
+              Cadastre a afirmação ou pergunta na frente e a explicação na resposta. Os cartões serão revisados dentro da plataforma.
+            </Typography>
+            <Box sx={{ display: "grid", gap: 1, mb: 1 }}>
+              {cards.map((card, index) => (
+                <Box key={card.id} data-testid="teacher-flashcard" sx={(theme) => ({ p: 1.5, border: `1px solid ${theme.vars.palette.surface.borderStrong}`, borderRadius: `${theme.brand.radius.md}px`, backgroundColor: theme.vars.palette.surface.sunken })}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>Cartão {index + 1}</Typography>
+                    <Button size="small" onClick={() => setCards((current) => current.filter((item) => item.id !== card.id))}>Remover</Button>
+                  </Box>
+                  <Box sx={{ display: "grid", gap: 1 }}>
+                    <TextField size="small" label="Tópico" value={card.topic} onChange={(event) => updateCard(index, "topic", event.target.value)} inputProps={{ maxLength: 160 }} />
+                    <TextField size="small" label="Frente · pergunta ou afirmação" multiline minRows={2} value={card.front} onChange={(event) => updateCard(index, "front", event.target.value)} inputProps={{ maxLength: 2000 }} />
+                    <TextField size="small" label="Resposta e explicação" multiline minRows={3} value={card.back} onChange={(event) => updateCard(index, "back", event.target.value)} inputProps={{ maxLength: 4000 }} />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+            <Button type="button" size="small" variant="outlined" disabled={cards.length >= 200} onClick={() => setCards((current) => [...current, { id: crypto.randomUUID(), topic: "", front: "", back: "" }])}>
+              Adicionar flashcard
+            </Button>
+          </Box>
+          <Box sx={{ flexBasis: "100%" }}>
+            <Typography variant="body2" component="p" sx={{ fontWeight: 600, mb: 1 }}>
+              Outros materiais de apoio
+            </Typography>
+            <Box sx={(theme) => ({
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 1.25,
+              [theme.breakpoints.down("md")]: { gridTemplateColumns: "1fr" },
+            })}>
+              <Field label="Link externo de flashcards (opcional)" name="flashcardsUrl" type="url" defaultValue={lesson.resources.flashcards ?? ""} />
+              <Field label="Resumo flash" name="flashSummaryUrl" type="url" defaultValue={lesson.resources.flashSummary ?? ""} />
+            </Box>
+          </Box>
           <Button type="submit" size="small" variant="contained" sx={{ mb: 2.5 }}>
             Salvar aula
           </Button>
@@ -260,7 +365,7 @@ function LessonRow({
 }
 
 export function TeacherTheory() {
-  const { catalogs, catalogId, lessons, rules, plans } = useLoaderData() as LoaderData;
+  const { catalogs, catalogId, lessons, rules, plans, classes } = useLoaderData() as LoaderData;
   const { revalidate } = useRevalidator();
   const [params, setParams] = useSearchParams();
 
@@ -268,16 +373,45 @@ export function TeacherTheory() {
   const [error, setError] = useState<ApiError | null>(null);
   const [imported, setImported] = useState<ImportMasterResult | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const pmprCatalog = catalogs.find((catalog) => catalog.key === PMPR_SOLDADO_2025.key);
+  const isPmprCatalog = pmprCatalog?.id === catalogId;
+  const eligiblePlans = isPmprCatalog
+    ? plans.filter((plan) => plan.targetExam?.toLocaleUpperCase("pt-BR").includes("PMPR"))
+    : plans;
 
-  async function run(action: () => Promise<{ ok: boolean; error?: ApiError }>, message?: string) {
+  async function createPmprCatalog() {
+    setBusy(true);
+    try {
+      const result = await api.ensurePmprPilotCatalog(newRequestId());
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setError(null);
+        setNotice("Catálogo Soldado PMPR criado com as nove matérias do edital.");
+        setParams((current) => {
+          const next = new URLSearchParams(current);
+          next.set("catalogo", result.data);
+          return next;
+        });
+        await revalidate();
+      }
+    } catch {
+      setError({ code: "unknown", message: "Não foi possível criar o catálogo agora." });
+    }
+    setBusy(false);
+  }
+
+  async function run(action: () => Promise<{ ok: boolean; error?: ApiError }>, message?: string): Promise<boolean> {
     const result = await action();
     if (!result.ok && result.error) {
       setError(result.error);
-      return;
+      return false;
     }
     setError(null);
     if (message) setNotice(message);
     await revalidate();
+    return true;
   }
 
   async function importFile(file: File) {
@@ -311,7 +445,13 @@ export function TeacherTheory() {
         title="Catálogo de teoria"
         description="Aulas, páginas auditadas e as regras de cada disciplina"
         actions={
-          catalogs.length > 0 ? (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            {!pmprCatalog && (
+              <Button variant="contained" size="small" disabled={busy} onClick={() => void createPmprCatalog()}>
+                Criar catálogo Soldado PMPR
+              </Button>
+            )}
+            {catalogs.length > 0 && (
             <TextField
               select
               size="small"
@@ -326,11 +466,12 @@ export function TeacherTheory() {
             >
               {catalogs.map((catalog) => (
                 <MenuItem key={catalog.id} value={catalog.id}>
-                  {catalog.name} · {catalog.lessonCount} aulas
+                  {catalog.name} · {catalog.lessonCount} {catalog.lessonCount === 1 ? "aula" : "aulas"}
                 </MenuItem>
               ))}
             </TextField>
-          ) : undefined
+            )}
+          </Box>
         }
       />
 
@@ -340,11 +481,47 @@ export function TeacherTheory() {
 
         {catalogs.length === 0 ? (
           <Empty icon="📚">
-            Nenhum catálogo de teoria. Ele é criado junto com a carga do MASTER, por script de
-            seed ou por quem administra o banco.
+            Nenhum catálogo ainda. Comece pelo catálogo Soldado PMPR para preparar as aulas
+            presenciais e os materiais de apoio.
           </Empty>
         ) : (
           <>
+            {isPmprCatalog && (
+              <Box sx={{ mb: 1.75 }}>
+                <Card
+                  title="Nova aula presencial"
+                  sub="Crie o rascunho agora; anexe os materiais e publique quando o professor liberar a aula"
+                >
+                  <Box
+                    component="form"
+                    data-testid="pmpr-draft-lesson-form"
+                    sx={{ display: "flex", alignItems: "flex-end", gap: 1.25, flexWrap: "wrap" }}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const form = event.currentTarget;
+                      const data = new FormData(form);
+                      const subject = String(data.get("subject") ?? "");
+                      const title = String(data.get("title") ?? "");
+                      if (catalogId) {
+                        void run(
+                          () => api.createDraftLesson(catalogId, subject, title, newRequestId()),
+                          "Aula criada em rascunho.",
+                        ).then((saved) => { if (saved) form.reset(); });
+                      }
+                    }}
+                  >
+                    <TextField select name="subject" label="Matéria" size="small" defaultValue={PMPR_SOLDADO_2025.subjects[0].name} sx={{ minWidth: 230 }}>
+                      {PMPR_SOLDADO_2025.subjects.map((subject) => (
+                        <MenuItem key={subject.name} value={subject.name}>{subject.name}</MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField name="title" label="Tópico da aula" size="small" required inputProps={{ maxLength: 180 }} sx={{ flex: 1, minWidth: 260 }} />
+                    <Button type="submit" variant="contained" size="small">Criar rascunho</Button>
+                  </Box>
+                </Card>
+              </Box>
+            )}
+
             <Box
               sx={(theme) => ({
                 display: "grid",
@@ -355,15 +532,15 @@ export function TeacherTheory() {
               })}
             >
               <Metric label="Aulas" value={lessons.length} />
-              <Metric label="Disciplinas" value={bySubject.size} />
+              <Metric label="Disciplinas" value={rules.length} />
               <Metric
                 label="Sem páginas auditadas"
                 value={lessons.filter((lesson) => !lesson.hasTheory).length}
-                note="mostram diagnóstico ao aluno"
+                note="materiais e questões continuam disponíveis"
               />
             </Box>
 
-            <Card title="Importar MASTER" sub="O arquivo é lido aqui, e não vai para o bundle">
+            {!isPmprCatalog && <Card title="Importar MASTER" sub="O arquivo é lido aqui, e não vai para o bundle">
               <input
                 ref={fileInput}
                 type="file"
@@ -389,16 +566,65 @@ export function TeacherTheory() {
                     // quais disciplinas ficaram fora da auditoria antes de o
                     // aluno descobrir sozinho.
                     <Alert status="warning">
-                      Sem páginas auditadas: {imported.subjectsWithoutPages.join(", ")}. O aluno vê
-                      o diagnóstico no lugar do controle por página.
+                      Sem páginas auditadas: {imported.subjectsWithoutPages.join(", ")}. Os materiais
+                      e questões continuam disponíveis ao aluno quando a aula for publicada.
                     </Alert>
                   )}
                 </Box>
               )}
-            </Card>
+            </Card>}
+
+            {isPmprCatalog && (
+              <Box sx={{ mt: 1.75 }}>
+                <Card title="Disponibilizar para uma turma" sub="Aulas publicadas aparecem para alunos matriculados com planejamento ativo">
+                  {classes.length === 0 ? (
+                    <Alert status="info">
+                      Crie uma turma em <RouterLink to={ROUTES.teacher.classes}>Turmas</RouterLink> para disponibilizar o catálogo aos alunos.
+                    </Alert>
+                  ) : (
+                    <Box
+                      component="form"
+                      sx={{ display: "flex", gap: 1.5, alignItems: "flex-end", flexWrap: "wrap" }}
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const classId = String(new FormData(event.currentTarget).get("classId") ?? "");
+                        if (classId) {
+                          void run(
+                            () => api.setClassTheoryCatalog(classId, catalogId),
+                            "Catálogo vinculado à turma. As aulas publicadas estarão disponíveis para os alunos matriculados.",
+                          );
+                        }
+                      }}
+                    >
+                      <TextField select name="classId" label="Turma" size="small" defaultValue="" sx={{ minWidth: 290 }}>
+                        <MenuItem value="">Selecione uma turma</MenuItem>
+                        {classes.map((turma) => (
+                          <MenuItem key={turma.id} value={turma.id}>
+                            {turma.name} · {turma.studentCount} alunos
+                            {turma.theoryCatalogId === catalogId ? " · vinculada" : ""}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <Button type="submit" variant="contained" size="small">Vincular à turma</Button>
+                    </Box>
+                  )}
+                  {classes.some((turma) => turma.theoryCatalogId === catalogId) && (
+                    <Typography variant="body2" sx={{ mt: 1.5 }}>
+                      Turmas vinculadas: {classes.filter((turma) => turma.theoryCatalogId === catalogId).map((turma) => turma.name).join(", ")}.
+                    </Typography>
+                  )}
+                </Card>
+              </Box>
+            )}
 
             <Box sx={{ mt: 1.75 }}>
-              <Card title="Vincular a um planejamento" sub="Um catálogo por planejamento">
+              <Card title="Vincular a um planejamento" sub={isPmprCatalog ? "Para alunos que estudam fora da turma" : "Um catálogo por planejamento"}>
+                {isPmprCatalog && eligiblePlans.length === 0 && (
+                  <Alert status="info">
+                    Alunos precisam de um planejamento ativo para acompanhar aulas e desempenho. Crie-o em{" "}
+                    <RouterLink to={ROUTES.teacher.plans}>Planejamentos</RouterLink>.
+                  </Alert>
+                )}
                 <Box
                   component="form"
                   noValidate
@@ -419,17 +645,17 @@ export function TeacherTheory() {
                     name="planId"
                     size="small"
                     label="Planejamento"
-                    defaultValue={plans[0]?.id ?? ""}
+                    defaultValue={eligiblePlans[0]?.id ?? ""}
                     slotProps={{ select: { inputProps: { "data-testid": "link-plan" } } }}
                     sx={{ minWidth: 260 }}
                   >
-                    {plans.map((plan) => (
+                    {eligiblePlans.map((plan) => (
                       <MenuItem key={plan.id} value={plan.id}>
                         {plan.name}
                       </MenuItem>
                     ))}
                   </TextField>
-                  <Button type="submit" variant="contained" size="small" disabled={plans.length === 0}>
+                  <Button type="submit" variant="contained" size="small" disabled={eligiblePlans.length === 0}>
                     Vincular
                   </Button>
                 </Box>
@@ -441,7 +667,7 @@ export function TeacherTheory() {
             </Typography>
             {rules.map((rule) => (
               <SubjectRuleCard
-                key={rule.subjectKey}
+                key={`${catalogId}:${rule.subjectKey}`}
                 rule={rule}
                 onSave={(updated) =>
                   void run(
@@ -463,7 +689,7 @@ export function TeacherTheory() {
                       key={lesson.id}
                       lesson={lesson}
                       onSave={(updated) =>
-                        void run(
+                        run(
                           () => api.saveLesson(updated, newRequestId()),
                           `Aula ${updated.lessonCode} salva.`,
                         )

@@ -6,14 +6,14 @@
  *   1. abrir a meta;  2. confirmar a aula e o caderno;
  *   3. salvar uma página intermediária;  4. fechar/reabrir e conferir;
  *   5. concluir a teoria;  6. registrar questões iniciais;
- *   7. atingir o mínimo e ver a próxima aula liberada;
+ *   7. atingir a meta de prática; o professor publica a próxima aula;
  *   8. conferir a criação da revisão conforme a regra.
  *
  * As regras puras têm teste sem navegador em `lib/domain/theory.test.ts`. Aqui
  * é o caminho completo: tela, contrato e banco.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { count, maybeOne, one } from "../fixtures/db.ts";
+import { count, maybeOne, one, query } from "../fixtures/db.ts";
 import {
   addTheoryCatalog,
   addTheoryGoal,
@@ -54,7 +54,7 @@ async function withCatalog(
 }
 
 test.describe("F-TEO-01 · passos 1 e 2 · abrir a meta e confirmar a aula", () => {
-  test("o modal abre na primeira aula não concluída, com as três abas", async ({
+  test("o modal abre na aula publicada, com materiais e desempenho", async ({
     studentPage,
     scenario,
   }) => {
@@ -70,9 +70,17 @@ test.describe("F-TEO-01 · passos 1 e 2 · abrir a meta e confirmar a aula", () 
     await expect(testId(studentPage, "theory-percent")).toHaveText("0% lido");
 
     const tabs = testId(studentPage, "theory-tabs").getByRole("tab");
-    await expect(tabs).toHaveCount(3);
-    await expect(tabs.nth(0)).toHaveText("Teoria");
-    await expect(tabs.nth(1)).toHaveText("Questões iniciais");
+    await expect(tabs).toHaveCount(4);
+    await expect(tabs.nth(0)).toHaveText("Aula");
+    await expect(tabs.nth(1)).toHaveText("Questões");
+    await expect(tabs.nth(2)).toHaveText("Desempenho");
+    await expect(dialog).toContainText("Cadernos de questões");
+    await expect(testId(studentPage, "lesson-flashcards-link")).toHaveAttribute("href", new RegExp(`aula=${catalog.lessons[0]!.id}`));
+
+    await testId(studentPage, "lesson-flashcards-link").click();
+    await expect(studentPage).toHaveURL(new RegExp(`/aluno/flashcards\\?aula=${catalog.lessons[0]!.id}`));
+    await expect(studentPage.locator("h1")).toContainText("Flashcards · A01");
+    await expect(studentPage.locator("body")).toContainText(catalog.lessons[0]!.title);
   });
 
   test("meta de disciplina fora do catálogo não abre o fluxo", async ({
@@ -135,8 +143,7 @@ test.describe("F-TEO-02 · passos 3 e 4 · salvar a página e reabrir", () => {
 test.describe("F-TEO-03 · encerrar a sessão NÃO conclui a aula", () => {
   /*
    * É a distinção que a v108.2 introduziu e a que mais se perde ao reescrever.
-   * Encerrar guarda a página e fecha o modal; concluir exige a teoria lida E o
-   * mínimo de questões iniciais.
+   * Encerrar guarda a página e fecha o modal; a prática é medida nas questões.
    */
   test("o botão de encerrar grava a página e fecha, e a aula segue aberta", async ({
     studentPage,
@@ -166,8 +173,8 @@ test.describe("F-TEO-03 · encerrar a sessão NÃO conclui a aula", () => {
   });
 });
 
-test.describe("F-TEO-04 · passos 5 a 7 · questões iniciais liberam a próxima aula", () => {
-  test("abaixo do mínimo a aula não fecha; no mínimo, fecha e avança", async ({
+test.describe("F-TEO-04 · passos 5 a 7 · questões medem a prática, professor publica aula", () => {
+  test("abaixo do mínimo a meta não fecha; publicação libera a próxima aula", async ({
     studentPage,
     scenario,
   }) => {
@@ -175,9 +182,9 @@ test.describe("F-TEO-04 · passos 5 a 7 · questões iniciais liberam a próxima
 
     await openTheory(studentPage, goalId);
     await savePage(studentPage, "17");
-    await expect(testId(studentPage, "theory-percent")).toContainText("teoria concluída");
+    await expect(testId(studentPage, "theory-percent")).toContainText("leitura concluída");
 
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await expect(testId(studentPage, "initial-questions-count")).toHaveText("0/15");
 
     // Passo 6: dez questões — abaixo do mínimo.
@@ -185,7 +192,7 @@ test.describe("F-TEO-04 · passos 5 a 7 · questões iniciais liberam a próxima
     await field(studentPage, "correctAnswers").fill("8");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
 
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await expect(testId(studentPage, "initial-questions-count")).toHaveText("10/15");
     expect(
       (
@@ -196,17 +203,12 @@ test.describe("F-TEO-04 · passos 5 a 7 · questões iniciais liberam a próxima
       ).lesson_done,
     ).toBe(false);
 
-    // Passo 7: as cinco que faltavam. A aula fecha e o modal passa à seguinte.
+    // Passo 7: as cinco que faltavam concluem a meta de prática, sem trocar de aula.
     await field(studentPage, "questions").fill("5");
     await field(studentPage, "correctAnswers").fill("4");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
 
-    // O modal AVISA que trocou de aula: sem isso a Aula 02 aparece do nada e a
-    // pessoa acha que perdeu o que fez.
-    await expect(alert(testId(studentPage, "theory-dialog"), "success")).toContainText(
-      "Aula concluída",
-    );
-    await expect(testId(studentPage, "theory-dialog")).toContainText(catalog.lessons[1]!.title);
+    await expect(testId(studentPage, "theory-dialog")).toContainText(catalog.lessons[0]!.title);
 
     const done = await one<{ lesson_done: boolean; initial_questions_done: number }>(
       `select lesson_done, initial_questions_done
@@ -214,13 +216,18 @@ test.describe("F-TEO-04 · passos 5 a 7 · questões iniciais liberam a próxima
       [catalog.lessons[0]!.id],
     );
     expect(done).toMatchObject({ lesson_done: true, initial_questions_done: 15 });
+
+    await query("update public.theory_lessons set published = true where id = $1", [catalog.lessons[1]!.id]);
+    await closeDialog(studentPage);
+    await openTheory(studentPage, goalId);
+    await expect(testId(studentPage, "theory-dialog")).toContainText(catalog.lessons[1]!.title);
   });
 
   test("as questões iniciais entram no ledger da meta", async ({ studentPage, scenario }) => {
     const { goalId } = await withCatalog(scenario);
 
     await openTheory(studentPage, goalId);
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await field(studentPage, "questions").fill("12");
     await field(studentPage, "correctAnswers").fill("9");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
@@ -242,7 +249,7 @@ test.describe("F-TEO-04 · passos 5 a 7 · questões iniciais liberam a próxima
     const { goalId } = await withCatalog(scenario);
 
     await openTheory(studentPage, goalId);
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await field(studentPage, "questions").fill("10");
     await field(studentPage, "correctAnswers").fill("30");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
@@ -266,11 +273,11 @@ test.describe("F-TEO-05 · passo 8 · a revisão nasce pela regra", () => {
     // Fecha a primeira aula.
     await openTheory(studentPage, goalId);
     await savePage(studentPage, "17");
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await field(studentPage, "questions").fill("5");
     await field(studentPage, "correctAnswers").fill("5");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
-    await expect(alert(testId(studentPage, "theory-dialog"), "success")).toBeVisible();
+    await expect(testId(studentPage, "initial-questions-count")).toHaveText("5/5");
 
     expect(
       await count("select count(*) from public.theory_reviews where theory_lesson_id = $1", [
@@ -278,12 +285,14 @@ test.describe("F-TEO-05 · passo 8 · a revisão nasce pela regra", () => {
       ]),
     ).toBe(1);
 
-    // Fecha a segunda: agora a revisão da primeira VENCEU (espaçamento 1).
-    // O modal já trocou de aula, mas continua na aba de questões — voltar à
-    // Teoria é o que a pessoa faria, e é o que o teste faz.
-    await tab(studentPage, "Teoria");
+    // O professor disponibiliza a segunda aula, mesmo sem usar o resultado
+    // das questões como trava.
+    await query("update public.theory_lessons set published = true where id = $1", [catalog.lessons[1]!.id]);
+    await closeDialog(studentPage);
+    await openTheory(studentPage, goalId);
+    await tab(studentPage, "Aula");
     await savePage(studentPage, "29");
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await field(studentPage, "questions").fill("5");
     await field(studentPage, "correctAnswers").fill("5");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
@@ -293,8 +302,11 @@ test.describe("F-TEO-05 · passo 8 · a revisão nasce pela regra", () => {
     await expect(vencida).toHaveCount(1);
     await expect(vencida).toContainText(catalog.lessons[0]!.title);
 
-    // E mesmo vencida, a terceira aula está aberta: fila, não muro.
-    await tab(studentPage, "Teoria");
+    // Mesmo vencida, o professor pode disponibilizar a terceira aula.
+    await query("update public.theory_lessons set published = true where id = $1", [catalog.lessons[2]!.id]);
+    await closeDialog(studentPage);
+    await openTheory(studentPage, goalId);
+    await tab(studentPage, "Aula");
     await expect(testId(studentPage, "theory-dialog")).toContainText(catalog.lessons[2]!.title);
   });
 
@@ -306,11 +318,11 @@ test.describe("F-TEO-05 · passo 8 · a revisão nasce pela regra", () => {
 
     await openTheory(studentPage, goalId);
     await savePage(studentPage, "17");
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await field(studentPage, "questions").fill("5");
     await field(studentPage, "correctAnswers").fill("5");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
-    await expect(alert(testId(studentPage, "theory-dialog"), "success")).toBeVisible();
+    await expect(testId(studentPage, "initial-questions-count")).toHaveText("5/5");
 
     await tab(studentPage, "Revisões");
     await testId(studentPage, "theory-review").getByRole("button", { name: "Registrar" }).click();
@@ -330,13 +342,8 @@ test.describe("F-TEO-05 · passo 8 · a revisão nasce pela regra", () => {
   });
 });
 
-test.describe("F-TEO-06 · disciplina fora do catálogo auditado", () => {
-  /*
-   * Matemática Financeira e TI ficaram de fora da auditoria da v108.5. A v2
-   * RECUSA inventar número de página e mostra o diagnóstico. Inventar faz o
-   * aluno ler o PDF errado e achar que a culpa é dele.
-   */
-  test("o modal mostra o diagnóstico em vez do controle por página", async ({
+test.describe("F-TEO-06 · aula sem intervalo de páginas", () => {
+  test("o modal mantém os materiais e questões sem mostrar página inventada", async ({
     studentPage,
     scenario,
   }) => {
@@ -345,28 +352,25 @@ test.describe("F-TEO-06 · disciplina fora do catálogo auditado", () => {
 
     await openTheory(studentPage, goalId);
 
-    await expect(alert(testId(studentPage, "theory-dialog"), "warning")).toContainText(
-      "ainda não está no catálogo auditado",
-    );
-    // Sem abas e sem campo de página: não há progresso por página a oferecer.
-    await expect(testId(studentPage, "theory-tabs")).toHaveCount(0);
+    await expect(testId(studentPage, "theory-tabs")).toBeVisible();
+    await expect(testId(studentPage, "theory-dialog")).toContainText("não tem páginas mapeadas");
     await expect(field(studentPage, "currentPage")).toHaveCount(0);
   });
 
-  test("a tela de controle marca a disciplina, e não a esconde", async ({
+  test("a tela de aulas mostra a disciplina e o material publicado", async ({
     studentPage,
     scenario,
   }) => {
     await addTheoryCatalog(scenario, { withUnaudited: true });
 
     await studentPage.goto("/aluno/teoria");
-    await expect(studentPage.locator("h1")).toHaveText("Estudo da teoria");
+    await expect(studentPage.locator("h1")).toHaveText("Aulas");
 
-    const naoAuditada = studentPage.locator(
-      '[data-testid="theory-subject"][data-diagnosis="subject_not_audited"]',
+    const disciplina = studentPage.locator(
+      '[data-testid="theory-subject"][data-subject="matematica financeira"][data-diagnosis="ok"]',
     );
-    await expect(naoAuditada).toHaveCount(1);
-    await expect(alert(studentPage, "warning")).toContainText("Fora do catálogo auditado");
+    await expect(disciplina).toHaveCount(1);
+    await expect(studentPage.locator("body")).toContainText("Aula 01 — Matemática Financeira");
   });
 });
 
@@ -389,14 +393,16 @@ test.describe("F-TEO-07 · o controle por disciplina", () => {
     // Fecha uma aula e a tela acompanha.
     await openTheory(studentPage, goalId);
     await savePage(studentPage, "17");
-    await tab(studentPage, "Questões iniciais");
+    await tab(studentPage, "Questões");
     await field(studentPage, "questions").fill("5");
     await field(studentPage, "correctAnswers").fill("5");
     await testId(studentPage, "initial-questions-form").getByRole("button").click();
-    await expect(alert(testId(studentPage, "theory-dialog"), "success")).toBeVisible();
+    await expect(testId(studentPage, "initial-questions-count")).toHaveText("5/5");
+
+    await query("update public.theory_lessons set published = true where id = $1", [catalog.lessons[1]!.id]);
 
     await studentPage.goto("/aluno/teoria");
-    await expect(studentPage.locator('[data-testid="theory-subject"]')).toContainText("1/4");
+    await expect(studentPage.locator('[data-testid="theory-subject"]')).toContainText("1/2");
     await expect(studentPage.locator('[data-testid="card"]').first()).toContainText(
       catalog.lessons[1]!.title,
     );

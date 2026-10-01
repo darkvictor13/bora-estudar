@@ -34,6 +34,7 @@ interface ClassRow {
   id: string;
   name: string;
   description: string | null;
+  theory_catalog_id: string | null;
 }
 
 /**
@@ -49,7 +50,7 @@ export async function listClasses(): Promise<readonly TeacherClass[]> {
   const [classes, members] = await Promise.all([
     supabase
       .from("classes")
-      .select("id,name,description")
+      .select("id,name,description,theory_catalog_id")
       .eq("teacher_id", session.profileId)
       .order("name"),
     supabase.from("class_students").select("class_id").eq("teacher_id", session.profileId),
@@ -67,12 +68,13 @@ export async function listClasses(): Promise<readonly TeacherClass[]> {
     id: row.id,
     name: row.name,
     description: row.description,
+    theoryCatalogId: row.theory_catalog_id,
     studentCount: countByClass.get(row.id) ?? 0,
   }));
 }
 
 function toClass(row: ClassRow, studentCount: number): TeacherClass {
-  return { id: row.id, name: row.name, description: row.description, studentCount };
+  return { id: row.id, name: row.name, description: row.description, theoryCatalogId: row.theory_catalog_id, studentCount };
 }
 
 export function createClass(input: ClassInput, requestId: RequestId): Promise<Result<TeacherClass>> {
@@ -89,7 +91,7 @@ export function createClass(input: ClassInput, requestId: RequestId): Promise<Re
         name: input.name.trim(),
         description: input.description?.trim() || null,
       })
-      .select("id,name,description")
+      .select("id,name,description,theory_catalog_id")
       .single();
 
     if (error) return failure(translateDbError(error));
@@ -116,7 +118,7 @@ export function renameClass(
       .from("classes")
       .update({ name: input.name.trim(), description: input.description?.trim() || null })
       .eq("id", classId)
-      .select("id,name,description")
+      .select("id,name,description,theory_catalog_id")
       .maybeSingle();
 
     if (error) return failure(translateDbError(error));
@@ -132,6 +134,31 @@ export function renameClass(
 
     return done(toClass(data as ClassRow, (members.data ?? []).length));
   });
+}
+
+/** A FK composta impede ligar um catálogo de outro professor à turma. */
+export async function setClassTheoryCatalog(
+  classId: Uuid,
+  catalogId: Uuid | null,
+): Promise<Result<TeacherClass>> {
+  const session = await requireSession();
+  const { data, error } = await supabase
+    .from("classes")
+    .update({ theory_catalog_id: catalogId })
+    .eq("id", classId)
+    .eq("teacher_id", session.profileId)
+    .select("id,name,description,theory_catalog_id")
+    .maybeSingle();
+
+  if (error) return failure(translateDbError(error));
+  if (!data) return fail("not_found", "Turma não encontrada, ou não é sua.");
+
+  const members = await supabase.from("class_students")
+    .select("student_id")
+    .eq("class_id", classId)
+    .eq("teacher_id", session.profileId);
+  if (members.error) return failure(translateDbError(members.error));
+  return done(toClass(data as ClassRow, (members.data ?? []).length));
 }
 
 export function deleteClass(classId: Uuid, requestId: RequestId): Promise<Result<void>> {

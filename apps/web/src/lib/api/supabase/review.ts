@@ -158,28 +158,22 @@ export async function saveReviewSpacing(
 
   const session = await requireSession();
 
-  const { data: link, error: linkError } = await supabase
-    .from("study_plan_theory_catalogs")
-    .select("catalog_id")
-    .eq("study_plan_id", input.studyPlanId)
-    .maybeSingle();
-
-  if (linkError) return failure(translateDbError(linkError));
-  if (!link) {
+  const context = await loadTheoryContext(input.studyPlanId);
+  if (!context.catalogId) {
     return fail("conflict", "Este planejamento não tem catálogo de teoria vinculado.");
   }
 
   const { data: lesson } = await supabase
     .from("theory_lessons")
     .select("subject")
-    .eq("catalog_id", link.catalog_id)
+    .eq("catalog_id", context.catalogId)
     .eq("subject_key", input.subjectKey)
     .limit(1)
     .maybeSingle();
 
   const { error } = await supabase.from("theory_review_rules").upsert(
     {
-      catalog_id: link.catalog_id,
+      catalog_id: context.catalogId,
       teacher_id: session.profileId,
       subject: lesson?.subject ?? input.subjectKey,
       subject_key: input.subjectKey,

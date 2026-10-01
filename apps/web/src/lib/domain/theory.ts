@@ -1,20 +1,9 @@
 /**
  * O MOTOR DA TEORIA, PURO — o `theory-engine.js` da v2, sem DOM e sem rede.
  *
- * O fluxo que ele governa é o da v108.2, e a ordem importa:
- *
- *     aula/PDF → progresso real por página → teoria concluída
- *              → questões iniciais → aula concluída → próxima aula
- *
- * Duas coisas que se perdem ao reescrever, e que os testes seguram:
- *
- * 1. **Encerrar a sessão não conclui a aula.** Encerrar guarda a página e
- *    fecha o modal. Concluir exige a teoria lida E o mínimo de questões
- *    iniciais. Confundir os dois faz o aluno pular metade do conteúdo achando
- *    que terminou.
- * 2. **Revisão vencida não bloqueia o avanço.** Ela entra numa fila própria.
- *    Bloquear transformaria um lembrete em muro, e quem está atrasado pararia
- *    de avançar exatamente quando mais precisa.
+ * O professor publica as aulas conforme a turma presencial avança. Leitura
+ * por página é opcional; a meta de prática usa as questões respondidas.
+ * Revisões entram numa fila própria e não bloqueiam a publicação de aulas.
  */
 
 /* ------------------------------------------------------------------ *
@@ -173,11 +162,8 @@ export interface CurrentLesson {
 }
 
 /**
- * A aula em que o aluno está: a primeira que ele ainda não concluiu.
- *
- * Quando não sobra nenhuma, devolve a ÚLTIMA com `courseFinished`. Devolver
- * `null` faria a tela mostrar "sem aula" para quem terminou a disciplina — que
- * é o oposto do que aconteceu.
+ * A aula atual é a última publicada pelo professor, independentemente de
+ * quantas questões o aluno respondeu nas anteriores.
  */
 export function currentLesson(
   lessons: readonly EngineLesson[],
@@ -186,25 +172,23 @@ export function currentLesson(
   const ordered = sortLessons(lessons);
   if (ordered.length === 0) return null;
 
-  for (const lesson of ordered) {
-    if (!progressById.get(lesson.id)?.lessonDone) return { lesson, courseFinished: false };
-  }
-  return { lesson: ordered[ordered.length - 1]!, courseFinished: true };
+  return {
+    lesson: ordered[ordered.length - 1]!,
+    courseFinished: ordered.every((lesson) => progressById.get(lesson.id)?.lessonDone),
+  };
 }
 
 /**
- * A aula fecha com as DUAS coisas: teoria lida e mínimo de questões iniciais.
- *
- * É o passo 7 do piloto da v108.2, e é onde a próxima aula é liberada.
+ * A meta de prática da aula depende das questões. Leitura e materiais são apoio.
+ * A próxima aula é publicada pelo professor, sem depender deste resultado.
  */
 export function isLessonComplete(
-  lesson: EngineLesson,
+  _lesson: EngineLesson,
   progress: EngineProgress | null,
   initialQuestionsRequired: number,
 ): boolean {
   if (!progress) return false;
-  const theoryDone = lesson.hasTheory ? progress.theoryDone : true;
-  return theoryDone && progress.initialQuestionsDone >= initialQuestionsRequired;
+  return progress.initialQuestionsDone >= initialQuestionsRequired;
 }
 
 /* ------------------------------------------------------------------ *
@@ -269,31 +253,17 @@ export type Diagnosis =
   | { kind: "no_catalog_linked" };
 
 /**
- * POR QUE UMA AULA PODE NÃO TER PÁGINA, e por que isso não é um erro a esconder.
- *
- * O catálogo auditado não cobre todas as disciplinas — Matemática Financeira e
- * TI ficaram de fora na v108.5. A v2 RECUSA INVENTAR número de página nesse
- * caso e mostra o diagnóstico no lugar do controle. Inventar faz o aluno ler o
- * PDF errado e achar que a culpa é dele.
- *
- * A falta é descoberta pelo DADO, não por uma lista de exceções escrita à mão:
- * disciplina cujas aulas todas vêm sem intervalo de teoria não foi auditada.
- * Uma lista fixa envelheceria no dia em que a auditoria cobrisse mais uma.
+ * Ausência de páginas auditadas só desliga o controle de leitura por página.
+ * A aula e seus recursos continuam disponíveis para a prática de questões.
  */
 export function diagnose(
   subject: string,
   lessons: readonly EngineLesson[],
-  lesson: EngineLesson | null,
+  _lesson: EngineLesson | null,
   hasCatalog: boolean,
-  lessonTitle: string,
+  _lessonTitle: string,
 ): Diagnosis {
   if (!hasCatalog) return { kind: "no_catalog_linked" };
   if (lessons.length === 0) return { kind: "subject_not_audited", subject };
-  if (lessons.every((candidate) => !candidate.hasTheory)) {
-    return { kind: "subject_not_audited", subject };
-  }
-  if (lesson && lesson.hasTheory && lesson.theoryEndPage === null) {
-    return { kind: "lesson_without_pages", lesson: lessonTitle };
-  }
   return { kind: "ok" };
 }

@@ -83,6 +83,10 @@ export const components: Components<Omit<Theme, 'components'>> = {
         border: `1px solid ${theme.vars.palette.surface.border}`,
         borderRadius: radius.lg,
         transition: transition(['background-color', 'border-color']),
+        ...theme.applyStyles('light', {
+          backgroundImage: `linear-gradient(145deg, ${theme.vars.palette.surface.overlay}, ${theme.vars.palette.surface.raised})`,
+          boxShadow: '0 4px 12px -10px rgba(18, 60, 50, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+        }),
       }),
       outlined: ({ theme }) => ({ borderColor: theme.vars.palette.surface.border }),
     },
@@ -96,8 +100,14 @@ export const components: Components<Omit<Theme, 'components'>> = {
         border: `1px solid ${theme.vars.palette.surface.border}`,
         borderRadius: radius.lg,
         transition: transition(['border-color', 'box-shadow', 'transform', 'background-color']),
-        // No claro o card já nasce com sombra; no preto, sombra não aparece.
-        ...theme.applyStyles('light', { boxShadow: theme.vars.palette.elevation.sm }),
+        ...theme.applyStyles('dark', {
+          backgroundImage: `radial-gradient(ellipse at 100% 0%, ${theme.vars.palette.accent.primarySoft}, transparent 58%), linear-gradient(145deg, ${theme.vars.palette.surface.overlay}, ${theme.vars.palette.surface.raised} 62%, ${theme.vars.palette.surface.sunken})`,
+          boxShadow: '0 16px 32px -25px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+        }),
+        ...theme.applyStyles('light', {
+          backgroundImage: `linear-gradient(145deg, ${theme.vars.palette.surface.overlay}, ${theme.vars.palette.surface.raised} 68%, ${theme.vars.palette.surface.sunken})`,
+          boxShadow: '0 8px 18px -13px rgba(18, 60, 50, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+        }),
       }),
     },
   },

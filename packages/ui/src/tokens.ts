@@ -2,7 +2,7 @@
  * Design tokens — fonte única de verdade.
  *
  * Duas camadas:
- *  1. ESCALAS cruas (yellow / aqua / neutral) — iguais nos dois modos.
+ *  1. ESCALAS cruas (aqua / petrol / neutral) — iguais nos dois modos.
  *  2. SCHEMES (light / dark) — o papel que cada cor cumpre em cada modo.
  *
  * Componentes nunca leem a camada 1 direto: leem `theme.vars.palette.*`,
@@ -30,25 +30,18 @@ export const amber = {
   900: '#5A3402',
 } as const;
 
-/**
- * Verde-petróleo (matiz 188°) — cor de apoio.
- *
- * É uma cor escura por natureza: o "petróleo" de verdade mora nos degraus
- * 700–900. Por isso ela entra de dois jeitos diferentes:
- *  - como FILL (`petrol[700]`), com texto branco por cima, igual nos dois modos;
- *  - como ACENTO de texto, que no escuro precisa subir até o 400 para ser lido.
- */
+/** Verde folha de apoio, mais fechado que o verde principal. */
 export const petrol = {
-  50: '#EEF7F9',
-  100: '#D3EAEE',
-  200: '#A4D7DF',
-  300: '#73C6D3',
-  400: '#46BCCE', // acento do modo escuro (9.3:1 no preto)
-  500: '#22AABF',
-  600: '#128EA1',
-  700: '#0A6E7F', // o petróleo propriamente dito — fill nos dois modos
-  800: '#08505E',
-  900: '#073640',
+  50: '#EEF8F4',
+  100: '#D8EEE5',
+  200: '#B4DFCD',
+  300: '#8DCDB5',
+  400: '#66BC9A',
+  500: '#3EA77F',
+  600: '#22865F',
+  700: '#146A4A',
+  800: '#0C5037',
+  900: '#073A29',
 } as const;
 
 /* --- Paleta anterior (amarelo vivo + turquesa). Nada aponta mais para elas;
@@ -148,8 +141,8 @@ export interface SchemeTokens {
   text: { primary: string; secondary: string; disabled: string };
   /**
    * Acentos prontos para uso. `primary`/`secondary` são a versão LEGÍVEL
-   * do amarelo e do verde naquele modo — no claro não são os tons vivos,
-   * porque #FFD400 dá 1.4:1 no branco.
+   * do verde naquele modo. O verde claro da marca precisa fechar como texto
+   * sobre superfícies brancas.
    */
   accent: {
     primary: string;
@@ -163,7 +156,7 @@ export interface SchemeTokens {
     secondaryBorder: string;
     focusRing: string;
   };
-  /** Fills da marca — vivos nos DOIS modos, sempre com texto escuro por cima. */
+  /** Preenchimentos da marca, com texto contrastante em cada modo. */
   fill: {
     primary: string;
     primaryHover: string;
@@ -200,12 +193,8 @@ export interface SchemeTokens {
   /**
    * AS CORES DE GRÁFICO, QUE NÃO SÃO AS DE INTERFACE.
    *
-   * `series` é o petróleo 600 nos DOIS modos, e o valor foi escolhido por
-   * validação, não por gosto: é o único degrau da escala que passa nas seis
-   * checagens do método de visualização — faixa de luminosidade, piso de
-   * croma, contraste contra a superfície — contra o branco E contra o preto.
-   * O 700 (`fill.secondary`) reprova o piso de croma e lê como cinza num
-   * traço fino; o 400 sai da faixa no escuro.
+   * `series` segue o verde principal. O degrau muda com o tema para manter
+   * visibilidade contra a superfície clara ou escura.
    *
    * Uma cor só porque todo gráfico deste produto tem UMA SÉRIE. Duas séries
    * pediriam a segunda fatia da paleta categórica, e aí a validação precisa
@@ -218,32 +207,32 @@ export interface SchemeTokens {
   };
 }
 
-/** Modo escuro — o padrão da marca: preto puro, âmbar, verde-petróleo. */
+/** Modo escuro da Fronteira: grafite profundo com funções em verde. */
 export const dark: SchemeTokens = {
   surface: {
-    base: neutral[1000],
-    raised: neutral[900],
-    overlay: neutral[800],
-    sunken: neutral[950],
-    border: 'rgba(255, 255, 255, 0.10)',
-    borderStrong: 'rgba(255, 255, 255, 0.18)',
+    base: '#0C1014',
+    raised: '#171D20',
+    overlay: '#222B2C',
+    sunken: '#090D10',
+    border: 'rgba(202, 218, 208, 0.18)',
+    borderStrong: 'rgba(202, 218, 208, 0.32)',
     controlBorder: neutral[300],  // 6.2:1 no preto
     hover: 'rgba(255, 255, 255, 0.06)',
-    selected: hexToRgba(amber[500], 0.12),
+    selected: hexToRgba(petrol[400], 0.16),
     scrim: 'rgba(0, 0, 0, 0.72)',
   },
   text: {
-    primary: neutral[50],
-    secondary: neutral[200],
+    primary: '#F7FAF7',
+    secondary: '#C5D0C7',
     disabled: neutral[400],
   },
   accent: {
-    primary: amber[500],
-    primarySoft: hexToRgba(amber[500], 0.14),
-    primarySoftHover: hexToRgba(amber[500], 0.2),
-    primaryBorder: hexToRgba(amber[500], 0.45),
-    primaryFocus: `0 0 0 3px ${hexToRgba(amber[500], 0.18)}`,
-    // O petróleo sobe até o 400 aqui: abaixo disso não se lê no preto.
+    primary: '#81D2A8',
+    primarySoft: hexToRgba(petrol[400], 0.12),
+    primarySoftHover: hexToRgba(petrol[400], 0.20),
+    primaryBorder: hexToRgba(petrol[300], 0.42),
+    primaryFocus: `0 0 0 3px ${hexToRgba(petrol[300], 0.30)}`,
+    // O verde de apoio sobe até o 400 para aparecer no fundo escuro.
     secondary: petrol[400],
     secondarySoft: hexToRgba(petrol[500], 0.18),
     secondarySoftHover: hexToRgba(petrol[500], 0.26),
@@ -251,18 +240,12 @@ export const dark: SchemeTokens = {
     focusRing: `0 0 0 3px ${hexToRgba(petrol[400], 0.45)}`,
   },
   fill: {
-    primary: amber[500],
-    primaryHover: amber[400],
-    primaryActive: amber[600],
-    primaryText: '#1A1400',
+    primary: '#0D4D36',
+    primaryHover: '#14664A',
+    primaryActive: '#093C2B',
+    primaryText: neutral[0],
     secondary: petrol[700],
-    // ESTE PREENCHIMENTO ESCURECE NO HOVER, ao contrário do âmbar.
-    //
-    // O texto sobre ele é branco: clarear o fundo derruba o contraste em vez
-    // de aumentá-lo. `petrol[600]` dava 3.88:1 com branco por cima — reprova
-    // AA num estado que é normal, não excepcional. Escurecer leva a 9.1:1 e
-    // mantém a diferença visível. O âmbar clareia porque lá o texto é
-    // quase-preto, e clarear é que aumenta o contraste.
+    // O texto é branco; o hover escurece para manter o contraste.
     secondaryHover: petrol[800],
     secondaryActive: petrol[900],
     secondaryText: neutral[0],
@@ -275,18 +258,18 @@ export const dark: SchemeTokens = {
     warning: '#FF8A3D',
     warningSoft: 'rgba(255, 138, 61, 0.10)',
     warningBorder: 'rgba(255, 138, 61, 0.40)',
-    // Azul puxado para o violeta, para se separar do petróleo.
+    // Azul para separar informação das ações verdes.
     info: '#6E9BFF',
     infoSoft: 'rgba(110, 155, 255, 0.10)',
     infoBorder: 'rgba(110, 155, 255, 0.40)',
-    // Verde de verdade (matiz 150): petróleo é ambíguo demais para "sucesso".
+    // O estado de sucesso permanece distinguível do verde de ação.
     success: '#2FD38C',
     successSoft: 'rgba(47, 211, 140, 0.10)',
     successBorder: 'rgba(47, 211, 140, 0.40)',
     contrastText: neutral[1000],
   },
   chart: {
-    series: petrol[600],
+    series: petrol[400],
     grid: 'rgba(255, 255, 255, 0.10)',
     axis: neutral[200],
   },
@@ -296,44 +279,38 @@ export const dark: SchemeTokens = {
     md: '0 4px 12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.07)',
     lg: '0 12px 32px rgba(0, 0, 0, 0.70), 0 0 0 1px rgba(255, 255, 255, 0.08)',
     xl: '0 24px 64px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.09)',
-    glowPrimary: `0 0 0 1px ${hexToRgba(amber[500], 0.4)}, 0 6px 24px ${hexToRgba(amber[500], 0.22)}`,
+    glowPrimary: `0 0 0 1px ${hexToRgba(petrol[400], 0.35)}, 0 6px 24px ${hexToRgba(petrol[500], 0.16)}`,
     glowSecondary: `0 0 0 1px ${hexToRgba(petrol[400], 0.4)}, 0 6px 24px ${hexToRgba(petrol[500], 0.25)}`,
   },
 };
 
-/**
- * Modo claro.
- *
- * Os fills são os MESMOS dos dois modos — âmbar `#FFB700` com texto quase-preto
- * e petróleo `#0A6E7F` com texto branco passam em qualquer fundo. O que muda é
- * o acento de texto: âmbar vivo dá 1.6:1 no branco e precisa fechar até o 800.
- */
+/** Modo claro da Fronteira: superfícies suaves e verde legível. */
 export const light: SchemeTokens = {
   surface: {
-    base: neutral[50],
+    base: '#F2F4F5',
     raised: neutral[0],
     overlay: neutral[0],
-    sunken: neutral[75],
-    border: hexToRgba(ink, 0.12),
-    borderStrong: hexToRgba(ink, 0.24),
+    sunken: '#E7EAED',
+    border: hexToRgba(ink, 0.18),
+    borderStrong: hexToRgba(ink, 0.32),
     // Um degrau mais fechado que no escuro: `neutral[300]` dá 2.99:1 sobre
     // `sunken`, e 2.99 reprova. O 400 dá 5.7:1 ali e 6.4:1 no branco.
     controlBorder: neutral[400],
     hover: hexToRgba(ink, 0.05),
-    selected: hexToRgba(amber[800], 0.1),
+    selected: hexToRgba(petrol[700], 0.10),
     scrim: hexToRgba(ink, 0.45),
   },
   text: {
-    primary: '#1A1C1E',
-    secondary: neutral[400],
+    primary: neutral[800],
+    secondary: neutral[500],
     disabled: '#9AA0A8',
   },
   accent: {
-    primary: amber[800],
-    primarySoft: hexToRgba(amber[500], 0.22),
-    primarySoftHover: hexToRgba(amber[500], 0.34),
-    primaryBorder: hexToRgba(amber[700], 0.55),
-    primaryFocus: `0 0 0 3px ${hexToRgba(amber[600], 0.3)}`,
+    primary: petrol[800],
+    primarySoft: hexToRgba(petrol[600], 0.11),
+    primarySoftHover: hexToRgba(petrol[600], 0.20),
+    primaryBorder: hexToRgba(petrol[800], 0.42),
+    primaryFocus: `0 0 0 3px ${hexToRgba(petrol[600], 0.28)}`,
     secondary: petrol[700],
     secondarySoft: hexToRgba(petrol[500], 0.16),
     secondarySoftHover: hexToRgba(petrol[500], 0.26),
@@ -341,10 +318,10 @@ export const light: SchemeTokens = {
     focusRing: `0 0 0 3px ${hexToRgba(petrol[600], 0.4)}`,
   },
   fill: {
-    primary: amber[500],
-    primaryHover: amber[400],
-    primaryActive: amber[600],
-    primaryText: '#1A1400',
+    primary: petrol[800],
+    primaryHover: petrol[900],
+    primaryActive: '#052D20',
+    primaryText: neutral[0],
     secondary: petrol[700],
     // Escurece no hover pelo mesmo motivo do escuro — ver o comentário lá.
     secondaryHover: petrol[800],
@@ -366,11 +343,9 @@ export const light: SchemeTokens = {
     successBorder: 'rgba(10, 110, 68, 0.32)',
     contrastText: neutral[0],
   },
-  // O MESMO petróleo 600 do modo escuro: é o único degrau que passa nas seis
-  // checagens contra o branco E contra o preto, então a série não muda de cor
-  // quando o tema muda — e quem aprendeu a ler o gráfico num modo o lê no outro.
+  // Tom fechado para aparecer sobre a superfície clara.
   chart: {
-    series: petrol[600],
+    series: petrol[700],
     grid: hexToRgba(ink, 0.1),
     axis: neutral[400],
   },
@@ -379,7 +354,7 @@ export const light: SchemeTokens = {
     md: `0 4px 12px ${hexToRgba(ink, 0.1)}, 0 0 0 1px ${hexToRgba(ink, 0.06)}`,
     lg: `0 12px 32px ${hexToRgba(ink, 0.12)}, 0 0 0 1px ${hexToRgba(ink, 0.07)}`,
     xl: `0 24px 64px ${hexToRgba(ink, 0.16)}, 0 0 0 1px ${hexToRgba(ink, 0.08)}`,
-    glowPrimary: `0 0 0 1px ${hexToRgba(amber[700], 0.5)}, 0 6px 20px ${hexToRgba(amber[500], 0.4)}`,
+    glowPrimary: `0 0 0 1px ${hexToRgba(petrol[800], 0.40)}, 0 6px 20px ${hexToRgba(petrol[600], 0.18)}`,
     glowSecondary: `0 0 0 1px ${hexToRgba(petrol[700], 0.45)}, 0 6px 20px ${hexToRgba(petrol[600], 0.3)}`,
   },
 };

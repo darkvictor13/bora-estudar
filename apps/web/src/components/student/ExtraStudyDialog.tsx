@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import { Alert, Field } from "@bora/ui";
 import { useState } from "react";
 
+import { clearRecordedStudyTimer, pauseStudyTimerForRecord } from "@/components/StudyTimer";
 import type { ApiError, ExtraStudyInput, ExtraStudyKind } from "@/lib/api";
 import { newRequestId } from "@/lib/api";
 
@@ -54,6 +55,8 @@ export function ExtraStudyDialog({
   const [requestId, setRequestId] = useState(newRequestId);
   const [error, setError] = useState<ApiError | null>(null);
   const [pending, setPending] = useState(false);
+  const [linkedTimerMinutes] = useState(() => open ? pauseStudyTimerForRecord() : 0);
+  const [minutes, setMinutes] = useState(() => String(linkedTimerMinutes || 30));
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,6 +85,7 @@ export function ExtraStudyDialog({
     }
     setRequestId(newRequestId());
     setError(null);
+    if (linkedTimerMinutes > 0) clearRecordedStudyTimer();
     onClose();
   }
 
@@ -98,6 +102,7 @@ export function ExtraStudyDialog({
       <Box component="form" noValidate onSubmit={handleSubmit}>
         <DialogContent>
           {error && <Alert status="error">{error.message}</Alert>}
+          {linkedTimerMinutes > 0 && <Alert status="info">Cronômetro pausado e vinculado: {linkedTimerMinutes} min. Ao lançar, esse tempo será zerado no cronômetro.</Alert>}
 
           <TextField
             select
@@ -142,7 +147,8 @@ export function ExtraStudyDialog({
             type="number"
             inputMode="numeric"
             min={0}
-            defaultValue={30}
+            value={minutes}
+            onChange={(event) => setMinutes(event.target.value)}
             invalid={error?.field === "minutes"}
           />
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>

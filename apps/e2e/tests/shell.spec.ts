@@ -59,7 +59,7 @@ test.describe("F-UI-02 · o estado persiste", () => {
     await expect(sidebar(studentPage)).toHaveAttribute("data-collapsed", "true");
 
     // Navegação de SPA: o layout não remonta, mas o estado tem de acompanhar.
-    await studentPage.goto("/aluno/cadernos");
+    await studentPage.goto("/aluno/resumos-flash");
     await expect(sidebar(studentPage)).toHaveAttribute("data-collapsed", "true");
 
     await studentPage.reload();
@@ -113,13 +113,13 @@ test.describe("F-UI-07 · a tela estreita recolhe à força", () => {
 
 test.describe("F-UI-08 · o item atual é o da rota", () => {
   test("a rota mais específica ganha, e só ela", async ({ studentPage }) => {
-    await studentPage.goto("/aluno/cadernos");
+    await studentPage.goto("/aluno/resumos-flash");
     await expect(studentPage.locator("h1")).toBeVisible();
 
-    // "/aluno" é prefixo de "/aluno/cadernos": sem casar o caminho mais longo,
-    // os dois ficariam marcados e "Metas" mentiria em toda subpágina.
+    // "/aluno" é prefixo de "/aluno/resumos-flash": sem casar o caminho mais longo,
+    // os dois ficariam marcados e "Minha semana" mentiria em toda subpágina.
     await expect(activeNavItem(studentPage)).toHaveCount(1);
-    await expect(activeNavItem(studentPage)).toContainText("Cadernos TEC");
+    await expect(activeNavItem(studentPage)).toContainText("Resumos Flash");
     await expect(activeNavItem(studentPage)).toHaveAttribute("aria-current", "page");
   });
 

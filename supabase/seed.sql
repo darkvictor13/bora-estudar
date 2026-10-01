@@ -183,6 +183,57 @@ begin
   cross join generate_series(1, 5) g
   on conflict do nothing;
 
+  -- A primeira aula funciona como vitrine completa da experiência do aluno.
+  -- O PDF fica no próprio aplicativo; os cadernos abrem nas plataformas de
+  -- questões e os cartões são revisados sem depender de serviço externo.
+  update public.theory_lessons
+     set pdf_file = 'aula-demonstrativa-direitos-fundamentais.pdf',
+         material_blocks = '[
+           {
+             "title": "Direitos individuais e coletivos",
+             "pdf": "/materials/demo/aula-demonstrativa-direitos-fundamentais.pdf",
+             "tecQuestions": "https://www.tecconcursos.com.br/s/Q6nMte",
+             "qcQuestions": "https://www.qconcursos.com/questoes-de-concursos/disciplinas/direito-direito-constitucional/direitos-individuais/questoes"
+           },
+           {
+             "title": "Remédios constitucionais e garantias",
+             "pdf": "/materials/demo/aula-demonstrativa-direitos-fundamentais.pdf",
+             "tecQuestions": "https://www.tecconcursos.com.br/s/Q6nMtf",
+             "qcQuestions": "https://www.qconcursos.com/questoes-de-concursos/disciplinas/direito-direito-constitucional/direitos-individuais-remedios-constitucionais-e-garantias-processuais/questoes"
+           }
+         ]'::jsonb,
+         flashcard_cards = '[
+           {
+             "id": "88888888-8888-4888-8888-000000000011",
+             "topic": "Direitos fundamentais",
+             "front": "Os direitos e garantias fundamentais se limitam aos brasileiros natos. Certo ou errado?",
+             "back": "Errado. A Constituição protege brasileiros e estrangeiros nos termos do art. 5º, além de reconhecer direitos em outros dispositivos."
+           },
+           {
+             "id": "88888888-8888-4888-8888-000000000012",
+             "topic": "Habeas corpus",
+             "front": "Qual remédio constitucional protege a liberdade de locomoção contra ilegalidade ou abuso de poder?",
+             "back": "O habeas corpus, que pode ser preventivo ou repressivo conforme a ameaça ou a restrição já ocorrida."
+           },
+           {
+             "id": "88888888-8888-4888-8888-000000000013",
+             "topic": "Habeas data",
+             "front": "Qual é a finalidade básica do habeas data?",
+             "back": "Assegurar conhecimento ou retificação de informações pessoais constantes de registros ou bancos de dados governamentais ou de caráter público."
+           },
+           {
+             "id": "88888888-8888-4888-8888-000000000014",
+             "topic": "Ação popular",
+             "front": "Quem possui legitimidade constitucional para propor ação popular?",
+             "back": "O cidadão, para buscar a anulação de ato lesivo aos bens e valores protegidos pela Constituição."
+           }
+         ]'::jsonb,
+         note = 'Aula demonstrativa completa com PDF, flashcards e cadernos TEC e QConcursos.',
+         published = true
+   where catalog_id = '55555555-5555-4555-8555-555555555555'
+     and subject_key = 'direito constitucional'
+     and position = 1;
+
   -- A disciplina NÃO auditada: aulas sem intervalo de teoria.
   insert into public.theory_lessons (
     catalog_id, teacher_id, subject, subject_key, lesson_code, position, title,

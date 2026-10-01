@@ -1,0 +1,108 @@
+{
+  "totalCards": 5108,
+  "subjects": [
+    {
+      "subject": "Informática",
+      "sourceFile": "01_INFORMATICA_V2_AUDITADO.md",
+      "cards": 1175,
+      "decks": 9,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Português",
+      "sourceFile": "02_PORTUGUES_V2_AUDITADO.md",
+      "cards": 652,
+      "decks": 10,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Direito Penal",
+      "sourceFile": "03_DIREITO_PENAL_V2_PARCIAL.md",
+      "cards": 496,
+      "decks": 9,
+      "auditLabel": "Auditoria jurídica parcial"
+    },
+    {
+      "subject": "Direito Processual Penal",
+      "sourceFile": "04_PROCESSO_PENAL_V2_PARCIAL.md",
+      "cards": 213,
+      "decks": 3,
+      "auditLabel": "Auditoria jurídica parcial"
+    },
+    {
+      "subject": "Direito Constitucional",
+      "sourceFile": "05_DIREITO_CONSTITUCIONAL.md",
+      "cards": 289,
+      "decks": 9,
+      "auditLabel": "Revisão inicial"
+    },
+    {
+      "subject": "Direito Administrativo",
+      "sourceFile": "06_DIREITO_ADMINISTRATIVO.md",
+      "cards": 336,
+      "decks": 8,
+      "auditLabel": "Revisão inicial"
+    },
+    {
+      "subject": "Direitos Humanos",
+      "sourceFile": "07_DIREITOS_HUMANOS.md",
+      "cards": 401,
+      "decks": 3,
+      "auditLabel": "Revisão inicial"
+    },
+    {
+      "subject": "Legislação Especial",
+      "sourceFile": "08_LEGISLACAO_ESPECIAL.md",
+      "cards": 450,
+      "decks": 14,
+      "auditLabel": "Revisão inicial"
+    },
+    {
+      "subject": "Contabilidade",
+      "sourceFile": "09_CONTABILIDADE_V2_AUDITADO.md",
+      "cards": 469,
+      "decks": 15,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Raciocínio Lógico-Matemático",
+      "sourceFile": "10_RLM_V2_AUDITADO.md",
+      "cards": 143,
+      "decks": 5,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Arquivologia",
+      "sourceFile": "11_ARQUIVOLOGIA_V2_AUDITADO.md",
+      "cards": 149,
+      "decks": 4,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Estatística",
+      "sourceFile": "12_ESTATISTICA_V2_AUDITADO.md",
+      "cards": 71,
+      "decks": 2,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Criminologia",
+      "sourceFile": "13_CRIMINOLOGIA_V2_AUDITADO.md",
+      "cards": 122,
+      "decks": 4,
+      "auditLabel": "V2 auditada"
+    },
+    {
+      "subject": "Medicina Legal",
+      "sourceFile": "14_MEDICINA_LEGAL_V2_AUDITADO.md",
+      "cards": 142,
+      "decks": 6,
+      "auditLabel": "V2 auditada"
+    }
+  ],
+  "legacy": {
+    "preserved": 1120,
+    "aliases": 8,
+    "unmapped": []
+  }
+}

@@ -24,7 +24,7 @@ const STATUS: Record<GoalStatus, { label: string; tone: BadgeTone }> = {
 };
 
 const TYPE_LABEL: Record<GoalType, string> = {
-  theory: "Teoria",
+  theory: "Aula",
   question_block: "Bateria",
   review: "Revisão",
   reinforcement: "Reforço",
@@ -58,6 +58,7 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const done = goal.status === "completed";
   const isQuiz = goal.type === "question_block";
+  const displayTitle = goal.title.replace(/^(Aula|Bateria|Revisão|Reforço|Simulado|Extra)\s*[—-]\s*/i, "");
 
   const score =
     goal.questionsAnswered > 0
@@ -65,8 +66,8 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
       : null;
 
   const detail = [
+    TYPE_LABEL[goal.type],
     goal.subject,
-    goal.lesson ?? goal.block,
     goal.spentMinutes > 0
       ? `${formatMinutes(goal.spentMinutes)} de ${formatMinutes(goal.plannedMinutes)}`
       : formatMinutes(goal.plannedMinutes),
@@ -140,7 +141,7 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
             opacity: done ? 0.7 : 1,
           }}
         >
-          {goal.title}
+          {displayTitle}
         </Typography>
         <Typography variant="caption" component="p" sx={{ mt: 0.125 }}>
           {detail}
@@ -151,10 +152,6 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
         data-testid="goal-actions"
         sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}
       >
-        {/* O TIPO É SEMPRE NEUTRO. A cor da linha já é gasta pelo ESTADO, que é
-            o que muda e o que a pessoa procura; pintar o tipo também faria duas
-            etiquetas coloridas disputando a mesma leitura. */}
-        <Badge tone="neutral">{TYPE_LABEL[goal.type]}</Badge>
         <Badge tone={STATUS[goal.status].tone}>{STATUS[goal.status].label}</Badge>
 
         {isQuiz ? (
@@ -178,12 +175,10 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
                 data-testid="goal-theory"
                 onClick={() => actions.onOpenTheory(goal)}
               >
-                Estudar teoria
+                Abrir aula
               </Button>
             ) : null}
-            <Button size="small" variant="outlined" onClick={() => actions.onRecord(goal)}>
-              Registrar
-            </Button>
+            {goal.type !== "theory" && <Button size="small" variant="outlined" onClick={() => actions.onRecord(goal)}>Registrar</Button>}
             <IconButton
               size="small"
               aria-label={`Mais ações para ${goal.title}`}
@@ -192,6 +187,11 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
               <MoreVertIcon fontSize="small" />
             </IconButton>
             <Menu anchorEl={menu} open={Boolean(menu)} onClose={() => setMenu(null)}>
+              {goal.type === "theory" && (
+                <MenuItem onClick={() => { setMenu(null); actions.onRecord(goal); }}>
+                  Registrar estudo
+                </MenuItem>
+              )}
               {done ? (
                 <MenuItem
                   onClick={() => {

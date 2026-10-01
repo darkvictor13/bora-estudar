@@ -38,8 +38,8 @@ export const PROTECTED_ROUTES = [...STUDENT_ROUTES, ...TEACHER_ROUTES] as const;
 
 /** Título esperado no `<h1>` de cada tela. */
 export const PAGE_TITLES: Record<string, string> = {
-  "/aluno": "Metas da semana",
-  "/aluno/planejamento": "Planejamento",
+  "/aluno": "Minha semana",
+  "/aluno/planejamento": "Meu curso",
   "/aluno/teoria": "Estudo da teoria",
   "/aluno/disciplinas": "Disciplinas",
   "/aluno/cadernos": "Cadernos TEC",

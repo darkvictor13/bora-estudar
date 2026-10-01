@@ -11,7 +11,7 @@
  * compila para `undefined` em produção, sem aviso.
  */
 import type { BoraApi } from "./contract.ts";
-import { fixturesApi } from "./fixtures.ts";
+import { fixturesApi, setFixtureRole } from "./fixtures.ts";
 import { supabaseApi } from "./supabase/index.ts";
 
 export * from "./contract.ts";
@@ -40,6 +40,7 @@ export { ACCESS_MONTHS, DEFAULT_ACCESS_MONTHS } from "./validation.ts";
  * operações, com o nome e o número da fase na mensagem.
  */
 const implementation = import.meta.env.VITE_API_IMPL ?? "supabase";
+if (implementation === "fixtures" && import.meta.env.VITE_FIXTURE_ROLE === "teacher") setFixtureRole("teacher");
 
 export const api: BoraApi = implementation === "fixtures" ? fixturesApi : supabaseApi;
 

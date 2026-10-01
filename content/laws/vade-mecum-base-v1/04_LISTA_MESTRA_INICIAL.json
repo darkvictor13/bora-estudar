@@ -1,0 +1,369 @@
+{
+  "versao": "1.0",
+  "data_base": "2026-09-29",
+  "regra": "uma norma = um canonical_id; editais armazenam apenas vínculos/recortes",
+  "normas": [
+    {
+      "canonical_id": "BR-CF-1988",
+      "titulo": "Constituição da República Federativa do Brasil de 1988",
+      "esfera": "constitucional",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DL-2848-1940",
+      "titulo": "Código Penal",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DL-3689-1941",
+      "titulo": "Código de Processo Penal",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-7210-1984",
+      "titulo": "Lei de Execução Penal",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-7716-1989",
+      "titulo": "Crimes resultantes de preconceito de raça ou cor",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-8069-1990",
+      "titulo": "Estatuto da Criança e do Adolescente",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-8072-1990",
+      "titulo": "Crimes Hediondos",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-8112-1990",
+      "titulo": "Regime Jurídico dos Servidores Públicos Civis da União",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-8429-1992",
+      "titulo": "Improbidade Administrativa",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-9099-1995",
+      "titulo": "Juizados Especiais",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-9296-1996",
+      "titulo": "Interceptação Telefônica",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-9455-1997",
+      "titulo": "Lei de Tortura",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-9503-1997",
+      "titulo": "Código de Trânsito Brasileiro",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-9605-1998",
+      "titulo": "Crimes Ambientais",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-9654-1998",
+      "titulo": "Carreira de Policial Rodoviário Federal",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-10741-2003",
+      "titulo": "Estatuto da Pessoa Idosa",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-10826-2003",
+      "titulo": "Estatuto do Desarmamento",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-11340-2006",
+      "titulo": "Lei Maria da Penha",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-11343-2006",
+      "titulo": "Lei de Drogas",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-12037-2009",
+      "titulo": "Identificação Criminal",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-12288-2010",
+      "titulo": "Estatuto da Igualdade Racial",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-12527-2011",
+      "titulo": "Lei de Acesso à Informação",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-12850-2013",
+      "titulo": "Organizações Criminosas",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-13675-2018",
+      "titulo": "Sistema Único de Segurança Pública",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-13869-2019",
+      "titulo": "Abuso de Autoridade",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR",
+        "PPPR",
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-LEI-14751-2023",
+      "titulo": "Lei Orgânica Nacional das PMs e CBMs",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PMPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DEC-678-1992",
+      "titulo": "Promulga a Convenção Americana sobre Direitos Humanos",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DEC-1655-1995",
+      "titulo": "Competência da Polícia Rodoviária Federal",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DEC-8282-2014",
+      "titulo": "Regulamentação da carreira PRF",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DEC-9662-2019",
+      "titulo": "Estrutura regimental do MJSP — referência histórica do edital PRF 2021",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PRF"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-FED-DEC-11615-2023",
+      "titulo": "Regulamenta o Estatuto do Desarmamento",
+      "esfera": "federal",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-PR-LEI-1943-1954",
+      "titulo": "Código da Polícia Militar do Paraná",
+      "esfera": "parana",
+      "editais_relacionados": [
+        "PMPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-PR-DEC-5075-1998",
+      "titulo": "Regulamento de Ética Profissional dos Militares Estaduais",
+      "esfera": "parana",
+      "editais_relacionados": [
+        "PMPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-PR-LEI-6174-1970",
+      "titulo": "Estatuto dos Funcionários Civis do Poder Executivo do Paraná",
+      "esfera": "parana",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-PR-LEI-20656-2021",
+      "titulo": "Processo Administrativo no Estado do Paraná",
+      "esfera": "parana",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-PR-LC-245-2022",
+      "titulo": "Quadro Próprio da Polícia Penal do Paraná",
+      "esfera": "parana",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    },
+    {
+      "canonical_id": "BR-PR-LEI-21404-2023",
+      "titulo": "Conselho da Polícia Penal",
+      "esfera": "parana",
+      "editais_relacionados": [
+        "PPPR"
+      ],
+      "status_verificacao": "pendente_fonte_oficial_individual"
+    }
+  ],
+  "pendencias": [
+    "Identificar o ato oficial vigente correspondente ao Estatuto Penitenciário do Paraná.",
+    "Cadastrar individualmente as Resoluções CONTRAN do edital PRF 2021.",
+    "Baixar e validar cada norma em fonte oficial (Planalto/legislação PR/CONTRAN).",
+    "Registrar texto vigente, hash normalizado e histórico de versões."
+  ]
+}

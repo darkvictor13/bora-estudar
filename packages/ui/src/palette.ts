@@ -1,5 +1,5 @@
 import type { PaletteOptions } from '@mui/material/styles';
-import { amber, neutral, petrol, type SchemeTokens, schemes } from './tokens.ts';
+import { neutral, petrol, type SchemeTokens, schemes } from './tokens.ts';
 
 /**
  * Converte um scheme de tokens em `PaletteOptions` do MUI.
@@ -11,12 +11,10 @@ import { amber, neutral, petrol, type SchemeTokens, schemes } from './tokens.ts'
 const toPalette = (s: SchemeTokens, mode: 'light' | 'dark'): PaletteOptions => ({
   mode,
 
-  // primary.main é o âmbar VIVO nos dois modos: ele só aparece como
-  // preenchimento, e o quase-preto sobre #FFB700 passa 10.5:1 em qualquer fundo.
   primary: {
     main: s.fill.primary,
-    light: amber[300],
-    dark: amber[700],
+    light: petrol[400],
+    dark: petrol[900],
     contrastText: s.fill.primaryText,
     soft: s.accent.primarySoft,
     border: s.accent.primaryBorder,

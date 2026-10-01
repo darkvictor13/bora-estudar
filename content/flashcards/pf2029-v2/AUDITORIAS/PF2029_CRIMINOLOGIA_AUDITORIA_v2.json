@@ -1,0 +1,32 @@
+{
+  "materia": "Criminologia",
+  "fonte_principal": "Resumo PF 2029",
+  "data_auditoria": "2026-09-29",
+  "arquivo_base": "PF2029_CRIMINOLOGIA_COMPLETO_FLASHCARDS.md",
+  "arquivo_resultado": "PF2029_CRIMINOLOGIA_FLASHCARDS_AUDITADO_v2.md",
+  "flashcards_antes": 98,
+  "flashcards_adicionados": 24,
+  "flashcards_depois": 122,
+  "duplicacoes_exatas_depois": 0,
+  "lacunas_preenchidas": [
+    "criminalizacao primaria, secundaria e terciaria",
+    "desviacao primaria e secundaria",
+    "role engulfment",
+    "criminologia critica e correntes",
+    "abolicionismo e direito penal minimo",
+    "criminologia clinica e ambiental",
+    "vitimizacao indireta e quaternaria",
+    "heterovitimizacao",
+    "vitimodogmatica",
+    "funcoes da criminologia",
+    "prevencao direta, indireta, primaria, secundaria e terciaria",
+    "teorias sociologicas",
+    "janelas quebradas"
+  ],
+  "correcoes_tecnicas": [
+    "conceito de inducao",
+    "Law and Order nao atribuido a Claus Roxin",
+    "prevencao especial positiva e negativa"
+  ],
+  "status": "segunda_passagem_auditoria_cobertura_concluida"
+}

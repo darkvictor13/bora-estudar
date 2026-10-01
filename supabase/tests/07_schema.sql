@@ -289,12 +289,12 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 25 or v_enums <> 13 or v_fks <> 55 or v_views <> 1 then
+  if v_tabelas <> 27 or v_enums <> 13 or v_fks <> 59 or v_views <> 1 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '13 OK  25 tabelas, 13 enums, 55 FKs e 1 view — como o de-para registra';
+  raise notice '13 OK  27 tabelas, 13 enums, 59 FKs e 1 view — como o de-para registra';
 end $$;

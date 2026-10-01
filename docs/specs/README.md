@@ -62,6 +62,9 @@ de lá vira uma spec nova antes de virar código.
 | 31 | [Iniciar a bateria pelo caderno](31-iniciar-bateria-pelo-caderno.md) | Começar pela lista de cadernos — **fluxo da extensão, removido** |
 | 32 | [O fluxo da teoria](32-fluxo-da-teoria.md) | Progresso por página, questões iniciais, revisão espaçada em aulas |
 | 33 | [Catálogo de teoria do professor](33-catalogo-de-teoria.md) | MASTER importado, páginas auditadas, regras por disciplina |
+| 34 | [Cronograma, leis e flashcards](34-cronograma-leis-flashcards.md) | Agenda interativa das metas; Leis e Flashcards com aviso de lançamento futuro |
+| 35 | [Simulados presenciais](35-simulados-presenciais.md) | Cadastro pelo professor, lançamento de notas e ranking publicado por turma |
+| 36 | [Aulas PRF e desempenho diário](36-aulas-prf-e-desempenho-diario.md) | Publicação pelo professor, links de apoio e acertos/erros por dia; atualiza o fluxo da spec 32 |
 
 ---
 

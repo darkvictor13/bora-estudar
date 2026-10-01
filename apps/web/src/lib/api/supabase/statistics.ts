@@ -12,16 +12,43 @@
  */
 import { supabase } from "@/lib/supabase/client";
 import { streakDays } from "@/lib/domain/week";
+import { questionsByDay } from "@/lib/domain/question-performance";
+import { classQuestionDistribution } from "@/lib/domain/class-question-distribution";
+import { localDate } from "@/lib/domain/schedule";
 
 import type {
+  ClassQuestionDistribution,
   SeriesPoint,
   Statistics,
   StatisticsFilter,
+  StudentQuestionComparison,
+  WeeklyQuestionComparison,
+  SubjectPeerComparison,
   SubjectPerformance,
+  IsoDate,
   Uuid,
 } from "../contract.ts";
 import { throwDb } from "./errors.ts";
 import { activePlanOf, requireSession, today } from "./session.ts";
+
+interface StudentComparisonRow {
+  sample_size: number;
+  minimum_questions: number;
+  student_questions: number;
+  student_score: number | null;
+  percentile: number | null;
+  box_min: number | null;
+  q1: number | null;
+  median: number | null;
+  q3: number | null;
+  box_max: number | null;
+  lower_whisker: number | null;
+  upper_whisker: number | null;
+}
+
+interface WeeklyComparisonRow extends StudentComparisonRow {
+  week_number: number;
+}
 
 const MONTHS = [
   "jan", "fev", "mar", "abr", "mai", "jun",
@@ -29,11 +56,181 @@ const MONTHS = [
 ] as const;
 
 interface EntryRow {
+  id: string;
   minutes: number;
   questions: number;
   correct_answers: number;
   created_at: string;
-  goals: { subject: string; week_number: number; status: string } | null;
+  goals: { subject: string; block?: string | null; week_number: number; status: string } | null;
+}
+
+/** Compara alunos da mesma turma no mesmo ano, sem expor nomes ou notas individuais. */
+export async function loadClassQuestionDistribution(classId: Uuid, year: number): Promise<ClassQuestionDistribution> {
+  const session = await requireSession();
+  if (session.role !== "teacher") throw new Error("A distribuição da turma está disponível apenas ao professor.");
+
+  const members = await supabase.from("class_students")
+    .select("student_id")
+    .eq("class_id", classId)
+    .eq("teacher_id", session.profileId);
+  if (members.error) throwDb(members.error);
+  const studentIds = (members.data ?? []).map((member) => member.student_id);
+  if (studentIds.length === 0) return classQuestionDistribution([], []);
+
+  // A turma é a moldura; o planejamento ativo é o recorte. Sem esta segunda
+  // condição, um plano arquivado do mesmo aluno continuaria alterando quartis
+  // e mediana do boxplot atual.
+  const activePlans = await supabase.from("study_plans")
+    .select("id,student_id")
+    .eq("teacher_id", session.profileId)
+    .eq("class_id", classId)
+    .eq("status", "active")
+    .in("student_id", studentIds);
+  if (activePlans.error) throwDb(activePlans.error);
+
+  const activeStudentIds = [...new Set((activePlans.data ?? []).map((plan) => plan.student_id))];
+  const activePlanIds = (activePlans.data ?? []).map((plan) => plan.id);
+  if (activePlanIds.length === 0) {
+    return classQuestionDistribution(studentIds, [], activeStudentIds);
+  }
+
+  const from = new Date(year, 0, 1).toISOString();
+  const to = new Date(year + 1, 0, 1).toISOString();
+  const rows: { studentId: string; questions: number; correctAnswers: number }[] = [];
+  // O Data API pode limitar cada resposta a 1.000 linhas. Paginamos em ordem
+  // estável para que uma turma ativa não perca os registros mais recentes.
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await supabase.from("goal_entries")
+      .select("id,student_id,questions,correct_answers,goals!inner(study_plan_id)")
+      .eq("teacher_id", session.profileId)
+      .in("student_id", studentIds)
+      .in("goals.study_plan_id", activePlanIds)
+      .gt("questions", 0)
+      .gte("created_at", from)
+      .lt("created_at", to)
+      .order("id")
+      .range(offset, offset + pageSize - 1);
+    if (page.error) throwDb(page.error);
+    const batch = page.data ?? [];
+    rows.push(...batch.map((row) => ({
+      studentId: row.student_id,
+      questions: row.questions,
+      correctAnswers: row.correct_answers,
+    })));
+    if (batch.length < pageSize) break;
+  }
+  return classQuestionDistribution(studentIds, rows, activeStudentIds);
+}
+
+export async function loadStudyDays(year: number): Promise<readonly IsoDate[]> {
+  const session = await requireSession();
+  if (session.role !== "student") throw new Error("O calendário de estudo pertence ao aluno.");
+  const from = new Date(year, 0, 1).toISOString();
+  const to = new Date(year + 1, 0, 1).toISOString();
+  const dates = new Set<IsoDate>();
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await supabase.from("goal_entries")
+      .select("id,created_at,minutes,questions")
+      .eq("student_id", session.profileId)
+      .gte("created_at", from)
+      .lt("created_at", to)
+      .order("id")
+      .range(offset, offset + pageSize - 1);
+    if (page.error) throwDb(page.error);
+    const batch = page.data ?? [];
+    for (const row of batch) if (row.minutes > 0 || row.questions > 0) dates.add(localDate(new Date(row.created_at)));
+    if (batch.length < pageSize) break;
+  }
+  return [...dates].filter((date) => date.startsWith(`${year}-`)).sort();
+}
+
+/** Agregados anônimos calculados no banco; nenhuma nota de colega chega ao cliente. */
+export async function loadStudentQuestionComparison(year: number): Promise<StudentQuestionComparison> {
+  const session = await requireSession();
+  if (session.role !== "student") throw new Error("A comparação individual pertence ao aluno.");
+
+  const { data, error } = await supabase.rpc("student_question_comparison", { p_year: year });
+  if (error) throwDb(error);
+  const row = (data?.[0] ?? null) as StudentComparisonRow | null;
+  if (!row) return emptyStudentComparison();
+
+  const hasDistribution = [row.box_min, row.q1, row.median, row.q3, row.box_max, row.lower_whisker, row.upper_whisker]
+    .every((value) => value !== null);
+
+  return {
+    sampleSize: row.sample_size,
+    minimumQuestions: row.minimum_questions,
+    studentQuestions: Number(row.student_questions),
+    studentScore: row.student_score === null ? null : Number(row.student_score),
+    percentile: row.percentile === null ? null : Number(row.percentile),
+    distribution: hasDistribution ? {
+      min: Number(row.box_min),
+      q1: Number(row.q1),
+      median: Number(row.median),
+      q3: Number(row.q3),
+      max: Number(row.box_max),
+      lowerWhisker: Number(row.lower_whisker),
+      upperWhisker: Number(row.upper_whisker),
+    } : null,
+  };
+}
+
+export async function loadStudentWeeklyQuestionComparison(year: number): Promise<readonly WeeklyQuestionComparison[]> {
+  const session = await requireSession();
+  if (session.role !== "student") throw new Error("A comparação semanal pertence ao aluno.");
+
+  const { data, error } = await supabase.rpc("student_weekly_question_comparison", { p_year: year });
+  if (error) throwDb(error);
+
+  return ((data ?? []) as WeeklyComparisonRow[]).map((row) => {
+    const hasDistribution = [row.box_min, row.q1, row.median, row.q3, row.box_max, row.lower_whisker, row.upper_whisker]
+      .every((value) => value !== null);
+    return {
+      weekNumber: row.week_number,
+      sampleSize: row.sample_size,
+      minimumQuestions: row.minimum_questions,
+      studentQuestions: Number(row.student_questions),
+      studentScore: row.student_score === null ? null : Number(row.student_score),
+      percentile: row.percentile === null ? null : Number(row.percentile),
+      distribution: hasDistribution ? {
+        min: Number(row.box_min),
+        q1: Number(row.q1),
+        median: Number(row.median),
+        q3: Number(row.q3),
+        max: Number(row.box_max),
+        lowerWhisker: Number(row.lower_whisker),
+        upperWhisker: Number(row.upper_whisker),
+      } : null,
+    };
+  });
+}
+
+export async function loadStudentSubjectPeerComparison(year: number): Promise<readonly SubjectPeerComparison[]> {
+  const session = await requireSession();
+  if (session.role !== "student") throw new Error("O comparativo por matéria pertence ao aluno.");
+
+  const { data, error } = await supabase.rpc("student_subject_peer_comparison", { p_year: year });
+  if (error) throwDb(error);
+  return (data ?? []).map((row) => ({
+    subject: row.subject,
+    studentScore: Number(row.student_score),
+    peerAverage: row.peer_average === null ? null : Number(row.peer_average),
+    sampleSize: row.sample_size,
+    minimumQuestions: row.minimum_questions,
+  }));
+}
+
+function emptyStudentComparison(): StudentQuestionComparison {
+  return {
+    sampleSize: 0,
+    minimumQuestions: 10,
+    studentQuestions: 0,
+    studentScore: null,
+    percentile: null,
+    distribution: null,
+  };
 }
 
 /** Soma por chave, preservando a ordem em que as chaves apareceram. */
@@ -93,27 +290,37 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
   const studentId = owner?.student_id ?? session.profileId;
 
   const year = filter.year ?? new Date().getFullYear();
-  const from = `${year}-01-01T00:00:00.000Z`;
-  const to = `${year + 1}-01-01T00:00:00.000Z`;
+  const from = new Date(year, 0, 1).toISOString();
+  const to = new Date(year + 1, 0, 1).toISOString();
 
-  const [entries, goals] = await Promise.all([
-    supabase
+  const rows: EntryRow[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await supabase
       .from("goal_entries")
-      .select("minutes,questions,correct_answers,created_at,goals!inner(subject,week_number,status,study_plan_id)")
+      .select("id,minutes,questions,correct_answers,created_at,goals!inner(subject,block,week_number,status,study_plan_id)")
       .eq("student_id", studentId)
       .eq("goals.study_plan_id", planId)
       .gte("created_at", from)
-      .lt("created_at", to),
-    supabase
-      .from("goals")
-      .select("status,subject")
-      .eq("study_plan_id", planId),
-  ]);
+      .lt("created_at", to)
+      .order("id")
+      .range(offset, offset + pageSize - 1);
+    if (page.error) throwDb(page.error);
+    const batch = (page.data ?? []) as unknown as EntryRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
 
-  if (entries.error) throwDb(entries.error);
-  if (goals.error) throwDb(goals.error);
-
-  const rows = (entries.data ?? []) as unknown as EntryRow[];
+  // Metas concluídas precisam respeitar o mesmo período dos demais KPIs. Uma
+  // conclusão de 2025 não pode reaparecer quando o professor seleciona 2026.
+  const completedGoals = await supabase
+    .from("goals")
+    .select("id", { count: "exact", head: true })
+    .eq("study_plan_id", planId)
+    .eq("status", "completed")
+    .gte("completed_at", from)
+    .lt("completed_at", to);
+  if (completedGoals.error) throwDb(completedGoals.error);
 
   const questionsAnswered = rows.reduce((sum, row) => sum + row.questions, 0);
   const correctAnswers = rows.reduce((sum, row) => sum + row.correct_answers, 0);
@@ -134,15 +341,28 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
 
   const subjectTargets = await targetsBySubject(studentId);
   const bySubject = buildSubjects(rows, subjectTargets);
+  const blocks = new Map<string, { subject: string; block: string; questions: number; correctAnswers: number }>();
+  for (const row of rows) {
+    if (row.questions <= 0) continue;
+    const subject = row.goals?.subject ?? "Sem disciplina";
+    const block = row.goals?.block ?? "Sem bloco vinculado";
+    const key = JSON.stringify([subject, block]);
+    const current = blocks.get(key) ?? { subject, block, questions: 0, correctAnswers: 0 };
+    current.questions += row.questions;
+    current.correctAnswers += row.correct_answers;
+    blocks.set(key, current);
+  }
 
   return {
+    studyTime: rows.filter((row) => row.minutes > 0).map((row) => ({ date: localDate(new Date(row.created_at)), subject: row.goals?.subject ?? "Sem disciplina", minutes: row.minutes })),
+    byBlock: [...blocks.values()],
     score: questionsAnswered > 0 ? Math.round((correctAnswers / questionsAnswered) * 100) : null,
     questionsAnswered,
     correctAnswers,
     studiedMinutes: rows.reduce((sum, row) => sum + row.minutes, 0),
-    goalsCompleted: (goals.data ?? []).filter((goal) => goal.status === "completed").length,
+    goalsCompleted: completedGoals.count ?? 0,
     streakDays: streakDays(
-      rows.map((row) => row.created_at.slice(0, 10)),
+      rows.filter((row) => row.minutes > 0 || row.questions > 0).map((row) => localDate(new Date(row.created_at))),
       today(),
     ),
     scoreByWeek: weeks.map(([week, totals]) => ({
@@ -153,6 +373,14 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
       label: `S${week}`,
       value: totals.questions,
     })),
+    dailyQuestions: questionsByDay(
+      rows.map((row) => ({
+        createdAt: row.created_at,
+        questions: row.questions,
+        correctAnswers: row.correct_answers,
+      })),
+      addDays(today(), -13),
+    ),
     // DO MAIS ANTIGO PARA O MAIS NOVO. A ordem da consulta é a do banco, que
     // não promete nenhuma; uma série temporal desenhada ao contrário lê como
     // queda onde houve subida, e ninguém desconfia do eixo.
@@ -236,6 +464,7 @@ function empty(): Statistics {
     streakDays: 0,
     scoreByWeek: [],
     questionsByWeek: [],
+    dailyQuestions: [],
     minutesByDay: [],
     minutesByMonth: [],
     bySubject: [],

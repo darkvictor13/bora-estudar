@@ -41,6 +41,12 @@ consultas que encontram essas linhas antes de a carga rodar.
 
 ## Tabelas
 
+**Acréscimo de 24/09/2026:** a migration `20260924210319_classroom_mock_exams`
+adiciona `mock_exams` e `mock_exam_results`, ambas com RLS, para simulados
+presenciais e ranking por turma (spec 35). O schema passa a ter 27 tabelas e
+59 foreign keys; a tabela de comparação histórica de 18/09 abaixo permanece
+como registro daquela revisão.
+
 | origem | destino |
 |---|---|
 | `aluno_turmas` | `class_students` |

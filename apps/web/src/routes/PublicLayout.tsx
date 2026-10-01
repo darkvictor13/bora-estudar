@@ -46,8 +46,7 @@ export function PublicLayout() {
         p: 4,
         overflow: "auto",
         backgroundColor: theme.vars.palette.surface.base,
-        // Os dois halos da v2, repintados com as cores da marca: âmbar no alto
-        // à direita, petróleo embaixo à esquerda. Em alfa muito baixo — o
+        // Os dois halos da v2, repintados com os verdes da marca. Em alfa baixo — o
         // fundo precisa dar profundidade sem disputar com o cartão.
         backgroundImage: `
           radial-gradient(circle at 75% 15%, ${theme.vars.palette.accent.primarySoft}, transparent 32%),
@@ -126,7 +125,7 @@ export function PublicLayout() {
         <Paper
           component="main"
           data-testid="auth-card"
-          aria-label="Acesso ao Bora Estudar Concursos"
+          aria-label="Acesso à plataforma Fronteira Concursos"
           sx={(theme) => ({
             width: "100%",
             display: "flex",
@@ -149,23 +148,17 @@ export function PublicLayout() {
                 mb: 2.5,
                 display: "grid",
                 placeItems: "center",
-                borderRadius: "50%",
-                backgroundColor: theme.vars.palette.fill.primary,
-                color: theme.vars.palette.fill.primaryText,
+                borderRadius: "12px",
                 boxShadow: theme.vars.palette.elevation.glowPrimary,
-                fontFamily: theme.typography.numeric.fontFamily,
-                fontWeight: 500,
-                fontSize: "1.75rem",
-                letterSpacing: "-0.1em",
               })}
             >
-              BE
+              <Box component="img" src="/fronteira-mark.svg" alt="" sx={{ width: 64, height: 64 }} />
             </Box>
             <Typography
               component="p"
               sx={{ fontSize: "1.25rem", fontWeight: 800, letterSpacing: "-0.025em" }}
             >
-              Bora Estudar Concursos
+              Fronteira Concursos
             </Typography>
           </Box>
 
@@ -176,7 +169,7 @@ export function PublicLayout() {
             component="p"
             sx={{ textAlign: "center", mt: "auto", pt: 2.75, fontSize: "0.6875rem", lineHeight: 1.5 }}
           >
-            © {new Date().getFullYear()} Bora Estudar Concursos
+            © {new Date().getFullYear()} Fronteira Concursos
             <br />
             Acesso protegido e dados sincronizados.
           </Typography>

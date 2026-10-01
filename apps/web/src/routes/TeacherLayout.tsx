@@ -1,4 +1,5 @@
 import BarChartIcon from "@mui/icons-material/BarChartOutlined";
+import TrophyIcon from "@mui/icons-material/EmojiEventsOutlined";
 import ClassIcon from "@mui/icons-material/ClassOutlined";
 import EventRepeatIcon from "@mui/icons-material/EventRepeatOutlined";
 import GroupIcon from "@mui/icons-material/GroupsOutlined";
@@ -61,7 +62,7 @@ export function TeacherLayout() {
         },
         {
           href: ROUTES.teacher.theory,
-          label: "Catálogo de teoria",
+          label: "Materiais das aulas",
           icon: <LibraryIcon fontSize="small" />,
         },
         {
@@ -80,6 +81,11 @@ export function TeacherLayout() {
     {
       title: "Análise",
       items: [
+        {
+          href: ROUTES.teacher.mockExams,
+          label: "Simulados presenciais",
+          icon: <TrophyIcon fontSize="small" />,
+        },
         {
           href: ROUTES.teacher.statistics,
           label: "Estatísticas",

@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
+import { PmprPilot } from "@/components/teacher/PmprPilot";
 import {
   api,
   newRequestId,
@@ -108,23 +109,17 @@ function PlanDialog({
             invalid={error?.field === "name"}
           />
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-            <Field label="Área" name="area" defaultValue={plan?.area ?? "Fiscal"} required />
-            <Field label="Concurso" name="targetExam" defaultValue={plan?.targetExam ?? ""} />
+            <Field label="Área" name="area" defaultValue={plan?.area ?? "Policial"} required />
+            <Field label="Concurso" name="targetExam" defaultValue={plan?.targetExam ?? "Soldado PMPR"} />
             <Field label="Fase" name="stage" defaultValue={plan?.stage ?? "Pré-edital"} />
             <Field
               label="Modelo de estudo"
               name="studyModel"
               defaultValue={plan?.studyModel ?? "Avanço progressivo"}
             />
-            <Field
-              label="Metas por semana"
-              name="weeklyGoals"
-              type="number"
-              min={1}
-              max={60}
-              defaultValue={plan?.weeklyGoals ?? 12}
-              invalid={error?.field === "weeklyGoals"}
-            />
+            {/* Compatibilidade temporária com o motor semanal. A quantidade
+                deixa de ser decisão pedagógica: a rotina nasce das aulas. */}
+            <input type="hidden" name="weeklyGoals" value={plan?.weeklyGoals ?? 12} />
             <Field
               label="Início"
               name="startsOn"
@@ -218,6 +213,8 @@ export function TeacherPlans() {
       <ContentBody>
         {error && <Alert status="error">{error.message}</Alert>}
 
+        <PmprPilot />
+
         {plans.length === 0 ? (
           <Empty icon="🗂">
             {students.length === 0
@@ -229,7 +226,7 @@ export function TeacherPlans() {
             <Box key={plan.id} sx={{ mb: 1.5 }}>
               <Card
                 title={plan.name}
-                sub={`${plan.area}${plan.targetExam ? ` · ${plan.targetExam}` : ""} · ${plan.weeklyGoals} metas por semana`}
+                sub={`${plan.area}${plan.targetExam ? ` · ${plan.targetExam}` : ""} · rotina baseada nas aulas`}
                 action={<Badge tone={STATUS[plan.status].tone}>{STATUS[plan.status].label}</Badge>}
               >
                 <Box

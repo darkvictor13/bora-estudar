@@ -31,10 +31,21 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
         pb: 2.25,
         backgroundColor: theme.vars.palette.surface.raised,
         borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+        ...theme.applyStyles('dark', {
+          backgroundImage: `linear-gradient(110deg, ${theme.vars.palette.surface.overlay}, ${theme.vars.palette.surface.raised} 62%, ${theme.vars.palette.surface.base})`,
+        }),
         [theme.breakpoints.down('md')]: { px: 2, pt: 2, pb: 2 },
       })}
     >
-      <Typography variant="h1" component="h1">
+      <Typography variant="h1" component="h1" sx={(theme) => ({
+        pl: 1.5,
+        borderLeft: `4px solid ${theme.vars.palette.accent.primary}`,
+        textTransform: 'uppercase',
+        fontSize: { xs: '1.25rem', md: '1.5rem' },
+        fontWeight: 800,
+        letterSpacing: '-0.035em',
+        lineHeight: 1.2,
+      })}>
         {title}
       </Typography>
       {description && (

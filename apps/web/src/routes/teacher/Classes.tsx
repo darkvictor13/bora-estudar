@@ -79,7 +79,7 @@ function ClassDialog({
             defaultValue={turma?.name ?? ""}
             required
             invalid={error?.field === "name"}
-            hint="“Fiscal 2027” cabe no nome — turma não tem período próprio."
+            hint="Exemplo: PRF 2027 · Turma A."
           />
           <Field
             label="Descrição"

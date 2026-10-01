@@ -10,14 +10,108 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
 import { fixturesApi as api, resetFixtures } from "./fixtures.ts";
+import { POLICE_FLASHCARDS } from "../domain/library-flashcards.ts";
 
 beforeEach(() => {
   resetFixtures();
 });
 
+test("calendário de constância usa os dias com registro de estudo", async () => {
+  assert.deepEqual(await api.loadStudyDays(2026), ["2026-09-14"]);
+  assert.deepEqual(await api.loadStudyDays(2025), []);
+});
+
 /** Toda escrita precisa de uma chave, e ela é gerada uma vez, na origem. */
 let counter = 0;
 const requestId = () => `req-${(counter += 1)}`;
+
+test("Informática V2 mantém nove decks e salva revisões por deck", async () => {
+  const informatica = POLICE_FLASHCARDS.subjects.find((subject) => subject.id === "informatica")!;
+  assert.equal(informatica.decks.length, 9);
+  assert.equal(informatica.decks.reduce((sum, deck) => sum + deck.cards.length, 0), 1175);
+  const [first, second] = informatica.decks;
+  assert.ok(first && second);
+  const firstCard = first.cards[0];
+  assert.ok(firstCard);
+  const invalid = await api.gradeLibraryFlashcard({ deckId: second.id, cardId: firstCard.id, grade: "good", requestId: requestId() });
+  assert.equal(invalid.ok, false);
+  const graded = await api.gradeLibraryFlashcard({ deckId: first.id, cardId: firstCard.id, grade: "good", requestId: requestId() });
+  assert.ok(graded.ok);
+  assert.equal(graded.data.reviewCount, 1);
+  assert.equal((await api.loadLibraryFlashcardReviews([first.id])).length, 1);
+  assert.equal((await api.loadLibraryFlashcardReviews([second.id])).length, 0);
+});
+
+test("cada uma das 14 matérias aceita avaliação sem misturar o histórico", async () => {
+  assert.equal(POLICE_FLASHCARDS.subjects.length, 14);
+  for (const subject of POLICE_FLASHCARDS.subjects) {
+    const deck = subject.decks[0]!;
+    const card = deck.cards[0]!;
+    const result = await api.gradeLibraryFlashcard({ deckId: deck.id, cardId: card.id, grade: "again", requestId: requestId() });
+    assert.ok(result.ok, subject.subject);
+    const reviews = await api.loadLibraryFlashcardReviews([deck.id]);
+    assert.equal(reviews.length, 1);
+    assert.equal(reviews[0]?.cardId, card.id);
+    assert.equal(reviews[0]?.state, "learning");
+  }
+});
+
+test("deck pessoal cria cartões e revisões sem alterar a biblioteca editorial", async () => {
+  const before = await api.listPersonalFlashcardDecks();
+  const deckId = "a8000000-0000-4000-8000-000000000001";
+  const cardId = "a8000000-0000-4000-8000-000000000002";
+  const deck = await api.createPersonalFlashcardDeck({ id: deckId, subject: "Criminologia", title: "Meus erros", requestId: requestId() });
+  assert.ok(deck.ok);
+  const card = await api.createPersonalFlashcard({ id: cardId, deckId, topic: "Controle social", front: "Pergunta", back: "Resposta", requestId: requestId() });
+  assert.ok(card.ok);
+  const grade = await api.gradePersonalFlashcard({ deckId, cardId, grade: "good", requestId: requestId() });
+  assert.ok(grade.ok);
+  assert.equal((await api.listPersonalFlashcardDecks()).length, before.length + 1);
+  assert.equal((await api.loadPersonalFlashcardReviews([deckId])).length, 1);
+  assert.equal((await api.loadLibraryFlashcardReviews(POLICE_FLASHCARDS.subjects.flatMap((subject) => subject.decks.map((item) => item.id)))).length, 0);
+});
+
+test("piloto PMPR cria um catálogo único e mantém aulas novas em rascunho", async () => {
+  const first = await api.ensurePmprPilotCatalog(requestId());
+  const repeated = await api.ensurePmprPilotCatalog(requestId());
+  assert.ok(first.ok && repeated.ok);
+  assert.equal(first.data, repeated.data);
+
+  const catalogs = (await api.listCatalogs()).filter((catalog) => catalog.key === "pmpr-soldado-2025");
+  assert.equal(catalogs.length, 1);
+  const rules = await api.loadSubjectRules(first.data);
+  assert.equal(rules.length, 9);
+
+  const key = requestId();
+  const draft = await api.createDraftLesson(first.data, "Língua Portuguesa", "Interpretação de textos", key);
+  const retried = await api.createDraftLesson(first.data, "Língua Portuguesa", "Interpretação de textos", key);
+  assert.ok(draft.ok && retried.ok);
+  assert.equal(draft.data.id, retried.data.id);
+  assert.equal(draft.data.published, false);
+  assert.equal((await api.loadCatalogLessons(first.data)).length, 1);
+});
+
+test("catálogo da turma libera aula publicada ao aluno matriculado e acompanha sua mudança de turma", async () => {
+  const catalog = await api.ensurePmprPilotCatalog(requestId());
+  assert.ok(catalog.ok);
+  const classroom = await api.createClass({ name: "Soldado PMPR · Turma piloto" }, requestId());
+  assert.ok(classroom.ok);
+
+  const draft = await api.createDraftLesson(catalog.data, "Língua Portuguesa", "Interpretação de textos", requestId());
+  assert.ok(draft.ok);
+  assert.ok((await api.setClassTheoryCatalog(classroom.data.id, catalog.data)).ok);
+  assert.ok((await api.moveStudent(classroom.data.id, "22222222-2222-4222-8222-222222222222")).ok);
+  assert.equal((await api.loadTheoryControl("plano")).length, 0, "rascunho ainda não aparece");
+
+  assert.ok((await api.saveLesson({ ...draft.data, published: true }, requestId())).ok);
+  const subjects = await api.loadTheoryControl("plano");
+  assert.equal(subjects[0]?.lessons[0]?.title, "Interpretação de textos");
+
+  const originalClass = (await api.listClasses()).find((item) => item.name === "PRF 2027 · Turma A");
+  assert.ok(originalClass);
+  assert.ok((await api.moveStudent(originalClass.id, "22222222-2222-4222-8222-222222222222")).ok);
+  assert.equal((await api.loadTheoryControl("plano")).some((item) => item.subject === "Língua Portuguesa"), false);
+});
 
 test("a semana chega agrupada por dia e ordenada dentro do dia", async () => {
   const week = await api.loadWeek("plano", 1);
@@ -35,6 +129,15 @@ test("a semana chega agrupada por dia e ordenada dentro do dia", async () => {
   );
 });
 
+test("trocar de semana avança as datas e respeita o intervalo do seletor", async () => {
+  const options = await api.listWeeks("plano");
+  const week = await api.loadWeek("plano", 2);
+  assert.equal(week.startsOn, options[1]?.startsOn);
+  assert.equal(week.endsOn, options[1]?.endsOn);
+  assert.equal(week.days[0]?.date, week.startsOn);
+  assert.equal(week.days[6]?.date, week.endsOn);
+});
+
 test("o resumo da semana soma os registros, não as metas", async () => {
   const week = await api.loadWeek("plano", 1);
 
@@ -44,6 +147,41 @@ test("o resumo da semana soma os registros, não as metas", async () => {
   assert.equal(week.summary.correctAnswers, 14);
   assert.equal(week.summary.score, 77.8);
   assert.equal(week.summary.goalsCompleted, 1);
+});
+
+test("professor vincula recursos à aula e o aluno encontra os mesmos links", async () => {
+  const lesson = (await api.loadCatalogLessons("catalogo")).find((item) => item.lessonCode === "DC-02");
+  assert.ok(lesson);
+  const pdf = "https://fronteira.example/materiais/prf/aula-01.pdf";
+  const saved = await api.saveLesson({
+    ...lesson,
+    materialBlocks: [{ title: "Organização do Estado", pdf, tecQuestions: "https://www.tecconcursos.com.br/questoes/123", qcQuestions: null }],
+  }, requestId());
+  assert.ok(saved.ok);
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days[0]!.goals[0]!;
+  const theory = await api.loadTheoryGoal(goal.id);
+  assert.equal(theory.lesson?.materialBlocks[0]?.pdf, pdf);
+  assert.equal(theory.lesson?.materialBlocks[0]?.tecQuestions, "https://www.tecconcursos.com.br/questoes/123");
+});
+
+test("professor cadastra cartões por aula e a revisão do aluno não altera o desempenho de questões", async () => {
+  const lesson = (await api.loadCatalogLessons("catalogo")).find((item) => item.lessonCode === "DC-02");
+  assert.ok(lesson);
+  const card = { id: "88888888-8888-4888-8888-000000000001", topic: "Organização do Estado", front: "Pergunta de teste", back: "Explicação de teste" };
+  assert.ok((await api.saveLesson({ ...lesson, flashcardCards: [card] }, requestId())).ok);
+  const studentLesson = (await api.loadTheoryControl("plano")).flatMap((subject) => subject.lessons).find((item) => item.id === lesson.id);
+  assert.deepEqual(studentLesson?.flashcardCards, [card]);
+
+  const before = (await api.loadWeek("plano", 1)).summary;
+  const graded = await api.gradeFlashcard({ lessonId: lesson.id, cardId: card.id, grade: "good", requestId: requestId() });
+  assert.ok(graded.ok);
+  assert.equal(graded.data.reviewCount, 1);
+  assert.equal((await api.loadFlashcardReviews(lesson.id))[0]?.cardId, card.id);
+  assert.deepEqual((await api.loadFlashcardReviewsForLessons([lesson.id, "aula-inexistente"]))[0], graded.data);
+  const after = (await api.loadWeek("plano", 1)).summary;
+  assert.equal(after.questionsAnswered, before.questionsAnswered);
+  assert.equal(after.correctAnswers, before.correctAnswers);
 });
 
 test("registrar estudo NÃO conclui a meta", async () => {
@@ -179,6 +317,15 @@ test("estudo extra cria a meta e o registro numa operação só", async () => {
 });
 
 test("encerrar a sessão de teoria NÃO conclui a aula", async () => {
+  const lesson = (await api.loadCatalogLessons("catalogo")).find((item) => item.lessonCode === "DC-02");
+  assert.ok(lesson);
+  assert.ok((await api.saveLesson({
+    ...lesson,
+    theoryStartPage: 3,
+    theoryEndPage: 55,
+    pdfTotalPages: 104,
+    finalQuestionsStart: 56,
+  }, requestId())).ok);
   const week = await api.loadWeek("plano", 1);
   // Terça: a aula de teoria que ainda não tem questões iniciais.
   const goal = week.days[1]!.goals[0]!;
@@ -197,13 +344,13 @@ test("encerrar a sessão de teoria NÃO conclui a aula", async () => {
   assert.equal(saved.data.lessonDone, false, "mas a aula não, sem as questões iniciais");
 });
 
-test("a próxima aula só libera depois do mínimo de questões iniciais", async () => {
+test("questões cumprem a meta de prática sem liberar a próxima aula", async () => {
   const week = await api.loadWeek("plano", 1);
   const goal = week.days[1]!.goals[0]!;
   assert.ok(goal.theory);
 
   const antes = await api.loadTheoryGoal(goal.id);
-  assert.equal(antes.nextLessonUnlocked, false);
+  assert.equal(antes.progress?.initialQuestionsComplete, false);
 
   await api.saveTheoryProgress({
     goalId: goal.id,
@@ -213,7 +360,7 @@ test("a próxima aula só libera depois do mínimo de questões iniciais", async
     endSession: false,
   });
 
-  // Uma questão a menos que o mínimo: ainda trancado.
+  // Uma questão a menos que o mínimo: prática ainda incompleta.
   await api.recordInitialQuestions({
     goalId: goal.id,
     lessonId: goal.theory.lessonId,
@@ -222,7 +369,7 @@ test("a próxima aula só libera depois do mínimo de questões iniciais", async
     correctAnswers: 10,
   });
   const quase = await api.loadTheoryGoal(goal.id);
-  assert.equal(quase.nextLessonUnlocked, false);
+  assert.equal(quase.progress?.initialQuestionsComplete, false);
   assert.equal(quase.progress?.lessonDone, false);
 
   await api.recordInitialQuestions({
@@ -232,20 +379,55 @@ test("a próxima aula só libera depois do mínimo de questões iniciais", async
     questions: 1,
     correctAnswers: 1,
   });
-  const liberado = await api.loadTheoryGoal(goal.id);
-  assert.equal(liberado.nextLessonUnlocked, true);
-  assert.equal(liberado.progress?.lessonDone, true, "teoria lida E questões iniciais");
+  const concluido = await api.loadTheoryGoal(goal.id);
+  assert.equal(concluido.lesson?.id, antes.lesson?.id, "questões não alteram a aula publicada");
+  assert.equal(concluido.progress?.lessonDone, true, "questões atingiram a meta de prática");
 });
 
-test("disciplina fora do catálogo auditado recebe diagnóstico, não página inventada", async () => {
+test("acertos e erros registrados atualizam o desempenho diário e geral", async () => {
+  const before = await api.loadStatistics({ studyPlanId: "plano", year: 2026 });
   const week = await api.loadWeek("plano", 1);
-  // Quinta: Matemática Financeira, que a auditoria da v108.5 deixou de fora.
+  const goal = week.days[1]!.goals[0]!;
+  assert.ok(goal.theory);
+
+  const saved = await api.recordInitialQuestions({
+    goalId: goal.id,
+    lessonId: goal.theory.lessonId,
+    requestId: requestId(),
+    questions: 10,
+    correctAnswers: 7,
+  });
+  assert.ok(saved.ok);
+
+  const after = await api.loadStatistics({ studyPlanId: "plano", year: 2026 });
+  assert.equal(after.questionsAnswered, before.questionsAnswered + 10);
+  assert.equal(after.correctAnswers, before.correctAnswers + 7);
+  assert.ok(after.dailyQuestions.some((day) => day.questions === 10 && day.correctAnswers === 7 && day.wrongAnswers === 3));
+});
+
+test("aula sem páginas mapeadas continua disponível para estudo e questões", async () => {
+  const week = await api.loadWeek("plano", 1);
+  // Quinta: Informática, cujo material ainda não tem páginas conferidas.
   const goal = week.days[3]!.goals[0]!;
 
   const theory = await api.loadTheoryGoal(goal.id);
-  assert.equal(theory.diagnosis.kind, "subject_not_audited");
-  assert.equal(theory.lesson, null, "sem aula, porque não há página confiável");
-  assert.equal(theory.progress, null);
+  assert.equal(theory.diagnosis.kind, "ok");
+  assert.equal(theory.lesson?.theoryEndPage, null);
+  assert.ok(theory.progress);
+});
+
+test("professor controla a publicação sem depender das questões do aluno", async () => {
+  const lessons = await api.loadCatalogLessons("catalogo");
+  const second = lessons.find((lesson) => lesson.lessonCode === "DC-02");
+  assert.ok(second);
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days[1]!.goals[0]!;
+  assert.equal((await api.loadTheoryGoal(goal.id)).lesson?.id, second.id);
+
+  assert.ok((await api.saveLesson({ ...second, published: false }, requestId())).ok);
+  assert.equal((await api.loadTheoryGoal(goal.id)).lesson?.lessonCode, "DC-01");
+  assert.ok((await api.saveLesson({ ...second, published: true }, requestId())).ok);
+  assert.equal((await api.loadTheoryGoal(goal.id)).lesson?.id, second.id);
 });
 
 test("gerar semana no modo seguro preserva o que já foi concluído", async () => {
@@ -379,7 +561,7 @@ test("importar o MASTER relata as disciplinas que ficaram sem página", async ()
 
   assert.ok(imported.ok);
   assert.deepEqual(imported.data.subjectsWithoutPages, [
-    "Matemática Financeira",
+    "Informática",
     "Tecnologia da Informação",
   ]);
 });

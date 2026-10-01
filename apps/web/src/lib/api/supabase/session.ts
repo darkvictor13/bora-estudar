@@ -87,10 +87,12 @@ export async function requireSession(): Promise<Session> {
 }
 
 export const PLAN_COLUMNS =
-  "id,name,area,target_exam,stage,study_model,weekly_goals,starts_on,exam_date,status";
+  "id,student_id,class_id,name,area,target_exam,stage,study_model,weekly_goals,starts_on,exam_date,status";
 
 export interface PlanRow {
   id: string;
+  student_id: string;
+  class_id: string | null;
   name: string;
   area: string;
   target_exam: string | null;
@@ -105,6 +107,8 @@ export interface PlanRow {
 export function toPlan(row: PlanRow): StudyPlanSummary {
   return {
     id: row.id,
+    studentId: row.student_id,
+    classId: row.class_id,
     name: row.name,
     area: row.area,
     targetExam: row.target_exam,

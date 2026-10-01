@@ -729,7 +729,7 @@ test.describe("F-VINC · liberar e bloquear", () => {
     await signIn(scenario.student);
     await teacherPage.goto("/aluno");
     await expect(teacherPage).toHaveURL(/\/aluno$/);
-    await expect(teacherPage.locator("h1")).toHaveText("Metas da semana");
+    await expect(teacherPage.locator("h1")).toHaveText("Minha semana");
   });
 
   test("F-VINC-06 · liberar de novo SOMA ao que ainda falta", async ({

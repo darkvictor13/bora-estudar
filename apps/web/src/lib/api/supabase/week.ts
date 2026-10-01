@@ -136,12 +136,8 @@ function toGoal(row: GoalRow): Goal {
      * QUEM ESCOLHE A AULA É O MOTOR, NÃO A META — e por isso `goals` não tem
      * coluna apontando para `theory_lessons`, nem precisa de uma.
      *
-     * A meta diz a DISCIPLINA; a aula atual é a primeira daquela disciplina
-     * que o aluno ainda não concluiu, no catálogo vinculado ao planejamento.
-     * É como a v108.2 funciona ("a aula atual e o caderno TEC são carregados
-     * automaticamente do catálogo vinculado"), e é o que faz a meta da semana
-     * seguinte continuar de onde a anterior parou sem o professor reescrever
-     * nada.
+     * A meta diz a DISCIPLINA; a aula atual é a mais recente que o professor
+     * publicou no catálogo vinculado ao planejamento.
      *
      * Preenchido por `attachTheory`, que resolve o catálogo uma vez por semana
      * em vez de uma vez por meta.

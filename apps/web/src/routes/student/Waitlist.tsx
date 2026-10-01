@@ -132,7 +132,7 @@ export function Waitlist() {
               label="Área de interesse"
               name="interestArea"
               defaultValue={entry?.interestArea ?? ""}
-              placeholder="Fiscal, policial, tribunais…"
+              placeholder="Carreira policial"
             />
             <Field
               label="Concurso alvo"
