@@ -1,4 +1,4 @@
-import type { MockExamInput, MockExamResult } from "../api/mock-exams.ts";
+import type { MockExamInput, MockExamResult, MockExamScores } from "../api/mock-exams.ts";
 
 export function validScore(score: number, maxScore: number): boolean {
   return Number.isFinite(score) && score >= 0 && score <= maxScore
@@ -75,5 +75,31 @@ export function calculateMockExamStatistics(
       rank: mine.rank,
       percentile: Math.round((scores.filter((score) => score < mine.score).length / scores.length) * 100),
     } : null,
+  };
+}
+
+/** O nome com que o aluno vê cada colega no placar do simulado. */
+export const PEER_NAME = "Colega";
+
+/** O id de ocasião de um colega no placar: vale só dentro de uma leitura. */
+export const peerId = (participant: number) => `colega-${participant}`;
+
+/**
+ * O placar como o aluno pode vê-lo — a mesma regra de `mock_exam_scoreboard`:
+ * só quem tem nota geral, a própria linha com nome, as dos colegas sem nome e
+ * com id de ocasião.
+ */
+export function anonymizeMockExamScores(
+  scores: MockExamScores,
+  self: { readonly profileId: string; readonly name: string | null },
+): MockExamScores {
+  const scored = scores.results.filter((row) => row.score !== null);
+  const ids = new Map(scored.map((row, index) => [row.studentId, row.studentId === self.profileId ? self.profileId : peerId(index + 1)]));
+  return {
+    results: scored.map((row) => row.studentId === self.profileId
+      ? { ...row, studentName: self.name ?? row.studentName }
+      : { studentId: ids.get(row.studentId) ?? "", studentName: PEER_NAME, score: row.score }),
+    subjectResults: scores.subjectResults.filter((row) => ids.has(row.studentId))
+      .map((row) => ({ ...row, studentId: ids.get(row.studentId) ?? "" })),
   };
 }

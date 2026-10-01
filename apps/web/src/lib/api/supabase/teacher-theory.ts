@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import { normalizeSubjectKey } from "@/lib/domain/theory";
 import { PMPR_SOLDADO_2025 } from "@/lib/domain/pmpr-soldado";
 import { readLessonMaterialBlocks, validateLessonMaterialBlocks, validateLessonResources } from "@/lib/domain/lesson-resources";
-import { readFlashcardCards, validateFlashcardCards } from "@/lib/domain/flashcards";
+import { validateFlashcardCards } from "@/lib/domain/flashcards";
 import type { Json } from "@bora/database";
 
 import type {
@@ -24,6 +24,7 @@ import type {
   Uuid,
 } from "../contract.ts";
 import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
+import { LESSON_CARD_COLUMNS, saveLessonCards, toLessonCards, type LessonCardRow } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
 
@@ -114,7 +115,7 @@ export function ensurePmprPilotCatalog(requestId: RequestId): Promise<Result<Uui
 const LESSON_COLUMNS =
   "id,subject,subject_key,lesson_code,position,title,pdf_file,theory_start_page," +
   "theory_end_page,pdf_total_pages,final_questions_start,has_theory,note,published," +
-  "pdf_url,flashcards_url,flash_summary_url,tec_questions_url,qc_questions_url,material_blocks,flashcard_cards";
+  "pdf_url,flashcards_url,flash_summary_url,tec_questions_url,qc_questions_url,material_blocks," + LESSON_CARD_COLUMNS;
 
 interface LessonRow {
   id: string;
@@ -131,7 +132,7 @@ interface LessonRow {
   tec_questions_url: string | null;
   qc_questions_url: string | null;
   material_blocks: unknown;
-  flashcard_cards: unknown;
+  theory_lesson_flashcards: LessonCardRow[] | null;
   theory_start_page: number | null;
   theory_end_page: number | null;
   pdf_total_pages: number | null;
@@ -158,7 +159,7 @@ function toLesson(row: LessonRow): TheoryLesson {
       qcQuestions: row.qc_questions_url,
     },
     materialBlocks: readLessonMaterialBlocks(row.material_blocks),
-    flashcardCards: readFlashcardCards(row.flashcard_cards),
+    flashcardCards: toLessonCards(row.theory_lesson_flashcards),
     theoryStartPage: row.theory_start_page,
     theoryEndPage: row.theory_end_page,
     pdfTotalPages: row.pdf_total_pages,
@@ -437,7 +438,6 @@ export function saveLesson(
         tec_questions_url: lesson.resources.tecQuestions,
         qc_questions_url: lesson.resources.qcQuestions,
         material_blocks: lesson.materialBlocks as unknown as Json,
-        flashcard_cards: (lesson.flashcardCards ?? []) as unknown as Json,
         theory_start_page: lesson.theoryStartPage,
         theory_end_page: lesson.theoryEndPage,
         pdf_total_pages: lesson.pdfTotalPages,
@@ -447,12 +447,24 @@ export function saveLesson(
         published: lesson.published,
       })
       .eq("id", lesson.id)
-      .select(LESSON_COLUMNS)
+      .select("id,teacher_id")
       .maybeSingle();
 
     if (error) return failure<TheoryLesson>(translateDbError(error));
     if (!data) return fail<TheoryLesson>("not_found", "Aula não encontrada.");
-    return done(toLesson(data as unknown as LessonRow));
+
+    // Os cartões moram na própria tabela, e não numa coluna da aula: a
+    // revisão do aluno aponta para o id de cada um.
+    const cardsError = await saveLessonCards(lesson.id, data.teacher_id, lesson.flashcardCards ?? []);
+    if (cardsError) return failure<TheoryLesson>(translateDbError(cardsError));
+
+    const { data: saved, error: readError } = await supabase
+      .from("theory_lessons")
+      .select(LESSON_COLUMNS)
+      .eq("id", lesson.id)
+      .single();
+    if (readError) return failure<TheoryLesson>(translateDbError(readError));
+    return done(toLesson(saved as unknown as LessonRow));
   });
 }
 
@@ -519,7 +531,7 @@ interface MasterRecord {
 
 type MasterLessonRow = Omit<LessonRow,
   "id" | "published" | "pdf_url" | "flashcards_url" | "flash_summary_url" |
-  "tec_questions_url" | "qc_questions_url" | "material_blocks" | "flashcard_cards"
+  "tec_questions_url" | "qc_questions_url" | "material_blocks" | "theory_lesson_flashcards"
 >;
 
 /**

@@ -69,6 +69,20 @@ do $$ declare r record; begin
  end if;
 end $$;
 
+-- Quem saiu da turma não recebe mais a distribuição dos ex-colegas — e, fora
+-- da amostra, cinco colegas seriam cinco notas exatas.
+reset role;
+select app_test.act_as_owner();
+delete from public.class_students where student_id='fa000000-0000-4000-8000-000000000002';
+set role authenticated;
+select app_test.act_as('fa000000-0000-4000-8000-000000000002');
+do $$ declare r record; begin
+ select * into r from public.student_question_comparison(2026);
+ if r.sample_size <> 0 or r.q1 is not null or r.box_min is not null then
+   raise exception 'FALHOU: aluno fora da turma recebeu a distribuição dos ex-colegas (%)', row_to_json(r);
+ end if;
+end $$;
+
 select app_test.act_as('fa000000-0000-4000-8000-000000000001');
 do $$ begin
  perform public.student_question_comparison(2026);

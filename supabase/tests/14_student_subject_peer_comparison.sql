@@ -60,12 +60,14 @@ insert into public.goal_entries(id,goal_id,teacher_id,student_id,questions,corre
 -- Geral tem cinco colegas. Em Informática, só quatro colegas responderam.
 reset role;
 select app_test.act_as_owner();
-insert into public.goals(id,study_plan_id,teacher_id,student_id,weekday,weekday_name,type,subject,title)
+-- Posição 2 no dia: a meta de Geral já ocupa a 1, e `goals_one_per_slot_idx`
+-- não deixa duas metas no mesmo lugar do mesmo plano.
+insert into public.goals(id,study_plan_id,teacher_id,student_id,weekday,weekday_name,day_position,type,subject,title)
 select ('fd000000-0000-4000-8000-0000000002' || lpad(n::text,2,'0'))::uuid,
        ('fc000000-0000-4000-8000-00000000000' || n::text)::uuid,
        'fa000000-0000-4000-8000-000000000001'::uuid,
        ('fa000000-0000-4000-8000-00000000000' || (n+1)::text)::uuid,
-       1,'Segunda','question_block','Informática','Redes'
+       1,'Segunda',2,'question_block','Informática','Redes'
   from generate_series(1,5) n;
 insert into public.goal_entries(id,goal_id,teacher_id,student_id,questions,correct_answers,created_at)
 select ('fe000000-0000-4000-8000-0000000002' || lpad(n::text,2,'0'))::uuid,
@@ -88,6 +90,18 @@ do $$ declare general record; sparse record; begin
  end if;
  if exists (select 1 from public.student_subject_peer_comparison(2025)) then
    raise exception 'FALHOU: dados de outro ano entraram no radar';
+ end if;
+end $$;
+
+-- Quem saiu da turma não recebe mais a média dos ex-colegas.
+reset role;
+select app_test.act_as_owner();
+delete from public.class_students where student_id='fa000000-0000-4000-8000-000000000002';
+set role authenticated;
+select app_test.act_as('fa000000-0000-4000-8000-000000000002');
+do $$ begin
+ if exists (select 1 from public.student_subject_peer_comparison(2026)) then
+   raise exception 'FALHOU: aluno fora da turma recebeu a média dos ex-colegas';
  end if;
 end $$;
 

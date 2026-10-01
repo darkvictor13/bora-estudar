@@ -1,6 +1,6 @@
 import type { MockExam, MockExamResult, MockExamSubject, MockExamSubjectResult, MockExamsApi } from "./mock-exams.ts";
 import type { Session, StudentCard, TeacherClass, Result } from "./contract.ts";
-import { validateMockExam, validScore } from "../domain/mock-exams.ts";
+import { anonymizeMockExamScores, validateMockExam, validScore } from "../domain/mock-exams.ts";
 
 export function createMockExamFixtures(context: {
   session: () => Session | null;
@@ -30,9 +30,13 @@ export function createMockExamFixtures(context: {
     && context.students().some((s) => s.studentId === context.session()?.profileId && s.classId === exam.classId));
   return {
     async listMockExams() { return exams.filter(visible).sort((a, b) => b.examDate.localeCompare(a.examDate)); },
-    async loadMockExamResults(id) { return exams.some((e) => e.id === id && visible(e)) ? [...(results.get(id) ?? [])] : []; },
+    async loadMockExamScores(id) {
+      if (!exams.some((e) => e.id === id && visible(e))) return { results: [], subjectResults: [] };
+      const scores = { results: [...(results.get(id) ?? [])], subjectResults: [...(subjectResults.get(id) ?? [])] };
+      const session = context.session();
+      return teacher() || !session ? scores : anonymizeMockExamScores(scores, session);
+    },
     async listMockExamSubjects(id) { return exams.some((e) => e.id === id && visible(e)) ? [...(subjects.get(id) ?? [])] : []; },
-    async loadMockExamSubjectResults(id) { return exams.some((e) => e.id === id && visible(e)) ? [...(subjectResults.get(id) ?? [])] : []; },
     async createMockExam(input) {
       if (!teacher()) return fail("Somente o professor cadastra simulados.");
       const invalid = validateMockExam(input);

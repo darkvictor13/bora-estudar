@@ -13,6 +13,7 @@ import type {
   Result,
 } from "../contract.ts";
 import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
+import { reviewValues, writeReview } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
 
@@ -121,9 +122,16 @@ export function gradePersonalFlashcard(input: GradePersonalFlashcardInput): Prom
     if (readError) return failure(translateDbError(readError));
     const previousReview = previous ? toReview(previous as ReviewRow) : undefined;
     const next = scheduleFlashcardReview(input.deckId, input.cardId, input.grade, previousReview ? { ...previousReview, lessonId: input.deckId } : undefined);
-    const { data, error } = await supabase.from("personal_flashcard_reviews")
-      .upsert({ student_id: session.profileId, deck_id: input.deckId, card_id: input.cardId, due_at: next.dueAt, interval_minutes: next.intervalMinutes, review_count: next.reviewCount, last_grade: next.lastGrade, state: next.state, step: next.step, stability: next.stability, difficulty: next.difficulty, lapses: next.lapses, last_reviewed_at: next.lastReviewedAt }, { onConflict: "student_id,deck_id,card_id" })
-      .select(REVIEW_COLUMNS).single();
+    const values = reviewValues(next);
+    const { data, error } = await writeReview(
+      previous !== null,
+      () => supabase.from("personal_flashcard_reviews")
+        .insert({ student_id: session.profileId, deck_id: input.deckId, card_id: input.cardId, ...values })
+        .select(REVIEW_COLUMNS).single(),
+      () => supabase.from("personal_flashcard_reviews").update(values)
+        .eq("student_id", session.profileId).eq("deck_id", input.deckId).eq("card_id", input.cardId)
+        .select(REVIEW_COLUMNS).single(),
+    );
     if (error) return failure(translateDbError(error));
     return done(toReview(data as ReviewRow));
   });

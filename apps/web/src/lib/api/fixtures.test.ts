@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
-import { fixturesApi as api, resetFixtures } from "./fixtures.ts";
+import { fixturesApi as api, resetFixtures, setFixtureRole } from "./fixtures.ts";
 import { POLICE_FLASHCARDS } from "../domain/library-flashcards.ts";
 
 beforeEach(() => {
@@ -735,4 +735,23 @@ test("renomear a turma aparece também na linha do aluno", async () => {
 
   const alunos = await api.listStudents({ classId: turmaA!.id });
   assert.deepEqual(new Set(alunos.map((student) => student.className)), new Set(["Fiscal 2028"]));
+});
+
+test("simulado: o professor vê os nomes, o aluno só o próprio e 'Colega'", async () => {
+  setFixtureRole("teacher");
+  const [exam] = await api.listMockExams();
+  assert.ok(exam);
+  const teacherView = await api.loadMockExamScores(exam.id);
+  assert.ok(teacherView.results.length >= 2, "o cenário precisa de dois alunos na turma");
+  const names = teacherView.results.map((row) => row.studentName);
+
+  setFixtureRole("student");
+  const studentView = await api.loadMockExamScores(exam.id);
+  const own = studentView.results.filter((row) => row.studentName !== "Colega");
+  assert.equal(own.length, 1, "só a própria linha tem nome");
+  const others = new Set(teacherView.results.map((row) => row.studentId));
+  const text = JSON.stringify(studentView);
+  for (const name of names.filter((name) => name !== own[0]?.studentName)) assert.ok(!text.includes(name), `vazou ${name}`);
+  for (const id of others) if (id !== own[0]?.studentId) assert.ok(!text.includes(id), `vazou o id ${id}`);
+  assert.equal(studentView.results.length, teacherView.results.filter((row) => row.score !== null).length);
 });

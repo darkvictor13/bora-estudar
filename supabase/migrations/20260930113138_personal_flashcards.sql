@@ -66,35 +66,39 @@ grant update (due_at, interval_minutes, review_count, last_grade, state, step, s
   on public.personal_flashcard_reviews to authenticated;
 grant all on public.personal_flashcard_decks, public.personal_flashcards, public.personal_flashcard_reviews to service_role;
 
+-- Ler o que é seu não exige acesso vigente; escrever, sim — o mesmo corte do
+-- resto do schema. Com `has_active_access()` no USING, quem venceu via os
+-- próprios decks sumirem em silêncio. O DELETE fica com ele: sem WITH CHECK,
+-- é no USING que a escrita se tranca.
 create policy personal_flashcard_decks_select on public.personal_flashcard_decks
-  for select to authenticated using (student_id = (select auth.uid()) and (select public.has_active_access()));
+  for select to authenticated using (student_id = (select auth.uid()));
 create policy personal_flashcard_decks_insert on public.personal_flashcard_decks
   for insert to authenticated with check (student_id = (select auth.uid()) and (select public.has_active_access()));
 create policy personal_flashcard_decks_update on public.personal_flashcard_decks
   for update to authenticated
-  using (student_id = (select auth.uid()) and (select public.has_active_access()))
+  using (student_id = (select auth.uid()))
   with check (student_id = (select auth.uid()) and (select public.has_active_access()));
 create policy personal_flashcard_decks_delete on public.personal_flashcard_decks
   for delete to authenticated using (student_id = (select auth.uid()) and (select public.has_active_access()));
 
 create policy personal_flashcards_select on public.personal_flashcards
-  for select to authenticated using (student_id = (select auth.uid()) and (select public.has_active_access()));
+  for select to authenticated using (student_id = (select auth.uid()));
 create policy personal_flashcards_insert on public.personal_flashcards
   for insert to authenticated with check (student_id = (select auth.uid()) and (select public.has_active_access()));
 create policy personal_flashcards_update on public.personal_flashcards
   for update to authenticated
-  using (student_id = (select auth.uid()) and (select public.has_active_access()))
+  using (student_id = (select auth.uid()))
   with check (student_id = (select auth.uid()) and (select public.has_active_access()));
 create policy personal_flashcards_delete on public.personal_flashcards
   for delete to authenticated using (student_id = (select auth.uid()) and (select public.has_active_access()));
 
 create policy personal_flashcard_reviews_select on public.personal_flashcard_reviews
-  for select to authenticated using (student_id = (select auth.uid()) and (select public.has_active_access()));
+  for select to authenticated using (student_id = (select auth.uid()));
 create policy personal_flashcard_reviews_insert on public.personal_flashcard_reviews
   for insert to authenticated with check (student_id = (select auth.uid()) and (select public.has_active_access()));
 create policy personal_flashcard_reviews_update on public.personal_flashcard_reviews
   for update to authenticated
-  using (student_id = (select auth.uid()) and (select public.has_active_access()))
+  using (student_id = (select auth.uid()))
   with check (student_id = (select auth.uid()) and (select public.has_active_access()));
 
 create trigger personal_flashcard_decks_updated_at before update on public.personal_flashcard_decks

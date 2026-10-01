@@ -23,9 +23,9 @@ export async function teacherMockExamsLoader({ request }: { request: Request }) 
   const [exams, classes, students] = await Promise.all([api.listMockExams(), api.listClasses(), api.listStudents({})]);
   const asked = new URL(request.url).searchParams.get("simulado");
   const selected = exams.find((exam) => exam.id === asked) ?? exams[0] ?? null;
-  const [results, subjects, subjectResults] = selected ? await Promise.all([
-    api.loadMockExamResults(selected.id), api.listMockExamSubjects(selected.id), api.loadMockExamSubjectResults(selected.id),
-  ]) : [[], [], []];
+  const [{ results, subjectResults }, subjects] = selected ? await Promise.all([
+    api.loadMockExamScores(selected.id), api.listMockExamSubjects(selected.id),
+  ]) : [{ results: [], subjectResults: [] }, []];
   return { exams, classes, students, selected, results, subjects, subjectResults };
 }
 

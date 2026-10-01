@@ -28,9 +28,12 @@ insert into public.mock_exams(id,teacher_id,class_id,title,exam_date,max_score) 
 insert into public.mock_exam_results(exam_id,teacher_id,student_id,score) values
  ('ee200000-0000-4000-8000-000000000001','ee000000-0000-4000-8000-000000000001','ee000000-0000-4000-8000-000000000003',80),
  ('ee200000-0000-4000-8000-000000000001','ee000000-0000-4000-8000-000000000001','ee000000-0000-4000-8000-000000000004',80);
+-- O nome mora em `profiles`. A cópia que esta tabela guardava ficava velha no
+-- primeiro "editar perfil" e era o que entregava o nome dos colegas ao aluno.
 do $$ begin
- if (select student_name from public.mock_exam_results where student_id='ee000000-0000-4000-8000-000000000003') <> 'Ana' then
-  raise exception 'FALHOU: nome não veio do perfil';
+ if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='mock_exam_results' and column_name='student_name') then
+  raise exception 'FALHOU: mock_exam_results voltou a copiar o nome do aluno';
  end if;
 end $$;
 do $$ begin
@@ -79,7 +82,15 @@ exception when raise_exception then
 end $$;
 select app_test.act_as('ee000000-0000-4000-8000-000000000003');
 do $$ declare n int; begin
- if (select count(*) from public.mock_exam_results) <> 2 then raise exception 'FALHOU: aluno não vê ranking publicado da turma'; end if;
+ -- Pela tabela, só a própria nota. A turma vem anônima, pela função.
+ if (select count(*) from public.mock_exam_results) <> 1
+    or exists (select 1 from public.mock_exam_results where student_id <> 'ee000000-0000-4000-8000-000000000003') then
+  raise exception 'FALHOU: aluno leu a nota de um colega direto na tabela';
+ end if;
+ if (select count(*) from public.mock_exam_scoreboard('ee200000-0000-4000-8000-000000000001') where subject is null) <> 2
+    or (select count(*) from public.mock_exam_scoreboard('ee200000-0000-4000-8000-000000000001') where is_self) <> 1 then
+  raise exception 'FALHOU: o placar anônimo não trouxe as duas notas, com uma só marcada como dele';
+ end if;
  update public.mock_exam_results set score=100 where student_id='ee000000-0000-4000-8000-000000000003';
  get diagnostics n=row_count;
  if n <> 0 then raise exception 'FALHOU: aluno alterou nota'; end if;
@@ -87,13 +98,26 @@ do $$ declare n int; begin
  get diagnostics n=row_count;
  if n <> 0 then raise exception 'FALHOU: aluno alterou publicação'; end if;
 end $$;
+-- O placar não devolve id nem nome de ninguém: o tipo de retorno é a defesa.
+do $$ begin
+ if exists (select 1 from pg_proc p, unnest(p.proargnames) arg
+             where p.proname = 'mock_exam_scoreboard' and arg ~ '(student|name|email)') then
+  raise exception 'FALHOU: mock_exam_scoreboard passou a devolver identidade';
+ end if;
+end $$;
 select app_test.act_as('ee000000-0000-4000-8000-000000000005');
 do $$ begin
  if exists(select 1 from public.mock_exams) or exists(select 1 from public.mock_exam_results) then raise exception 'FALHOU: outra turma acessa ranking'; end if;
+ if exists(select 1 from public.mock_exam_scoreboard('ee200000-0000-4000-8000-000000000001')) then
+  raise exception 'FALHOU: outra turma leu o placar pela função';
+ end if;
 end $$;
 select app_test.act_as('ee000000-0000-4000-8000-000000000002');
 do $$ declare n int; begin
  if exists(select 1 from public.mock_exams) or exists(select 1 from public.mock_exam_results) then raise exception 'FALHOU: outro professor acessa ranking'; end if;
+ if exists(select 1 from public.mock_exam_scoreboard('ee200000-0000-4000-8000-000000000001')) then
+  raise exception 'FALHOU: outro professor leu o placar pela função';
+ end if;
  update public.mock_exams set published=false;
  get diagnostics n=row_count;
  if n <> 0 then raise exception 'FALHOU: outro professor altera ranking'; end if;
@@ -104,7 +128,22 @@ update public.profiles set access_status='expired' where id='ee000000-0000-4000-
 set role authenticated;
 select app_test.act_as('ee000000-0000-4000-8000-000000000003');
 do $$ begin
- if exists(select 1 from public.mock_exams) or exists(select 1 from public.mock_exam_results) then raise exception 'FALHOU: acesso vencido vê ranking'; end if;
+ if exists(select 1 from public.mock_exams) then raise exception 'FALHOU: acesso vencido vê ranking'; end if;
+ if exists(select 1 from public.mock_exam_scoreboard('ee200000-0000-4000-8000-000000000001')) then
+  raise exception 'FALHOU: acesso vencido leu o placar pela função';
+ end if;
+end $$;
+
+-- Quem SAIU da turma não lê mais o placar dela.
+reset role;
+select app_test.act_as_owner();
+delete from public.class_students where student_id='ee000000-0000-4000-8000-000000000004';
+set role authenticated;
+select app_test.act_as('ee000000-0000-4000-8000-000000000004');
+do $$ begin
+ if exists(select 1 from public.mock_exam_scoreboard('ee200000-0000-4000-8000-000000000001')) then
+  raise exception 'FALHOU: aluno que saiu da turma leu o placar';
+ end if;
 end $$;
 reset role;
 set role anon;

@@ -1,4 +1,9 @@
 -- A turma compartilha um catálogo; o progresso continua no planejamento do aluno.
+--
+-- Convive com `study_plan_theory_catalogs`, e as duas não dizem a mesma coisa:
+-- o catálogo da TURMA prevalece para quem está matriculado, e o vínculo do
+-- planejamento atende quem está fora de turma (ou numa turma sem catálogo).
+-- Quem resolve é `loadTheoryContext`, em `apps/web/src/lib/api/supabase/theory.ts`.
 alter table public.classes
   add column theory_catalog_id uuid;
 

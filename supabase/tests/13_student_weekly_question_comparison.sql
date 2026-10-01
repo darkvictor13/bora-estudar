@@ -94,6 +94,19 @@ do $$ declare first_week record; second_week record; old_year record; begin
  end if;
 end $$;
 
+-- Quem saiu da turma não recebe mais a distribuição dos ex-colegas — e, fora
+-- da amostra, cinco colegas seriam cinco notas exatas.
+reset role;
+select app_test.act_as_owner();
+delete from public.class_students where student_id='fa000000-0000-4000-8000-000000000002';
+set role authenticated;
+select app_test.act_as('fa000000-0000-4000-8000-000000000002');
+do $$ begin
+ if exists (select 1 from public.student_weekly_question_comparison(2026)) then
+   raise exception 'FALHOU: aluno fora da turma recebeu as semanas dos ex-colegas';
+ end if;
+end $$;
+
 select app_test.act_as('fa000000-0000-4000-8000-000000000001');
 do $$ begin
  perform public.student_weekly_question_comparison(2026);

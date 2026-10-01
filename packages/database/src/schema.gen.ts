@@ -9,140 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      personal_flashcard_decks: {
-        Row: { id: string; student_id: string; subject: string; title: string; created_at: string; updated_at: string }
-        Insert: { id: string; student_id: string; subject: string; title: string; created_at?: string; updated_at?: string }
-        Update: { id?: string; student_id?: string; subject?: string; title?: string; created_at?: string; updated_at?: string }
-        Relationships: [
-          { foreignKeyName: "personal_flashcard_decks_student_id_fkey"; columns: ["student_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
-        ]
-      }
-      personal_flashcards: {
-        Row: { id: string; deck_id: string; student_id: string; topic: string; front: string; back: string; created_at: string; updated_at: string }
-        Insert: { id: string; deck_id: string; student_id: string; topic?: string; front: string; back: string; created_at?: string; updated_at?: string }
-        Update: { id?: string; deck_id?: string; student_id?: string; topic?: string; front?: string; back?: string; created_at?: string; updated_at?: string }
-        Relationships: [
-          { foreignKeyName: "personal_flashcards_deck_id_student_id_fkey"; columns: ["deck_id", "student_id"]; isOneToOne: false; referencedRelation: "personal_flashcard_decks"; referencedColumns: ["id", "student_id"] },
-        ]
-      }
-      personal_flashcard_reviews: {
-        Row: { student_id: string; deck_id: string; card_id: string; due_at: string; interval_minutes: number; review_count: number; last_grade: string; state: string; step: number; stability: number; difficulty: number; lapses: number; last_reviewed_at: string; updated_at: string }
-        Insert: { student_id: string; deck_id: string; card_id: string; due_at: string; interval_minutes: number; review_count: number; last_grade: string; state?: string; step?: number; stability?: number; difficulty?: number; lapses?: number; last_reviewed_at?: string; updated_at?: string }
-        Update: { student_id?: string; deck_id?: string; card_id?: string; due_at?: string; interval_minutes?: number; review_count?: number; last_grade?: string; state?: string; step?: number; stability?: number; difficulty?: number; lapses?: number; last_reviewed_at?: string; updated_at?: string }
-        Relationships: [
-          { foreignKeyName: "personal_flashcard_reviews_card_id_deck_id_student_id_fkey"; columns: ["card_id", "deck_id", "student_id"]; isOneToOne: false; referencedRelation: "personal_flashcards"; referencedColumns: ["id", "deck_id", "student_id"] },
-        ]
-      }
-      mock_exam_subjects: {
-        Row: { exam_id: string; teacher_id: string; subject: string; question_count: number }
-        Insert: { exam_id: string; teacher_id: string; subject: string; question_count: number }
-        Update: { exam_id?: string; teacher_id?: string; subject?: string; question_count?: number }
-        Relationships: [
-          { foreignKeyName: "mock_exam_subjects_exam_id_teacher_id_fkey"; columns: ["exam_id", "teacher_id"]; isOneToOne: false; referencedRelation: "mock_exams"; referencedColumns: ["id", "teacher_id"] },
-        ]
-      }
-      mock_exam_subject_results: {
-        Row: { exam_id: string; teacher_id: string; student_id: string; subject: string; correct_answers: number }
-        Insert: { exam_id: string; teacher_id: string; student_id: string; subject: string; correct_answers: number }
-        Update: { exam_id?: string; teacher_id?: string; student_id?: string; subject?: string; correct_answers?: number }
-        Relationships: [
-          { foreignKeyName: "mock_exam_subject_results_exam_id_teacher_id_subject_fkey"; columns: ["exam_id", "teacher_id", "subject"]; isOneToOne: false; referencedRelation: "mock_exam_subjects"; referencedColumns: ["exam_id", "teacher_id", "subject"] },
-          { foreignKeyName: "mock_exam_subject_results_student_id_fkey"; columns: ["student_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
-        ]
-      }
-      mock_exam_results: {
-        Row: {
-          exam_id: string
-          score: number | null
-          student_id: string
-          student_name: string
-          teacher_id: string
-          updated_at: string
-        }
-        Insert: {
-          exam_id: string
-          score?: number | null
-          student_id: string
-          student_name?: string
-          teacher_id: string
-          updated_at?: string
-        }
-        Update: {
-          exam_id?: string
-          score?: number | null
-          student_id?: string
-          student_name?: string
-          teacher_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mock_exam_results_exam_id_teacher_id_fkey"
-            columns: ["exam_id","teacher_id"]
-            isOneToOne: false
-            referencedRelation: "mock_exams"
-            referencedColumns: ["id","teacher_id"]
-          },
-          {
-            foreignKeyName: "mock_exam_results_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mock_exams: {
-        Row: {
-          class_id: string
-          created_at: string
-          exam_date: string
-          id: string
-          max_score: number
-          published: boolean
-          teacher_id: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          class_id: string
-          created_at?: string
-          exam_date: string
-          id: string
-          max_score: number
-          published?: boolean
-          teacher_id: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          class_id?: string
-          created_at?: string
-          exam_date?: string
-          id?: string
-          max_score?: number
-          published?: boolean
-          teacher_id?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mock_exams_class_id_teacher_id_fkey"
-            columns: ["class_id","teacher_id"]
-            isOneToOne: false
-            referencedRelation: "classes"
-            referencedColumns: ["id","teacher_id"]
-          },
-          {
-            foreignKeyName: "mock_exams_teacher_id_fkey"
-            columns: ["teacher_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       access_grants: {
         Row: {
           action: Database["public"]["Enums"]["access_grant_action"]
@@ -312,18 +178,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "classes_theory_catalog_fk"
-            columns: ["theory_catalog_id", "teacher_id"]
-            isOneToOne: false
-            referencedRelation: "theory_catalogs"
-            referencedColumns: ["id", "teacher_id"]
-          },
-          {
             foreignKeyName: "classes_teacher_id_fkey"
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classes_theory_catalog_fk"
+            columns: ["theory_catalog_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_catalogs"
+            referencedColumns: ["id", "teacher_id"]
           },
         ]
       }
@@ -359,122 +225,63 @@ export type Database = {
       }
       flashcard_reviews: {
         Row: {
-          student_id: string
-          theory_lesson_id: string
           card_id: string
+          difficulty: number
           due_at: string
           interval_minutes: number
-          review_count: number
+          lapses: number
           last_grade: string
-          updated_at: string
+          last_reviewed_at: string
+          review_count: number
+          stability: number
           state: string
           step: number
-          stability: number
-          difficulty: number
-          lapses: number
-          last_reviewed_at: string
-        }
-        Insert: {
           student_id: string
           theory_lesson_id: string
+          updated_at: string
+        }
+        Insert: {
           card_id: string
+          difficulty?: number
           due_at: string
           interval_minutes: number
-          review_count: number
+          lapses?: number
           last_grade: string
-          updated_at?: string
+          last_reviewed_at?: string
+          review_count: number
+          stability?: number
           state?: string
           step?: number
-          stability?: number
-          difficulty?: number
-          lapses?: number
-          last_reviewed_at?: string
+          student_id: string
+          theory_lesson_id: string
+          updated_at?: string
         }
         Update: {
+          card_id?: string
+          difficulty?: number
+          due_at?: string
+          interval_minutes?: number
+          lapses?: number
+          last_grade?: string
+          last_reviewed_at?: string
+          review_count?: number
+          stability?: number
+          state?: string
+          step?: number
           student_id?: string
           theory_lesson_id?: string
-          card_id?: string
-          due_at?: string
-          interval_minutes?: number
-          review_count?: number
-          last_grade?: string
           updated_at?: string
-          state?: string
-          step?: number
-          stability?: number
-          difficulty?: number
-          lapses?: number
-          last_reviewed_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "flashcard_reviews_card_id_theory_lesson_id_fkey"
+            columns: ["card_id", "theory_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lesson_flashcards"
+            referencedColumns: ["id", "theory_lesson_id"]
+          },
           {
             foreignKeyName: "flashcard_reviews_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "flashcard_reviews_theory_lesson_id_fkey"
-            columns: ["theory_lesson_id"]
-            isOneToOne: false
-            referencedRelation: "theory_lessons"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      library_flashcard_reviews: {
-        Row: {
-          student_id: string
-          deck_id: string
-          card_id: string
-          due_at: string
-          interval_minutes: number
-          review_count: number
-          last_grade: string
-          updated_at: string
-          state: string
-          step: number
-          stability: number
-          difficulty: number
-          lapses: number
-          last_reviewed_at: string
-        }
-        Insert: {
-          student_id: string
-          deck_id: string
-          card_id: string
-          due_at: string
-          interval_minutes: number
-          review_count: number
-          last_grade: string
-          updated_at?: string
-          state?: string
-          step?: number
-          stability?: number
-          difficulty?: number
-          lapses?: number
-          last_reviewed_at?: string
-        }
-        Update: {
-          student_id?: string
-          deck_id?: string
-          card_id?: string
-          due_at?: string
-          interval_minutes?: number
-          review_count?: number
-          last_grade?: string
-          updated_at?: string
-          state?: string
-          step?: number
-          stability?: number
-          difficulty?: number
-          lapses?: number
-          last_reviewed_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "library_flashcard_reviews_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -669,6 +476,380 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      library_flashcard_decks: {
+        Row: {
+          created_at: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      library_flashcard_reviews: {
+        Row: {
+          card_id: string
+          deck_id: string
+          difficulty: number
+          due_at: string
+          interval_minutes: number
+          lapses: number
+          last_grade: string
+          last_reviewed_at: string
+          review_count: number
+          stability: number
+          state: string
+          step: number
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          card_id: string
+          deck_id: string
+          difficulty?: number
+          due_at: string
+          interval_minutes: number
+          lapses?: number
+          last_grade: string
+          last_reviewed_at?: string
+          review_count: number
+          stability?: number
+          state?: string
+          step?: number
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string
+          deck_id?: string
+          difficulty?: number
+          due_at?: string
+          interval_minutes?: number
+          lapses?: number
+          last_grade?: string
+          last_reviewed_at?: string
+          review_count?: number
+          stability?: number
+          state?: string
+          step?: number
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_flashcard_reviews_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcard_decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "library_flashcard_reviews_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mock_exam_results: {
+        Row: {
+          exam_id: string
+          score: number | null
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          exam_id: string
+          score?: number | null
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          exam_id?: string
+          score?: number | null
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mock_exam_results_exam_id_teacher_id_fkey"
+            columns: ["exam_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "mock_exams"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "mock_exam_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mock_exam_subject_results: {
+        Row: {
+          correct_answers: number
+          exam_id: string
+          student_id: string
+          subject: string
+          teacher_id: string
+        }
+        Insert: {
+          correct_answers: number
+          exam_id: string
+          student_id: string
+          subject: string
+          teacher_id: string
+        }
+        Update: {
+          correct_answers?: number
+          exam_id?: string
+          student_id?: string
+          subject?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mock_exam_subject_results_exam_id_teacher_id_subject_fkey"
+            columns: ["exam_id", "teacher_id", "subject"]
+            isOneToOne: false
+            referencedRelation: "mock_exam_subjects"
+            referencedColumns: ["exam_id", "teacher_id", "subject"]
+          },
+          {
+            foreignKeyName: "mock_exam_subject_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mock_exam_subjects: {
+        Row: {
+          exam_id: string
+          question_count: number
+          subject: string
+          teacher_id: string
+        }
+        Insert: {
+          exam_id: string
+          question_count: number
+          subject: string
+          teacher_id: string
+        }
+        Update: {
+          exam_id?: string
+          question_count?: number
+          subject?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mock_exam_subjects_exam_id_teacher_id_fkey"
+            columns: ["exam_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "mock_exams"
+            referencedColumns: ["id", "teacher_id"]
+          },
+        ]
+      }
+      mock_exams: {
+        Row: {
+          class_id: string
+          created_at: string
+          exam_date: string
+          id: string
+          max_score: number
+          published: boolean
+          teacher_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          exam_date: string
+          id: string
+          max_score: number
+          published?: boolean
+          teacher_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          exam_date?: string
+          id?: string
+          max_score?: number
+          published?: boolean
+          teacher_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mock_exams_class_id_teacher_id_fkey"
+            columns: ["class_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id", "teacher_id"]
+          },
+          {
+            foreignKeyName: "mock_exams_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personal_flashcard_decks: {
+        Row: {
+          created_at: string
+          id: string
+          student_id: string
+          subject: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          student_id: string
+          subject: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          student_id?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_flashcard_decks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personal_flashcard_reviews: {
+        Row: {
+          card_id: string
+          deck_id: string
+          difficulty: number
+          due_at: string
+          interval_minutes: number
+          lapses: number
+          last_grade: string
+          last_reviewed_at: string
+          review_count: number
+          stability: number
+          state: string
+          step: number
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          card_id: string
+          deck_id: string
+          difficulty?: number
+          due_at: string
+          interval_minutes: number
+          lapses?: number
+          last_grade: string
+          last_reviewed_at?: string
+          review_count: number
+          stability?: number
+          state?: string
+          step?: number
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string
+          deck_id?: string
+          difficulty?: number
+          due_at?: string
+          interval_minutes?: number
+          lapses?: number
+          last_grade?: string
+          last_reviewed_at?: string
+          review_count?: number
+          stability?: number
+          state?: string
+          step?: number
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_flashcard_reviews_card_id_deck_id_student_id_fkey"
+            columns: ["card_id", "deck_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "personal_flashcards"
+            referencedColumns: ["id", "deck_id", "student_id"]
+          },
+        ]
+      }
+      personal_flashcards: {
+        Row: {
+          back: string
+          created_at: string
+          deck_id: string
+          front: string
+          id: string
+          student_id: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          back: string
+          created_at?: string
+          deck_id: string
+          front: string
+          id: string
+          student_id: string
+          topic?: string
+          updated_at?: string
+        }
+        Update: {
+          back?: string
+          created_at?: string
+          deck_id?: string
+          front?: string
+          id?: string
+          student_id?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_flashcards_deck_id_student_id_fkey"
+            columns: ["deck_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "personal_flashcard_decks"
+            referencedColumns: ["id", "student_id"]
           },
         ]
       }
@@ -1500,14 +1681,59 @@ export type Database = {
           },
         ]
       }
+      theory_lesson_flashcards: {
+        Row: {
+          back: string
+          created_at: string
+          deleted: boolean
+          front: string
+          id: string
+          position: number
+          teacher_id: string
+          theory_lesson_id: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          back: string
+          created_at?: string
+          deleted?: boolean
+          front: string
+          id: string
+          position: number
+          teacher_id: string
+          theory_lesson_id: string
+          topic?: string
+          updated_at?: string
+        }
+        Update: {
+          back?: string
+          created_at?: string
+          deleted?: boolean
+          front?: string
+          id?: string
+          position?: number
+          teacher_id?: string
+          theory_lesson_id?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_lesson_flashcards_theory_lesson_id_teacher_id_fkey"
+            columns: ["theory_lesson_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lessons"
+            referencedColumns: ["id", "teacher_id"]
+          },
+        ]
+      }
       theory_lessons: {
         Row: {
           active: boolean
-          published: boolean
           catalog_id: string | null
           created_at: string
           final_questions_start: number | null
-          flashcard_cards: Json
           flash_summary_url: string | null
           flashcards_url: string | null
           has_theory: boolean
@@ -1516,15 +1742,16 @@ export type Database = {
           material_blocks: Json
           note: string | null
           pdf_file: string
-          pdf_url: string | null
           pdf_total_pages: number | null
+          pdf_url: string | null
           position: number
+          published: boolean
           qc_questions_url: string | null
           subject: string
           subject_key: string
           teacher_id: string
-          tec_questions_url: string | null
           tec_notebooks: Json
+          tec_questions_url: string | null
           theory_end_page: number | null
           theory_start_page: number | null
           title: string
@@ -1532,11 +1759,9 @@ export type Database = {
         }
         Insert: {
           active?: boolean
-          published?: boolean
           catalog_id?: string | null
           created_at?: string
           final_questions_start?: number | null
-          flashcard_cards?: Json
           flash_summary_url?: string | null
           flashcards_url?: string | null
           has_theory?: boolean
@@ -1545,15 +1770,16 @@ export type Database = {
           material_blocks?: Json
           note?: string | null
           pdf_file: string
-          pdf_url?: string | null
           pdf_total_pages?: number | null
+          pdf_url?: string | null
           position?: number
+          published?: boolean
           qc_questions_url?: string | null
           subject: string
           subject_key: string
           teacher_id: string
-          tec_questions_url?: string | null
           tec_notebooks?: Json
+          tec_questions_url?: string | null
           theory_end_page?: number | null
           theory_start_page?: number | null
           title: string
@@ -1561,11 +1787,9 @@ export type Database = {
         }
         Update: {
           active?: boolean
-          published?: boolean
           catalog_id?: string | null
           created_at?: string
           final_questions_start?: number | null
-          flashcard_cards?: Json
           flash_summary_url?: string | null
           flashcards_url?: string | null
           has_theory?: boolean
@@ -1574,15 +1798,16 @@ export type Database = {
           material_blocks?: Json
           note?: string | null
           pdf_file?: string
-          pdf_url?: string | null
           pdf_total_pages?: number | null
+          pdf_url?: string | null
           position?: number
+          published?: boolean
           qc_questions_url?: string | null
           subject?: string
           subject_key?: string
           teacher_id?: string
-          tec_questions_url?: string | null
           tec_notebooks?: Json
+          tec_questions_url?: string | null
           theory_end_page?: number | null
           theory_start_page?: number | null
           title?: string
@@ -1964,6 +2189,15 @@ export type Database = {
       is_teacher: { Args: never; Returns: boolean }
       is_teacher_of: { Args: { p_student: string }; Returns: boolean }
       link_student: { Args: { p_student_id: string }; Returns: undefined }
+      mock_exam_scoreboard: {
+        Args: { p_exam_id: string }
+        Returns: {
+          is_self: boolean
+          participant: number
+          score: number
+          subject: string
+        }[]
+      }
       my_teacher: {
         Args: never
         Returns: {
@@ -1986,46 +2220,46 @@ export type Database = {
       student_question_comparison: {
         Args: { p_year: number }
         Returns: {
-          box_max: number | null
-          box_min: number | null
-          lower_whisker: number | null
-          median: number | null
+          box_max: number
+          box_min: number
+          lower_whisker: number
+          median: number
           minimum_questions: number
-          percentile: number | null
-          q1: number | null
-          q3: number | null
+          percentile: number
+          q1: number
+          q3: number
           sample_size: number
           student_questions: number
-          student_score: number | null
-          upper_whisker: number | null
-        }[]
-      }
-      student_weekly_question_comparison: {
-        Args: { p_year: number }
-        Returns: {
-          week_number: number
-          sample_size: number
-          minimum_questions: number
-          student_questions: number
-          student_score: number | null
-          percentile: number | null
-          box_min: number | null
-          q1: number | null
-          median: number | null
-          q3: number | null
-          box_max: number | null
-          lower_whisker: number | null
-          upper_whisker: number | null
+          student_score: number
+          upper_whisker: number
         }[]
       }
       student_subject_peer_comparison: {
         Args: { p_year: number }
         Returns: {
-          subject: string
-          student_score: number
-          peer_average: number | null
-          sample_size: number
           minimum_questions: number
+          peer_average: number
+          sample_size: number
+          student_score: number
+          subject: string
+        }[]
+      }
+      student_weekly_question_comparison: {
+        Args: { p_year: number }
+        Returns: {
+          box_max: number
+          box_min: number
+          lower_whisker: number
+          median: number
+          minimum_questions: number
+          percentile: number
+          q1: number
+          q3: number
+          sample_size: number
+          student_questions: number
+          student_score: number
+          upper_whisker: number
+          week_number: number
         }[]
       }
     }

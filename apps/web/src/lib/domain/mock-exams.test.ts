@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateMockExamStatistics, rankMockExam, validScore, validateMockExam } from "./mock-exams.ts";
+import { PEER_NAME, anonymizeMockExamScores, calculateMockExamStatistics, rankMockExam, validScore, validateMockExam } from "./mock-exams.ts";
 
 test("ranking preserva empate, pula colocação e inclui zero sem incluir ausente", () => {
   const rows = [
@@ -48,4 +48,28 @@ test("estatísticas do simulado calculam média, mediana e percentil do aluno", 
     mine: { score: 80, percent: 80, rank: 2, percentile: 50 },
   });
   assert.equal(calculateMockExamStatistics(rows, 0), null);
+});
+
+test("o aluno vê o placar sem nome nem id de colega, e com o próprio nome", () => {
+  const scores = {
+    results: [
+      { studentId: "ana", studentName: "Ana", score: 80 },
+      { studentId: "bruno", studentName: "Bruno", score: 70 },
+      { studentId: "carla", studentName: "Carla", score: null },
+    ],
+    subjectResults: [
+      { studentId: "ana", subject: "Português", correctAnswers: 8 },
+      { studentId: "bruno", subject: "Português", correctAnswers: 9 },
+      { studentId: "carla", subject: "Português", correctAnswers: 10 },
+    ],
+  };
+  const seen = anonymizeMockExamScores(scores, { profileId: "ana", name: "Ana Souza" });
+  const text = JSON.stringify(seen);
+  for (const leaked of ["bruno", "Bruno", "carla", "Carla"]) assert.ok(!text.includes(leaked), `vazou ${leaked}`);
+  assert.deepEqual(seen.results.map((row) => [row.studentName, row.score]), [["Ana Souza", 80], [PEER_NAME, 70]]);
+  // Quem não tem nota geral não entra, nem nos acertos por matéria.
+  assert.equal(seen.subjectResults.length, 2);
+  // O id de ocasião casa a nota geral do colega com os acertos dele.
+  const peer = seen.results.find((row) => row.studentName === PEER_NAME)!;
+  assert.equal(seen.subjectResults.find((row) => row.studentId === peer.studentId)?.correctAnswers, 9);
 });

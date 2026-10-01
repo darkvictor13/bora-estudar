@@ -36,11 +36,24 @@ export interface MockExamSubjectResult {
   readonly correctAnswers: number;
 }
 
+/**
+ * As notas de um simulado, nas duas granularidades, numa leitura só.
+ *
+ * Para o PROFESSOR, cada linha traz o aluno de verdade. Para o ALUNO, só a
+ * própria linha traz o id e o nome dele; as dos colegas chegam com um id de
+ * ocasião (`colega-N`) e o nome `Colega`. O id de ocasião só vale dentro desta
+ * leitura — é o que casa a nota geral de alguém com os acertos dessa mesma
+ * pessoa por matéria — e por isso as duas listas vêm juntas.
+ */
+export interface MockExamScores {
+  readonly results: readonly MockExamResult[];
+  readonly subjectResults: readonly MockExamSubjectResult[];
+}
+
 export interface MockExamsApi {
   listMockExams(): Promise<readonly MockExam[]>;
-  loadMockExamResults(examId: string): Promise<readonly MockExamResult[]>;
+  loadMockExamScores(examId: string): Promise<MockExamScores>;
   listMockExamSubjects(examId: string): Promise<readonly MockExamSubject[]>;
-  loadMockExamSubjectResults(examId: string): Promise<readonly MockExamSubjectResult[]>;
   createMockExam(input: MockExamInput): Promise<Result<MockExam>>;
   saveMockExamScore(examId: string, studentId: string, score: number | null): Promise<Result<void>>;
   saveMockExamSubject(examId: string, subject: string, questionCount: number): Promise<Result<void>>;

@@ -11,7 +11,6 @@
  */
 import { supabase } from "@/lib/supabase/client";
 import { readLessonMaterialBlocks } from "@/lib/domain/lesson-resources";
-import { readFlashcardCards } from "@/lib/domain/flashcards";
 import {
   currentLesson,
   diagnose,
@@ -40,6 +39,7 @@ import type {
   Uuid,
 } from "../contract.ts";
 import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { LESSON_CARD_COLUMNS, toLessonCards, type LessonCardRow } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
 
@@ -50,7 +50,7 @@ import { requireSession } from "./session.ts";
 const LESSON_COLUMNS =
   "id,subject,subject_key,lesson_code,position,title,pdf_file,theory_start_page," +
   "theory_end_page,pdf_total_pages,final_questions_start,has_theory,note,active,published," +
-  "pdf_url,flashcards_url,flash_summary_url,tec_questions_url,qc_questions_url,material_blocks,flashcard_cards";
+  "pdf_url,flashcards_url,flash_summary_url,tec_questions_url,qc_questions_url,material_blocks," + LESSON_CARD_COLUMNS;
 
 interface LessonRow {
   id: string;
@@ -67,7 +67,7 @@ interface LessonRow {
   tec_questions_url: string | null;
   qc_questions_url: string | null;
   material_blocks: unknown;
-  flashcard_cards: unknown;
+  theory_lesson_flashcards: LessonCardRow[] | null;
   theory_start_page: number | null;
   theory_end_page: number | null;
   pdf_total_pages: number | null;
@@ -94,7 +94,7 @@ function toLesson(row: LessonRow): TheoryLesson {
       qcQuestions: row.qc_questions_url,
     },
     materialBlocks: readLessonMaterialBlocks(row.material_blocks),
-    flashcardCards: readFlashcardCards(row.flashcard_cards),
+    flashcardCards: toLessonCards(row.theory_lesson_flashcards),
     theoryStartPage: row.theory_start_page,
     theoryEndPage: row.theory_end_page,
     pdfTotalPages: row.pdf_total_pages,

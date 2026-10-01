@@ -267,11 +267,13 @@ insert into public.theory_catalogs (id, teacher_id, name, key) values
 
 insert into public.theory_lessons (
   id, teacher_id, catalog_id, subject, subject_key, lesson_code, position, title,
-  pdf_file, theory_start_page, theory_end_page, pdf_total_pages
+  pdf_file, theory_start_page, theory_end_page, pdf_total_pages, published
 ) values
+  -- Publicada: desde `20260925033641` a aula nasce rascunho e o aluno só lê a
+  -- publicada. Sem isto, a 06 acusava a RLS de esconder a aula do Bruno.
   ('b2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
    'b1000000-0000-4000-8000-000000000001','Ciências Forenses','forenses','FOR-01',1,
-   'Aula 1 — Introdução','forenses-01.pdf',1,40,120);
+   'Aula 1 — Introdução','forenses-01.pdf',1,40,120,true);
 
 insert into public.study_plan_theory_catalogs (study_plan_id, catalog_id, teacher_id, student_id) values
   ('a2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000001',

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase/client";
 
 import type { FlashcardGrade, FlashcardState, GradeLibraryFlashcardInput, LibraryFlashcardReview, Result } from "../contract.ts";
 import { done, failure, throwDb, translateDbError } from "./errors.ts";
+import { reviewValues, writeReview } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
 
@@ -56,9 +57,19 @@ export function gradeLibraryFlashcard(input: GradeLibraryFlashcardInput): Promis
     if (readError) return failure<LibraryFlashcardReview>(translateDbError(readError));
     const previousReview = normalizeLibraryReviews(((previous ?? []) as Row[]).map(toReview)).find((review) => review.deckId === input.deckId && review.cardId === input.cardId);
     const next = scheduleFlashcardReview(input.deckId, input.cardId, input.grade, previousReview ? { ...previousReview, lessonId: input.deckId } : undefined);
-    const { data, error } = await supabase.from("library_flashcard_reviews")
-      .upsert({ student_id: session.profileId, deck_id: input.deckId, card_id: input.cardId, due_at: next.dueAt, interval_minutes: next.intervalMinutes, review_count: next.reviewCount, last_grade: next.lastGrade, state: next.state, step: next.step, stability: next.stability, difficulty: next.difficulty, lapses: next.lapses, last_reviewed_at: next.lastReviewedAt }, { onConflict: "student_id,deck_id,card_id" })
-      .select(COLUMNS).single();
+    // A leitura acima traz também as fontes antigas do mesmo cartão; o que
+    // decide entre INSERT e UPDATE é haver linha neste deck, com este id.
+    const existed = ((previous ?? []) as Row[]).some((row) => row.deck_id === input.deckId && row.card_id === input.cardId);
+    const values = reviewValues(next);
+    const { data, error } = await writeReview(
+      existed,
+      () => supabase.from("library_flashcard_reviews")
+        .insert({ student_id: session.profileId, deck_id: input.deckId, card_id: input.cardId, ...values })
+        .select(COLUMNS).single(),
+      () => supabase.from("library_flashcard_reviews").update(values)
+        .eq("student_id", session.profileId).eq("deck_id", input.deckId).eq("card_id", input.cardId)
+        .select(COLUMNS).single(),
+    );
     if (error) return failure<LibraryFlashcardReview>(translateDbError(error));
     return done(toReview(data as Row));
   });

@@ -44,6 +44,18 @@ do $$ begin
 exception when raise_exception then
  if sqlerrm not like 'Há acertos%' then raise; end if;
 end $$;
+do $$ begin
+ insert into public.mock_exam_subjects(exam_id,teacher_id,subject,question_count) values
+ ('ef200000-0000-4000-8000-000000000001','ef000000-0000-4000-8000-000000000001','português',10);
+ raise exception 'FALHOU: aceitou a mesma matéria com outra caixa';
+exception when unique_violation then null;
+end $$;
+-- Em rascunho o gatilho deixa apagar; quem segura os acertos é a FK.
+do $$ begin
+ delete from public.mock_exam_subjects where subject='Português';
+ raise exception 'FALHOU: apagar a matéria levou os acertos lançados';
+exception when foreign_key_violation then null;
+end $$;
 select app_test.act_as('ef000000-0000-4000-8000-000000000002');
 do $$ begin
  if exists(select 1 from public.mock_exam_subjects) or exists(select 1 from public.mock_exam_subject_results) then
@@ -69,9 +81,15 @@ do $$ begin
     (select count(*) from public.mock_exam_subject_results) <> 1 then
   raise exception 'FALHOU: aluno não vê análise publicada'; end if;
 end $$;
+do $$ begin
+ if (select count(*) from public.mock_exam_scoreboard('ef200000-0000-4000-8000-000000000001')
+      where subject = 'Português' and is_self and score = 7) <> 1 then
+  raise exception 'FALHOU: o placar não trouxe os acertos do próprio aluno'; end if;
+end $$;
 select app_test.act_as('ef000000-0000-4000-8000-000000000003');
 do $$ begin
- if exists(select 1 from public.mock_exam_subject_results) then
+ if exists(select 1 from public.mock_exam_subject_results)
+    or exists(select 1 from public.mock_exam_scoreboard('ef200000-0000-4000-8000-000000000001')) then
   raise exception 'FALHOU: aluno de outra turma vê os acertos'; end if;
 end $$;
 rollback;

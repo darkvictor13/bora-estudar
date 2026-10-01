@@ -48,5 +48,24 @@ do $$ begin
   raise notice '04 OK  outro aluno nao altera nem apaga o deck';
 end $$;
 
+-- Acesso vencido: o que é dele continua visível; escrever, não.
+reset role;
+select app_test.act_as_owner();
+update public.profiles set access_expires_at = now() - interval '1 day'
+ where id = '22222222-2222-4222-8222-222222222222';
+set role authenticated;
+select app_test.act_as('22222222-2222-4222-8222-222222222222');
+do $$ begin
+  if (select count(*) from public.personal_flashcard_decks) <> 1
+     or (select count(*) from public.personal_flashcard_reviews) <> 1 then
+    raise exception 'FALHOU: acesso vencido escondeu os decks do proprio aluno';
+  end if;
+  insert into public.personal_flashcard_decks (id, student_id, subject, title)
+  values (gen_random_uuid(), '22222222-2222-4222-8222-222222222222', 'Novo', 'Deck novo');
+  raise exception 'FALHOU: aluno com acesso vencido criou deck';
+exception when insufficient_privilege then
+  raise notice '05 OK  acesso vencido le os proprios decks e nao cria';
+end $$;
+
 reset role;
 rollback;

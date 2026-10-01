@@ -12,9 +12,18 @@ alunos. O aluno consulta o ranking; não responde à prova nem altera notas pelo
 - Uma nota vazia significa não lançada e não participa do ranking. Zero é uma
   nota válida. Não são aceitas notas negativas ou maiores que o máximo.
 - O ranking ordena por nota decrescente, com empate na mesma colocação (1, 1, 3).
-  A ordem alfabética apenas organiza os nomes empatados, sem desempatar.
+  A ordem alfabética apenas organiza os nomes empatados (na visão do professor),
+  sem desempatar.
 - Alunos com acesso ativo veem apenas simulados publicados da própria turma e
-  professor. O ranking mostra nome e nota, sem e-mail ou outros dados de perfil.
+  professor, enquanto estiverem matriculados nela.
+- **O aluno não vê nome nem identificador de colega.** O ranking dele mostra a
+  própria linha com o nome e a de cada colega como "Colega", com nota e
+  colocação. O professor vê o ranking com os nomes. No banco, o aluno lê só a
+  própria linha de `mock_exam_results` e `mock_exam_subject_results`; a turma
+  chega a ele pela função `mock_exam_scoreboard`, cujo identificador de
+  participante é sorteado a cada chamada e só serve para casar a nota geral com
+  os acertos por matéria da mesma pessoa. Decisão da revisão do PR 10, que
+  substitui "o ranking mostra nome e nota".
 - O professor só cadastra e altera simulados próprios, para suas turmas, e só
   lança notas de alunos vinculados a ele e à turma do simulado.
 - O professor cadastra as matérias de cada simulado com o total de questões e
@@ -64,7 +73,9 @@ persistência entre recarregamentos e sem sincronização entre abas.
 A extensão por matéria está em `20260930120000_mock_exam_subject_results.sql`,
 com `mock_exam_subjects` (matéria e total da prova) e
 `mock_exam_subject_results` (acertos por aluno). As duas tabelas herdam a
-visibilidade do simulado: professor responsável lê rascunhos; alunos da turma
-só leem após publicação. A suíte `15_mock_exam_subject_results.sql` cobre
+visibilidade do simulado: professor responsável lê rascunhos; o aluno da turma
+só lê a própria linha, e só após a publicação. Apagar uma matéria com acertos
+lançados é recusado pela FK (`ON DELETE RESTRICT`), e "Português" e
+"português" são a mesma matéria (`mock_exam_subjects_name_uidx`). A suíte `15_mock_exam_subject_results.sql` cobre
 isolamento, limites e bloqueio de edição publicada. Essa migration também
 precisa ser aplicada ao ambiente remoto antes de usar o novo lançamento lá.

@@ -26,9 +26,17 @@ begin
     raise exception 'comparacao disponivel apenas ao aluno com acesso ativo';
   end if;
 
+  -- A turma é a da MATRÍCULA de hoje, e não só a de `study_plans.class_id`:
+  -- nada atualiza o plano quando o aluno sai da turma, e quem saiu continuava
+  -- recebendo a distribuição dos ex-colegas — sem contar na amostra, o que com
+  -- cinco colegas eram as cinco notas exatas.
   select sp.id, sp.teacher_id, sp.class_id
     into v_plan, v_teacher, v_class
     from public.study_plans sp
+    join public.class_students cs
+      on cs.class_id = sp.class_id
+     and cs.student_id = sp.student_id
+     and cs.teacher_id = sp.teacher_id
    where sp.student_id = v_student and sp.status = 'active'
    order by sp.updated_at desc
    limit 1;

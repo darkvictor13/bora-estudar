@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import type { MockExam, MockExamInput, MockExamsApi } from "../mock-exams.ts";
-import { validScore, validateMockExam } from "../../domain/mock-exams.ts";
+import { PEER_NAME, peerId, validScore, validateMockExam } from "../../domain/mock-exams.ts";
 import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
 import { requireSession } from "./session.ts";
 import type { Row } from "@bora/database";
@@ -20,22 +20,42 @@ export const mockExamsApi: MockExamsApi = {
     const names = new Map(classes.data?.map((item) => [item.id, item.name]));
     return data.map((exam) => toExam(exam, names.get(exam.class_id) ?? "Turma"));
   },
-  async loadMockExamResults(examId) {
-    const { data, error } = await supabase.from("mock_exam_results").select("student_id,student_name,score").eq("exam_id", examId);
+  async loadMockExamScores(examId) {
+    const session = await requireSession();
+    if (session.role === "teacher") {
+      // O nome vem de `profiles`, que o professor lê para os próprios alunos — a
+      // tabela de notas não guarda cópia dele.
+      const [results, subjectResults] = await Promise.all([
+        supabase.from("mock_exam_results").select("student_id,score,student:profiles(name)").eq("exam_id", examId),
+        supabase.from("mock_exam_subject_results").select("student_id,subject,correct_answers").eq("exam_id", examId),
+      ]);
+      if (results.error) throwDb(results.error);
+      if (subjectResults.error) throwDb(subjectResults.error);
+      return {
+        results: (results.data ?? []).map((row) => ({ studentId: row.student_id,
+          studentName: row.student?.name?.trim() || "Aluno", score: row.score })),
+        subjectResults: (subjectResults.data ?? []).map((row) => ({ studentId: row.student_id,
+          subject: row.subject, correctAnswers: row.correct_answers })),
+      };
+    }
+    // O aluno não lê as notas da turma nas tabelas — a RLS só lhe mostra a
+    // própria linha. O placar inteiro vem anônimo, da função.
+    const { data, error } = await supabase.rpc("mock_exam_scoreboard", { p_exam_id: examId });
     if (error) throwDb(error);
-    return (data ?? []).map((row) => ({ studentId: row.student_id, studentName: row.student_name, score: row.score }));
+    const rows = data ?? [];
+    const idOf = (row: { is_self: boolean; participant: number }) => row.is_self ? session.profileId : peerId(row.participant);
+    return {
+      results: rows.filter((row) => row.subject === null).map((row) => ({ studentId: idOf(row),
+        studentName: row.is_self ? session.name?.trim() || "Você" : PEER_NAME, score: Number(row.score) })),
+      subjectResults: rows.filter((row) => row.subject !== null).map((row) => ({ studentId: idOf(row),
+        subject: row.subject ?? "", correctAnswers: Number(row.score) })),
+    };
   },
   async listMockExamSubjects(examId) {
     const { data, error } = await supabase.from("mock_exam_subjects").select("exam_id,subject,question_count")
       .eq("exam_id", examId).order("subject");
     if (error) throwDb(error);
     return (data ?? []).map((row) => ({ examId: row.exam_id, subject: row.subject, questionCount: row.question_count }));
-  },
-  async loadMockExamSubjectResults(examId) {
-    const { data, error } = await supabase.from("mock_exam_subject_results")
-      .select("student_id,subject,correct_answers").eq("exam_id", examId);
-    if (error) throwDb(error);
-    return (data ?? []).map((row) => ({ studentId: row.student_id, subject: row.subject, correctAnswers: row.correct_answers }));
   },
   async createMockExam(input: MockExamInput) {
     const invalid = validateMockExam(input);
