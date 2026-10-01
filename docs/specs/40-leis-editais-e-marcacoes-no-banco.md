@@ -1,6 +1,6 @@
 # 40 — Leis, editais e marcações no banco
 
-**Situação:** não implementada · **Fluxos e2e:** F-LEI-01 a F-LEI-03
+**Situação:** implementada em 01/10/2026 · **Fluxos e2e:** F-LEI-01 a F-LEI-03
 
 Terceira de três (ver a 38 e a 39). Atualiza o que a spec
 [34](34-cronograma-leis-flashcards.md) diz sobre marcações: elas deixam de
@@ -48,7 +48,7 @@ arquivos publicados com o site. Quatro coisas custam por isso:
 | R-LEI-09 | A marcação é do aluno e mora em `law_marks`, uma linha por trecho marcado: `id` gerado no navegador, `student_id`, `law_id`, `article_id`, `paragraph_index`, `start_offset`, `end_offset`, `style`, `color` e a âncora de texto (R-LEI-11). |
 | R-LEI-10 | O aluno escreve direto, com RLS: lê, cria, altera e apaga só as próprias; criar e alterar exigem acesso vigente; ler não (quem venceu continua vendo os próprios grifos). `GRANT UPDATE` só em posição, âncora, estilo e cor — `student_id`, `law_id` e `article_id` ficam fora. |
 | R-LEI-11 | **Âncora por trecho, além da posição** (o `TextQuoteSelector` da W3C Web Annotation): cada marcação guarda `quote` (o texto exato marcado), `prefix` e `suffix` (até 32 caracteres antes e depois). *(Proposto e decidido na entrevista.)* |
-| R-LEI-12 | Ao abrir a lei, cada marcação é reancorada: se o parágrafo gravado ainda tem `quote` na posição gravada, pinta ali; senão procura `quote` em todos os parágrafos do artigo e escolhe a ocorrência cujo contexto mais se parece com `prefix` e `suffix`, desempatando pela mais próxima da posição antiga. |
+| R-LEI-12 | Ao abrir a lei, cada marcação é reancorada: se o parágrafo gravado ainda tem `quote` na posição gravada, pinta ali; senão procura `quote` em todos os parágrafos do artigo e escolhe a ocorrência cujo contexto mais se parece com `prefix` e `suffix`, desempatando pela mais próxima da posição antiga. Duas ocorrências sem nenhum contexto em comum, ou empatadas em contexto e em distância, são ambiguidade: a marcação é tratada como perdida (R-LEI-13). Ocorrência única é aceita mesmo sem contexto. |
 | R-LEI-13 | Marcação cujo `quote` não existe mais no artigo — ou cujo artigo foi retirado — não é pintada, **continua no banco**, e o leitor diz quantas estão nessa situação. Nenhuma marcação é apagada pela correção de um texto. |
 | R-LEI-14 | `(law_id, article_id)` tem FK composta para `law_articles (law_id, id)`: o artigo é da lei que a linha diz. |
 | R-LEI-15 | Salvar é a diferença entre o antes e o depois de cada ação (criar, alterar, apagar por `id`). É **naturalmente idempotente**, e quem sustenta é a PK `law_marks_pkey`: criar é `insert … on conflict do nothing` com o id do navegador; alterar grava valores absolutos; apagar é por id. As gravações de uma aba saem em fila, uma depois da outra. |
@@ -79,6 +79,7 @@ marcar/apagar     → nova lista → diff por id → saveLawMarks (fila) → INS
 | Adaptadores | `lib/api/supabase/laws.ts` (novo); `lib/api/fixtures-laws.ts` (novo, import dinâmico) |
 | Domínio | `lib/domain/law-markings.ts`: `anchorLawMarks`, `diffLawMarks`, `withLawQuotes`; `law-library.ts` e `law-exam-maps.ts` sem JSON |
 | Tela | `routes/student/Laws.tsx`, `components/student/LawContinuousReader.tsx`, `components/student/LawExamMaps.tsx` |
+| Testes | `supabase/tests/18_laws.sql`, `01_grants.sql` (32), `scripts/load-law-library.test.mjs`, `lib/domain/law-markings.test.ts`, `lib/api/fixtures.test.ts`, `apps/e2e/tests/laws.spec.ts` |
 
 ---
 
@@ -86,12 +87,12 @@ marcar/apagar     → nova lista → diff por id → saveLawMarks (fila) → INS
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | A carga traz 46 normas, 15 leis, 768 artigos ativos e os 3 editais com os 69 itens; `vw_law_library` conta os artigos de cada lei. | `supabase/tests/18_laws.sql` |
-| CA-02 | Carregar duas vezes não escreve nada; o artigo que some do arquivo é retirado e volta com o mesmo id. | `scripts/load-law-library.test.mjs` |
-| CA-03 | Aluno vigente e professor leem os artigos; vencido e pendente leem zero; o índice é legível a todos os autenticados. | `18_laws.sql` |
-| CA-04 | O aluno lê e escreve só as próprias marcações; o colega lê zero e apaga zero (contado por linhas). | `18_laws.sql` |
-| CA-05 | `student_id`, `law_id` e `article_id` estão fora do grant de UPDATE (`42501`). | `18_laws.sql` |
-| CA-06 | Artigo de outra lei, `quote` de tamanho errado e escrita sem acesso vigente são recusados. | `18_laws.sql` |
+| CA-01 | A carga traz 46 normas, 15 leis, 768 artigos ativos e os 3 editais com os 69 itens; `vw_law_library` conta os artigos de cada lei. | `supabase/tests/18_laws.sql` (01, 02) |
+| CA-02 | Carregar duas vezes não escreve nada; o artigo que some do arquivo é retirado e volta com o mesmo id. | `scripts/load-law-library.test.mjs` (CA-02, e os casos de recusa e de escrita parcial) |
+| CA-03 | Aluno vigente e professor leem os artigos; vencido e pendente leem zero; o índice é legível a todos os autenticados. | `18_laws.sql` (03 a 06) |
+| CA-04 | O aluno lê e escreve só as próprias marcações; o colega lê zero e apaga zero (contado por linhas). | `18_laws.sql` (07, 13, 14, 15) |
+| CA-05 | `student_id`, `law_id` e `article_id` estão fora do grant de UPDATE (`42501`). | `18_laws.sql` (08, 09) |
+| CA-06 | Artigo de outra lei, `quote` de tamanho errado e escrita sem acesso vigente são recusados. | `18_laws.sql` (10, 11, 12, 14, 16) e `01_grants.sql` (32) |
 | CA-07 | Reancorar: trecho no lugar pinta no lugar; trecho deslocado pinta no lugar novo; trecho repetido escolhe pelo contexto; trecho que sumiu não pinta e é contado. | `lib/domain/law-markings.test.ts` |
 | CA-08 | O diff de marcações produz criar, alterar e apagar por id, e nada para listas iguais. | `law-markings.test.ts` |
 | CA-09 | O contrato de leis, editais e marcações é o mesmo nas duas implementações. | `lib/api/fixtures.test.ts` |

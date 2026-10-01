@@ -67,7 +67,7 @@ de lá vira uma spec nova antes de virar código.
 | 36 | [Aulas PRF e desempenho diário](36-aulas-prf-e-desempenho-diario.md) | Publicação pelo professor, links de apoio e acertos/erros por dia; atualiza o fluxo da spec 32 |
 | 38 | [Biblioteca de flashcards no banco](38-biblioteca-de-flashcards-no-banco.md) | Cartões, matérias, aliases e carga idempotente no deploy |
 | 39 | [Biblioteca de flashcards lida do banco](39-biblioteca-de-flashcards-lida-do-banco.md) | FK da revisão para o cartão, catálogo sem texto, deck sob demanda |
-| 40 | [Leis, editais e marcações no banco](40-leis-editais-e-marcacoes-no-banco.md) | Normas por `canonical_id`, texto por artigo, mapas de edital por vínculo e marcações na conta, ancoradas pelo trecho — **não implementada** |
+| 40 | [Leis, editais e marcações no banco](40-leis-editais-e-marcacoes-no-banco.md) | Normas por `canonical_id`, texto por artigo, mapas de edital por vínculo e marcações na conta, ancoradas pelo trecho |
 
 ---
 

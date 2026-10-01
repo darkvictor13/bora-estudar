@@ -270,11 +270,11 @@ diff mostra a omissão.
 
 ### Leis — `tests/laws.spec.ts`
 
-| Fluxo | O que prova |
+| Id | Cobre |
 |---|---|
-| F-LEI-01 | *(reservado, spec [40](specs/40-leis-editais-e-marcacoes-no-banco.md))* a marcação feita numa sessão aparece em outra sessão do mesmo aluno |
-| F-LEI-02 | *(reservado, spec 40)* corrigido o texto antes do grifo, o grifo continua no mesmo trecho; apagado o trecho, o leitor avisa |
-| F-LEI-03 | *(reservado, spec 40)* o mapa de edital marca como disponível a norma que tem texto na biblioteca, e abre a lei |
+| F-LEI-01 | spec [40](specs/40-leis-editais-e-marcacoes-no-banco.md): a marcação feita numa sessão aparece em outra sessão do mesmo aluno |
+| F-LEI-02 | spec 40: corrigido o texto antes do grifo, o grifo continua no mesmo trecho; apagado o trecho, o leitor avisa |
+| F-LEI-03 | spec 40: o mapa de edital marca como disponível a norma que tem texto na biblioteca, e abre a lei |
 
 ### Isolamento — `tests/isolation.spec.ts`
 

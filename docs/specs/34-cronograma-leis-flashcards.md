@@ -35,8 +35,10 @@ aula. Os recortes de edital e a incidência continuam sem dados homologados.
   leitura contínua, com biblioteca, índice e barra de marcação fixos durante a
   rolagem. O aluno pode selecionar trechos e aplicar marca-texto, sublinhado,
   tachado, contorno ou apagar a marcação, escolhendo entre sete cores e desfazendo
-  ações da sessão. As marcações ficam no navegador, por aluno e por lei; ainda
-  não sincronizam entre dispositivos. Nenhum artigo é marcado como cobrado em
+  ações da sessão. As marcações ficam na conta do aluno, por lei, e
+  acompanham o trecho quando o texto é corrigido — *atualizado em 01/10/2026
+  pela spec [40](40-leis-editais-e-marcacoes-no-banco.md); antes ficavam no
+  navegador*. Nenhum artigo é marcado como cobrado em
   PMPR, PPPR ou PRF sem recorte de edital conferido.
 
 ## Referência

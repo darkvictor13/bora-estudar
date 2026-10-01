@@ -55,7 +55,10 @@ conteúdo da biblioteca PF 2029 para o banco (spec 38) — `library_flashcard_su
 `library_flashcards`, `library_flashcard_aliases` e as duas tabelas de
 referência, `library_flashcard_origins` e `library_flashcard_statuses`. Também
 sem origem no banco anterior: o conteúdo vinha de um JSON publicado com o site.
-Coluna 01/10.
+`20261001180000_law_library` faz o mesmo com as leis (spec 40) — `legal_norms`,
+`laws`, `law_articles`, `law_subjects`, `exam_notices`, `exam_notice_sections`,
+`exam_notice_items` — e acrescenta `law_marks`, as marcações de leitura, que
+antes ficavam no `localStorage`. Coluna 01/10.
 
 | origem | destino |
 |---|---|
@@ -907,22 +910,25 @@ doze migrations de simulados, cartões, biblioteca e comparações, de
 `20261001120000`, o conteúdo da biblioteca de flashcards (spec 38): cinco
 tabelas, o enum do aviso editorial, seis FKs e `vw_library_flashcard_decks`; e
 `20261001150000` (spec 39), a FK da revisão para o cartão, com o índice
-`(deck_id, card_id)` no lugar do de `deck_id`, que era prefixo dele. É a
+`(deck_id, card_id)` no lugar do de `deck_id`, que era prefixo dele. E
+`20261001180000` (spec 40), o Vade Mecum: oito tabelas — normas, leis,
+artigos, matérias, os três níveis do mapa de edital e `law_marks` —, quatro
+enums e `vw_law_library`. É a
 última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
 
 | | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 |
 |---|---|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 41 / 41 |
-| Colunas | 326 | 294 | 294 | 302 | 401 | 435 |
-| Policies | 79 | 63 | 62 | 64 | 99 | 104 |
-| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 14 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 100 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 | 78 |
-| Índices | 85 | 81 | 92 | 97 | 128 | 137 |
-| Views | 0 | 1 | 1 | 1 | 1 | 2 |
-| Gatilhos | 12 | 27 | 28 | 29 | 39 | 45 |
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 495 |
+| Policies | 79 | 63 | 62 | 64 | 99 | 115 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 154 |
+| Views | 0 | 1 | 1 | 1 | 1 | 3 |
+| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 |
 | Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 |
 | Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 |
 | Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 |

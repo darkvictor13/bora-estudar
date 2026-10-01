@@ -13,20 +13,21 @@ import { Alert, Card } from "@bora/ui";
 import { useMemo, useState } from "react";
 
 import {
-  LAW_EXAM_MAPS,
   filterLawExamMap,
   getLawExamMap,
   getLawExamMapStats,
+  type LawExamMap,
 } from "@/lib/domain/law-exam-maps";
 
 interface LawExamMapsProps {
+  readonly maps: readonly LawExamMap[];
   readonly selectedMapId: string | null;
   readonly onSelectMap: (id: string) => void;
 }
 
-export function LawExamMaps({ selectedMapId, onSelectMap }: LawExamMapsProps) {
+export function LawExamMaps({ maps, selectedMapId, onSelectMap }: LawExamMapsProps) {
   const [query, setQuery] = useState("");
-  const selected = getLawExamMap(selectedMapId);
+  const selected = getLawExamMap(maps, selectedMapId);
   const stats = getLawExamMapStats(selected);
   const sections = useMemo(() => filterLawExamMap(selected, query), [query, selected]);
 
@@ -37,7 +38,7 @@ export function LawExamMaps({ selectedMapId, onSelectMap }: LawExamMapsProps) {
         aria-label="Concursos do Vade Mecum"
         sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.25 }}
       >
-        {LAW_EXAM_MAPS.map((map) => {
+        {maps.map((map) => {
           const mapStats = getLawExamMapStats(map);
           const active = map.id === selected.id;
           return (
@@ -109,6 +110,9 @@ export function LawExamMaps({ selectedMapId, onSelectMap }: LawExamMapsProps) {
                 {section.items.map((item) => (
                   <Box
                     key={`${section.title}-${item.canonicalId}`}
+                    data-testid="exam-map-item"
+                    data-canonical-id={item.canonicalId}
+                    data-available={item.available}
                     sx={(theme) => ({
                       display: "grid",
                       gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },

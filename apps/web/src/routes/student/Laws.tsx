@@ -14,41 +14,41 @@ import { useLoaderData, useSearchParams, type LoaderFunctionArgs } from "react-r
 import { ContentBody } from "@/components/AppShell";
 import { LawExamMaps } from "@/components/student/LawExamMaps";
 import { LawContinuousReader } from "@/components/student/LawContinuousReader";
-import {
-  LAW_LIBRARY,
-  LAW_SUBJECTS,
-  loadLawDocument,
-  searchLaws,
-  type LawArticle,
-  type LawEntry,
-} from "@/lib/domain/law-library";
+import { api, newRequestId, type LawLibrary, type LawMark } from "@/lib/api";
+import { searchLaws, type LawArticle, type LawEntry } from "@/lib/domain/law-library";
 import { requireStudentAccess } from "@/lib/auth/session";
 
 export async function lawsLoader({ request }: LoaderFunctionArgs) {
-  const session = await requireStudentAccess();
+  await requireStudentAccess();
   const query = new URL(request.url).searchParams;
-  const fallback = LAW_LIBRARY[0];
+  // O Vade Mecum vem do banco (spec 40): o índice e os mapas, e só depois o
+  // texto e as marcações da lei aberta.
+  const [library, examMaps] = await Promise.all([api.loadLawLibrary(), api.loadExamMaps()]);
+  const fallback = library.laws[0];
   if (!fallback) throw new Error("A biblioteca de leis está vazia.");
-  const law = LAW_LIBRARY.find((entry) => entry.id === query.get("lei")) ?? fallback;
-  const document = await loadLawDocument(law);
-  return { law, document, profileId: session.profileId };
+  const law = library.laws.find((entry) => entry.id === query.get("lei")) ?? fallback;
+  const [document, marks] = await Promise.all([api.loadLawDocument(law.id), api.loadLawMarks(law.id)]);
+  if (!document) throw new Error(`O texto de ${law.title} não foi encontrado.`);
+  return { library, examMaps, law, document, marks };
 }
 
 type LoaderData = Awaited<ReturnType<typeof lawsLoader>>;
 
 function LawLibraryNav({
+  library,
   selected,
   onSelect,
 }: {
+  library: LawLibrary;
   selected: LawEntry;
   onSelect: (law: LawEntry) => void;
 }) {
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
-  const matches = useMemo(() => searchLaws(query, subject), [query, subject]);
+  const matches = useMemo(() => searchLaws(library.laws, query, subject), [library.laws, query, subject]);
 
   return (
-    <Card title="Biblioteca" sub={`${LAW_LIBRARY.length} leis · primeiro lote`}>
+    <Card title="Biblioteca" sub={`${library.laws.length} leis · primeiro lote`}>
       <Box sx={{ display: "grid", gap: 1.5 }}>
         <TextField
           size="small"
@@ -59,11 +59,11 @@ function LawLibraryNav({
           slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
         />
         <Box component="nav" aria-label="Matérias do Vade Mecum" sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-          <Chip label={`Todas (${LAW_LIBRARY.length})`} size="small" color={!subject ? "primary" : "default"} variant={!subject ? "filled" : "outlined"} onClick={() => setSubject("")} />
-          {LAW_SUBJECTS.map((name) => (
+          <Chip label={`Todas (${library.laws.length})`} size="small" color={!subject ? "primary" : "default"} variant={!subject ? "filled" : "outlined"} onClick={() => setSubject("")} />
+          {library.subjects.map((name) => (
             <Chip
               key={name}
-              label={`${name} (${LAW_LIBRARY.filter((law) => law.subject === name).length})`}
+              label={`${name} (${library.laws.filter((law) => law.subject === name).length})`}
               size="small"
               color={subject === name ? "primary" : "default"}
               variant={subject === name ? "filled" : "outlined"}
@@ -151,7 +151,7 @@ function ArticleNav({
 }
 
 export function Laws() {
-  const { law, document, profileId } = useLoaderData() as LoaderData;
+  const { library, examMaps, law, document, marks } = useLoaderData() as LoaderData;
   const [params, setParams] = useSearchParams();
   const view = params.get("visao") === "mapas" ? "exam" : "text";
   const requestedArticle = params.get("artigo");
@@ -208,7 +208,7 @@ export function Laws() {
               <GavelIcon color="primary" sx={{ fontSize: 32 }} />
               <Box>
                 <Typography variant="h2">Primeiro lote de leis</Typography>
-                <Typography color="text.secondary" variant="body2">{LAW_LIBRARY.length} normas · leitura por artigo · fonte oficial em cada lei</Typography>
+                <Typography color="text.secondary" variant="body2">{library.laws.length} normas · leitura por artigo · fonte oficial em cada lei</Typography>
               </Box>
             </Box>
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -217,16 +217,17 @@ export function Laws() {
             </Box>
           </Box>
           {view === "exam" ? (
-            <LawExamMaps selectedMapId={params.get("mapa")} onSelectMap={selectMap} />
+            <LawExamMaps maps={examMaps.maps} selectedMapId={params.get("mapa")} onSelectMap={selectMap} />
           ) : (
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "260px 170px minmax(0, 1fr)" }, alignItems: "start", gap: 1.5 }}>
               <Box sx={{ position: { lg: "sticky" }, top: { lg: 104 }, maxHeight: { lg: "calc(100vh - 112px)" }, overflowY: { lg: "auto" } }}>
-                <LawLibraryNav selected={law} onSelect={selectLaw} />
+                <LawLibraryNav library={library} selected={law} onSelect={selectLaw} />
               </Box>
               <Box sx={{ position: { lg: "sticky" }, top: { lg: 104 }, maxHeight: { lg: "calc(100vh - 112px)" } }}>
                 <ArticleNav key={law.id} articles={document.articles} selected={article} onSelect={selectArticle} />
               </Box>
-              <LawContinuousReader key={law.id} law={law} document={document} profileId={profileId} requestedArticleId={requestedArticle} onActiveArticle={setActiveArticleId} />
+              <LawContinuousReader key={law.id} law={law} document={document} initialMarks={marks} requestedArticleId={requestedArticle} onActiveArticle={setActiveArticleId}
+                onSaveMarks={(previous: readonly LawMark[], next: readonly LawMark[]) => api.saveLawMarks({ lawId: law.id, previous, next, requestId: newRequestId() })} />
             </Box>
           )}
         </Box>

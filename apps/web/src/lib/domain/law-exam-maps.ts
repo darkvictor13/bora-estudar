@@ -1,26 +1,8 @@
-import catalog from "../../data/laws/exam-maps.json" with { type: "json" };
+import type { LawExamMap, LawExamMapSection } from "../api/laws.ts";
 
-export interface LawExamMapItem {
-  readonly canonicalId: string;
-  readonly title: string;
-  readonly scope: string;
-  readonly libraryId: string | null;
-  readonly available: boolean;
-}
-
-export interface LawExamMapSection {
-  readonly title: string;
-  readonly items: readonly LawExamMapItem[];
-}
-
-export interface LawExamMap {
-  readonly id: string;
-  readonly shortName: string;
-  readonly title: string;
-  readonly accent: string;
-  readonly canonicalId: string;
-  readonly sections: readonly LawExamMapSection[];
-}
+// Os mapas vêm do contrato (spec 40); o "tem texto" de cada item é calculado
+// pelo banco a partir da biblioteca, e não escrito à mão (R-LEI-05).
+export type { LawExamMap, LawExamMapItem, LawExamMapSection, LawExamMaps } from "../api/laws.ts";
 
 export interface LawExamMapStats {
   readonly total: number;
@@ -29,13 +11,10 @@ export interface LawExamMapStats {
   readonly coverage: number;
 }
 
-export const LAW_EXAM_MAPS: readonly LawExamMap[] = catalog.maps;
-export const LAW_EXAM_MAP_BASE_DATE = catalog.baseDate;
-
-export function getLawExamMap(id: string | null): LawExamMap {
-  const fallback = LAW_EXAM_MAPS[0];
+export function getLawExamMap(maps: readonly LawExamMap[], id: string | null): LawExamMap {
+  const fallback = maps[0];
   if (!fallback) throw new Error("Nenhum mapa de edital foi cadastrado.");
-  return LAW_EXAM_MAPS.find((map) => map.id === id) ?? fallback;
+  return maps.find((map) => map.id === id) ?? fallback;
 }
 
 export function getLawExamMapStats(map: LawExamMap): LawExamMapStats {

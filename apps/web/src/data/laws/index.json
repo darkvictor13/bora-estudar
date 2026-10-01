@@ -1,152 +1,152 @@
 [
   {
     "id": "l8072",
+    "canonicalId": "BR-FED-LEI-8072-1990",
     "title": "Crimes Hediondos",
     "norm": "Lei 8.072/1990",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/l8072compilada.htm",
     "articleCount": 13,
-    "contentPath": "/laws/l8072.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l9455",
+    "canonicalId": "BR-FED-LEI-9455-1997",
     "title": "Tortura",
     "norm": "Lei 9.455/1997",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/l9455.htm",
     "articleCount": 4,
-    "contentPath": "/laws/l9455.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "ed",
+    "canonicalId": "BR-FED-LEI-10826-2003",
     "title": "Estatuto do Desarmamento",
     "norm": "Lei 10.826/2003",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/2003/l10.826compilado.htm",
     "articleCount": 41,
-    "contentPath": "/laws/ed.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "ld",
+    "canonicalId": "BR-FED-LEI-11343-2006",
     "title": "Lei de Drogas",
     "norm": "Lei 11.343/2006",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm",
     "articleCount": 99,
-    "contentPath": "/laws/ld.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l12850",
+    "canonicalId": "BR-FED-LEI-12850-2013",
     "title": "Organização Criminosa",
     "norm": "Lei 12.850/2013",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12850.htm",
     "articleCount": 36,
-    "contentPath": "/laws/l12850.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l13869",
+    "canonicalId": "BR-FED-LEI-13869-2019",
     "title": "Abuso de Autoridade",
     "norm": "Lei 13.869/2019",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2019/lei/l13869compilado.htm",
     "articleCount": 46,
-    "contentPath": "/laws/l13869.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "lmp",
+    "canonicalId": "BR-FED-LEI-11340-2006",
     "title": "Lei Maria da Penha",
     "norm": "Lei 11.340/2006",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11340.htm",
     "articleCount": 57,
-    "contentPath": "/laws/lmp.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "ei",
+    "canonicalId": "BR-FED-LEI-10741-2003",
     "title": "Estatuto da Pessoa Idosa",
     "norm": "Lei 10.741/2003",
     "subject": "Direitos Humanos e Proteção",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/2003/l10.741compilado.htm",
     "articleCount": 118,
-    "contentPath": "/laws/ei.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l7716",
+    "canonicalId": "BR-FED-LEI-7716-1989",
     "title": "Racismo",
     "norm": "Lei 7.716/1989",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/l7716compilado.htm",
     "articleCount": 27,
-    "contentPath": "/laws/l7716.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "eir",
+    "canonicalId": "BR-FED-LEI-12288-2010",
     "title": "Estatuto da Igualdade Racial",
     "norm": "Lei 12.288/2010",
     "subject": "Direitos Humanos e Proteção",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2007-2010/2010/lei/l12288.htm",
     "articleCount": 65,
-    "contentPath": "/laws/eir.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l9605",
+    "canonicalId": "BR-FED-LEI-9605-1998",
     "title": "Crimes Ambientais",
     "norm": "Lei 9.605/1998",
     "subject": "Legislação Penal Especial",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/l9605.htm",
     "articleCount": 87,
-    "contentPath": "/laws/l9605.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l9296",
+    "canonicalId": "BR-FED-LEI-9296-1996",
     "title": "Interceptação Telefônica",
     "norm": "Lei 9.296/1996",
     "subject": "Direito Processual Penal",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/l9296.htm",
     "articleCount": 14,
-    "contentPath": "/laws/l9296.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "l12037",
+    "canonicalId": "BR-FED-LEI-12037-2009",
     "title": "Identificação Criminal",
     "norm": "Lei 12.037/2009",
     "subject": "Direito Processual Penal",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2007-2010/2009/lei/l12037.htm",
     "articleCount": 13,
-    "contentPath": "/laws/l12037.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "lje",
+    "canonicalId": "BR-FED-LEI-9099-1995",
     "title": "Juizados Especiais",
     "norm": "Lei 9.099/1995",
     "subject": "Direito Processual Penal",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/leis/l9099.htm",
     "articleCount": 99,
-    "contentPath": "/laws/lje.json",
     "sourceDate": "2026-09-28"
   },
   {
     "id": "lai",
+    "canonicalId": "BR-FED-LEI-12527-2011",
     "title": "Acesso à Informação (LAI)",
     "norm": "Lei 12.527/2011",
     "subject": "Direito Administrativo e Transparência",
     "officialUrl": "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2011/lei/l12527.htm",
     "articleCount": 49,
-    "contentPath": "/laws/lai.json",
     "sourceDate": "2026-09-28"
   }
 ]

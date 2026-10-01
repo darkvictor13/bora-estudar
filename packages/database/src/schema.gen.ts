@@ -223,6 +223,107 @@ export type Database = {
         }
         Relationships: []
       }
+      exam_notice_items: {
+        Row: {
+          norm_id: string
+          notice_id: string
+          position: number
+          scope: string
+          section_position: number
+        }
+        Insert: {
+          norm_id: string
+          notice_id: string
+          position: number
+          scope: string
+          section_position: number
+        }
+        Update: {
+          norm_id?: string
+          notice_id?: string
+          position?: number
+          scope?: string
+          section_position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_notice_items_norm_id_fkey"
+            columns: ["norm_id"]
+            isOneToOne: false
+            referencedRelation: "legal_norms"
+            referencedColumns: ["canonical_id"]
+          },
+          {
+            foreignKeyName: "exam_notice_items_notice_id_section_position_fkey"
+            columns: ["notice_id", "section_position"]
+            isOneToOne: false
+            referencedRelation: "exam_notice_sections"
+            referencedColumns: ["notice_id", "position"]
+          },
+        ]
+      }
+      exam_notice_sections: {
+        Row: {
+          notice_id: string
+          position: number
+          title: string
+        }
+        Insert: {
+          notice_id: string
+          position: number
+          title: string
+        }
+        Update: {
+          notice_id?: string
+          position?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_notice_sections_notice_id_fkey"
+            columns: ["notice_id"]
+            isOneToOne: false
+            referencedRelation: "exam_notices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_notices: {
+        Row: {
+          accent: string
+          base_date: string
+          canonical_id: string
+          created_at: string
+          id: string
+          position: number
+          short_name: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          accent: string
+          base_date: string
+          canonical_id: string
+          created_at?: string
+          id: string
+          position: number
+          short_name: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          accent?: string
+          base_date?: string
+          canonical_id?: string
+          created_at?: string
+          id?: string
+          position?: number
+          short_name?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       flashcard_reviews: {
         Row: {
           card_id: string
@@ -478,6 +579,231 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      law_articles: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          law_id: string
+          paragraphs: string[]
+          position: number
+          retired_at: string | null
+          section: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          label: string
+          law_id: string
+          paragraphs: string[]
+          position: number
+          retired_at?: string | null
+          section: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          law_id?: string
+          paragraphs?: string[]
+          position?: number
+          retired_at?: string | null
+          section?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "law_articles_law_id_fkey"
+            columns: ["law_id"]
+            isOneToOne: false
+            referencedRelation: "laws"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "law_articles_law_id_fkey"
+            columns: ["law_id"]
+            isOneToOne: false
+            referencedRelation: "vw_law_library"
+            referencedColumns: ["law_id"]
+          },
+        ]
+      }
+      law_marks: {
+        Row: {
+          article_id: string
+          color: Database["public"]["Enums"]["law_mark_color"]
+          created_at: string
+          end_offset: number
+          id: string
+          law_id: string
+          paragraph_index: number
+          prefix: string
+          quote: string
+          start_offset: number
+          student_id: string
+          style: Database["public"]["Enums"]["law_mark_style"]
+          suffix: string
+          updated_at: string
+        }
+        Insert: {
+          article_id: string
+          color: Database["public"]["Enums"]["law_mark_color"]
+          created_at?: string
+          end_offset: number
+          id: string
+          law_id: string
+          paragraph_index: number
+          prefix?: string
+          quote: string
+          start_offset: number
+          student_id: string
+          style: Database["public"]["Enums"]["law_mark_style"]
+          suffix?: string
+          updated_at?: string
+        }
+        Update: {
+          article_id?: string
+          color?: Database["public"]["Enums"]["law_mark_color"]
+          created_at?: string
+          end_offset?: number
+          id?: string
+          law_id?: string
+          paragraph_index?: number
+          prefix?: string
+          quote?: string
+          start_offset?: number
+          student_id?: string
+          style?: Database["public"]["Enums"]["law_mark_style"]
+          suffix?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "law_marks_law_id_article_id_fkey"
+            columns: ["law_id", "article_id"]
+            isOneToOne: false
+            referencedRelation: "law_articles"
+            referencedColumns: ["law_id", "id"]
+          },
+          {
+            foreignKeyName: "law_marks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      law_subjects: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          position: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      laws: {
+        Row: {
+          created_at: string
+          id: string
+          norm_id: string
+          norm_label: string
+          official_url: string
+          position: number
+          source_date: string | null
+          subject_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          norm_id: string
+          norm_label: string
+          official_url: string
+          position: number
+          source_date?: string | null
+          subject_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          norm_id?: string
+          norm_label?: string
+          official_url?: string
+          position?: number
+          source_date?: string | null
+          subject_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "laws_norm_id_fkey"
+            columns: ["norm_id"]
+            isOneToOne: true
+            referencedRelation: "legal_norms"
+            referencedColumns: ["canonical_id"]
+          },
+          {
+            foreignKeyName: "laws_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "law_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_norms: {
+        Row: {
+          canonical_id: string
+          created_at: string
+          sphere: Database["public"]["Enums"]["legal_norm_sphere"] | null
+          title: string
+          updated_at: string
+          verification_status:
+            | Database["public"]["Enums"]["legal_norm_verification"]
+            | null
+        }
+        Insert: {
+          canonical_id: string
+          created_at?: string
+          sphere?: Database["public"]["Enums"]["legal_norm_sphere"] | null
+          title: string
+          updated_at?: string
+          verification_status?:
+            | Database["public"]["Enums"]["legal_norm_verification"]
+            | null
+        }
+        Update: {
+          canonical_id?: string
+          created_at?: string
+          sphere?: Database["public"]["Enums"]["legal_norm_sphere"] | null
+          title?: string
+          updated_at?: string
+          verification_status?:
+            | Database["public"]["Enums"]["legal_norm_verification"]
+            | null
+        }
+        Relationships: []
       }
       library_flashcard_aliases: {
         Row: {
@@ -2349,6 +2675,57 @@ export type Database = {
       }
     }
     Views: {
+      vw_law_library: {
+        Row: {
+          article_count: number | null
+          law_id: string | null
+          norm_id: string | null
+          norm_label: string | null
+          official_url: string | null
+          position: number | null
+          source_date: string | null
+          subject_id: string | null
+          title: string | null
+        }
+        Insert: {
+          article_count?: never
+          law_id?: string | null
+          norm_id?: string | null
+          norm_label?: string | null
+          official_url?: string | null
+          position?: number | null
+          source_date?: string | null
+          subject_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          article_count?: never
+          law_id?: string | null
+          norm_id?: string | null
+          norm_label?: string | null
+          official_url?: string | null
+          position?: number | null
+          source_date?: string | null
+          subject_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "laws_norm_id_fkey"
+            columns: ["norm_id"]
+            isOneToOne: true
+            referencedRelation: "legal_norms"
+            referencedColumns: ["canonical_id"]
+          },
+          {
+            foreignKeyName: "laws_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "law_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_library_flashcard_decks: {
         Row: {
           active_cards: number | null
@@ -2537,6 +2914,17 @@ export type Database = {
         | "reinforcement"
         | "mock_exam"
         | "extra"
+      law_mark_color:
+        | "yellow"
+        | "mint"
+        | "blue"
+        | "pink"
+        | "lilac"
+        | "peach"
+        | "salmon"
+      law_mark_style: "highlight" | "underline" | "strike" | "outline"
+      legal_norm_sphere: "constitutional" | "federal" | "state"
+      legal_norm_verification: "pending_official_source"
       library_flashcard_notice:
         | "revoked"
         | "pending_check"
@@ -2698,6 +3086,18 @@ export const Constants = {
         "mock_exam",
         "extra",
       ],
+      law_mark_color: [
+        "yellow",
+        "mint",
+        "blue",
+        "pink",
+        "lilac",
+        "peach",
+        "salmon",
+      ],
+      law_mark_style: ["highlight", "underline", "strike", "outline"],
+      legal_norm_sphere: ["constitutional", "federal", "state"],
+      legal_norm_verification: ["pending_official_source"],
       library_flashcard_notice: [
         "revoked",
         "pending_check",

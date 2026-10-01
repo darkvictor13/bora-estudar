@@ -23,6 +23,7 @@ import { validateLessonMaterialBlocks, validateLessonResources } from "../domain
 import { scheduleFlashcardReview, validateFlashcardCards } from "../domain/flashcards.ts";
 import { normalizeLibraryReviews } from "../domain/library-flashcards.ts";
 import { fixtureLibrary } from "./fixtures-library.ts";
+import { createLawFixtures, resetFixtureLawMarks } from "./fixtures-laws.ts";
 import { questionsByDay } from "../domain/question-performance.ts";
 import { localDate } from "../domain/schedule.ts";
 import { streakDays as countStreakDays } from "../domain/week.ts";
@@ -603,6 +604,7 @@ export function resetFixtures(): void {
   personalFlashcardReviews.clear();
   state = seedState();
   Object.assign(fixturesApi, createMockExamFixtures(mockExamContext));
+  resetFixtureLawMarks();
 }
 
 /* ------------------------------------------------------------------ *
@@ -713,6 +715,7 @@ function progressOf(lessonId: Uuid): TheoryProgress {
 
 export const fixturesApi: BoraApi = {
   ...createMockExamFixtures(mockExamContext),
+  ...createLawFixtures(later, once),
   /* --- Fase 2 --- */
 
   loadSession: () => later(state.session),

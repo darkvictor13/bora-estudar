@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import catalog from "../../data/laws/exam-maps.json" with { type: "json" };
 import {
-  LAW_EXAM_MAPS,
   filterLawExamMap,
   getLawExamMap,
   getLawExamMapStats,
+  type LawExamMap,
 } from "./law-exam-maps.ts";
+
+// O arquivo é a fonte da carga (spec 40); o teste o usa como dado de entrada.
+const LAW_EXAM_MAPS: readonly LawExamMap[] = catalog.maps;
 
 test("provides PMPR, PPPR and PRF maps", () => {
   assert.deepEqual(LAW_EXAM_MAPS.map((map) => map.shortName), ["PMPR", "PPPR", "PRF"]);
@@ -18,7 +22,7 @@ test("provides PMPR, PPPR and PRF maps", () => {
 });
 
 test("reports library coverage without double counting repeated norms", () => {
-  const prf = getLawExamMap("prf-2021");
+  const prf = getLawExamMap(LAW_EXAM_MAPS, "prf-2021");
   const stats = getLawExamMapStats(prf);
   const unique = new Set(prf.sections.flatMap((section) => section.items.map((item) => item.canonicalId)));
   assert.equal(stats.total, unique.size);
@@ -27,7 +31,7 @@ test("reports library coverage without double counting repeated norms", () => {
 });
 
 test("finds a law by title, scope or canonical id", () => {
-  const pmpr = getLawExamMap("pmpr-2025");
+  const pmpr = getLawExamMap(LAW_EXAM_MAPS, "pmpr-2025");
   assert.equal(filterLawExamMap(pmpr, "Maria da Penha").flatMap((section) => section.items).length, 1);
   assert.equal(filterLawExamMap(pmpr, "medidas protetivas").flatMap((section) => section.items).length, 1);
   assert.equal(filterLawExamMap(pmpr, "BR-FED-LEI-8072-1990").flatMap((section) => section.items).length, 1);

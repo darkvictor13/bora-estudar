@@ -71,6 +71,11 @@ jobs:
       - name: Carregar a biblioteca de flashcards
         run: node scripts/load-library-flashcards.mjs --linked
 
+      # Spec 40: o Vade Mecum (normas, textos e mapas de edital), pelo mesmo
+      # caminho e com as mesmas garantias da carga acima.
+      - name: Carregar o Vade Mecum
+        run: node scripts/load-law-library.mjs --linked
+
   site:
     needs: banco
     runs-on: ubuntu-latest

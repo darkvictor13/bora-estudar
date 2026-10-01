@@ -15,13 +15,15 @@ import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card } from "@bora/ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import type { Result } from "@/lib/api";
 import type { LawDocument, LawEntry } from "@/lib/domain/law-library";
 import {
   LAW_MARK_COLORS,
+  anchorLawMarks,
   eraseLawRanges,
   paintLawRanges,
   segmentLawText,
-  validateLawMarks,
+  withLawQuotes,
   type LawMark,
   type LawMarkColor,
   type LawMarkStyle,
@@ -31,9 +33,12 @@ import {
 interface Props {
   readonly law: LawEntry;
   readonly document: LawDocument;
-  readonly profileId: string;
+  /** Como estão gravadas na conta; o leitor as reancora no texto atual. */
+  readonly initialMarks: readonly LawMark[];
   readonly requestedArticleId: string | null;
   readonly onActiveArticle: (articleId: string) => void;
+  /** Grava UMA ação: o antes e o depois (spec 40, R-LEI-15). */
+  readonly onSaveMarks: (previous: readonly LawMark[], next: readonly LawMark[]) => Promise<Result<null>>;
 }
 
 const TOOLS: readonly { style: LawMarkStyle; label: string; icon: ReactNode }[] = [
@@ -52,19 +57,6 @@ const COLOR_LABELS: Readonly<Record<LawMarkColor, string>> = {
   peach: "Pêssego",
   salmon: "Salmão",
 };
-
-function storageKey(profileId: string, lawId: string): string {
-  return `fronteira:law-marks:v1:${profileId}:${lawId}`;
-}
-
-function readMarks(key: string, document: LawDocument): LawMark[] {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? validateLawMarks(JSON.parse(saved), document) : [];
-  } catch {
-    return [];
-  }
-}
 
 function selectedParagraphRanges(root: HTMLElement): LawTextRange[] {
   const selection = window.getSelection();
@@ -108,13 +100,18 @@ function markSx(mark: LawMark | null) {
   }
 }
 
-export function LawContinuousReader({ law, document: lawDocument, profileId, requestedArticleId, onActiveArticle }: Props) {
-  const key = storageKey(profileId, law.id);
-  const [marks, setMarks] = useState<LawMark[]>(() => readMarks(key, lawDocument));
+export function LawContinuousReader({ law, document: lawDocument, initialMarks, requestedArticleId, onActiveArticle, onSaveMarks }: Props) {
+  // A reancoragem roda uma vez, na montagem: as que perderam o trecho
+  // continuam gravadas, não são pintadas e são contadas (R-LEI-13).
+  const [anchored] = useState(() => anchorLawMarks(initialMarks, lawDocument));
+  const [marks, setMarks] = useState<LawMark[]>(anchored.placed);
   const [selection, setSelection] = useState<LawTextRange[]>([]);
   const [style, setStyle] = useState<LawMarkStyle>("highlight");
   const [color, setColor] = useState<LawMarkColor>("yellow");
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // As gravações de uma aba saem em fila (R-LEI-15): a segunda ação só vai ao
+  // banco depois de a primeira voltar, e a ordem do banco é a da tela.
+  const saving = useRef<Promise<void>>(Promise.resolve());
   const [undoCount, setUndoCount] = useState(0);
   const undo = useRef<LawMark[][]>([]);
   const content = useRef<HTMLDivElement>(null);
@@ -157,13 +154,20 @@ export function LawContinuousReader({ law, document: lawDocument, profileId, req
     if (content.current) setSelection(selectedParagraphRanges(content.current));
   };
 
-  const changeMarks = (next: LawMark[]) => {
+  const persist = (previous: readonly LawMark[], next: readonly LawMark[]) => {
+    saving.current = saving.current.then(async () => {
+      const result = await onSaveMarks(previous, next);
+      setSaveError(result.ok ? null : result.error.message);
+    });
+  };
+
+  const changeMarks = (changed: LawMark[]) => {
+    const next = withLawQuotes(changed, lawDocument);
     undo.current.push(marks);
     if (undo.current.length > 30) undo.current.shift();
     setUndoCount(undo.current.length);
     setMarks(next);
-    try { localStorage.setItem(key, JSON.stringify(next)); setSaveError(false); }
-    catch { setSaveError(true); }
+    persist(marks, next);
   };
 
   const paint = (nextStyle: LawMarkStyle, nextColor: LawMarkColor) => {
@@ -226,15 +230,19 @@ export function LawContinuousReader({ law, document: lawDocument, profileId, req
           if (!previous) return;
           setUndoCount(undo.current.length);
           setMarks(previous);
-          try { localStorage.setItem(key, JSON.stringify(previous)); setSaveError(false); }
-          catch { setSaveError(true); }
+          persist(marks, previous);
         }}><UndoIcon fontSize="small" /></IconButton></span></Tooltip>
         <Tooltip title="Limpar seleção"><span><IconButton size="small" aria-label="Limpar seleção" disabled={!selection.length} onClick={dismiss}><CloseIcon fontSize="small" /></IconButton></span></Tooltip>
         <Typography variant="caption" color="text.secondary" sx={{ ml: "auto", px: 0.6 }}>
           {selection.length ? `${selection.length} trecho${selection.length > 1 ? "s" : ""} selecionado${selection.length > 1 ? "s" : ""}` : "Selecione um trecho para marcar"}
         </Typography>
       </Box>
-      {saveError && <Alert status="warning">Não foi possível salvar as marcações neste navegador.</Alert>}
+      {saveError && <Alert status="warning">Não foi possível salvar a última marcação: {saveError} Recarregue a página para ver o que ficou gravado.</Alert>}
+      {anchored.lost.length > 0 && (
+        <Alert status="info">
+          {anchored.lost.length === 1 ? "Uma marcação sua não foi encontrada" : `${anchored.lost.length} marcações suas não foram encontradas`} no texto atual desta lei: o trecho foi alterado ou retirado. {anchored.lost.length === 1 ? "Ela continua guardada" : "Elas continuam guardadas"}, mas não aparece{anchored.lost.length === 1 ? "" : "m"} no texto.
+        </Alert>
+      )}
 
       <Box ref={content} onMouseUp={captureSelection} onKeyUp={captureSelection} onTouchEnd={captureSelection} sx={{ display: "grid", gap: 1.5 }}>
         {lawDocument.articles.map((article) => (
@@ -258,7 +266,8 @@ export function LawContinuousReader({ law, document: lawDocument, profileId, req
                       sx={{ fontSize: "0.93rem", fontWeight: paragraphIndex === 0 ? 650 : 500, lineHeight: 1.8, color: "text.primary", mb: paragraphIndex === article.paragraphs.length - 1 ? 0 : 1.35, overflowWrap: "anywhere" }}
                     >
                       {segmentLawText(paragraph, paragraphMarks).map((segment, index) => (
-                        <Box component="span" key={index} sx={markSx(segment.mark)}>{segment.text}</Box>
+                        <Box component="span" key={index} sx={markSx(segment.mark)}
+                          {...(segment.mark ? { "data-testid": "law-mark", "data-style": segment.mark.style, "data-color": segment.mark.color } : {})}>{segment.text}</Box>
                       ))}
                     </Typography>
                   );
@@ -268,7 +277,7 @@ export function LawContinuousReader({ law, document: lawDocument, profileId, req
           </Box>
         ))}
       </Box>
-      <Alert status="info">O arquivo recebido pode conter redações históricas e dispositivos vetados. A fonte oficial prevalece. As marcações ficam salvas neste navegador; os recortes de PMPR, PPPR e PRF aguardam conferência dos editais.</Alert>
+      <Alert status="info">O arquivo recebido pode conter redações históricas e dispositivos vetados. A fonte oficial prevalece. As marcações ficam salvas na sua conta; os recortes de PMPR, PPPR e PRF aguardam conferência dos editais.</Alert>
     </Box>
   );
 }

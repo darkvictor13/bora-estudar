@@ -45,6 +45,8 @@ test("mantém a identificação de material histórico e auditoria parcial", () 
 });
 
 test("a migração permite todos os decks importados", () => {
-  const sql = readFileSync(new URL("../supabase/migrations/20260929205400_police_flashcard_decks.sql", import.meta.url), "utf8");
+  // Os nove de Informática entraram na migration anterior, a das revisões.
+  const sql = ["20260929100710_library_flashcard_reviews.sql", "20260929205400_police_flashcard_decks.sql"]
+    .map((name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8")).join("\n");
   for (const subject of catalog.subjects) for (const deck of subject.decks) assert.ok(sql.includes(`'${deck.id}'`));
 });

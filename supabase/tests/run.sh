@@ -16,6 +16,8 @@ supabase db reset >/dev/null
 # toca — nada dele pende de usuário.
 echo "→ carregando a biblioteca de flashcards"
 node scripts/load-library-flashcards.mjs >/dev/null
+echo "→ carregando o Vade Mecum"
+node scripts/load-law-library.mjs >/dev/null
 
 CONTAINER="supabase_db_$(grep -m1 '^project_id' supabase/config.toml | cut -d'"' -f2)"
 
@@ -50,6 +52,9 @@ done
 echo
 echo "══ load-library-flashcards.test.mjs"
 node --test --test-reporter=dot scripts/load-library-flashcards.test.mjs
+echo
+echo "══ load-law-library.test.mjs"
+node --test --test-reporter=dot scripts/load-law-library.test.mjs
 
 echo
 echo "✓ todas as suítes passaram"

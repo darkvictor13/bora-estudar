@@ -334,3 +334,29 @@ exception when insufficient_privilege then
   raise notice '31 OK  nem o professor edita cartao da biblioteca';
 end $$;
 reset role;
+
+-- ---------- Vade Mecum: só leitura (spec 40, R-LEI-08) ----------
+do $$
+declare
+  v_tabela text;
+  v_sobra  text := '';
+begin
+  foreach v_tabela in array array['law_subjects', 'legal_norms', 'laws', 'law_articles',
+    'exam_notices', 'exam_notice_sections', 'exam_notice_items', 'vw_law_library']
+  loop
+    if not has_table_privilege('authenticated', 'public.' || v_tabela, 'select') then
+      raise exception 'FALHOU: authenticated nao le %', v_tabela;
+    end if;
+    if has_table_privilege('authenticated', 'public.' || v_tabela, 'insert')
+       or has_table_privilege('authenticated', 'public.' || v_tabela, 'update')
+       or has_table_privilege('authenticated', 'public.' || v_tabela, 'delete')
+       or has_any_column_privilege('authenticated', 'public.' || v_tabela, 'insert')
+       or has_any_column_privilege('authenticated', 'public.' || v_tabela, 'update') then
+      v_sobra := v_sobra || ' ' || v_tabela;
+    end if;
+  end loop;
+  if v_sobra <> '' then
+    raise exception 'FALHOU: authenticated escreve no Vade Mecum:%', v_sobra;
+  end if;
+  raise notice '32 OK  o Vade Mecum e so leitura para authenticated';
+end $$;

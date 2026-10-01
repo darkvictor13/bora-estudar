@@ -41,7 +41,7 @@ npm run dev           # site em http://localhost:3000 (Vite)
 
 npm run check         # typecheck + lint + testes de todos os pacotes
 npm run db:test       # recria o banco e roda as suítes de invariante
-npm run db:reset      # recria o banco: migration + seed + carga da biblioteca
+npm run db:reset      # recria o banco: migration + seed + carga da biblioteca e das leis
 npm run db:types      # regenera packages/database a partir do schema local
 
 npm run e2e           # suíte Playwright, modo rápido
@@ -88,6 +88,8 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `classes`, `class_students` | professor | direto, com RLS e grant por coluna |
 | `catalog_blocks` | ninguém | leitura para autenticado; carga por `service_role` |
 | `library_flashcards`, `library_flashcard_subjects`, `library_flashcard_aliases` e as duas de referência | ninguém | SELECT e nada mais; o texto do cartão só com acesso vigente ou professor. Carga por `scripts/load-library-flashcards.mjs`, no deploy |
+| `legal_norms`, `laws`, `law_articles`, `law_subjects`, `exam_notices` e filhas | ninguém | SELECT e nada mais; o texto do artigo só com acesso vigente ou professor. Carga por `scripts/load-law-library.mjs`, no deploy |
+| `law_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar e alterar exigem acesso vigente |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 

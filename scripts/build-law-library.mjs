@@ -4,26 +4,29 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDir = path.join(root, "content", "laws", "source");
-const publicDir = path.join(root, "apps", "web", "public", "laws");
+// Fora de `public/` desde a spec 40: o site lê o texto do banco, e só a
+// implementação `fixtures` o importa, por import dinâmico.
+const textDir = path.join(root, "apps", "web", "src", "data", "laws", "text");
 const indexPath = path.join(root, "apps", "web", "src", "data", "laws", "index.json");
 
 // A matéria vem da pasta do pacote; o texto de cada norma permanece canônico.
+// O terceiro campo é o `canonical_id` da norma (spec 40, R-LEI-02).
 const files = [
-  ["07_crimes_hediondos.md", "Legislação Penal Especial"],
-  ["08_tortura.md", "Legislação Penal Especial"],
-  ["09_estatuto_desarmamento.md", "Legislação Penal Especial"],
-  ["10_lei_drogas.md", "Legislação Penal Especial"],
-  ["11_organizacoes_criminosas.md", "Legislação Penal Especial"],
-  ["12_abuso_autoridade.md", "Legislação Penal Especial"],
-  ["13_maria_da_penha.md", "Legislação Penal Especial"],
-  ["14_estatuto_pessoa_idosa.md", "Direitos Humanos e Proteção"],
-  ["15_crimes_preconceito_raca_cor.md", "Legislação Penal Especial"],
-  ["16_estatuto_igualdade_racial.md", "Direitos Humanos e Proteção"],
-  ["17_crimes_ambientais.md", "Legislação Penal Especial"],
-  ["18_interceptacao_telefonica.md", "Direito Processual Penal"],
-  ["19_identificacao_criminal.md", "Direito Processual Penal"],
-  ["20_juizados_especiais.md", "Direito Processual Penal"],
-  ["21_lei_acesso_informacao.md", "Direito Administrativo e Transparência"],
+  ["07_crimes_hediondos.md", "Legislação Penal Especial", "BR-FED-LEI-8072-1990"],
+  ["08_tortura.md", "Legislação Penal Especial", "BR-FED-LEI-9455-1997"],
+  ["09_estatuto_desarmamento.md", "Legislação Penal Especial", "BR-FED-LEI-10826-2003"],
+  ["10_lei_drogas.md", "Legislação Penal Especial", "BR-FED-LEI-11343-2006"],
+  ["11_organizacoes_criminosas.md", "Legislação Penal Especial", "BR-FED-LEI-12850-2013"],
+  ["12_abuso_autoridade.md", "Legislação Penal Especial", "BR-FED-LEI-13869-2019"],
+  ["13_maria_da_penha.md", "Legislação Penal Especial", "BR-FED-LEI-11340-2006"],
+  ["14_estatuto_pessoa_idosa.md", "Direitos Humanos e Proteção", "BR-FED-LEI-10741-2003"],
+  ["15_crimes_preconceito_raca_cor.md", "Legislação Penal Especial", "BR-FED-LEI-7716-1989"],
+  ["16_estatuto_igualdade_racial.md", "Direitos Humanos e Proteção", "BR-FED-LEI-12288-2010"],
+  ["17_crimes_ambientais.md", "Legislação Penal Especial", "BR-FED-LEI-9605-1998"],
+  ["18_interceptacao_telefonica.md", "Direito Processual Penal", "BR-FED-LEI-9296-1996"],
+  ["19_identificacao_criminal.md", "Direito Processual Penal", "BR-FED-LEI-12037-2009"],
+  ["20_juizados_especiais.md", "Direito Processual Penal", "BR-FED-LEI-9099-1995"],
+  ["21_lei_acesso_informacao.md", "Direito Administrativo e Transparência", "BR-FED-LEI-12527-2011"],
 ];
 
 function unescapeMarkdown(value) {
@@ -107,11 +110,11 @@ function parseArticles(lines) {
   });
 }
 
-await mkdir(publicDir, { recursive: true });
+await mkdir(textDir, { recursive: true });
 await mkdir(path.dirname(indexPath), { recursive: true });
 const index = [];
 
-for (const [filename, subject] of files) {
+for (const [filename, subject, canonicalId] of files) {
   const raw = await readFile(path.join(sourceDir, filename), "utf8");
   const { lines, values } = metadata(raw);
   if (!values.id || !values.nome || !values.norma || !values.fonte_oficial) {
@@ -127,15 +130,15 @@ for (const [filename, subject] of files) {
     throw new Error(`Unexpected official source in ${filename}`);
   }
   const doc = { id, articles };
-  await writeFile(path.join(publicDir, `${id}.json`), JSON.stringify(doc));
+  await writeFile(path.join(textDir, `${id}.json`), JSON.stringify(doc));
   index.push({
     id,
+    canonicalId,
     title: values.nome,
     norm: values.norma,
     subject,
     officialUrl,
     articleCount: articles.length,
-    contentPath: `/laws/${id}.json`,
     sourceDate: values.coleta_pacote ?? null,
   });
 }

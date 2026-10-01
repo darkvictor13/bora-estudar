@@ -781,3 +781,39 @@ test("simulado: o professor vê os nomes, o aluno só o próprio e 'Colega'", as
   for (const id of others) if (id !== own[0]?.studentId) assert.ok(!text.includes(id), `vazou o id ${id}`);
   assert.equal(studentView.results.length, teacherView.results.filter((row) => row.score !== null).length);
 });
+
+// Spec 40, CA-09: o contrato do Vade Mecum.
+test("a biblioteca de leis traz 15 leis em 4 matérias, e o texto por lei", async () => {
+  const library = await api.loadLawLibrary();
+  assert.equal(library.laws.length, 15);
+  assert.deepEqual(library.subjects, ["Legislação Penal Especial", "Direitos Humanos e Proteção", "Direito Processual Penal", "Direito Administrativo e Transparência"]);
+  const drugs = library.laws.find((law) => law.id === "ld")!;
+  assert.equal(drugs.canonicalId, "BR-FED-LEI-11343-2006");
+  const document = await api.loadLawDocument("ld");
+  assert.equal(document?.articles.length, drugs.articleCount);
+  assert.equal(await api.loadLawDocument("nao-existe"), null);
+});
+
+test("os mapas de edital dizem quais normas têm texto na biblioteca", async () => {
+  const { maps } = await api.loadExamMaps();
+  assert.deepEqual(maps.map((map) => map.shortName), ["PMPR", "PPPR", "PRF"]);
+  const library = new Set((await api.loadLawLibrary()).laws.map((law) => law.id));
+  for (const item of maps.flatMap((map) => map.sections.flatMap((section) => section.items))) {
+    assert.equal(item.available, item.libraryId !== null);
+    if (item.libraryId) assert.ok(library.has(item.libraryId), item.libraryId);
+  }
+});
+
+test("as marcações gravam a diferença, e repetir a mesma chave não muda nada", async () => {
+  const mark = { id: "a9000000-0000-4000-8000-000000000001", articleId: "lai-art-1", paragraphIndex: 0, start: 8, end: 16, style: "highlight", color: "yellow", quote: "Esta Lei", prefix: "Art. 1º ", suffix: " dispõe sobre" } as const;
+  const first = requestId();
+  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [], next: [mark], requestId: first })).ok);
+  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [], next: [mark], requestId: first })).ok);
+  assert.deepEqual(await api.loadLawMarks("lai"), [mark]);
+  const recolored = { ...mark, color: "mint" } as const;
+  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [mark], next: [recolored], requestId: requestId() })).ok);
+  assert.deepEqual((await api.loadLawMarks("lai")).map((item) => item.color), ["mint"]);
+  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [recolored], next: [], requestId: requestId() })).ok);
+  assert.deepEqual(await api.loadLawMarks("lai"), []);
+  assert.deepEqual(await api.loadLawMarks("ld"), []);
+});
