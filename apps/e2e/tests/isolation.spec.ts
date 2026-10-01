@@ -35,6 +35,10 @@ async function study(
 
 test.describe("F-ISO-01 · leitura", () => {
   test("o aluno 2 não vê nada do aluno 1", async ({ page, signIn, scenario }) => {
+    // Percorre TODAS as telas de estudo, e `/aluno/flashcards` traz a
+    // biblioteca editorial inteira: com a suíte em paralelo, os 45 s do
+    // orçamento padrão não cobrem a volta completa.
+    test.slow();
     await study(scenario, 85);
     const outro = await createScenario({ withPlan: false });
 

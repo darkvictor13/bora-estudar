@@ -251,6 +251,20 @@ diff mostra a omissão.
 | F-MATR-01 a F-MATR-05 | turmas: criar, renomear, matricular, mover, recusar apagar turma com aluno, filtrar por `?turma=` — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
 
+### Simulados — `tests/mock-exams.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-SIM-01 | o professor cadastra, lança nota geral e acertos por matéria e publica; o aluno vê a própria linha com nome e cada colega como "Colega", sem nome nem id do colega em lugar nenhum do HTML — spec [35](specs/35-simulados-presenciais.md) |
+
+### Flashcards — `tests/flashcards.spec.ts`
+
+| Id | Cobre |
+|---|---|
+| F-FLASH-01 | cartões de aula: o professor cria pelo editor, o aluno revisa, o professor reescreve um e remove o revisado; o removido fica MARCADO, o reescrito mantém o id, e a revisão do aluno continua — spec [34](specs/34-cronograma-leis-flashcards.md) |
+| F-FLASH-02 | deck pessoal: criar deck e cartão, revisar duas vezes (INSERT e depois UPDATE) |
+| F-FLASH-03 | biblioteca editorial: revisar o mesmo cartão duas vezes (INSERT e depois UPDATE) |
+
 ### Isolamento — `tests/isolation.spec.ts`
 
 | Id | Cobre |

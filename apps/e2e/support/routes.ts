@@ -15,6 +15,9 @@ export const STUDENT_STUDY_ROUTES = [
   "/aluno/cadernos",
   "/aluno/estatisticas",
   "/aluno/revisoes",
+  "/aluno/flashcards",
+  "/aluno/flashcards/estatisticas",
+  "/aluno/simulados",
 ] as const;
 
 /** Alcançáveis pelo aluno mesmo sem acesso liberado. */
@@ -31,6 +34,7 @@ export const TEACHER_ROUTES = [
   "/professor/cadernos",
   "/professor/revisoes",
   "/professor/estatisticas",
+  "/professor/simulados",
   "/professor/conta",
 ] as const;
 
@@ -45,6 +49,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/aluno/cadernos": "Cadernos TEC",
   "/aluno/estatisticas": "Estatísticas",
   "/aluno/revisoes": "Controle de revisões",
+  "/aluno/flashcards": "Flashcards",
+  "/aluno/flashcards/estatisticas": "Estatísticas dos flashcards",
+  "/aluno/simulados": "Simulados",
   "/aluno/conta": "Meus dados",
   "/aluno/lista-espera": "Lista de espera",
   "/professor": "Meus alunos",
@@ -55,6 +62,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/professor/cadernos": "Cadernos TEC",
   "/professor/revisoes": "Revisões",
   "/professor/estatisticas": "Estatísticas",
+  "/professor/simulados": "Simulados presenciais",
   "/professor/conta": "Meus dados",
 };
 
