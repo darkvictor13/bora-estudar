@@ -6,7 +6,6 @@ import { useLoaderData } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
 import { api, type Notebook } from "@/lib/api";
-import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 import { requireStudentAccess } from "@/lib/auth/session";
 
 /**
@@ -23,7 +22,7 @@ import { requireStudentAccess } from "@/lib/auth/session";
 export async function studentNotebooksLoader() {
   await requireStudentAccess();
 
-  const plan = await loadActivePlanOrNull();
+  const plan = await api.loadActivePlanOrNull();
   if (!plan) return { notebooks: [] as readonly Notebook[], hasPlan: false };
 
   const notebooks = await api.listNotebooks(plan.id);

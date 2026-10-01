@@ -13,7 +13,6 @@ import {
   type Reinforcement,
   type ReviewGridRow,
 } from "@/lib/api";
-import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 import { requireStudentAccess } from "@/lib/auth/session";
 
 /**
@@ -32,7 +31,7 @@ import { requireStudentAccess } from "@/lib/auth/session";
 export async function studentReviewsLoader() {
   await requireStudentAccess();
 
-  const plan = await loadActivePlanOrNull();
+  const plan = await api.loadActivePlanOrNull();
   if (!plan) {
     return {
       grid: [] as readonly ReviewGridRow[],

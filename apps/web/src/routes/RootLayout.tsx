@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { useEffect } from "react";
 import { Outlet, useMatches } from "react-router";
 
-const DEFAULT_TITLE = "Bora Estudar";
+const DEFAULT_TITLE = "Fronteira Concursos";
 
 interface TitleHandle {
   readonly title?: string;

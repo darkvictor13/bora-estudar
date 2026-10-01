@@ -1,0 +1,584 @@
+{
+  "version": "1.0",
+  "baseDate": "2026-09-29",
+  "maps": [
+    {
+      "file": "01_MAPA_PMPR_2025.md",
+      "id": "pmpr-2025",
+      "shortName": "PMPR",
+      "title": "PMPR Soldado 2025",
+      "accent": "Soldado",
+      "canonicalId": "EDITAL-PMPR-SOLDADO-2025-01",
+      "sections": [
+        {
+          "title": "Constituição Federal — recortes expressos",
+          "items": [
+            {
+              "canonicalId": "BR-CF-1988",
+              "title": "Constituição da República Federativa do Brasil de 1988",
+              "scope": "Título III, Cap. VII, Seções I e III; Título IV, Cap. III, Seções VII e VIII; Título V, Caps. II e III",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Direitos Humanos",
+          "items": [
+            {
+              "canonicalId": "DOC-ONU-DUDH-1948",
+              "title": "Declaração Universal dos Direitos Humanos",
+              "scope": "arts. 1º a 30",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "DOC-OEA-CADH-1969",
+              "title": "Convenção Americana sobre Direitos Humanos",
+              "scope": "arts. 1º a 32",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "DOC-ONU-RES-34-169",
+              "title": "Código de Conduta para Funcionários Responsáveis pela Aplicação da Lei",
+              "scope": "Resolução ONU 34/169 — arts. 1º a 8º",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Legislação",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-8072-1990",
+              "title": "Crimes Hediondos",
+              "scope": "Crimes Hediondos",
+              "libraryId": "l8072",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9455-1997",
+              "title": "Lei de Tortura",
+              "scope": "Tortura",
+              "libraryId": "l9455",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-10826-2003",
+              "title": "Estatuto do Desarmamento",
+              "scope": "Estatuto do Desarmamento",
+              "libraryId": "ed",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-11343-2006",
+              "title": "Lei de Drogas",
+              "scope": "Lei de Drogas",
+              "libraryId": "ld",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12850-2013",
+              "title": "Organizações Criminosas",
+              "scope": "Organização Criminosa",
+              "libraryId": "l12850",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-13869-2019",
+              "title": "Abuso de Autoridade",
+              "scope": "Abuso de Autoridade",
+              "libraryId": "l13869",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-10741-2003",
+              "title": "Estatuto da Pessoa Idosa",
+              "scope": "Estatuto da Pessoa Idosa",
+              "libraryId": "ei",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-7716-1989",
+              "title": "Crimes resultantes de preconceito de raça ou cor",
+              "scope": "Crimes resultantes de preconceito de raça ou cor",
+              "libraryId": "l7716",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12288-2010",
+              "title": "Estatuto da Igualdade Racial",
+              "scope": "Estatuto da Igualdade Racial",
+              "libraryId": "eir",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-11340-2006",
+              "title": "Lei Maria da Penha",
+              "scope": "somente medidas protetivas de urgência e crime de descumprimento",
+              "libraryId": "lmp",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-8069-1990",
+              "title": "Estatuto da Criança e do Adolescente",
+              "scope": "arts. 1º a 6º; 98 a 102; 103 a 128; 129 e 130",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Legislação Institucional",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-14751-2023",
+              "title": "Lei Orgânica Nacional das PMs e CBMs",
+              "scope": "Capítulo I",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-PR-LEI-1943-1954",
+              "title": "Código da Polícia Militar do Paraná",
+              "scope": "Título II: Capítulos IV e XI; Título V: Capítulos I e II",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-PR-DEC-5075-1998",
+              "title": "Regulamento de Ética Profissional dos Militares Estaduais",
+              "scope": "Regulamento de Ética Profissional dos Militares Estaduais e Anexo",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "02_MAPA_PPPR_2024.md",
+      "id": "pppr-2024",
+      "shortName": "PPPR",
+      "title": "Polícia Penal do Paraná 2024",
+      "accent": "Policial Penal",
+      "canonicalId": "EDITAL-PPPR-POLICIAL-PENAL-2024-001",
+      "sections": [
+        {
+          "title": "Legislação extravagante",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-11343-2006",
+              "title": "Lei de Drogas",
+              "scope": "Título I; Título II, Cap. I; Título III, Cap. III; Título IV, Caps. II e III",
+              "libraryId": "ld",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-8072-1990",
+              "title": "Crimes Hediondos",
+              "scope": "integral conforme edital",
+              "libraryId": "l8072",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-13869-2019",
+              "title": "Abuso de Autoridade",
+              "scope": "integral conforme edital",
+              "libraryId": "l13869",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-10826-2003",
+              "title": "Estatuto do Desarmamento",
+              "scope": "edital cita o Estatuto do Desarmamento e também recorta Caps. I a VI",
+              "libraryId": "ed",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9296-1996",
+              "title": "Interceptação Telefônica",
+              "scope": "Interceptação Telefônica",
+              "libraryId": "l9296",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12850-2013",
+              "title": "Organizações Criminosas",
+              "scope": "Organizações Criminosas",
+              "libraryId": "l12850",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-11340-2006",
+              "title": "Lei Maria da Penha",
+              "scope": "Títulos I e II",
+              "libraryId": "lmp",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9455-1997",
+              "title": "Lei de Tortura",
+              "scope": "Tortura",
+              "libraryId": "l9455",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9605-1998",
+              "title": "Crimes Ambientais",
+              "scope": "Caps. I, II, V (Seções I a V) e VI",
+              "libraryId": "l9605",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-DEC-11615-2023",
+              "title": "Regulamenta o Estatuto do Desarmamento",
+              "scope": "Cap. I; Cap. III, Seções I a IV; Cap. IV",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-PR-LEI-20656-2021",
+              "title": "Processo Administrativo no Estado do Paraná",
+              "scope": "recortes indicados no edital sobre processo administrativo estadual",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-8069-1990",
+              "title": "Estatuto da Criança e do Adolescente",
+              "scope": "recortes de Parte Geral e Parte Especial indicados no edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-10741-2003",
+              "title": "Estatuto da Pessoa Idosa",
+              "scope": "Estatuto da Pessoa Idosa",
+              "libraryId": "ei",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12527-2011",
+              "title": "Lei de Acesso à Informação",
+              "scope": "LAI",
+              "libraryId": "lai",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-PR-LEI-6174-1970",
+              "title": "Estatuto dos Funcionários Civis do Poder Executivo do Paraná",
+              "scope": "recortes de cargos, tempo de serviço e regime disciplinar",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Direito Administrativo",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-8429-1992",
+              "title": "Improbidade Administrativa",
+              "scope": "Improbidade Administrativa",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Direito Penitenciário / Criminologia",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-7210-1984",
+              "title": "Lei de Execução Penal",
+              "scope": "Lei de Execução Penal",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "PENDENTE-ESTATUTO-PENITENCIARIO-PR",
+              "title": "Estatuto Penitenciário do Paraná",
+              "scope": "Ato normativo oficial vigente ainda será identificado",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "PENDENTE-ESTATUTO-PENITENCIARIO-PR",
+              "title": "Estatuto Penitenciário do Paraná",
+              "scope": "cadastrar com `canonical_id` próprio após identificação do ato normativo oficial vigente",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-PR-LC-245-2022",
+              "title": "Quadro Próprio da Polícia Penal do Paraná",
+              "scope": "Quadro Próprio da Polícia Penal",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-PR-LEI-21404-2023",
+              "title": "Conselho da Polícia Penal",
+              "scope": "Conselho da Polícia Penal",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "03_MAPA_PRF_2021.md",
+      "id": "prf-2021",
+      "shortName": "PRF",
+      "title": "Polícia Rodoviária Federal 2021",
+      "accent": "Policial Rodoviário Federal",
+      "canonicalId": "EDITAL-PRF-POLICIAL-2021-01",
+      "sections": [
+        {
+          "title": "Legislação de Trânsito",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-9503-1997",
+              "title": "Código de Trânsito Brasileiro",
+              "scope": "Código de Trânsito Brasileiro e alterações",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-5970-1973",
+              "title": "Lei nº 5.970/1973",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-CONTRAN-RESOLUCOES-PRF-2021",
+              "title": "Resoluções CONTRAN do edital",
+              "scope": "40 resoluções, da Resolução 04/1998 à 810/2020; cadastro individual pendente",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Direito Administrativo",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-8112-1990",
+              "title": "Regime Jurídico dos Servidores Públicos Civis da União",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9654-1998",
+              "title": "Carreira de Policial Rodoviário Federal",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12855-2013",
+              "title": "Lei nº 12.855/2013",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-13712-2018",
+              "title": "Lei nº 13.712/2018",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-DEC-8282-2014",
+              "title": "Regulamentação da carreira PRF",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Direito Penal",
+          "items": [
+            {
+              "canonicalId": "BR-FED-DL-2848-1940",
+              "title": "Código Penal",
+              "scope": "Código Penal, conforme tópicos indicados no edital",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        },
+        {
+          "title": "Direito Processual Penal",
+          "items": [
+            {
+              "canonicalId": "BR-FED-DL-3689-1941",
+              "title": "Código de Processo Penal",
+              "scope": "CPP, conforme tópicos indicados",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9099-1995",
+              "title": "Juizados Especiais",
+              "scope": "TCO",
+              "libraryId": "lje",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12037-2009",
+              "title": "Identificação Criminal",
+              "scope": "Identificação Criminal",
+              "libraryId": "l12037",
+              "available": true
+            }
+          ]
+        },
+        {
+          "title": "Legislação Especial",
+          "items": [
+            {
+              "canonicalId": "BR-FED-LEI-5553-1968",
+              "title": "Lei nº 5.553/1968",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12037-2009",
+              "title": "Identificação Criminal",
+              "scope": "Conforme o edital",
+              "libraryId": "l12037",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-8069-1990",
+              "title": "Estatuto da Criança e do Adolescente",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-8072-1990",
+              "title": "Crimes Hediondos",
+              "scope": "Conforme o edital",
+              "libraryId": "l8072",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-DEC-1655-1995",
+              "title": "Competência da Polícia Rodoviária Federal",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-DEC-9662-2019",
+              "title": "Estrutura regimental do MJSP — referência histórica do edital PRF 2021",
+              "scope": "art. 47, conforme edital histórico",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9099-1995",
+              "title": "Juizados Especiais",
+              "scope": "Conforme o edital",
+              "libraryId": "lje",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9455-1997",
+              "title": "Lei de Tortura",
+              "scope": "Conforme o edital",
+              "libraryId": "l9455",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-9605-1998",
+              "title": "Crimes Ambientais",
+              "scope": "Caps. III e V",
+              "libraryId": "l9605",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-10826-2003",
+              "title": "Estatuto do Desarmamento",
+              "scope": "Cap. IV",
+              "libraryId": "ed",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-11343-2006",
+              "title": "Lei de Drogas",
+              "scope": "Conforme o edital",
+              "libraryId": "ld",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-12850-2013",
+              "title": "Organizações Criminosas",
+              "scope": "Conforme o edital",
+              "libraryId": "l12850",
+              "available": true
+            },
+            {
+              "canonicalId": "BR-FED-LEI-13675-2018",
+              "title": "Sistema Único de Segurança Pública",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-LEI-13869-2019",
+              "title": "Abuso de Autoridade",
+              "scope": "Conforme o edital",
+              "libraryId": "l13869",
+              "available": true
+            }
+          ]
+        },
+        {
+          "title": "Direitos Humanos",
+          "items": [
+            {
+              "canonicalId": "BR-CF-1988",
+              "title": "Constituição da República Federativa do Brasil de 1988",
+              "scope": "direitos humanos e tratados",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "DOC-ONU-DUDH-1948",
+              "title": "Declaração Universal dos Direitos Humanos",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "DOC-OEA-CADH-1969",
+              "title": "Convenção Americana sobre Direitos Humanos",
+              "scope": "Conforme o edital",
+              "libraryId": null,
+              "available": false
+            },
+            {
+              "canonicalId": "BR-FED-DEC-678-1992",
+              "title": "Promulga a Convenção Americana sobre Direitos Humanos",
+              "scope": "promulgação da CADH",
+              "libraryId": null,
+              "available": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

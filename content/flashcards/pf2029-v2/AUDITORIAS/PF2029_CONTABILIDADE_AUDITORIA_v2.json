@@ -1,0 +1,48 @@
+{
+  "materia": "Contabilidade",
+  "fonte_principal": "Resumo PF 2029",
+  "data_auditoria": "2026-09-29",
+  "arquivo_base": "PF2029_CONTABILIDADE_COMPLETO_FLASHCARDS.md",
+  "arquivo_resultado": "PF2029_CONTABILIDADE_FLASHCARDS_AUDITADO_v2.md",
+  "flashcards_antes": 431,
+  "flashcards_adicionados": 38,
+  "flashcards_depois": 469,
+  "duplicacoes_exatas_antes": 0,
+  "correcoes_normativas": [
+    {
+      "flashcard": 403,
+      "tema": "CPC 26 x CPC 51",
+      "resultado": "CPC 26 aplicável em 2026; CPC 51 obrigatório para companhias abertas a partir de 01/01/2027"
+    },
+    {
+      "flashcards": [
+        456,
+        457,
+        458,
+        459
+      ],
+      "tema": "DFC - juros, dividendos e JCP",
+      "resultado": "classificações ajustadas conforme CPC 03 (R2) vigente"
+    },
+    {
+      "flashcards": [
+        464,
+        465,
+        466
+      ],
+      "tema": "CPC 01 - valor recuperável",
+      "resultado": "conceitos complementados e escopo distinguido de estoques"
+    }
+  ],
+  "lacunas_preenchidas_por_bloco": {
+    "fundamentos_plano_de_contas": 3,
+    "livros_balancete": 5,
+    "regimes_antecipacoes": 2,
+    "estoques_ipi_icms": 9,
+    "dre_dfc": 9,
+    "dva_dmpl": 3,
+    "impairment": 4,
+    "demonstracoes_atualizacao_normativa": 3
+  },
+  "status": "segunda_passagem_auditoria_cobertura_concluida"
+}

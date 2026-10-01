@@ -1,10 +1,14 @@
 import AssignmentIcon from "@mui/icons-material/AssignmentOutlined";
+import TrophyIcon from "@mui/icons-material/EmojiEventsOutlined";
+import GavelIcon from "@mui/icons-material/GavelOutlined";
+import StyleIcon from "@mui/icons-material/StyleOutlined";
+import DateRangeIcon from "@mui/icons-material/DateRangeOutlined";
 import BarChartIcon from "@mui/icons-material/BarChartOutlined";
 import EventRepeatIcon from "@mui/icons-material/EventRepeatOutlined";
-import GridViewIcon from "@mui/icons-material/GridViewOutlined";
 import TodayIcon from "@mui/icons-material/CalendarMonthOutlined";
 import HourglassIcon from "@mui/icons-material/HourglassEmptyOutlined";
 import MenuBookIcon from "@mui/icons-material/MenuBookOutlined";
+import DescriptionIcon from "@mui/icons-material/DescriptionOutlined";
 import PersonIcon from "@mui/icons-material/PersonOutlineOutlined";
 import Box from "@mui/material/Box";
 import { Alert } from "@bora/ui";
@@ -41,32 +45,26 @@ export function StudentLayout() {
   const signOut = useSignOut();
   const sidebar = useSidebar();
 
-  // Os grupos e os rótulos são os da v2 (`aluno.html`). "Metas" é o nome que o
-  // aluno usa para a tela inicial — "visão geral" é jargão de quem construiu.
+  // Organização por tarefa: rotina, materiais e acompanhamento.
   const groups: NavGroup[] = [
     {
-      title: "Visão geral",
+      title: "Minha rotina",
       items: [
         {
           href: ROUTES.student.overview,
-          label: "Metas",
-          icon: <GridViewIcon fontSize="small" />,
+          label: "Minha semana",
+          icon: <DateRangeIcon fontSize="small" />,
           enabled: session.hasAccess,
         },
-      ],
-    },
-    {
-      title: "Estudo",
-      items: [
         {
           href: ROUTES.student.planning,
-          label: "Planejamento",
+          label: "Meu curso",
           icon: <TodayIcon fontSize="small" />,
           enabled: session.hasAccess,
         },
         {
           href: ROUTES.student.theory,
-          label: "Estudo da teoria",
+          label: "Aulas",
           icon: <MenuBookIcon fontSize="small" />,
           enabled: session.hasAccess,
         },
@@ -77,15 +75,43 @@ export function StudentLayout() {
           enabled: session.hasAccess,
         },
         {
-          href: ROUTES.student.notebooks,
-          label: "Cadernos TEC",
-          icon: <MenuBookIcon fontSize="small" />,
+          href: ROUTES.student.reviews,
+          label: "Revisões",
+          icon: <EventRepeatIcon fontSize="small" />,
+          enabled: session.hasAccess,
+        },
+      ],
+    },
+    {
+      title: "Materiais",
+      items: [
+        {
+          href: ROUTES.student.laws,
+          label: "Leis",
+          icon: <GavelIcon fontSize="small" />,
           enabled: session.hasAccess,
         },
         {
-          href: ROUTES.student.reviews,
-          label: "Controle de revisões",
-          icon: <EventRepeatIcon fontSize="small" />,
+          href: ROUTES.student.flashcards,
+          label: "Flashcards",
+          icon: <StyleIcon fontSize="small" />,
+          enabled: session.hasAccess,
+        },
+        {
+          href: ROUTES.student.flashSummaries,
+          label: "Resumos Flash",
+          icon: <DescriptionIcon fontSize="small" />,
+          enabled: session.hasAccess,
+        },
+      ],
+    },
+    {
+      title: "Desempenho",
+      items: [
+        {
+          href: ROUTES.student.mockExams,
+          label: "Simulados",
+          icon: <TrophyIcon fontSize="small" />,
           enabled: session.hasAccess,
         },
         {
@@ -116,6 +142,8 @@ export function StudentLayout() {
       profileId={session.profileId}
       theme={session.theme}
       roleLabel="Aluno"
+      timerHref={ROUTES.student.timer}
+      timerRecordHref={`${ROUTES.student.overview}?estudoExtra=cronometro`}
       signOutAction={signOut}
       collapsed={sidebar.collapsed}
       onToggle={sidebar.toggle}

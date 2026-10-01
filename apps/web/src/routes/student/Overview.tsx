@@ -11,6 +11,9 @@ import { ContentBody } from "@/components/AppShell";
 import { ExtraStudyDialog } from "@/components/student/ExtraStudyDialog";
 import { GoalRow } from "@/components/student/GoalRow";
 import { WeekHero } from "@/components/student/WeekHero";
+import { StudyCalendar } from "@/components/student/StudyCalendar";
+import { StudyStreakDialog } from "@/components/student/StudyStreakDialog";
+import { calendarDays, dailyQuestionPerformance, localDate, matchesSchedule, scheduleFilter } from "@/lib/domain/schedule";
 import {
   api,
   newRequestId,
@@ -24,7 +27,6 @@ import {
 import { RecordStudyDialog } from "@/components/student/RecordStudyDialog";
 import { TheoryDialog } from "@/components/student/TheoryDialog";
 import { requireStudentAccess } from "@/lib/auth/session";
-import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 
 /**
  * A semana do aluno — o `p-dashboard` da v2.
@@ -37,11 +39,12 @@ import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 export async function overviewLoader({ request }: { request: Request }) {
   await requireStudentAccess();
 
-  const plan = await loadActivePlanOrNull();
+  const plan = await api.loadActivePlanOrNull();
   if (!plan) return { plan: null, week: null, weeks: [] as readonly WeekOption[] };
 
   const asked = new URL(request.url).searchParams.get("semana");
-  const weekNumber = asked ? Number(asked) : undefined;
+  const parsedWeek = Number(asked);
+  const weekNumber = asked && Number.isSafeInteger(parsedWeek) && parsedWeek > 0 ? parsedWeek : undefined;
 
   const [week, weeks] = await Promise.all([
     api.loadWeek(plan.id, Number.isFinite(weekNumber) ? weekNumber : undefined),
@@ -58,13 +61,15 @@ function DayGroupCard({
   weekday,
   goals,
   actions,
-  onExtra,
+  performance,
+  emptyMessage,
 }: {
   date: string;
   weekday: number;
   goals: readonly Goal[];
   actions: Parameters<typeof GoalRow>[0]["actions"];
-  onExtra: (date: string) => void;
+  performance: ReturnType<typeof dailyQuestionPerformance>;
+  emptyMessage?: string;
 }) {
   const completed = goals.filter((goal) => goal.status === "completed").length;
 
@@ -99,16 +104,26 @@ function DayGroupCard({
           {date.slice(8, 10)}/{date.slice(5, 7)}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Button size="small" variant="text" onClick={() => onExtra(date)}>
-            Estudo extra
-          </Button>
           <Typography variant="numeric" component="span" data-testid="day-count">
-            {completed}/{goals.length} concluídas
+            {completed}/{goals.length}
           </Typography>
         </Box>
       </Box>
 
+      {performance.questions > 0 && (
+        <Box sx={(theme) => ({
+          px: 1.75,
+          py: 1,
+          borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
+        })}>
+          <Typography variant="caption" component="p" data-testid="day-question-performance" color="text.secondary">
+            {performance.questions} questões · {performance.correct} acertos · {performance.wrong} erros · {performance.score}%
+          </Typography>
+        </Box>
+      )}
+
       <Box sx={{ px: 1.75 }}>
+        {goals.length === 0 && <Empty>{emptyMessage}</Empty>}
         {goals.map((goal) => (
           <GoalRow key={goal.id} goal={goal} actions={actions} />
         ))}
@@ -117,7 +132,7 @@ function DayGroupCard({
   );
 }
 
-export function Overview() {
+export function Overview({ interactive = true }: { interactive?: boolean }) {
   const { plan, week, weeks } = useLoaderData() as LoaderData;
   const [params, setParams] = useSearchParams();
   const { revalidate } = useRevalidator();
@@ -126,13 +141,19 @@ export function Overview() {
   const [theory, setTheory] = useState<TheoryGoal | null>(null);
   const [theoryPending, setTheoryPending] = useState(false);
   const [theoryNotice, setTheoryNotice] = useState<string | null>(null);
-  const [extraDate, setExtraDate] = useState<string | null>(null);
+  const [extraDate, setExtraDate] = useState<string | null>(() => {
+    if (params.get("estudoExtra") !== "cronometro") return null;
+    const askedDate = params.get("dia");
+    return week?.days.some((day) => day.date === askedDate) ? askedDate : week?.startsOn ?? localDate();
+  });
+  const [streakOpen, setStreakOpen] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const title = "Minha semana";
 
   if (!plan || !week) {
     return (
       <>
-        <PageHeader title="Metas da semana" />
+        <PageHeader title={title} />
         <ContentBody>
           <Alert status="info">
             Nenhum planejamento ativo. Aguarde seu professor montar e ativar um.
@@ -194,12 +215,10 @@ export function Overview() {
     const fresh = await api.loadTheoryGoal(goalId);
     setTheory(fresh);
 
-    // A AULA MUDOU PORQUE A ANTERIOR FECHOU — o passo 7 do piloto da v108.2, e
-    // o único momento em que o modal troca de conteúdo sozinho. Sem o aviso, a
-    // Aula 02 aparece do nada e a pessoa acha que perdeu o que fez.
+    // A aula só muda quando o professor publica outra enquanto o modal está aberto.
     setTheoryNotice(
       before && fresh.lesson && fresh.lesson.id !== before
-        ? `Aula concluída. Você está agora em ${fresh.lesson.lessonCode} — ${fresh.lesson.title}.`
+        ? `Nova aula disponível: ${fresh.lesson.lessonCode} — ${fresh.lesson.title}.`
         : null,
     );
     await revalidate();
@@ -215,14 +234,53 @@ export function Overview() {
 
   const subjects = [...new Set(week.days.flatMap((day) => day.goals.map((g) => g.subject)))];
   const weekOf = weeks.find((option) => option.weekNumber === week.weekNumber);
+  const days = calendarDays(week);
+  const today = localDate();
+  const askedDate = params.get("dia");
+  const selectedDate = askedDate === "todos" ? null
+    : days.some((day) => day.date === askedDate) ? askedDate
+    : days.some((day) => day.date === today) ? today : week.startsOn;
+  const filter = scheduleFilter(params.get("filtro"));
+  const subject = subjects.includes(params.get("disciplina") ?? "") ? params.get("disciplina")! : "";
+  const visibleDays = interactive
+    ? days.filter((day) => !selectedDate || day.date === selectedDate)
+      .map((day) => ({ ...day, goals: day.goals.filter((goal) => matchesSchedule(goal, filter, subject)) }))
+    : week.days;
+  const orderedWeeks = [...weeks].sort((a, b) => a.weekNumber - b.weekNumber);
+  const currentIndex = orderedWeeks.findIndex((option) => option.weekNumber === week.weekNumber);
+  const previous = currentIndex > 0 ? orderedWeeks[currentIndex - 1] : undefined;
+  const next = currentIndex >= 0 ? orderedWeeks[currentIndex + 1] : undefined;
+  const theoryGoal = theory
+    ? week.days.flatMap((day) => day.goals).find((goal) => goal.id === theory.goalId)
+    : null;
+
+  function changeParam(key: string, value: string | null) {
+    const updated = new URLSearchParams(params);
+    if (value === null) updated.delete(key);
+    else updated.set(key, value);
+    if (key === "semana") {
+      updated.delete("dia");
+      updated.delete("disciplina");
+    }
+    setParams(updated);
+  }
+
+  function closeExtraStudy() {
+    setExtraDate(null);
+    if (!params.has("estudoExtra")) return;
+    const updated = new URLSearchParams(params);
+    updated.delete("estudoExtra");
+    setParams(updated, { replace: true });
+  }
 
   return (
     <>
       <PageHeader
-        title="Metas da semana"
+        title={title}
         description={plan.name}
         actions={
           <>
+            {interactive && <Button size="small" variant="text" disabled={!previous} onClick={() => previous && changeParam("semana", String(previous.weekNumber))}>Semana anterior</Button>}
             <TextField
               select
               size="small"
@@ -235,8 +293,7 @@ export function Overview() {
               }}
               value={String(week.weekNumber)}
               onChange={(event) => {
-                params.set("semana", event.target.value);
-                setParams(params);
+                changeParam("semana", event.target.value);
               }}
               sx={{ minWidth: 200 }}
             >
@@ -247,10 +304,11 @@ export function Overview() {
                 </MenuItem>
               ))}
             </TextField>
+            {interactive && <Button size="small" variant="text" disabled={!next} onClick={() => next && changeParam("semana", String(next.weekNumber))}>Próxima semana</Button>}
             <Button
               variant="outlined"
               size="small"
-              onClick={() => setExtraDate(weekOf?.startsOn ?? week.startsOn)}
+              onClick={() => setExtraDate(interactive && selectedDate ? selectedDate : weekOf?.startsOn ?? week.startsOn)}
             >
               Estudo extra
             </Button>
@@ -261,19 +319,31 @@ export function Overview() {
       <ContentBody>
         {error && <Alert status="error">{error.message}</Alert>}
 
-        <WeekHero week={week} />
+        <WeekHero week={week} onOpenTheory={(goal) => void openTheory(goal)} onRecord={setRecording} onOpenStreak={() => setStreakOpen(true)} />
 
-        {week.days.length === 0 ? (
+        {interactive && <StudyCalendar days={days} selectedDate={selectedDate} today={today}
+          filter={filter} subject={subject} subjects={subjects} onChange={changeParam}
+          onToday={() => {
+            const updated = new URLSearchParams(params);
+            updated.delete("semana");
+            updated.delete("disciplina");
+            updated.delete("filtro");
+            updated.set("dia", today);
+            setParams(updated);
+          }} />}
+
+        {!interactive && week.days.length === 0 ? (
           <Empty icon="🗓">Nenhuma meta para esta semana.</Empty>
         ) : (
-          week.days.map((day) => (
+          visibleDays.map((day) => (
             <DayGroupCard
               key={day.date}
               date={day.date}
               weekday={day.weekday}
               goals={day.goals}
               actions={actions}
-              onExtra={setExtraDate}
+              performance={dailyQuestionPerformance(week, day.date)}
+              emptyMessage={filter !== "all" || subject ? "Nenhuma meta corresponde aos filtros neste dia." : "Dia livre: nenhuma meta programada. Você pode registrar um estudo extra."}
             />
           ))
         )}
@@ -285,8 +355,13 @@ export function Overview() {
         onSubmit={(input: RecordStudyInput) => run(() => api.recordStudy(input))}
       />
 
+      <StudyStreakDialog open={streakOpen} onClose={() => setStreakOpen(false)} startsOn={plan.startsOn} />
+
       <TheoryDialog
+        key={theory?.lesson?.id ?? "closed"}
         theory={theory}
+        questionStats={theoryGoal ? { answered: theoryGoal.questionsAnswered, correct: theoryGoal.correctAnswers } : null}
+        dayPerformance={dailyQuestionPerformance(week, selectedDate ?? today)}
         notice={theoryNotice}
         error={null}
         pending={theoryPending}
@@ -317,14 +392,15 @@ export function Overview() {
         }}
       />
 
-      <ExtraStudyDialog
+      {extraDate !== null && <ExtraStudyDialog
+        key={extraDate}
         studyPlanId={plan.id}
-        date={extraDate ?? week.startsOn}
+        date={extraDate}
         subjects={subjects}
         open={extraDate !== null}
-        onClose={() => setExtraDate(null)}
+        onClose={closeExtraStudy}
         onSubmit={(input: ExtraStudyInput) => run(() => api.recordExtraStudy(input))}
-      />
+      />}
     </>
   );
 }

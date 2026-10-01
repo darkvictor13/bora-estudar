@@ -387,6 +387,10 @@ export interface ExtraStudyInput {
 
 export interface StudyPlanSummary {
   readonly id: Uuid;
+  /** Aluno ao qual este planejamento pertence. */
+  readonly studentId: Uuid;
+  /** Turma usada para os recortes coletivos; `null` em plano sem turma. */
+  readonly classId: Uuid | null;
   readonly name: string;
   readonly area: string;
   readonly targetExam: string | null;
@@ -418,6 +422,7 @@ export interface Subject {
 export interface StudentPlanApi {
   /** O planejamento ativo do aluno. Lança `not_found` quando não há nenhum. */
   loadActivePlan(): Promise<StudyPlanSummary>;
+  loadActivePlanOrNull(): Promise<StudyPlanSummary | null>;
   loadSubjects(studyPlanId: Uuid): Promise<readonly Subject[]>;
 }
 
@@ -425,29 +430,122 @@ export interface StudentPlanApi {
  * Fase 4 — o fluxo inteligente da teoria
  * ------------------------------------------------------------------ */
 
-/**
- * POR QUE UMA AULA PODE NÃO TER PÁGINA.
- *
- * O catálogo auditado não cobre todas as disciplinas — Matemática Financeira e
- * TI ficaram de fora na v108.5. A v2 recusa inventar número de página nesse
- * caso, e mostra o diagnóstico em vez do controle. A reconstrução mantém isso:
- * inventar página faz o aluno ler o PDF errado e achar que a culpa é dele.
- */
+/** Falta de catálogo ou de aula publicada; páginas não bloqueiam o estudo. */
 export type TheoryDiagnosis =
   | { readonly kind: "ok" }
   | { readonly kind: "subject_not_audited"; readonly subject: string }
   | { readonly kind: "lesson_without_pages"; readonly lesson: string }
   | { readonly kind: "no_catalog_linked" };
 
+/** Um tópico da aula com seu próprio PDF e seus cadernos de questões. */
+export interface LessonMaterialBlock {
+  readonly title: string;
+  readonly pdf: string | null;
+  readonly tecQuestions: string | null;
+  readonly qcQuestions: string | null;
+}
+
+/** Um cartão de revisão produzido pelo professor para uma aula. */
+export interface FlashcardCard {
+  readonly id: Uuid;
+  readonly topic: string;
+  readonly front: string;
+  readonly back: string;
+}
+
+export type FlashcardGrade = "again" | "hard" | "good" | "easy";
+export type FlashcardState = "learning" | "review" | "relearning";
+
+export interface FlashcardReview {
+  readonly lessonId: Uuid;
+  readonly cardId: Uuid;
+  readonly dueAt: string;
+  readonly intervalMinutes: number;
+  readonly reviewCount: number;
+  readonly lastGrade: FlashcardGrade;
+  /** Estado de memória FSRS por aluno e cartão. */
+  readonly state: FlashcardState;
+  readonly step: number;
+  readonly stability: number;
+  readonly difficulty: number;
+  readonly lapses: number;
+  readonly lastReviewedAt: string;
+}
+
+export interface GradeFlashcardInput {
+  readonly lessonId: Uuid;
+  readonly cardId: Uuid;
+  readonly grade: FlashcardGrade;
+  readonly requestId: RequestId;
+}
+
+/** Revisões dos decks editoriais, independentes das aulas do professor. */
+export interface LibraryFlashcardReview extends Omit<FlashcardReview, "lessonId"> {
+  readonly deckId: string;
+}
+
+export interface GradeLibraryFlashcardInput {
+  readonly deckId: string;
+  readonly cardId: Uuid;
+  readonly grade: FlashcardGrade;
+  readonly requestId: RequestId;
+}
+
+/** Deck privado criado pelo aluno, separado dos conteúdos editorial e docente. */
+export interface PersonalFlashcardDeck {
+  readonly id: Uuid;
+  readonly subject: string;
+  readonly title: string;
+  readonly cards: readonly FlashcardCard[];
+  readonly createdAt: IsoDateTime;
+  readonly updatedAt: IsoDateTime;
+}
+
+export interface CreatePersonalFlashcardDeckInput {
+  readonly id: Uuid;
+  readonly subject: string;
+  readonly title: string;
+  readonly requestId: RequestId;
+}
+
+export interface CreatePersonalFlashcardInput extends FlashcardCard {
+  readonly deckId: Uuid;
+  readonly requestId: RequestId;
+}
+
+export interface PersonalFlashcardReview extends Omit<FlashcardReview, "lessonId"> {
+  readonly deckId: Uuid;
+}
+
+export interface GradePersonalFlashcardInput {
+  readonly deckId: Uuid;
+  readonly cardId: Uuid;
+  readonly grade: FlashcardGrade;
+  readonly requestId: RequestId;
+}
+
 export interface TheoryLesson {
   readonly id: Uuid;
+  /** O professor libera a aula para os alunos quando o material estiver pronto. */
+  readonly published: boolean;
   readonly subject: string;
   readonly subjectKey: string;
   readonly lessonCode: string;
   readonly position: number;
   readonly title: string;
   readonly pdfFile: string;
-  /** `null` quando a aula não tem teoria, ou quando o diagnóstico não é `ok`. */
+  /** Links estáveis cadastrados pelo professor; nenhum contém token de sessão. */
+  readonly resources: {
+    readonly pdf: string | null;
+    readonly flashcards: string | null;
+    readonly flashSummary: string | null;
+    readonly tecQuestions: string | null;
+    readonly qcQuestions: string | null;
+  };
+  readonly materialBlocks: readonly LessonMaterialBlock[];
+  /** Cartões nativos desta aula; links externos continuam como apoio opcional. */
+  readonly flashcardCards?: readonly FlashcardCard[];
+  /** `null` quando não há intervalo de páginas mapeado para esta aula. */
   readonly theoryStartPage: number | null;
   readonly theoryEndPage: number | null;
   readonly pdfTotalPages: number | null;
@@ -464,7 +562,7 @@ export interface TheoryProgress {
   readonly initialQuestionsDone: number;
   readonly initialQuestionsRequired: number;
   readonly initialQuestionsComplete: boolean;
-  /** A aula inteira concluída — teoria E mínimo de questões iniciais. */
+  /** Meta de prática da aula atingida; não controla a publicação da próxima aula. */
   readonly lessonDone: boolean;
 }
 
@@ -489,11 +587,6 @@ export interface TheoryGoal {
   readonly lesson: TheoryLesson | null;
   readonly progress: TheoryProgress | null;
   readonly reviews: readonly TheoryReview[];
-  /**
-   * A próxima aula só libera depois do mínimo de questões iniciais desta.
-   * Vem calculado porque a regra é do domínio, não da tela.
-   */
-  readonly nextLessonUnlocked: boolean;
 }
 
 /** Uma linha do controle por disciplina, em `/aluno/teoria`. */
@@ -504,24 +597,34 @@ export interface TheorySubjectControl {
   readonly lessonsTotal: number;
   readonly lessonsDone: number;
   readonly currentLesson: TheoryLesson | null;
+  readonly lessons: readonly TheoryLesson[];
   readonly reviewsDue: number;
 }
 
 export interface TheoryApi {
   loadTheoryControl(studyPlanId: Uuid): Promise<readonly TheorySubjectControl[]>;
   loadTheoryGoal(goalId: Uuid): Promise<TheoryGoal>;
+  loadFlashcardReviews(lessonId: Uuid): Promise<readonly FlashcardReview[]>;
+  loadFlashcardReviewsForLessons(lessonIds: readonly Uuid[]): Promise<readonly FlashcardReview[]>;
+  gradeFlashcard(input: GradeFlashcardInput): Promise<Result<FlashcardReview>>;
+  loadLibraryFlashcardReviews(deckIds: readonly string[]): Promise<readonly LibraryFlashcardReview[]>;
+  gradeLibraryFlashcard(input: GradeLibraryFlashcardInput): Promise<Result<LibraryFlashcardReview>>;
+  listPersonalFlashcardDecks(): Promise<readonly PersonalFlashcardDeck[]>;
+  createPersonalFlashcardDeck(input: CreatePersonalFlashcardDeckInput): Promise<Result<PersonalFlashcardDeck>>;
+  createPersonalFlashcard(input: CreatePersonalFlashcardInput): Promise<Result<FlashcardCard>>;
+  loadPersonalFlashcardReviews(deckIds: readonly Uuid[]): Promise<readonly PersonalFlashcardReview[]>;
+  gradePersonalFlashcard(input: GradePersonalFlashcardInput): Promise<Result<PersonalFlashcardReview>>;
 
   /**
    * "Salvar progresso e continuar" e "Salvar e encerrar sessão".
    *
-   * ENCERRAR SESSÃO NÃO CONCLUI A AULA. É a distinção que a v108.2 introduziu e
-   * a que mais se perde ao reescrever: encerrar guarda a página e fecha o
-   * modal; concluir exige a teoria lida E o mínimo de questões iniciais.
+   * Encerrar guarda a página e fecha o modal. A meta de prática é medida
+   * separadamente pelas questões respondidas.
    * `endSession` só muda o que a tela faz depois — o progresso é o mesmo.
    */
   saveTheoryProgress(input: SaveTheoryProgressInput): Promise<Result<TheoryProgress>>;
 
-  /** Questões iniciais respondidas. É o que libera a próxima aula. */
+  /** Questões respondidas na aula; acertos e erros medem o aprendizado. */
   recordInitialQuestions(input: RecordInitialQuestionsInput): Promise<Result<TheoryProgress>>;
 
   /** A fila de revisões vencidas do aluno, entre todas as disciplinas. */
@@ -612,6 +715,49 @@ export interface StatisticsFilter {
   readonly year?: number;
 }
 
+export interface ClassQuestionDistribution {
+  /** Um percentual por aluno da turma, calculado por total de acertos / total de questões. */
+  readonly scores: readonly number[];
+  readonly enrolledStudents: number;
+  /** Matriculados que têm um planejamento ativo nesta turma. */
+  readonly studentsWithActivePlan: number;
+  readonly studentsWithQuestions: number;
+  readonly minimumQuestions: number;
+}
+
+export interface StudentQuestionComparison {
+  readonly sampleSize: number;
+  readonly minimumQuestions: number;
+  readonly studentQuestions: number;
+  readonly studentScore: number | null;
+  /** Percentual de colegas comparáveis com resultado inferior ao do aluno. */
+  readonly percentile: number | null;
+  /** Agregados anônimos; ausente enquanto a amostra tiver menos de cinco alunos. */
+  readonly distribution: {
+    readonly min: number;
+    readonly q1: number;
+    readonly median: number;
+    readonly q3: number;
+    readonly max: number;
+    readonly lowerWhisker: number;
+    readonly upperWhisker: number;
+  } | null;
+}
+
+export interface WeeklyQuestionComparison extends StudentQuestionComparison {
+  /** Posição da semana dentro do planejamento ativo. */
+  readonly weekNumber: number;
+}
+
+export interface SubjectPeerComparison {
+  readonly subject: string;
+  readonly studentScore: number;
+  /** Média dos colegas que responderam pelo menos cinco questões da matéria. */
+  readonly peerAverage: number | null;
+  readonly sampleSize: number;
+  readonly minimumQuestions: number;
+}
+
 /** Um ponto de série temporal. Serve para semana, dia e mês. */
 export interface SeriesPoint {
   readonly label: string;
@@ -626,7 +772,17 @@ export interface SubjectPerformance {
   readonly targetScore: number;
 }
 
+export interface DailyQuestionPerformance {
+  readonly date: IsoDate;
+  readonly questions: number;
+  readonly correctAnswers: number;
+  readonly wrongAnswers: number;
+  readonly score: number;
+}
+
 export interface Statistics {
+  readonly studyTime?: readonly { date: string; subject: string; minutes: number }[];
+  readonly byBlock?: readonly { subject: string; block: string; questions: number; correctAnswers: number }[];
   readonly score: number | null;
   readonly questionsAnswered: number;
   readonly correctAnswers: number;
@@ -635,6 +791,8 @@ export interface Statistics {
   readonly streakDays: number;
   readonly scoreByWeek: readonly SeriesPoint[];
   readonly questionsByWeek: readonly SeriesPoint[];
+  /** Resultado das questões no dia em que foram respondidas. */
+  readonly dailyQuestions: readonly DailyQuestionPerformance[];
   readonly minutesByDay: readonly SeriesPoint[];
   readonly minutesByMonth: readonly SeriesPoint[];
   /** Alimenta o radar por disciplina e a rosca de acerto e erro. */
@@ -643,6 +801,12 @@ export interface Statistics {
 
 export interface StatisticsApi {
   loadStatistics(filter: StatisticsFilter): Promise<Statistics>;
+  loadClassQuestionDistribution(classId: Uuid, year: number): Promise<ClassQuestionDistribution>;
+  loadStudentQuestionComparison(year: number): Promise<StudentQuestionComparison>;
+  loadStudentWeeklyQuestionComparison(year: number): Promise<readonly WeeklyQuestionComparison[]>;
+  loadStudentSubjectPeerComparison(year: number): Promise<readonly SubjectPeerComparison[]>;
+  /** Datas com registro de estudo do próprio aluno, para o calendário de constância. */
+  loadStudyDays(year: number): Promise<readonly IsoDate[]>;
 }
 
 /* --- Acesso, lista de espera e cupom --- */
@@ -920,7 +1084,15 @@ export interface ImportMasterResult {
 
 export interface TeacherTheoryApi {
   listCatalogs(): Promise<readonly TheoryCatalog[]>;
+  /** Cria a base compartilhada do piloto sem publicar aulas nem substituir regras existentes. */
+  ensurePmprPilotCatalog(requestId: RequestId): Promise<Result<Uuid>>;
   loadCatalogLessons(catalogId: Uuid): Promise<readonly TheoryLesson[]>;
+  createDraftLesson(
+    catalogId: Uuid,
+    subject: string,
+    title: string,
+    requestId: RequestId,
+  ): Promise<Result<TheoryLesson>>;
   loadSubjectRules(catalogId: Uuid): Promise<readonly TheorySubjectRule[]>;
   saveSubjectRule(
     catalogId: Uuid,
@@ -973,6 +1145,8 @@ export interface TeacherClass {
   readonly id: Uuid;
   readonly name: string;
   readonly description: string | null;
+  /** Catálogo comum aos alunos matriculados nesta turma. */
+  readonly theoryCatalogId: Uuid | null;
   /** Quantos alunos estão nela. É o que a tela precisa antes de oferecer "Apagar". */
   readonly studentCount: number;
 }
@@ -1002,6 +1176,8 @@ export interface TeacherClassesApi {
   listClasses(): Promise<readonly TeacherClass[]>;
   createClass(input: ClassInput, requestId: RequestId): Promise<Result<TeacherClass>>;
   renameClass(classId: Uuid, input: ClassInput, requestId: RequestId): Promise<Result<TeacherClass>>;
+  /** A associação acompanha a matrícula; o progresso permanece individual. */
+  setClassTheoryCatalog(classId: Uuid, catalogId: Uuid | null): Promise<Result<TeacherClass>>;
   /** Recusado enquanto houver aluno dentro — a recusa é do banco (R-MATR-05). */
   deleteClass(classId: Uuid, requestId: RequestId): Promise<Result<void>>;
   /** Matricula quem ainda não está em turma nenhuma. */
@@ -1023,6 +1199,9 @@ export interface TeacherClassesApi {
  * implementação que esquecer uma operação ou mudar um tipo. Função solta
  * exportada de dois módulos não tem quem compare os dois.
  */
+export type { MockExam, MockExamInput, MockExamResult, MockExamSubject, MockExamSubjectResult, MockExamsApi } from "./mock-exams.ts";
+import type { MockExamsApi } from "./mock-exams.ts";
+
 export interface BoraApi
   extends AuthApi,
     AccountApi,
@@ -1038,4 +1217,5 @@ export interface BoraApi
     TeacherGoalsApi,
     TeacherTheoryApi,
     TeacherNotebooksApi,
-    TeacherClassesApi {}
+    TeacherClassesApi,
+    MockExamsApi {}

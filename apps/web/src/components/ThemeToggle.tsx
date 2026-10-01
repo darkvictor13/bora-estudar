@@ -51,10 +51,10 @@ export function ThemeToggle({
   const icon = theme === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />;
 
   return (
-    <Box data-testid="theme-toggle">
+    <Box data-testid="theme-toggle" sx={{ position: "relative", display: "flex", alignItems: "center" }}>
       {collapsed ? (
-        <Tooltip title={label} placement="right">
-          <IconButton type="button" aria-label={label} onClick={toggle} sx={{ width: "100%" }}>
+        <Tooltip title={label} placement="bottom">
+          <IconButton type="button" aria-label={label} onClick={toggle} sx={{ width: 36, height: 36, color: "text.primary" }}>
             {icon}
           </IconButton>
         </Tooltip>
@@ -78,7 +78,7 @@ export function ThemeToggle({
           component="p"
           role="status"
           data-testid="theme-unsaved"
-          sx={{ mt: 0.5 }}
+          sx={(muiTheme) => ({ position: collapsed ? "absolute" : "static", top: collapsed ? 42 : undefined, right: 0, zIndex: 12, width: collapsed ? 230 : undefined, mt: collapsed ? 0 : 0.5, p: collapsed ? 1 : 0, borderRadius: `${muiTheme.brand.radius.sm}px`, backgroundColor: collapsed ? muiTheme.vars.palette.surface.raised : undefined, border: collapsed ? `1px solid ${muiTheme.vars.palette.surface.border}` : undefined })}
         >
           Tema aplicado neste aparelho. Não foi possível salvar na sua conta.
         </Typography>

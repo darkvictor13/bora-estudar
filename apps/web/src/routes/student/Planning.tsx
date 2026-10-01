@@ -5,23 +5,23 @@ import { useLoaderData } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
 import { api, type StudyPlanSummary, type Subject } from "@/lib/api";
-import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 import { requireStudentAccess } from "@/lib/auth/session";
 
 /**
  * O planejamento, como o aluno o vê — o `p-planejamento` da v2.
  *
  * SÓ LEITURA, e é regra de produto: quem monta o planejamento é o professor.
- * A tela existe para o aluno saber o que combinaram — qual concurso, quantas
- * metas por semana, qual o peso de cada matéria —, não para negociar.
+ * A tela existe para o aluno entender o percurso do curso: concurso, período,
+ * disciplinas e aulas liberadas. A rotina acompanha as aulas presenciais.
  */
 export async function planningLoader() {
   await requireStudentAccess();
 
-  const plan = await loadActivePlanOrNull();
-  if (!plan) return { plan: null, subjects: [] as readonly Subject[] };
+  const plan = await api.loadActivePlanOrNull();
+  if (!plan) return { plan: null, subjects: [] as readonly Subject[], theory: [] as const };
 
-  return { plan, subjects: await api.loadSubjects(plan.id) };
+  const [subjects, theory] = await Promise.all([api.loadSubjects(plan.id), api.loadTheoryControl(plan.id)]);
+  return { plan, subjects, theory };
 }
 
 type LoaderData = Awaited<ReturnType<typeof planningLoader>>;
@@ -38,12 +38,13 @@ function PlanIdentity({ plan }: { plan: StudyPlanSummary }) {
     ["Concurso", plan.targetExam ?? "—"],
     ["Fase", plan.stage],
     ["Modelo de estudo", plan.studyModel],
+    ["Base da rotina", "Aulas presenciais"],
     ["Início", formatDate(plan.startsOn)],
     ["Data da prova", formatDate(plan.examDate)],
   ];
 
   return (
-    <Card title={plan.name} sub="Montado pelo seu professor">
+    <Card title={plan.name} sub="Percurso definido pelo professor e pela sequência das aulas">
       <Box
         component="dl"
         sx={(theme) => ({
@@ -71,12 +72,12 @@ function PlanIdentity({ plan }: { plan: StudyPlanSummary }) {
 }
 
 export function Planning() {
-  const { plan, subjects } = useLoaderData() as LoaderData;
+  const { plan, subjects, theory } = useLoaderData() as LoaderData;
 
   if (!plan) {
     return (
       <>
-        <PageHeader title="Planejamento" />
+        <PageHeader title="Meu curso" />
         <ContentBody>
           <Alert status="info">
             Nenhum planejamento ativo. Aguarde seu professor montar e ativar um.
@@ -86,12 +87,14 @@ export function Planning() {
     );
   }
 
-  const totalWeight = subjects.reduce((sum, subject) => sum + subject.weight, 0);
   const blocks = subjects.reduce((sum, subject) => sum + subject.blocks.length, 0);
+  const lessons = theory.reduce((sum, subject) => sum + subject.lessonsTotal, 0);
+  const lessonsDone = theory.reduce((sum, subject) => sum + subject.lessonsDone, 0);
+  const theoryBySubject = new Map(theory.map((item) => [item.subject, item]));
 
   return (
     <>
-      <PageHeader title="Planejamento" description={plan.name} />
+      <PageHeader title="Meu curso" description="A sequência de estudo acompanha as aulas presenciais liberadas" />
 
       <ContentBody>
         <Box
@@ -103,8 +106,8 @@ export function Planning() {
             [theme.breakpoints.down("lg")]: { gridTemplateColumns: "repeat(2, 1fr)" },
           })}
         >
-          <Metric label="Metas por semana" value={plan.weeklyGoals} />
           <Metric label="Disciplinas" value={subjects.length} />
+          <Metric label="Aulas liberadas" value={lessons} note={`${lessonsDone} concluídas`} />
           <Metric label="Blocos" value={blocks} />
           <Metric
             label="Situação"
@@ -116,7 +119,7 @@ export function Planning() {
         <PlanIdentity plan={plan} />
 
         <Box sx={{ mt: 1.75 }}>
-          <Card title="Ciclo de estudo" sub="O peso decide quanto de cada matéria entra na semana">
+          <Card title="Percurso por disciplina" sub="As novas aulas aparecem conforme o professor publica o conteúdo presencial">
             {subjects.length === 0 ? (
               <Empty icon="📚">Seu professor ainda não cadastrou disciplinas.</Empty>
             ) : (
@@ -156,9 +159,7 @@ export function Planning() {
                       {subject.targetScore}% de acerto
                     </Typography>
                   </Box>
-                  <Badge tone="neutral">
-                    {totalWeight > 0 ? Math.round((subject.weight / totalWeight) * 100) : 0}%
-                  </Badge>
+                  <Badge tone="neutral">{theoryBySubject.get(subject.name)?.lessonsDone ?? 0}/{theoryBySubject.get(subject.name)?.lessonsTotal ?? 0} aulas</Badge>
                 </Box>
               ))
             )}

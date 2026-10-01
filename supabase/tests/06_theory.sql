@@ -145,3 +145,46 @@ begin
   end if;
   raise notice '12 OK  o aluno le o catalogo, e nao escreve nele (0 linhas)';
 end $$;
+
+-- ---------- Catálogo compartilhado pela turma ----------
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_afetadas integer;
+begin
+  update public.classes
+     set theory_catalog_id = 'b1000000-0000-4000-8000-000000000001'
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 1 then
+    raise exception 'FALHOU: Ana nao vinculou o proprio catalogo a turma';
+  end if;
+  raise notice '13 OK  professora vincula o proprio catalogo a propria turma';
+end $$;
+
+do $$ begin
+  update public.classes
+     set theory_catalog_id = 'b1000000-0000-4000-8000-000000000002'
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: Ana vinculou catalogo de outro professor a turma';
+exception when foreign_key_violation then
+  raise notice '14 OK  FK composta recusa catalogo de outro professor';
+end $$;
+
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$
+declare v_catalogo uuid;
+declare v_afetadas integer;
+begin
+  select theory_catalog_id into v_catalogo from public.classes
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  if v_catalogo is distinct from 'b1000000-0000-4000-8000-000000000001'::uuid then
+    raise exception 'FALHOU: aluno nao le o catalogo da sua turma';
+  end if;
+  update public.classes set theory_catalog_id = null
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  get diagnostics v_afetadas = row_count;
+  if v_afetadas <> 0 then
+    raise exception 'FALHOU: aluno alterou o catalogo da turma';
+  end if;
+  raise notice '15 OK  aluno le o vinculo da turma e nao pode altera-lo';
+end $$;

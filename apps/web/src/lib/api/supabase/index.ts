@@ -34,9 +34,13 @@
  * motor, pelo progresso do aluno no catálogo do planejamento. Ver `theory.ts`.
  */
 import type { BoraApi } from "../contract.ts";
+import { mockExamsApi } from "./mock-exams.ts";
+import { gradeFlashcard, loadFlashcardReviews, loadFlashcardReviewsForLessons } from "./flashcards.ts";
+import { gradeLibraryFlashcard, loadLibraryFlashcardReviews } from "./library-flashcards.ts";
+import { createPersonalFlashcard, createPersonalFlashcardDeck, gradePersonalFlashcard, listPersonalFlashcardDecks, loadPersonalFlashcardReviews } from "./personal-flashcards.ts";
 import { authApi } from "./auth.ts";
 import { joinWaitlist, loadWaitlistEntry, redeemCoupon } from "./access.ts";
-import { loadActivePlan, loadSubjects } from "./plan.ts";
+import { loadActivePlan, loadActivePlanOrNull, loadSubjects } from "./plan.ts";
 import {
   deleteNotebook,
   listNotebooks,
@@ -72,9 +76,12 @@ import {
   listClasses,
   moveStudent,
   renameClass,
+  setClassTheoryCatalog,
   unenrollStudent,
 } from "./teacher-classes.ts";
 import {
+  createDraftLesson,
+  ensurePmprPilotCatalog,
   importMaster,
   linkCatalogToPlan,
   listCatalogs,
@@ -90,7 +97,7 @@ import {
   saveReviewSpacing,
   setSelectedSubjects,
 } from "./review.ts";
-import { loadStatistics } from "./statistics.ts";
+import { loadClassQuestionDistribution, loadStatistics, loadStudentQuestionComparison, loadStudentWeeklyQuestionComparison, loadStudentSubjectPeerComparison, loadStudyDays } from "./statistics.ts";
 import {
   loadDueReviews,
   loadTheoryControl,
@@ -127,6 +134,7 @@ import {
  * quando o banco mudar; uma tela que finge ter tentado, não.
  */
 export const supabaseApi: BoraApi = {
+  ...mockExamsApi,
   /* --- Fase 2 --- */
   ...authApi,
 
@@ -140,11 +148,22 @@ export const supabaseApi: BoraApi = {
   skipGoal,
   recordExtraStudy,
   loadActivePlan,
+  loadActivePlanOrNull,
   loadSubjects,
 
   /* --- Fase 4 --- */
   loadTheoryControl,
   loadTheoryGoal,
+  loadFlashcardReviews,
+  loadFlashcardReviewsForLessons,
+  gradeFlashcard,
+  loadLibraryFlashcardReviews,
+  gradeLibraryFlashcard,
+  listPersonalFlashcardDecks,
+  createPersonalFlashcardDeck,
+  createPersonalFlashcard,
+  loadPersonalFlashcardReviews,
+  gradePersonalFlashcard,
   saveTheoryProgress,
   recordInitialQuestions,
   loadDueReviews,
@@ -154,6 +173,11 @@ export const supabaseApi: BoraApi = {
   loadReviewGrid,
   listReinforcements,
   loadStatistics,
+  loadClassQuestionDistribution,
+  loadStudentQuestionComparison,
+  loadStudentWeeklyQuestionComparison,
+  loadStudentSubjectPeerComparison,
+  loadStudyDays,
   loadWaitlistEntry,
   joinWaitlist,
   redeemCoupon,
@@ -176,7 +200,9 @@ export const supabaseApi: BoraApi = {
   generateWeek,
   clearPendingGoals,
   listCatalogs,
+  ensurePmprPilotCatalog,
   loadCatalogLessons,
+  createDraftLesson,
   loadSubjectRules,
   saveSubjectRule,
   saveLessonOrder,
@@ -197,5 +223,6 @@ export const supabaseApi: BoraApi = {
   deleteClass,
   enrollStudent,
   moveStudent,
+  setClassTheoryCatalog,
   unenrollStudent,
 };

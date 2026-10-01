@@ -74,7 +74,7 @@ export async function listStudents(
   if (ids.length === 0) return [];
 
   const [plans, goals, entries, classes] = await Promise.all([
-    supabase.from("study_plans").select(`${PLAN_COLUMNS},student_id`).in("student_id", ids).eq("status", "active"),
+    supabase.from("study_plans").select(PLAN_COLUMNS).in("student_id", ids).eq("status", "active"),
     supabase.from("goals").select("student_id,week_number,weekday,status").in("student_id", ids),
     supabase
       .from("goal_entries")

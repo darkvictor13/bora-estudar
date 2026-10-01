@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Fronteira Concursos">
+  <defs>
+    <linearGradient id="brand" x1="0" x2="1" y1="1" y2="0">
+      <stop stop-color="#087568"/>
+      <stop offset="1" stop-color="#27D9BC"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#brand)" d="M9 15h18v15H9zm20 0h42v15H19zm-20 22h31v14H9zm34 0h21v14H32zM9 58h25v14H9z"/>
+  <path fill="#0B1715" d="M26 27h16L29 41H13zM39 48h16L42 62H26z"/>
+</svg>

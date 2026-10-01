@@ -93,7 +93,7 @@ test.describe("F-AUTH-04 · login leva cada papel para a própria casa", () => {
   test("aluno vai para /aluno", async ({ page, scenario }) => {
     await signInThroughForm(page, scenario.student.email, scenario.student.password);
     await expect(page).toHaveURL(/\/aluno$/);
-    await expect(page.locator("h1")).toHaveText("Metas da semana");
+    await expect(page.locator("h1")).toHaveText("Minha semana");
   });
 
   test("professor vai para /professor", async ({ page, scenario }) => {
@@ -150,7 +150,7 @@ test.describe("F-AUTH-06 · tela pública com sessão ativa", () => {
 
 test("F-AUTH-07 · logout apaga o cookie e a área volta a barrar", async ({ studentPage }) => {
   await studentPage.goto("/aluno");
-  await expect(studentPage.locator("h1")).toHaveText("Metas da semana");
+  await expect(studentPage.locator("h1")).toHaveText("Minha semana");
 
   await signOut(studentPage).click();
   await expect(studentPage).toHaveURL(/\/entrar$/);

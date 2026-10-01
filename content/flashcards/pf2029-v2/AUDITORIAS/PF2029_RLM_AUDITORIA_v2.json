@@ -1,0 +1,31 @@
+{
+  "materia": "RLM",
+  "fonte_principal": "Resumo PF 2029",
+  "data_auditoria": "2026-09-29",
+  "arquivo_base": "PF2029_RLM_COMPLETO_FLASHCARDS.md",
+  "arquivo_resultado": "PF2029_RLM_FLASHCARDS_AUDITADO_v2.md",
+  "flashcards_antes": 123,
+  "flashcards_adicionados": 20,
+  "flashcards_depois": 143,
+  "frentes_unicas": 143,
+  "duplicacoes_exatas": 0,
+  "lacunas_preenchidas_por_bloco": {
+    "proposicoes_tabela_verdade": 2,
+    "argumentos_metodos_falacias": 14,
+    "conjuntos": 3,
+    "probabilidade": 1
+  },
+  "correcoes_tecnicas": [
+    {
+      "flashcard": 139,
+      "tema": "validade de argumentos",
+      "resultado": "corrigida a ideia de que mera existência de premissa falsa determina validade"
+    },
+    {
+      "flashcard": 142,
+      "tema": "implicação e conjuntos",
+      "resultado": "formulada como inclusão A⊆B apenas quando A e B representam classes"
+    }
+  ],
+  "status": "segunda_passagem_auditoria_cobertura_concluida"
+}

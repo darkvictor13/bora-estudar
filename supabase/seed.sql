@@ -183,6 +183,53 @@ begin
   cross join generate_series(1, 5) g
   on conflict do nothing;
 
+  -- A primeira aula funciona como vitrine completa da experiência do aluno.
+  -- O PDF fica no próprio aplicativo; os cadernos abrem nas plataformas de
+  -- questões e os cartões são revisados sem depender de serviço externo.
+  update public.theory_lessons
+     set pdf_file = 'aula-demonstrativa-direitos-fundamentais.pdf',
+         material_blocks = '[
+           {
+             "title": "Direitos individuais e coletivos",
+             "pdf": "/materials/demo/aula-demonstrativa-direitos-fundamentais.pdf",
+             "tecQuestions": "https://www.tecconcursos.com.br/s/Q6nMte",
+             "qcQuestions": "https://www.qconcursos.com/questoes-de-concursos/disciplinas/direito-direito-constitucional/direitos-individuais/questoes"
+           },
+           {
+             "title": "Remédios constitucionais e garantias",
+             "pdf": "/materials/demo/aula-demonstrativa-direitos-fundamentais.pdf",
+             "tecQuestions": "https://www.tecconcursos.com.br/s/Q6nMtf",
+             "qcQuestions": "https://www.qconcursos.com/questoes-de-concursos/disciplinas/direito-direito-constitucional/direitos-individuais-remedios-constitucionais-e-garantias-processuais/questoes"
+           }
+         ]'::jsonb,
+         note = 'Aula demonstrativa completa com PDF, flashcards e cadernos TEC e QConcursos.',
+         published = true
+   where catalog_id = '55555555-5555-4555-8555-555555555555'
+     and subject_key = 'direito constitucional'
+     and position = 1;
+
+  -- Os cartões da aula demonstrativa, um por linha.
+  insert into public.theory_lesson_flashcards (id, theory_lesson_id, teacher_id, position, topic, front, back)
+  select card.id, lesson.id, lesson.teacher_id, card.position, card.topic, card.front, card.back
+    from public.theory_lessons lesson
+   cross join (values
+    (uuid '88888888-8888-4888-8888-000000000011', 1, 'Direitos fundamentais',
+     'Os direitos e garantias fundamentais se limitam aos brasileiros natos. Certo ou errado?',
+     'Errado. A Constituição protege brasileiros e estrangeiros nos termos do art. 5º, além de reconhecer direitos em outros dispositivos.'),
+    ('88888888-8888-4888-8888-000000000012', 2, 'Habeas corpus',
+     'Qual remédio constitucional protege a liberdade de locomoção contra ilegalidade ou abuso de poder?',
+     'O habeas corpus, que pode ser preventivo ou repressivo conforme a ameaça ou a restrição já ocorrida.'),
+    ('88888888-8888-4888-8888-000000000013', 3, 'Habeas data',
+     'Qual é a finalidade básica do habeas data?',
+     'Assegurar conhecimento ou retificação de informações pessoais constantes de registros ou bancos de dados governamentais ou de caráter público.'),
+    ('88888888-8888-4888-8888-000000000014', 4, 'Ação popular',
+     'Quem possui legitimidade constitucional para propor ação popular?',
+     'O cidadão, para buscar a anulação de ato lesivo aos bens e valores protegidos pela Constituição.')
+   ) as card(id, position, topic, front, back)
+   where lesson.catalog_id = '55555555-5555-4555-8555-555555555555'
+     and lesson.subject_key = 'direito constitucional'
+     and lesson.position = 1;
+
   -- A disciplina NÃO auditada: aulas sem intervalo de teoria.
   insert into public.theory_lessons (
     catalog_id, teacher_id, subject, subject_key, lesson_code, position, title,

@@ -1,0 +1,26 @@
+{
+  "materia": "Estatística",
+  "fonte_principal": "Resumo PF 2029",
+  "data_auditoria": "2026-09-29",
+  "arquivo_base": "PF2029_ESTATISTICA_COMPLETO_FLASHCARDS.md",
+  "arquivo_resultado": "PF2029_ESTATISTICA_FLASHCARDS_AUDITADO_v2.md",
+  "flashcards_antes": 49,
+  "flashcards_adicionados": 22,
+  "flashcards_depois": 71,
+  "duplicacoes_exatas_depois": 0,
+  "lacunas_preenchidas": [
+    "população, dados e observações",
+    "mediana em amostras pares e ímpares",
+    "médias geométrica e harmônica",
+    "IQR e robustez",
+    "leitura de boxplot",
+    "interpretação da variância",
+    "coeficiente de variação",
+    "sentido das assimetrias",
+    "distribuições discretas citadas",
+    "estimação de parâmetros e testes de hipóteses",
+    "interpretação de longo prazo da esperança"
+  ],
+  "correcao_tecnica": "regra empírica ±3 desvios-padrão corrigida para aproximadamente 99,7%",
+  "status": "segunda_passagem_auditoria_cobertura_concluida"
+}

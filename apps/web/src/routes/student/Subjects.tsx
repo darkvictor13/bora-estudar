@@ -10,7 +10,6 @@ import { useLoaderData } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
 import { api, type Subject, type SubjectBlock } from "@/lib/api";
-import { loadActivePlanOrNull } from "@/lib/api/supabase/plan.ts";
 import { requireStudentAccess } from "@/lib/auth/session";
 
 /**
@@ -24,7 +23,7 @@ import { requireStudentAccess } from "@/lib/auth/session";
 export async function subjectsLoader() {
   await requireStudentAccess();
 
-  const plan = await loadActivePlanOrNull();
+  const plan = await api.loadActivePlanOrNull();
   if (!plan) return { subjects: [] as readonly Subject[], hasPlan: false };
 
   return { subjects: await api.loadSubjects(plan.id), hasPlan: true };

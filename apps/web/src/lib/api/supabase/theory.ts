@@ -1,17 +1,16 @@
 /**
  * O FLUXO INTELIGENTE DA TEORIA, CONTRA O BANCO.
  *
- * O motor — quem decide qual aula é a atual, o que já venceu e o que libera a
- * próxima — é puro e mora em `lib/domain/theory.ts`. Aqui só há leitura,
+ * O motor — quem decide qual aula publicada é a atual e o que já venceu —
+ * mora em `lib/domain/theory.ts`. Aqui só há leitura,
  * escrita e a tradução entre o vocabulário do schema e o do contrato.
  *
  * A META NÃO APONTA PARA A AULA, e isso é o desenho, não uma falta. A meta diz
- * a DISCIPLINA; a aula atual é a primeira daquela disciplina que o aluno ainda
- * não concluiu no catálogo vinculado ao planejamento. É o que faz a meta da
- * semana seguinte continuar de onde a anterior parou sem o professor reescrever
- * nada — e é como a v108.2 descreve o comportamento.
+ * a DISCIPLINA; a aula atual é a mais recente que o professor publicou no
+ * catálogo vinculado ao planejamento.
  */
 import { supabase } from "@/lib/supabase/client";
+import { readLessonMaterialBlocks } from "@/lib/domain/lesson-resources";
 import {
   currentLesson,
   diagnose,
@@ -40,6 +39,7 @@ import type {
   Uuid,
 } from "../contract.ts";
 import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { LESSON_CARD_COLUMNS, toLessonCards, type LessonCardRow } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
 
@@ -49,16 +49,25 @@ import { requireSession } from "./session.ts";
 
 const LESSON_COLUMNS =
   "id,subject,subject_key,lesson_code,position,title,pdf_file,theory_start_page," +
-  "theory_end_page,pdf_total_pages,final_questions_start,has_theory,note,active";
+  "theory_end_page,pdf_total_pages,final_questions_start,has_theory,note,active,published," +
+  "pdf_url,flashcards_url,flash_summary_url,tec_questions_url,qc_questions_url,material_blocks," + LESSON_CARD_COLUMNS;
 
 interface LessonRow {
   id: string;
+  published: boolean;
   subject: string;
   subject_key: string;
   lesson_code: string;
   position: number;
   title: string;
   pdf_file: string;
+  pdf_url: string | null;
+  flashcards_url: string | null;
+  flash_summary_url: string | null;
+  tec_questions_url: string | null;
+  qc_questions_url: string | null;
+  material_blocks: unknown;
+  theory_lesson_flashcards: LessonCardRow[] | null;
   theory_start_page: number | null;
   theory_end_page: number | null;
   pdf_total_pages: number | null;
@@ -70,12 +79,22 @@ interface LessonRow {
 function toLesson(row: LessonRow): TheoryLesson {
   return {
     id: row.id,
+    published: row.published,
     subject: row.subject,
     subjectKey: row.subject_key,
     lessonCode: row.lesson_code,
     position: row.position,
     title: row.title,
     pdfFile: row.pdf_file,
+    resources: {
+      pdf: row.pdf_url,
+      flashcards: row.flashcards_url,
+      flashSummary: row.flash_summary_url,
+      tecQuestions: row.tec_questions_url,
+      qcQuestions: row.qc_questions_url,
+    },
+    materialBlocks: readLessonMaterialBlocks(row.material_blocks),
+    flashcardCards: toLessonCards(row.theory_lesson_flashcards),
     theoryStartPage: row.theory_start_page,
     theoryEndPage: row.theory_end_page,
     pdfTotalPages: row.pdf_total_pages,
@@ -91,9 +110,7 @@ function toEngineLesson(lesson: TheoryLesson): EngineLesson {
     subjectKey: lesson.subjectKey,
     position: lesson.position,
     lessonCode: lesson.lessonCode,
-    // Uma aula marcada com teoria mas SEM intervalo auditado não é teoria que
-    // se possa acompanhar por página — é exatamente o caso que o diagnóstico
-    // `lesson_without_pages` existe para nomear.
+    // Sem intervalo auditado, a leitura por página fica opcional.
     hasTheory: lesson.hasTheory && lesson.theoryEndPage !== null,
     theoryStartPage: lesson.theoryStartPage,
     theoryEndPage: lesson.theoryEndPage,
@@ -146,14 +163,32 @@ export async function loadTheoryContext(studyPlanId: Uuid): Promise<TheoryContex
   if (planError) throwDb(planError);
   if (!plan) readFailure("Planejamento não encontrado.");
 
-  const { data: link, error: linkError } = await supabase
-    .from("study_plan_theory_catalogs")
-    .select("catalog_id")
-    .eq("study_plan_id", studyPlanId)
-    .maybeSingle();
+  const [membership, link] = await Promise.all([
+    supabase.from("class_students")
+      .select("class_id")
+      .eq("student_id", plan.student_id)
+      .eq("teacher_id", plan.teacher_id)
+      .maybeSingle(),
+    supabase.from("study_plan_theory_catalogs")
+      .select("catalog_id")
+      .eq("study_plan_id", studyPlanId)
+      .maybeSingle(),
+  ]);
+  if (membership.error) throwDb(membership.error);
+  if (link.error) throwDb(link.error);
 
-  if (linkError) throwDb(linkError);
-  const catalogId = link?.catalog_id ?? null;
+  let classCatalogId: string | null = null;
+  if (membership.data) {
+    const classroom = await supabase.from("classes")
+      .select("theory_catalog_id")
+      .eq("id", membership.data.class_id)
+      .eq("teacher_id", plan.teacher_id)
+      .maybeSingle();
+    if (classroom.error) throwDb(classroom.error);
+    classCatalogId = classroom.data?.theory_catalog_id ?? null;
+  }
+  // A turma prevalece; o vínculo individual continua atendendo quem está fora dela.
+  const catalogId = classCatalogId ?? link.data?.catalog_id ?? null;
 
   const base: Omit<TheoryContext, "lessons" | "progress" | "initialQuestions" | "reviewRules"> = {
     studyPlanId,
@@ -177,7 +212,8 @@ export async function loadTheoryContext(studyPlanId: Uuid): Promise<TheoryContex
       .from("theory_lessons")
       .select(LESSON_COLUMNS)
       .eq("catalog_id", catalogId)
-      .eq("active", true),
+      .eq("active", true)
+      .eq("published", true),
     supabase
       .from("theory_progress")
       .select(
@@ -321,7 +357,9 @@ async function reviewsOf(
   const dueKeys = new Set<string>();
   for (const [subjectKey, rules] of context.reviewRules) {
     const lessons = lessonsOfSubject(context, subjectKey).map(toEngineLesson);
-    for (const item of dueReviews(lessons, context.progress, rules)) {
+    // `false`: o contexto só carrega as aulas PUBLICADAS — a RLS esconde as
+    // outras do aluno —, então não dá para saber se a disciplina terminou.
+    for (const item of dueReviews(lessons, context.progress, rules, false)) {
       dueKeys.add(`${item.lesson.id}|${item.rule.reviewNumber}`);
     }
   }
@@ -443,7 +481,9 @@ export async function loadTheoryControl(
 
   return subjectKeys
     .map((subjectKey) => {
-      const lessons = lessonsOfSubject(context, subjectKey);
+      const lessons = [...lessonsOfSubject(context, subjectKey)].sort(
+        (a, b) => a.position - b.position || a.lessonCode.localeCompare(b.lessonCode, "pt-BR"),
+      );
       const engineLessons = lessons.map(toEngineLesson);
       const current = currentLesson(engineLessons, context.progress);
       const currentTheory = current
@@ -468,6 +508,7 @@ export async function loadTheoryControl(
         lessonsTotal: lessons.length,
         lessonsDone: lessons.filter((lesson) => context.progress.get(lesson.id)?.lessonDone).length,
         currentLesson: currentTheory,
+        lessons,
         reviewsDue: dueForSubject,
       };
     })
@@ -511,11 +552,6 @@ export async function loadTheoryGoal(goalId: Uuid): Promise<TheoryGoal> {
     lesson: diagnosis.kind === "ok" ? lesson : null,
     progress,
     reviews: await reviewsOf(context, lessons.map((l) => l.id)),
-    // A PRÓXIMA AULA SÓ LIBERA depois do mínimo de questões iniciais desta.
-    // Revisão vencida NÃO entra nesta conta: ela é fila, não muro.
-    nextLessonUnlocked: Boolean(
-      lesson && isLessonComplete(toEngineLesson(lesson), context.progress.get(lesson.id) ?? null, required),
-    ),
   };
 }
 
@@ -584,9 +620,8 @@ export function saveTheoryProgress(
     const context = await loadTheoryContext(goal.study_plan_id);
     const required = requiredQuestions(context, normalizeSubjectKey(goal.subject));
 
-    // A teoria pode ter acabado AGORA, e com as questões já feitas a aula fecha
-    // neste mesmo gesto — é o "se a teoria terminar durante a sessão, o fluxo
-    // passa para questões iniciais" da v108.2, visto do outro lado.
+    // Salvar leitura não publica outra aula. A meta de prática é verificada
+    // separadamente a partir das questões que já foram respondidas.
     await maybeCompleteLesson(context, lesson, required);
 
     const fresh = await loadTheoryContext(goal.study_plan_id);
@@ -594,7 +629,7 @@ export function saveTheoryProgress(
   });
 }
 
-/** Fecha a aula quando teoria e questões iniciais estiverem cumpridas. */
+/** Registra a meta de prática da aula, sem afetar a publicação da próxima. */
 async function maybeCompleteLesson(
   context: TheoryContext,
   lesson: TheoryLesson,
@@ -665,7 +700,7 @@ export function recordInitialQuestions(
 
     // O estudo também entra no ledger da meta: o tempo e o desempenho da semana
     // contam as questões iniciais como qualquer outro estudo.
-    await supabase.from("goal_entries").insert({
+    const { error: entryError } = await supabase.from("goal_entries").insert({
       goal_id: input.goalId,
       student_id: session.profileId,
       teacher_id: goal.teacher_id,
@@ -675,6 +710,7 @@ export function recordInitialQuestions(
       theory_stage: "questions_in_progress",
       manual_lesson: lesson.title,
     });
+    if (entryError) return failure<TheoryProgress>(translateDbError(entryError));
 
     const required = requiredQuestions(context, normalizeSubjectKey(goal.subject));
     const after = await loadTheoryContext(goal.study_plan_id);

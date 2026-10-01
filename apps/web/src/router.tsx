@@ -17,6 +17,14 @@ import { Overview, overviewLoader } from "@/routes/student/Overview";
 import { Planning, planningLoader } from "@/routes/student/Planning";
 import { Subjects, subjectsLoader } from "@/routes/student/Subjects";
 import { Theory, theoryLoader } from "@/routes/student/Theory";
+import { Laws, lawsLoader } from "@/routes/student/Laws";
+import { Flashcards, flashcardsLoader } from "@/routes/student/Flashcards";
+import { FlashcardStatistics, flashcardStatisticsLoader } from "@/routes/student/FlashcardStatistics";
+import { FlashSummaries, flashSummariesLoader } from "@/routes/student/FlashSummaries";
+import { Schedule } from "@/routes/student/Schedule";
+import { Timer, timerLoader } from "@/routes/student/Timer";
+import { MockExams, mockExamsLoader } from "@/routes/student/MockExams";
+import { TeacherMockExams, teacherMockExamsLoader } from "@/routes/teacher/MockExams";
 import { StudentNotebooks, studentNotebooksLoader } from "@/routes/student/Notebooks";
 import { StudentStatistics, studentStatisticsLoader } from "@/routes/student/Statistics";
 import { StudentReviews, studentReviewsLoader } from "@/routes/student/Reviews";
@@ -79,24 +87,24 @@ export const router = createBrowserRouter([
             path: ROUTES.signIn,
             loader: signInLoader,
             Component: SignIn,
-            handle: { title: "Entrar · Bora Estudar" },
+            handle: { title: "Entrar · Fronteira Concursos" },
           },
           {
             path: ROUTES.signUp,
             loader: signUpLoader,
             Component: SignUp,
-            handle: { title: "Criar conta · Bora Estudar" },
+            handle: { title: "Criar conta · Fronteira Concursos" },
           },
           {
             path: ROUTES.forgotPassword,
             Component: ForgotPassword,
-            handle: { title: "Recuperar senha · Bora Estudar" },
+            handle: { title: "Recuperar senha · Fronteira Concursos" },
           },
           {
             path: ROUTES.resetPassword,
             loader: resetPasswordLoader,
             Component: ResetPassword,
-            handle: { title: "Nova senha · Bora Estudar" },
+            handle: { title: "Nova senha · Fronteira Concursos" },
           },
         ],
       },
@@ -112,55 +120,96 @@ export const router = createBrowserRouter([
                 path: ROUTES.student.overview,
                 loader: overviewLoader,
                 Component: Overview,
-                handle: { title: "Metas da semana · Bora Estudar" },
+                handle: { title: "Minha semana · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.planning,
                 loader: planningLoader,
                 Component: Planning,
-                handle: { title: "Planejamento · Bora Estudar" },
+                handle: { title: "Meu curso · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.theory,
                 loader: theoryLoader,
                 Component: Theory,
-                handle: { title: "Estudo da teoria · Bora Estudar" },
+                handle: { title: "Aulas · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.subjects,
                 loader: subjectsLoader,
                 Component: Subjects,
-                handle: { title: "Disciplinas · Bora Estudar" },
+                handle: { title: "Disciplinas · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.laws,
+                loader: lawsLoader,
+                Component: Laws,
+                handle: { title: "Leis · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.flashcards,
+                loader: flashcardsLoader,
+                Component: Flashcards,
+                handle: { title: "Flashcards · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.flashcardStatistics,
+                loader: flashcardStatisticsLoader,
+                Component: FlashcardStatistics,
+                handle: { title: "Estatísticas dos flashcards · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.flashSummaries,
+                loader: flashSummariesLoader,
+                Component: FlashSummaries,
+                handle: { title: "Resumos Flash · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.schedule,
+                Component: Schedule,
+                handle: { title: "Minha semana · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.timer,
+                loader: timerLoader,
+                Component: Timer,
+                handle: { title: "Cronômetro · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.student.mockExams,
+                loader: mockExamsLoader,
+                Component: MockExams,
+                handle: { title: "Simulados · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.notebooks,
                 loader: studentNotebooksLoader,
                 Component: StudentNotebooks,
-                handle: { title: "Cadernos TEC · Bora Estudar" },
+                handle: { title: "Cadernos TEC · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.statistics,
                 loader: studentStatisticsLoader,
                 Component: StudentStatistics,
-                handle: { title: "Estatísticas · Bora Estudar" },
+                handle: { title: "Estatísticas · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.reviews,
                 loader: studentReviewsLoader,
                 Component: StudentReviews,
-                handle: { title: "Revisões · Bora Estudar" },
+                handle: { title: "Revisões · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.account,
                 loader: accountLoader,
                 Component: Account,
-                handle: { title: "Meus dados · Bora Estudar" },
+                handle: { title: "Meus dados · Fronteira Concursos" },
               },
               {
                 path: ROUTES.student.waitlist,
                 loader: waitlistLoader,
                 Component: Waitlist,
-                handle: { title: "Lista de espera · Bora Estudar" },
+                handle: { title: "Lista de espera · Fronteira Concursos" },
               },
         ],
           },
@@ -178,62 +227,68 @@ export const router = createBrowserRouter([
                 path: ROUTES.teacher.students,
                 loader: teacherStudentsLoader,
                 Component: TeacherStudents,
-                handle: { title: "Meus alunos · Bora Estudar" },
+                handle: { title: "Meus alunos · Fronteira Concursos" },
               },
               {
                 path: "/professor/alunos/:studentId",
                 loader: teacherStudentLoader,
                 Component: TeacherStudent,
-                handle: { title: "Aluno · Bora Estudar" },
+                handle: { title: "Aluno · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.classes,
                 loader: teacherClassesLoader,
                 Component: TeacherClasses,
-                handle: { title: "Turmas · Bora Estudar" },
+                handle: { title: "Turmas · Fronteira Concursos" },
+              },
+              {
+                path: ROUTES.teacher.mockExams,
+                loader: teacherMockExamsLoader,
+                Component: TeacherMockExams,
+                handle: { title: "Simulados presenciais · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.plans,
                 loader: teacherPlansLoader,
                 Component: TeacherPlans,
-                handle: { title: "Planejamentos · Bora Estudar" },
+                handle: { title: "Planejamentos · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.goals,
                 loader: teacherGoalsLoader,
                 Component: TeacherGoals,
-                handle: { title: "Gerar metas · Bora Estudar" },
+                handle: { title: "Gerar metas · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.theory,
                 loader: teacherTheoryLoader,
                 Component: TeacherTheory,
-                handle: { title: "Catálogo de teoria · Bora Estudar" },
+                handle: { title: "Materiais das aulas · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.notebooks,
                 loader: teacherNotebooksLoader,
                 Component: TeacherNotebooks,
-                handle: { title: "Cadernos · Bora Estudar" },
+                handle: { title: "Cadernos · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.reviews,
                 loader: teacherReviewsLoader,
                 Component: TeacherReviews,
-                handle: { title: "Revisões · Bora Estudar" },
+                handle: { title: "Revisões · Fronteira Concursos" },
               },
               {
                 path: ROUTES.teacher.statistics,
                 loader: teacherStatisticsLoader,
                 Component: TeacherStatistics,
-                handle: { title: "Estatísticas · Bora Estudar" },
+                handle: { title: "Estatísticas · Fronteira Concursos" },
               },
               {
                 // A mesma tela de `/aluno/conta`: mesmos campos, mesmo action.
                 path: ROUTES.teacher.account,
                 loader: accountLoader,
                 Component: Account,
-                handle: { title: "Meus dados · Bora Estudar" },
+                handle: { title: "Meus dados · Fronteira Concursos" },
               },
         ],
           },
@@ -242,7 +297,7 @@ export const router = createBrowserRouter([
 
       // Sem esta rota, uma URL inexistente é tela branca: o servidor devolve o
       // index.html para qualquer caminho, e o router não casaria nada.
-      { path: "*", Component: NotFound, handle: { title: "Não encontrado · Bora Estudar" } },
+      { path: "*", Component: NotFound, handle: { title: "Não encontrado · Fronteira Concursos" } },
     ],
   },
 ]);

@@ -705,12 +705,12 @@ export async function addTheoryCatalog(
     `insert into public.theory_lessons
        (catalog_id, teacher_id, subject, subject_key, lesson_code, position, title,
         pdf_file, theory_start_page, theory_end_page, pdf_total_pages,
-        final_questions_start, has_theory)
+        final_questions_start, has_theory, published)
      select $1::uuid, $2::uuid, $3::text, $4::text,
             format('A%s', lpad(g::text, 2, '0')), g,
             format('Aula %s — %s', lpad(g::text, 2, '0'), $3::text),
             format('e2e-aula-%s.pdf', lpad(g::text, 2, '0')),
-            5, 5 + (g * 12), 5 + (g * 12) + 20, 5 + (g * 12) + 1, true
+            5, 5 + (g * 12), 5 + (g * 12) + 20, 5 + (g * 12) + 1, true, g = 1
        from generate_series(1, $5::int) g`,
     [catalogId, scenario.teacher.id, subject, subjectKey, lessons],
   );
@@ -719,9 +719,9 @@ export async function addTheoryCatalog(
     await query(
       `insert into public.theory_lessons
          (catalog_id, teacher_id, subject, subject_key, lesson_code, position, title,
-          pdf_file, theory_start_page, theory_end_page, pdf_total_pages, has_theory)
+          pdf_file, theory_start_page, theory_end_page, pdf_total_pages, has_theory, published)
        values ($1, $2, $3, $4, 'A01', 1, 'Aula 01 — Matemática Financeira',
-               'mat-fin-01.pdf', null, null, 40, false)`,
+               'mat-fin-01.pdf', null, null, 40, false, true)`,
       [catalogId, scenario.teacher.id, unauditedSubject, "matematica financeira"],
     );
   }

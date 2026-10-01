@@ -70,7 +70,7 @@ test.describe("F-TEMA-01 · escolher o tema", () => {
     await toggle(studentPage).click();
 
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
-    await expect(toggle(studentPage)).toHaveText("Tema claro");
+    await expect(toggle(studentPage)).toHaveAccessibleName("Tema claro");
     expect(await localCopy(studentPage)).toEqual({
       active: scenario.student.id,
       theme: "dark",
@@ -78,7 +78,7 @@ test.describe("F-TEMA-01 · escolher o tema", () => {
 
     await studentPage.reload();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
-    await expect(toggle(studentPage)).toHaveText("Tema claro");
+    await expect(toggle(studentPage)).toHaveAccessibleName("Tema claro");
   });
 
   test("voltar para o claro grava de novo, sem deixar resíduo", async ({
@@ -352,7 +352,7 @@ test.describe("F-TEMA-08 · sem escolha", () => {
     await expect(studentPage.locator("h1")).toBeVisible();
 
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
-    await expect(toggle(studentPage)).toHaveText("Tema escuro");
+    await expect(toggle(studentPage)).toHaveAccessibleName("Tema escuro");
     expect(await storedTheme(studentPage, scenario.student.id)).toBeNull();
   });
 });

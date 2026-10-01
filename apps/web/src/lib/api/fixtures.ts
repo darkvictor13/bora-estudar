@@ -18,6 +18,16 @@
  * O relógio é fixo (`TODAY`): teste que depende de "hoje" falha num dia e passa
  * no outro, e leva meses para alguém descobrir por quê.
  */
+import { createMockExamFixtures } from "./fixtures-mock-exams.ts";
+import { validateLessonMaterialBlocks, validateLessonResources } from "../domain/lesson-resources.ts";
+import { scheduleFlashcardReview, validateFlashcardCards } from "../domain/flashcards.ts";
+import { libraryDeck, normalizeLibraryReviews } from "../domain/library-flashcards.ts";
+import { questionsByDay } from "../domain/question-performance.ts";
+import { localDate } from "../domain/schedule.ts";
+import { streakDays as countStreakDays } from "../domain/week.ts";
+import { MINIMUM_BOX_PLOT_QUESTIONS } from "../domain/class-question-distribution.ts";
+import { PMPR_SOLDADO_2025 } from "../domain/pmpr-soldado.ts";
+import { normalizeSubjectKey } from "../domain/theory.ts";
 import type {
   Account,
   AccountInput,
@@ -28,10 +38,20 @@ import type {
   Credentials,
   DayGroup,
   ExtraStudyInput,
+  FlashcardCard,
+  FlashcardReview,
+  CreatePersonalFlashcardDeckInput,
+  CreatePersonalFlashcardInput,
+  GradeLibraryFlashcardInput,
+  LibraryFlashcardReview,
+  GradePersonalFlashcardInput,
+  PersonalFlashcardDeck,
+  PersonalFlashcardReview,
   GenerateWeekInput,
   GenerateWeekPreview,
   Goal,
   GoalType,
+  GradeFlashcardInput,
   GrantAccessInput,
   ImportMasterInput,
   ImportMasterResult,
@@ -99,6 +119,7 @@ const PLAN_ID = "11111111-1111-4111-8111-111111111111";
 const STUDENT_ID = "22222222-2222-4222-8222-222222222222";
 const TEACHER_ID = "33333333-3333-4333-8333-333333333333";
 const CATALOG_ID = "44444444-4444-4444-8444-444444444444";
+const PMPR_CATALOG_ID = "77777777-7777-4777-8777-777777777777";
 const CLASS_A_ID = "66666666-6666-4666-8666-000000000001";
 const CLASS_B_ID = "66666666-6666-4666-8666-000000000002";
 
@@ -199,74 +220,165 @@ interface State {
   emails: Map<string, Uuid>;
 }
 
-const LESSONS: readonly TheoryLesson[] = [
+const EMPTY_LESSON_RESOURCES: TheoryLesson["resources"] = {
+  pdf: null,
+  flashcards: null,
+  flashSummary: null,
+  tecQuestions: null,
+  qcQuestions: null,
+};
+
+let LESSONS: readonly TheoryLesson[] = [
   {
     id: "55555555-5555-4555-8555-000000000001",
-    subject: "Direito Tributário",
-    subjectKey: "direito-tributario",
-    lessonCode: "DT-01",
+    published: true,
+    subject: "Direito Constitucional",
+    subjectKey: "direito-constitucional",
+    lessonCode: "DC-01",
     position: 1,
-    title: "Competência tributária",
-    pdfFile: "dt-01-competencia.pdf",
-    theoryStartPage: 3,
-    theoryEndPage: 41,
-    pdfTotalPages: 88,
-    finalQuestionsStart: 42,
-    hasTheory: true,
-    note: null,
-  },
-  {
-    id: "55555555-5555-4555-8555-000000000002",
-    subject: "Direito Tributário",
-    subjectKey: "direito-tributario",
-    lessonCode: "DT-02",
-    position: 2,
-    title: "Limitações ao poder de tributar",
-    pdfFile: "dt-02-limitacoes.pdf",
-    theoryStartPage: 3,
-    theoryEndPage: 55,
-    pdfTotalPages: 104,
-    finalQuestionsStart: 56,
-    hasTheory: true,
-    note: null,
-  },
-  {
-    id: "55555555-5555-4555-8555-000000000003",
-    subject: "Português",
-    subjectKey: "portugues",
-    lessonCode: "PT-01",
-    position: 1,
-    title: "Ortografia e acentuação",
-    pdfFile: "pt-01-ortografia.pdf",
-    theoryStartPage: 2,
-    theoryEndPage: 28,
-    pdfTotalPages: 60,
-    finalQuestionsStart: 29,
-    hasTheory: true,
-    note: null,
-  },
-  /**
-   * SEM PÁGINA DE PROPÓSITO. Matemática Financeira ficou fora da auditoria da
-   * v108.5, e a v2 recusa inventar página nesse caso. A fixture guarda o caso
-   * para a tela de diagnóstico existir desde o primeiro dia, e não como
-   * remendo depois que alguém reclamar.
-   */
-  {
-    id: "55555555-5555-4555-8555-000000000004",
-    subject: "Matemática Financeira",
-    subjectKey: "matematica-financeira",
-    lessonCode: "MF-01",
-    position: 1,
-    title: "Juros simples e compostos",
-    pdfFile: "mf-01-juros.pdf",
+    title: "Direitos e garantias fundamentais",
+    pdfFile: "aula-demonstrativa-direitos-fundamentais.pdf",
+    resources: EMPTY_LESSON_RESOURCES,
+    flashcardCards: [
+      {
+        id: "88888888-8888-4888-8888-000000000011",
+        topic: "Direitos fundamentais",
+        front: "Os direitos e garantias fundamentais se limitam aos brasileiros natos. Certo ou errado?",
+        back: "Errado. A Constituição protege brasileiros e estrangeiros nos termos do art. 5º, além de reconhecer direitos em outros dispositivos.",
+      },
+      {
+        id: "88888888-8888-4888-8888-000000000012",
+        topic: "Habeas corpus",
+        front: "Qual remédio constitucional protege a liberdade de locomoção contra ilegalidade ou abuso de poder?",
+        back: "O habeas corpus, que pode ser preventivo ou repressivo conforme a ameaça ou a restrição já ocorrida.",
+      },
+      {
+        id: "88888888-8888-4888-8888-000000000013",
+        topic: "Habeas data",
+        front: "Qual é a finalidade básica do habeas data?",
+        back: "Assegurar conhecimento ou retificação de informações pessoais constantes de registros ou bancos de dados governamentais ou de caráter público.",
+      },
+      {
+        id: "88888888-8888-4888-8888-000000000014",
+        topic: "Ação popular",
+        front: "Quem possui legitimidade constitucional para propor ação popular?",
+        back: "O cidadão, para buscar a anulação de ato lesivo aos bens e valores protegidos pela Constituição.",
+      },
+    ],
+    materialBlocks: [
+      { title: "Direitos individuais e coletivos", pdf: "/materials/demo/aula-demonstrativa-direitos-fundamentais.pdf", tecQuestions: "https://www.tecconcursos.com.br/s/Q6nMte", qcQuestions: "https://www.qconcursos.com/questoes-de-concursos/disciplinas/direito-direito-constitucional/direitos-individuais/questoes" },
+      { title: "Remédios constitucionais e garantias", pdf: "/materials/demo/aula-demonstrativa-direitos-fundamentais.pdf", tecQuestions: "https://www.tecconcursos.com.br/s/Q6nMtf", qcQuestions: "https://www.qconcursos.com/questoes-de-concursos/disciplinas/direito-direito-constitucional/direitos-individuais-remedios-constitucionais-e-garantias-processuais/questoes" },
+    ],
     theoryStartPage: null,
     theoryEndPage: null,
     pdfTotalPages: null,
     finalQuestionsStart: null,
     hasTheory: true,
-    note: "Disciplina fora do catálogo auditado v108.5.",
+    note: "Aula demonstrativa completa com PDF, flashcards e cadernos de questões TEC e QConcursos.",
+  },
+  {
+    id: "55555555-5555-4555-8555-000000000002",
+    published: true,
+    subject: "Direito Constitucional",
+    subjectKey: "direito-constitucional",
+    lessonCode: "DC-02",
+    position: 2,
+    title: "Organização do Estado",
+    pdfFile: "dc-02-organizacao-estado.pdf",
+    resources: EMPTY_LESSON_RESOURCES,
+    // Cartões demonstrativos da fixture, para pré-visualizar a experiência.
+    // Fonte: CF/88, art. 18 (https://www.planalto.gov.br/ccivil_03/constituicao/constituicaocompilado.htm).
+    flashcardCards: [
+      {
+        id: "88888888-8888-4888-8888-000000000001",
+        topic: "Organização político-administrativa",
+        front: "A organização político-administrativa do Brasil compreende União, Estados, Distrito Federal e Municípios, todos autônomos. Certo ou errado?",
+        back: "Certo. O art. 18 da Constituição Federal enumera esses quatro entes e estabelece sua autonomia nos termos da Constituição.",
+      },
+      {
+        id: "88888888-8888-4888-8888-000000000002",
+        topic: "Territórios Federais",
+        front: "Os Territórios Federais são entes autônomos da Federação. Certo ou errado?",
+        back: "Errado. Os Territórios Federais integram a União (Constituição Federal, art. 18, § 2º).",
+      },
+    ],
+    materialBlocks: [
+      { title: "Organização do Estado", pdf: null, tecQuestions: null, qcQuestions: null },
+    ],
+    theoryStartPage: null,
+    theoryEndPage: null,
+    pdfTotalPages: null,
+    finalQuestionsStart: null,
+    hasTheory: true,
+    note: "Materiais desta aula ainda aguardam links permanentes conferidos.",
+  },
+  {
+    id: "55555555-5555-4555-8555-000000000003",
+    published: true,
+    subject: "Português",
+    subjectKey: "portugues",
+    lessonCode: "PT-01",
+    position: 1,
+    title: "Ortografia e acentuação",
+    pdfFile: "a02fbce5.pdf",
+    resources: EMPTY_LESSON_RESOURCES,
+    materialBlocks: [
+      { title: "Acentuação gráfica", pdf: "https://files.curseduca.com/1334c6e4-1845-4ef0-9d63-36053566aa39/a02fbce5.pdf", tecQuestions: "https://www.tecconcursos.com.br/s/Q6mm6r", qcQuestions: "https://www.qconcursos.com/questoes-de-concursos/questoes?discipline_ids%5B%5D=1&subject_ids%5B%5D=25201&subject_ids%5B%5D=25202" },
+      { title: "Ortografia e emprego do hífen", pdf: "https://files.curseduca.com/1334c6e4-1845-4ef0-9d63-36053566aa39/a02fbce5.pdf", tecQuestions: "https://www.tecconcursos.com.br/s/Q6mmTi", qcQuestions: "https://www.qconcursos.com/questoes-de-concursos/disciplinas/letras-portugues/emprego-do-hifen/questoes" },
+    ],
+    theoryStartPage: null,
+    theoryEndPage: null,
+    pdfTotalPages: 59,
+    finalQuestionsStart: null,
+    hasTheory: true,
+    note: "PDF integrado de Português; a divisão das páginas por tópico ainda não foi conferida.",
+  },
+  /**
+   * SEM PÁGINA DE PROPÓSITO. O material de Informática ainda não foi conferido,
+   * e a interface recusa inventar página nesse caso. A fixture guarda o caso
+   * para a tela de diagnóstico existir desde o primeiro dia, e não como
+   * remendo depois que alguém reclamar.
+   */
+  {
+    id: "55555555-5555-4555-8555-000000000004",
+    published: true,
+    subject: "Informática",
+    subjectKey: "informatica",
+    lessonCode: "INFO-01",
+    position: 1,
+    title: "Segurança da informação",
+    pdfFile: "info-01-seguranca.pdf",
+    resources: EMPTY_LESSON_RESOURCES,
+    materialBlocks: [
+      { title: "Conceitos de proteção e segurança", pdf: "/materials/prf/informatica/conceitos-protecao-seguranca.pdf", tecQuestions: "https://www.tecconcursos.com.br/s/Q5FFjM", qcQuestions: "https://www.qconcursos.com/questoes-de-concursos/questoes?discipline_ids%5B%5D=46&subject_ids%5B%5D=285&subject_ids%5B%5D=825&subject_ids%5B%5D=1778&subject_ids%5B%5D=2344&subject_ids%5B%5D=5170" },
+    ],
+    theoryStartPage: null,
+    theoryEndPage: null,
+    pdfTotalPages: null,
+    finalQuestionsStart: null,
+    hasTheory: true,
+    note: "Material da aula ainda sem páginas conferidas.",
   },
 ];
+const INITIAL_LESSONS = LESSONS;
+let pilotCatalogCreated = false;
+let pilotLessons: TheoryLesson[] = [];
+const flashcardReviews = new Map<string, FlashcardReview>();
+const libraryFlashcardReviews = new Map<string, LibraryFlashcardReview>();
+const PERSONAL_DECK_ID = "88888888-8888-4888-8888-000000000001";
+const PERSONAL_CARD_ID = "88888888-8888-4888-8888-000000000002";
+function seedPersonalFlashcardDecks(): PersonalFlashcardDeck[] {
+  return [{
+    id: PERSONAL_DECK_ID,
+    subject: "Direito Constitucional",
+    title: "Meus pontos de revisão",
+    createdAt: `${TODAY}T09:00:00.000Z`,
+    updatedAt: `${TODAY}T09:00:00.000Z`,
+    cards: [{ id: PERSONAL_CARD_ID, topic: "Direitos fundamentais", front: "Qual é o núcleo do direito de reunião?", back: "Reunião pacífica, sem armas, em locais abertos ao público, independentemente de autorização, com prévio aviso e sem frustrar outra reunião anteriormente convocada." }],
+  }];
+}
+let personalFlashcardDecks = seedPersonalFlashcardDecks();
+const personalFlashcardReviews = new Map<string, PersonalFlashcardReview>();
 
 const INITIAL_QUESTIONS_REQUIRED = 15;
 
@@ -280,10 +392,10 @@ function seedGoals(): GoalRow[] {
     weekday: 1,
     dayPosition: 1,
     weekNumber: 1,
-    subject: "Direito Tributário",
-    title: "Teoria — Competência tributária",
+    subject: "Direito Constitucional",
+    title: "Aula — Direitos e garantias fundamentais",
     description: null,
-    lesson: "Competência tributária",
+    lesson: "Direitos e garantias fundamentais",
     block: null,
     plannedMinutes: 90,
     completedAt: `${TODAY}T11:02:00.000Z`,
@@ -296,11 +408,11 @@ function seedGoals(): GoalRow[] {
     weekday: 1,
     dayPosition: 2,
     weekNumber: 1,
-    subject: "Direito Tributário",
-    title: "Bateria — Competência tributária",
+    subject: "Direito Constitucional",
+    title: "Bateria — Direitos e garantias fundamentais",
     description: null,
     lesson: null,
-    block: "DT · Bloco 1",
+    block: "DC · Bloco 1",
     plannedMinutes: 45,
     completedAt: null,
     theoryLessonId: null,
@@ -312,10 +424,10 @@ function seedGoals(): GoalRow[] {
     weekday: 2,
     dayPosition: 1,
     weekNumber: 1,
-    subject: "Direito Tributário",
-    title: "Teoria — Limitações ao poder de tributar",
+    subject: "Direito Constitucional",
+    title: "Aula — Organização do Estado",
     description: null,
-    lesson: "Limitações ao poder de tributar",
+    lesson: "Organização do Estado",
     block: null,
     plannedMinutes: 90,
     completedAt: null,
@@ -329,7 +441,7 @@ function seedGoals(): GoalRow[] {
     dayPosition: 1,
     weekNumber: 1,
     subject: "Português",
-    title: "Teoria — Ortografia e acentuação",
+    title: "Aula — Ortografia e acentuação",
     description: null,
     lesson: "Ortografia e acentuação",
     block: null,
@@ -344,10 +456,10 @@ function seedGoals(): GoalRow[] {
     weekday: 4,
     dayPosition: 1,
     weekNumber: 1,
-    subject: "Matemática Financeira",
-    title: "Teoria — Juros simples e compostos",
+    subject: "Informática",
+    title: "Aula — Segurança da informação",
     description: null,
-    lesson: "Juros simples e compostos",
+    lesson: "Segurança da informação",
     block: null,
     plannedMinutes: 60,
     completedAt: null,
@@ -360,10 +472,10 @@ function seedGoals(): GoalRow[] {
     weekday: 5,
     dayPosition: 1,
     weekNumber: 1,
-    subject: "Direito Tributário",
-    title: "Revisão 1 — Competência tributária",
+    subject: "Direito Constitucional",
+    title: "Revisão 1 — Direitos e garantias fundamentais",
     description: null,
-    lesson: "Competência tributária",
+    lesson: "Direitos e garantias fundamentais",
     block: null,
     plannedMinutes: 30,
     completedAt: null,
@@ -459,7 +571,7 @@ function seedState(): State {
       },
     ],
     waitlist: null,
-    selectedSubjects: new Set(["direito-tributario", "portugues"]),
+    selectedSubjects: new Set(["direito-constitucional", "portugues"]),
     students: seedStudents(),
     classes: seedClasses(),
     candidates: seedCandidates(),
@@ -468,12 +580,28 @@ function seedState(): State {
 }
 
 let state = seedState();
+const mockExamContext = { session: () => state.session, students: () => state.students, classes: () => state.classes };
+
+/** Somente na implementação de demonstração; não participa da autenticação real. */
+export function setFixtureRole(role: "teacher" | "student") {
+  if (state.session) state.session = { ...state.session, role,
+    profileId: role === "teacher" ? TEACHER_ID : STUDENT_ID,
+    name: role === "teacher" ? "Professor de Exemplo" : "Aluna de Exemplo" };
+}
 
 /** Volta o cenário ao começo. Usada por teste, nunca pela aplicação. */
 export function resetFixtures(): void {
   sequence = 0;
   replayed.clear();
+  LESSONS = INITIAL_LESSONS;
+  pilotCatalogCreated = false;
+  pilotLessons = [];
+  flashcardReviews.clear();
+  libraryFlashcardReviews.clear();
+  personalFlashcardDecks = seedPersonalFlashcardDecks();
+  personalFlashcardReviews.clear();
   state = seedState();
+  Object.assign(fixturesApi, createMockExamFixtures(mockExamContext));
 }
 
 /* ------------------------------------------------------------------ *
@@ -501,7 +629,7 @@ function toGoal(row: GoalRow): Goal {
     lesson: row.lesson,
     block: row.block,
     plannedMinutes: row.plannedMinutes,
-    dueOn: addDays(TODAY, row.weekday - 1),
+    dueOn: addDays(TODAY, (row.weekNumber - 1) * 7 + row.weekday - 1),
     completedAt: row.completedAt,
     spentMinutes: sum((entry) => entry.minutes),
     questionsAnswered: sum((entry) => entry.questions),
@@ -517,22 +645,21 @@ function toGoal(row: GoalRow): Goal {
 function summarize(goals: readonly Goal[]): WeekSummary {
   const questions = goals.reduce((total, goal) => total + goal.questionsAnswered, 0);
   const correct = goals.reduce((total, goal) => total + goal.correctAnswers, 0);
-  const days = new Set(
-    goals.filter((goal) => goal.entries.length > 0).map((goal) => goal.weekday),
-  );
+  const streak = countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)), localDate(new Date()));
 
   return {
     score: questions > 0 ? Math.round((correct / questions) * 1000) / 10 : null,
     studiedMinutes: goals.reduce((total, goal) => total + goal.spentMinutes, 0),
     questionsAnswered: questions,
     correctAnswers: correct,
-    streakDays: days.size,
+    streakDays: streak,
     goalsTotal: goals.length,
     goalsCompleted: goals.filter((goal) => goal.status === "completed").length,
   };
 }
 
 function buildWeek(weekNumber: number): Week {
+  const startsOn = addDays(TODAY, (weekNumber - 1) * 7);
   const goals = state.goals
     .filter((row) => row.weekNumber === weekNumber)
     .map(toGoal)
@@ -540,15 +667,15 @@ function buildWeek(weekNumber: number): Week {
 
   const days: DayGroup[] = ([1, 2, 3, 4, 5, 6, 7] as const).map((weekday) => ({
     weekday,
-    date: addDays(TODAY, weekday - 1),
+    date: addDays(startsOn, weekday - 1),
     goals: goals.filter((goal) => goal.weekday === weekday),
   }));
 
   return {
     studyPlanId: PLAN_ID,
     weekNumber,
-    startsOn: TODAY,
-    endsOn: addDays(TODAY, 6),
+    startsOn,
+    endsOn: addDays(startsOn, 6),
     summary: summarize(goals),
     days,
   };
@@ -559,12 +686,7 @@ function findGoal(goalId: Uuid): GoalRow | undefined {
 }
 
 function diagnose(lesson: TheoryLesson): TheoryGoal["diagnosis"] {
-  if (lesson.subjectKey === "matematica-financeira") {
-    return { kind: "subject_not_audited", subject: lesson.subject };
-  }
-  if (lesson.hasTheory && lesson.theoryStartPage === null) {
-    return { kind: "lesson_without_pages", lesson: lesson.title };
-  }
+  void lesson;
   return { kind: "ok" };
 }
 
@@ -589,6 +711,7 @@ function progressOf(lessonId: Uuid): TheoryProgress {
  * ------------------------------------------------------------------ */
 
 export const fixturesApi: BoraApi = {
+  ...createMockExamFixtures(mockExamContext),
   /* --- Fase 2 --- */
 
   loadSession: () => later(state.session),
@@ -623,7 +746,7 @@ export const fixturesApi: BoraApi = {
       profileId: STUDENT_ID,
       name: state.session?.name ?? null,
       email: state.session?.email ?? "",
-      plan: "Área Fiscal",
+      plan: "Preparatório PRF",
       access: state.session?.access ?? "pending",
       accessExpiresAt: state.session?.accessExpiresAt ?? null,
       teacherName: "Professor de Exemplo",
@@ -638,7 +761,7 @@ export const fixturesApi: BoraApi = {
         profileId: STUDENT_ID,
         name,
         email: state.session?.email ?? "",
-        plan: "Área Fiscal",
+        plan: "Preparatório PRF",
         access: state.session?.access ?? "pending",
         accessExpiresAt: state.session?.accessExpiresAt ?? null,
         teacherName: "Professor de Exemplo",
@@ -788,14 +911,16 @@ export const fixturesApi: BoraApi = {
     ),
 
   loadActivePlan: () => later(PLAN),
+  loadActivePlanOrNull: () => later(PLAN),
   loadSubjects: () => later(SUBJECTS),
 
   /* --- Fase 4 --- */
 
-  loadTheoryControl: () =>
-    later<readonly TheorySubjectControl[]>(
-      [...new Set(LESSONS.map((lesson) => lesson.subjectKey))].map((subjectKey) => {
-        const lessons = LESSONS.filter((lesson) => lesson.subjectKey === subjectKey);
+  loadTheoryControl: () => {
+    const available = studentLessons().filter((lesson) => lesson.published);
+    return later<readonly TheorySubjectControl[]>(
+      [...new Set(available.map((lesson) => lesson.subjectKey))].map((subjectKey) => {
+        const lessons = available.filter((lesson) => lesson.subjectKey === subjectKey);
         const head = lessons[0]!;
         const doneCount = lessons.filter((lesson) => progressOf(lesson.id).lessonDone).length;
         return {
@@ -804,17 +929,21 @@ export const fixturesApi: BoraApi = {
           diagnosis: diagnose(head),
           lessonsTotal: lessons.length,
           lessonsDone: doneCount,
-          currentLesson: lessons.find((lesson) => !progressOf(lesson.id).lessonDone) ?? null,
+          currentLesson: lessons.at(-1) ?? null,
+          lessons,
           reviewsDue: state.reviews.filter(
             (review) => review.due && review.subject === head.subject,
           ).length,
         };
       }),
-    ),
+    );
+  },
 
   loadTheoryGoal: (goalId: Uuid) => {
     const row = findGoal(goalId);
-    const lesson = LESSONS.find((candidate) => candidate.id === row?.theoryLessonId) ?? null;
+    const lesson = studentLessons().filter((candidate) =>
+      candidate.published && candidate.subjectKey === row?.subjectKey,
+    ).at(-1) ?? null;
     if (!row || !lesson) {
       return later<TheoryGoal>({
         goalId,
@@ -822,7 +951,6 @@ export const fixturesApi: BoraApi = {
         lesson: null,
         progress: null,
         reviews: [],
-        nextLessonUnlocked: false,
       });
     }
 
@@ -834,7 +962,6 @@ export const fixturesApi: BoraApi = {
         lesson: null,
         progress: null,
         reviews: [],
-        nextLessonUnlocked: false,
       });
     }
 
@@ -845,15 +972,13 @@ export const fixturesApi: BoraApi = {
       lesson,
       progress,
       reviews: state.reviews.filter((review) => review.lessonId === lesson.id),
-      // A próxima aula só abre depois do mínimo de questões iniciais DESTA.
-      nextLessonUnlocked: progress.initialQuestionsComplete,
     });
   },
 
   saveTheoryProgress: (input: SaveTheoryProgressInput) =>
     later(
       once(input.requestId, () => {
-        const lesson = LESSONS.find((candidate) => candidate.id === input.lessonId);
+        const lesson = studentLessons().find((candidate) => candidate.id === input.lessonId);
         if (!lesson) return fail<TheoryProgress>("not_found", "Aula não encontrada.");
 
         const current = progressOf(lesson.id);
@@ -863,9 +988,7 @@ export const fixturesApi: BoraApi = {
           ...current,
           currentPage: input.currentPage,
           theoryDone: current.theoryDone || theoryDone,
-          // ENCERRAR SESSÃO NÃO CONCLUI A AULA. Concluir exige teoria lida E o
-          // mínimo de questões iniciais — `input.endSession` não entra na conta.
-          lessonDone: (current.theoryDone || theoryDone) && current.initialQuestionsComplete,
+          lessonDone: current.initialQuestionsComplete,
         };
         state.progress.set(lesson.id, updated);
         return done(updated);
@@ -875,6 +998,11 @@ export const fixturesApi: BoraApi = {
   recordInitialQuestions: (input: RecordInitialQuestionsInput) =>
     later(
       once(input.requestId, () => {
+        if (!Number.isInteger(input.questions) || input.questions <= 0 ||
+            !Number.isInteger(input.correctAnswers) || input.correctAnswers < 0 ||
+            input.correctAnswers > input.questions) {
+          return fail<TheoryProgress>("validation", "Informe questões e acertos válidos.");
+        }
         const current = progressOf(input.lessonId);
         const total = current.initialQuestionsDone + input.questions;
         const complete = total >= current.initialQuestionsRequired;
@@ -882,9 +1010,21 @@ export const fixturesApi: BoraApi = {
           ...current,
           initialQuestionsDone: total,
           initialQuestionsComplete: complete,
-          lessonDone: current.theoryDone && complete,
+          lessonDone: complete,
         };
         state.progress.set(input.lessonId, updated);
+        state.entries.push({
+          id: nextId("a"),
+          goalId: input.goalId,
+          minutes: 0,
+          questions: input.questions,
+          correctAnswers: input.correctAnswers,
+          score: Math.round((input.correctAnswers / input.questions) * 1000) / 10,
+          note: null,
+          theoryStage: "questions_in_progress",
+          manualLesson: studentLessons().find((lesson) => lesson.id === input.lessonId)?.title ?? null,
+          createdAt: new Date().toISOString(),
+        });
         return done(updated);
       }),
     ),
@@ -913,8 +1053,8 @@ export const fixturesApi: BoraApi = {
 
   loadReviewGrid: () =>
     later<readonly ReviewGridRow[]>(
-      [...new Set(LESSONS.map((lesson) => lesson.subjectKey))].map((subjectKey) => {
-        const head = LESSONS.find((lesson) => lesson.subjectKey === subjectKey)!;
+      [...new Set(studentLessons().map((lesson) => lesson.subjectKey))].map((subjectKey) => {
+        const head = studentLessons().find((lesson) => lesson.subjectKey === subjectKey)!;
         return {
           subject: head.subject,
           subjectKey,
@@ -947,7 +1087,147 @@ export const fixturesApi: BoraApi = {
 
   listReinforcements: () => later(REINFORCEMENTS),
 
-  loadStatistics: (_filter: StatisticsFilter) => later(STATISTICS),
+  loadStatistics: (_filter: StatisticsFilter) => {
+    const extra = state.entries.slice(1);
+    const questionsAnswered = STATISTICS.questionsAnswered + extra.reduce((sum, entry) => sum + entry.questions, 0);
+    const correctAnswers = STATISTICS.correctAnswers + extra.reduce((sum, entry) => sum + entry.correctAnswers, 0);
+    return later({
+      ...STATISTICS,
+      questionsAnswered,
+      correctAnswers,
+      score: Math.round((correctAnswers / questionsAnswered) * 1000) / 10,
+      studiedMinutes: STATISTICS.studiedMinutes + extra.reduce((sum, entry) => sum + entry.minutes, 0),
+      streakDays: countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)), localDate(new Date())),
+      dailyQuestions: questionsByDay(state.entries),
+    });
+  },
+
+  loadClassQuestionDistribution: (classId: Uuid, _year: number) => {
+    const members = state.students.filter((student) => student.classId === classId);
+    return later({
+      enrolledStudents: members.length,
+      studentsWithActivePlan: members.length,
+      studentsWithQuestions: members.filter((student) => student.questionsAnswered > 0).length,
+      minimumQuestions: MINIMUM_BOX_PLOT_QUESTIONS,
+      scores: members.filter((student) => student.questionsAnswered >= MINIMUM_BOX_PLOT_QUESTIONS)
+        .flatMap((student) => student.score === null ? [] : [student.score]),
+    });
+  },
+
+  loadStudentQuestionComparison: (_year: number) => later({
+    sampleSize: 8,
+    minimumQuestions: MINIMUM_BOX_PLOT_QUESTIONS,
+    studentQuestions: STATISTICS.questionsAnswered,
+    studentScore: STATISTICS.score,
+    percentile: 71.4,
+    distribution: {
+      min: 54,
+      q1: 63.5,
+      median: 69.8,
+      q3: 77.2,
+      max: 86,
+      lowerWhisker: 54,
+      upperWhisker: 86,
+    },
+  }),
+
+  loadStudentWeeklyQuestionComparison: (_year: number) => later(STATISTICS.scoreByWeek.map((week, index) => ({
+    weekNumber: index + 1,
+    sampleSize: 8,
+    minimumQuestions: 5,
+    studentQuestions: STATISTICS.questionsByWeek[index]?.value ?? 0,
+    studentScore: week.value,
+    percentile: [28.6, 57.1, 57.1, 71.4][index] ?? null,
+    distribution: {
+      min: [40, 48, 51, 54][index] ?? 0,
+      q1: [52, 58, 61, 63][index] ?? 0,
+      median: [64, 66, 68, 70][index] ?? 0,
+      q3: [74, 76, 78, 80][index] ?? 0,
+      max: [90, 89, 87, 88][index] ?? 0,
+      lowerWhisker: [40, 48, 51, 54][index] ?? 0,
+      upperWhisker: [90, 89, 87, 88][index] ?? 0,
+    },
+  }))),
+
+  loadStudentSubjectPeerComparison: (_year: number) => later(STATISTICS.bySubject.map((subject, index) => ({
+    subject: subject.subject,
+    studentScore: subject.correctAnswers / subject.questions * 100,
+    peerAverage: [76, 73, 71][index] ?? null,
+    sampleSize: 7,
+    minimumQuestions: 5,
+  }))),
+
+  loadStudyDays: (year: number) => later([...new Set(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)))]
+    .filter((date) => date.startsWith(`${year}-`)).sort()),
+
+  loadFlashcardReviews: (lessonId: Uuid) => later([...flashcardReviews.values()].filter((review) => review.lessonId === lessonId)),
+  loadFlashcardReviewsForLessons: (lessonIds: readonly Uuid[]) => {
+    const ids = new Set(lessonIds);
+    return later([...flashcardReviews.values()].filter((review) => ids.has(review.lessonId)));
+  },
+
+  gradeFlashcard: (input: GradeFlashcardInput) => later(once(input.requestId, () => {
+    const lesson = studentLessons().find((item) => item.id === input.lessonId && item.published);
+    if (!lesson || !(lesson.flashcardCards ?? []).some((card) => card.id === input.cardId)) {
+      return fail<FlashcardReview>("not_found", "Cartão não encontrado nesta aula.");
+    }
+    const key = `${input.lessonId}:${input.cardId}`;
+    const review = scheduleFlashcardReview(input.lessonId, input.cardId, input.grade, flashcardReviews.get(key));
+    flashcardReviews.set(key, review);
+    return done(review);
+  })),
+
+  loadLibraryFlashcardReviews: (deckIds: readonly string[]) => {
+    const ids = new Set(deckIds);
+    return later(normalizeLibraryReviews([...libraryFlashcardReviews.values()]).filter((review) => ids.has(review.deckId)));
+  },
+  gradeLibraryFlashcard: (input: GradeLibraryFlashcardInput) => later(once(input.requestId, () => {
+    if (!libraryDeck(input.deckId)?.cards.some((card) => card.id === input.cardId)) {
+      return fail<LibraryFlashcardReview>("not_found", "Cartão não encontrado neste deck.");
+    }
+    const key = `${input.deckId}:${input.cardId}`;
+    const previous = normalizeLibraryReviews([...libraryFlashcardReviews.values()]).find((review) => review.deckId === input.deckId && review.cardId === input.cardId);
+    const scheduled = scheduleFlashcardReview(input.deckId, input.cardId, input.grade, previous ? { ...previous, lessonId: previous.deckId } : undefined);
+    const review: LibraryFlashcardReview = { deckId: input.deckId, cardId: scheduled.cardId, dueAt: scheduled.dueAt, intervalMinutes: scheduled.intervalMinutes, reviewCount: scheduled.reviewCount, lastGrade: scheduled.lastGrade, state: scheduled.state, step: scheduled.step, stability: scheduled.stability, difficulty: scheduled.difficulty, lapses: scheduled.lapses, lastReviewedAt: scheduled.lastReviewedAt };
+    libraryFlashcardReviews.set(key, review);
+    return done(review);
+  })),
+
+  listPersonalFlashcardDecks: () => later(personalFlashcardDecks.map((deck) => ({ ...deck, cards: [...deck.cards] }))),
+  createPersonalFlashcardDeck: (input: CreatePersonalFlashcardDeckInput) => later(once(input.requestId, () => {
+    const subject = input.subject.trim();
+    const title = input.title.trim();
+    if (subject.length < 2) return fail<PersonalFlashcardDeck>("validation", "Informe a disciplina.", "subject");
+    if (title.length < 2) return fail<PersonalFlashcardDeck>("validation", "Informe o assunto do deck.", "title");
+    const deck: PersonalFlashcardDeck = { id: input.id, subject, title, cards: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    personalFlashcardDecks = [deck, ...personalFlashcardDecks];
+    return done(deck);
+  })),
+  createPersonalFlashcard: (input: CreatePersonalFlashcardInput) => later(once(input.requestId, () => {
+    const deck = personalFlashcardDecks.find((item) => item.id === input.deckId);
+    if (!deck) return fail<FlashcardCard>("not_found", "Deck pessoal não encontrado.");
+    const front = input.front.trim();
+    const back = input.back.trim();
+    if (!front) return fail<FlashcardCard>("validation", "Escreva a pergunta ou afirmação.", "front");
+    if (!back) return fail<FlashcardCard>("validation", "Escreva a resposta.", "back");
+    const card: FlashcardCard = { id: input.id, topic: input.topic.trim(), front, back };
+    personalFlashcardDecks = personalFlashcardDecks.map((item) => item.id === deck.id ? { ...item, cards: [...item.cards, card], updatedAt: new Date().toISOString() } : item);
+    return done(card);
+  })),
+  loadPersonalFlashcardReviews: (deckIds: readonly string[]) => {
+    const ids = new Set(deckIds);
+    return later([...personalFlashcardReviews.values()].filter((review) => ids.has(review.deckId)));
+  },
+  gradePersonalFlashcard: (input: GradePersonalFlashcardInput) => later(once(input.requestId, () => {
+    const deck = personalFlashcardDecks.find((item) => item.id === input.deckId);
+    if (!deck?.cards.some((card) => card.id === input.cardId)) return fail<PersonalFlashcardReview>("not_found", "Cartão não encontrado neste deck.");
+    const key = `${input.deckId}:${input.cardId}`;
+    const previous = personalFlashcardReviews.get(key);
+    const scheduled = scheduleFlashcardReview(input.deckId, input.cardId, input.grade, previous ? { ...previous, lessonId: input.deckId } : undefined);
+    const review: PersonalFlashcardReview = { deckId: input.deckId, cardId: scheduled.cardId, dueAt: scheduled.dueAt, intervalMinutes: scheduled.intervalMinutes, reviewCount: scheduled.reviewCount, lastGrade: scheduled.lastGrade, state: scheduled.state, step: scheduled.step, stability: scheduled.stability, difficulty: scheduled.difficulty, lapses: scheduled.lapses, lastReviewedAt: scheduled.lastReviewedAt };
+    personalFlashcardReviews.set(key, review);
+    return done(review);
+  })),
 
   loadWaitlistEntry: () => later(state.waitlist),
 
@@ -1118,6 +1398,8 @@ export const fixturesApi: BoraApi = {
       once(requestId, () =>
         done<StudyPlanSummary>({
           id: nextId("c"),
+          studentId: input.studentId,
+          classId: input.classId ?? null,
           name: input.name,
           area: input.area,
           targetExam: input.targetExam ?? null,
@@ -1184,24 +1466,88 @@ export const fixturesApi: BoraApi = {
     later<readonly TheoryCatalog[]>([
       {
         id: CATALOG_ID,
-        name: "Área Fiscal v108.5",
-        key: "area-fiscal-v108-5",
-        description: "Catálogo auditado da área fiscal.",
+        name: "PRF · Carreira Policial",
+        key: "prf-carreira-policial",
+        description: "Catálogo inicial de aulas para a PRF.",
         active: true,
         lessonCount: LESSONS.length,
         subjectCount: new Set(LESSONS.map((lesson) => lesson.subjectKey)).size,
       },
+      ...(pilotCatalogCreated ? [{
+        id: PMPR_CATALOG_ID,
+        name: PMPR_SOLDADO_2025.name,
+        key: PMPR_SOLDADO_2025.key,
+        description: PMPR_SOLDADO_2025.reference,
+        active: true,
+        lessonCount: pilotLessons.length,
+        subjectCount: PMPR_SOLDADO_2025.subjects.length,
+      }] : []),
     ]),
 
-  loadCatalogLessons: () => later(LESSONS),
+  ensurePmprPilotCatalog: (requestId: RequestId) =>
+    later(once(requestId, () => {
+      pilotCatalogCreated = true;
+      return done<Uuid>(PMPR_CATALOG_ID);
+    })),
 
-  loadSubjectRules: () =>
+  loadCatalogLessons: (catalogId: Uuid) =>
+    later(catalogId === PMPR_CATALOG_ID ? pilotLessons : LESSONS),
+
+  createDraftLesson: (catalogId: Uuid, subject: string, title: string, requestId: RequestId) =>
+    later(once(requestId, () => {
+      const cleanSubject = subject.trim();
+      const cleanTitle = title.trim();
+      if (cleanTitle.length < 3 || cleanTitle.length > 180 || !cleanSubject) {
+        return fail<TheoryLesson>("validation", "Informe a matéria e um título de 3 a 180 caracteres.");
+      }
+      if (catalogId === PMPR_CATALOG_ID && !pilotCatalogCreated) {
+        return fail<TheoryLesson>("not_found", "Catálogo não encontrado.");
+      }
+      if (catalogId !== PMPR_CATALOG_ID && catalogId !== CATALOG_ID) {
+        return fail<TheoryLesson>("not_found", "Catálogo não encontrado.");
+      }
+      if (catalogId === PMPR_CATALOG_ID && !PMPR_SOLDADO_2025.subjects.some((item) => item.name === cleanSubject)) {
+        return fail<TheoryLesson>("validation", "Escolha uma matéria do edital de Soldado PMPR.");
+      }
+      const list = catalogId === PMPR_CATALOG_ID ? pilotLessons : LESSONS;
+      const subjectKey = normalizeSubjectKey(cleanSubject);
+      const position = Math.max(0, ...list.filter((item) => item.subjectKey === subjectKey).map((item) => item.position)) + 1;
+      const lesson: TheoryLesson = {
+        id: requestId,
+        published: false,
+        subject: cleanSubject,
+        subjectKey,
+        lessonCode: `AULA-${requestId.slice(0, 8).toUpperCase()}`,
+        position,
+        title: cleanTitle,
+        pdfFile: `manual/${requestId}`,
+        resources: { ...EMPTY_LESSON_RESOURCES },
+        materialBlocks: [],
+        flashcardCards: [],
+        theoryStartPage: null,
+        theoryEndPage: null,
+        pdfTotalPages: null,
+        finalQuestionsStart: null,
+        hasTheory: false,
+        note: null,
+      };
+      if (catalogId === PMPR_CATALOG_ID) pilotLessons = [...pilotLessons, lesson];
+      else LESSONS = [...LESSONS, lesson];
+      return done(lesson);
+    })),
+
+  loadSubjectRules: (catalogId: Uuid) =>
     later<readonly TheorySubjectRule[]>(
-      [...new Set(LESSONS.map((lesson) => lesson.subjectKey))].map((subjectKey) => ({
-        subject: LESSONS.find((lesson) => lesson.subjectKey === subjectKey)!.subject,
+      (catalogId === PMPR_CATALOG_ID && pilotCatalogCreated
+        ? PMPR_SOLDADO_2025.subjects.map((subject) => ({ subjectKey: normalizeSubjectKey(subject.name), subject: subject.name }))
+        : [...new Set(LESSONS.map((lesson) => lesson.subjectKey))].map((subjectKey) => ({
+          subjectKey,
+          subject: LESSONS.find((lesson) => lesson.subjectKey === subjectKey)!.subject,
+        }))).map(({ subjectKey, subject }) => ({
+        subject,
         subjectKey,
         initialQuestions: INITIAL_QUESTIONS_REQUIRED,
-        reviews: [
+        reviews: catalogId === PMPR_CATALOG_ID ? [] : [
           { reviewNumber: 1, lessonSpacing: 4, minimumQuestions: 15, active: true },
           { reviewNumber: 2, lessonSpacing: 12, minimumQuestions: 15, active: true },
         ],
@@ -1228,6 +1574,14 @@ export const fixturesApi: BoraApi = {
   saveLesson: (lesson: TheoryLesson, requestId: RequestId) =>
     later(
       once(requestId, () => {
+        const invalidResource = validateLessonResources(lesson.resources);
+        if (invalidResource) {
+          return fail<TheoryLesson>("validation", invalidResource.message, invalidResource.field);
+        }
+        const invalidBlock = validateLessonMaterialBlocks(lesson.materialBlocks);
+        if (invalidBlock) return fail<TheoryLesson>("validation", invalidBlock, "materialBlocks");
+        const invalidCards = validateFlashcardCards(lesson.flashcardCards ?? []);
+        if (invalidCards) return fail<TheoryLesson>("validation", invalidCards, "flashcardCards");
         if (
           lesson.hasTheory &&
           lesson.theoryStartPage !== null &&
@@ -1240,6 +1594,8 @@ export const fixturesApi: BoraApi = {
             "theoryEndPage",
           );
         }
+        LESSONS = LESSONS.map((current) => current.id === lesson.id ? lesson : current);
+        pilotLessons = pilotLessons.map((current) => current.id === lesson.id ? lesson : current);
         return done(lesson);
       }),
     ),
@@ -1251,7 +1607,7 @@ export const fixturesApi: BoraApi = {
           lessonsCreated: 128,
           lessonsUpdated: 14,
           // As duas que a auditoria da v108.5 deixou de fora.
-          subjectsWithoutPages: ["Matemática Financeira", "Tecnologia da Informação"],
+          subjectsWithoutPages: ["Informática", "Tecnologia da Informação"],
         }),
       ),
     ),
@@ -1296,6 +1652,21 @@ export const fixturesApi: BoraApi = {
 
   listClasses: () => later(state.classes.map(withCount)),
 
+  setClassTheoryCatalog: (classId: Uuid, catalogId: Uuid | null) =>
+    later<Result<TeacherClass>>((() => {
+      const turma = state.classes.find((candidate) => candidate.id === classId);
+      if (!turma) return fail<TeacherClass>("not_found", "Turma não encontrada, ou não é sua.");
+      if (catalogId && catalogId !== PMPR_CATALOG_ID && catalogId !== CATALOG_ID) {
+        return fail<TeacherClass>("not_found", "Catálogo não encontrado.");
+      }
+      if (catalogId === PMPR_CATALOG_ID && !pilotCatalogCreated) {
+        return fail<TeacherClass>("not_found", "Catálogo não encontrado.");
+      }
+      const updated = { ...turma, theoryCatalogId: catalogId };
+      state.classes = state.classes.map((candidate) => candidate.id === classId ? updated : candidate);
+      return done(withCount(updated));
+    })()),
+
   createClass: (input: ClassInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
@@ -1306,6 +1677,7 @@ export const fixturesApi: BoraApi = {
           id: nextId("7"),
           name: input.name.trim(),
           description: input.description?.trim() || null,
+          theoryCatalogId: null,
           studentCount: 0,
         };
         state.classes = [...state.classes, created];
@@ -1407,6 +1779,12 @@ function studentsOfClass(classId: Uuid): readonly StudentCard[] {
   return state.students.filter((student) => student.classId === classId);
 }
 
+function studentLessons(): readonly TheoryLesson[] {
+  const student = state.students.find((candidate) => candidate.studentId === STUDENT_ID);
+  const turma = state.classes.find((candidate) => candidate.id === student?.classId);
+  return turma?.theoryCatalogId === PMPR_CATALOG_ID ? pilotLessons : LESSONS;
+}
+
 /** A contagem sai dos alunos, e não de um contador guardado ao lado. */
 function withCount(turma: TeacherClass): TeacherClass {
   return { ...turma, studentCount: studentsOfClass(turma.id).length };
@@ -1443,9 +1821,11 @@ function stripUndefined<T extends object>(input: T): Partial<T> {
 
 const PLAN: StudyPlanSummary = {
   id: PLAN_ID,
-  name: "Área Fiscal 2027",
-  area: "Fiscal",
-  targetExam: "Auditor Fiscal Estadual",
+  studentId: STUDENT_ID,
+  classId: CLASS_A_ID,
+  name: "Planejamento demonstrativo PRF 2027",
+  area: "Policial",
+  targetExam: "Policial Rodoviário Federal",
   stage: "Pré-edital",
   studyModel: "Avanço progressivo",
   weeklyGoals: 24,
@@ -1457,23 +1837,23 @@ const PLAN: StudyPlanSummary = {
 const SUBJECTS: readonly Subject[] = [
   {
     id: "66666666-6666-4666-8666-000000000001",
-    name: "Direito Tributário",
-    color: "#0A6E7F",
+    name: "Direito Constitucional",
+    color: "#146A4A",
     weight: 3,
     targetScore: 80,
     blocks: [
-      { id: nextId("d"), name: "DT · Bloco 1", position: 1, link: null },
-      { id: nextId("d"), name: "DT · Bloco 2", position: 2, link: null },
+      { id: nextId("d"), name: "DC · Bloco 1", position: 1, link: null },
+      { id: nextId("d"), name: "DC · Bloco 2", position: 2, link: null },
     ],
     lessons: [
-      { id: nextId("e"), name: "Competência tributária", position: 1, link: null },
-      { id: nextId("e"), name: "Limitações ao poder de tributar", position: 2, link: null },
+      { id: nextId("e"), name: "Direitos e garantias fundamentais", position: 1, link: null },
+      { id: nextId("e"), name: "Organização do Estado", position: 2, link: null },
     ],
   },
   {
     id: "66666666-6666-4666-8666-000000000002",
     name: "Português",
-    color: "#FFB700",
+    color: "#109C85",
     weight: 2,
     targetScore: 85,
     blocks: [{ id: nextId("d"), name: "PT · Bloco 1", position: 1, link: null }],
@@ -1484,8 +1864,8 @@ const SUBJECTS: readonly Subject[] = [
 const REINFORCEMENTS: readonly Reinforcement[] = [
   {
     id: "77777777-7777-4777-8777-000000000001",
-    subject: "Direito Tributário",
-    blockName: "DT · Bloco 1",
+    subject: "Direito Constitucional",
+    blockName: "DC · Bloco 1",
     sourceScore: 47,
     sourceErrors: 8,
     uniqueQuestions: 8,
@@ -1496,7 +1876,18 @@ const REINFORCEMENTS: readonly Reinforcement[] = [
 const STATISTICS: Statistics = {
   score: 72.4,
   questionsAnswered: 1840,
+  dailyQuestions: [],
   correctAnswers: 1332,
+  studyTime: [2100, 2640, 2400, 2280].flatMap((minutes, index) => [
+    { date: `2026-${String(index + 6).padStart(2, "0")}-15`, subject: "Direito Constitucional", minutes: minutes * .5 },
+    { date: `2026-${String(index + 6).padStart(2, "0")}-15`, subject: "Português", minutes: minutes * .3 },
+    { date: `2026-${String(index + 6).padStart(2, "0")}-15`, subject: "Informática", minutes: minutes * .2 },
+  ]),
+  byBlock: [
+    { subject: "Direito Constitucional", block: "Direitos e garantias fundamentais", questions: 720, correctAnswers: 504 },
+    { subject: "Português", block: "Ortografia e acentuação", questions: 640, correctAnswers: 512 },
+    { subject: "Informática", block: "Redes de computadores", questions: 480, correctAnswers: 316 },
+  ],
   studiedMinutes: 9_420,
   goalsCompleted: 96,
   streakDays: 11,
@@ -1529,7 +1920,7 @@ const STATISTICS: Statistics = {
   ],
   bySubject: [
     {
-      subject: "Direito Tributário",
+      subject: "Direito Constitucional",
       questions: 720,
       correctAnswers: 504,
       score: 70,
@@ -1537,7 +1928,7 @@ const STATISTICS: Statistics = {
     },
     { subject: "Português", questions: 640, correctAnswers: 512, score: 80, targetScore: 85 },
     {
-      subject: "Matemática Financeira",
+      subject: "Informática",
       questions: 480,
       correctAnswers: 316,
       score: 65.8,
@@ -1562,8 +1953,8 @@ function seedStudents(): StudentCard[] {
     access: "active",
     accessExpiresAt: addDays(TODAY, 120),
     classId: CLASS_A_ID,
-    className: "Fiscal 2027 · Turma A",
-    planName: "Área Fiscal 2027",
+    className: "PRF 2027 · Turma A",
+    planName: "Preparatório PRF 2027",
     pace: "on_track",
     progress: 82,
     score: 72.4,
@@ -1578,8 +1969,8 @@ function seedStudents(): StudentCard[] {
     access: "active",
     accessExpiresAt: addDays(TODAY, 30),
     classId: CLASS_A_ID,
-    className: "Fiscal 2027 · Turma A",
-    planName: "Área Fiscal 2027",
+    className: "PRF 2027 · Turma A",
+    planName: "Preparatório PRF 2027",
     pace: "attention",
     progress: 58,
     score: 61.2,
@@ -1610,13 +2001,14 @@ function seedClasses(): TeacherClass[] {
   return [
     {
       id: CLASS_A_ID,
-      name: "Fiscal 2027 · Turma A",
+      name: "PRF 2027 · Turma A",
       description: "Segunda e quarta, 19h",
+      theoryCatalogId: null,
       studentCount: 2,
     },
     // VAZIA DE PROPÓSITO: é a turma que a tela consegue apagar, e sem ela o
     // caminho de "apagar" nasceria sem cenário.
-    { id: CLASS_B_ID, name: "Fiscal 2027 · Turma B", description: null, studentCount: 0 },
+    { id: CLASS_B_ID, name: "PRF 2027 · Turma B", description: null, theoryCatalogId: null, studentCount: 0 },
   ];
 }
 
@@ -1658,8 +2050,8 @@ function seedEmails(): Map<string, Uuid> {
 const SESSIONS: readonly QuizSessionSummary[] = [
   {
     id: "88888888-8888-4888-8888-000000000001",
-    subject: "Direito Tributário",
-    blockName: "DT · Bloco 1",
+    subject: "Direito Constitucional",
+    blockName: "DC · Bloco 1",
     status: "completed",
     mainTotal: 15,
     mainCorrect: 7,
@@ -1684,14 +2076,14 @@ const SESSIONS: readonly QuizSessionSummary[] = [
 
 const TOPICS: readonly TopicDifficulty[] = [
   {
-    subject: "Direito Tributário",
+    subject: "Direito Constitucional",
     topic: "Imunidades",
     questions: 42,
     errors: 23,
     score: 45.2,
   },
   {
-    subject: "Direito Tributário",
+    subject: "Direito Constitucional",
     topic: "Competência residual",
     questions: 31,
     errors: 14,
@@ -1703,12 +2095,12 @@ const TOPICS: readonly TopicDifficulty[] = [
 const NOTEBOOKS: readonly Notebook[] = [
   {
     blockId: "99999999-9999-4999-8999-000000000001",
-    subjectKey: "direito-tributario",
-    subjectName: "Direito Tributário",
-    subjectColor: "#0A6E7F",
+    subjectKey: "direito-constitucional",
+    subjectName: "Direito Constitucional",
+    subjectColor: "#146A4A",
     subjectTarget: 80,
     notebookKey: "dt-bloco-1",
-    notebookName: "DT · Bloco 1",
+    notebookName: "DC · Bloco 1",
     notebookLink: "https://www.tecconcursos.com.br/s/Q1",
     totalQuestions: 120,
     subjectPosition: 1,
@@ -1720,7 +2112,7 @@ const NOTEBOOKS: readonly Notebook[] = [
     blockId: "99999999-9999-4999-8999-000000000002",
     subjectKey: "portugues",
     subjectName: "Português",
-    subjectColor: "#FFB700",
+    subjectColor: "#109C85",
     subjectTarget: 85,
     notebookKey: "pt-bloco-1",
     notebookName: "PT · Bloco 1",

@@ -15,7 +15,20 @@ export const STUDENT_STUDY_ROUTES = [
   "/aluno/cadernos",
   "/aluno/estatisticas",
   "/aluno/revisoes",
+  "/aluno/flashcards",
+  "/aluno/flashcards/estatisticas",
+  "/aluno/simulados",
 ] as const;
+
+/**
+ * A semana do aluno com os sete dias abertos.
+ *
+ * `/aluno` sozinho mostra só o dia de HOJE (ou o primeiro da semana, quando
+ * hoje cai fora dela). As metas do cenário se espalham pela semana inteira:
+ * sem `dia=todos`, a linha procurada pode estar num dia que a tela escondeu, e
+ * o teste falha acusando "linha não encontrada".
+ */
+export const STUDENT_WEEK_ALL_DAYS = "/aluno?dia=todos";
 
 /** Alcançáveis pelo aluno mesmo sem acesso liberado. */
 export const STUDENT_FREE_ROUTES = ["/aluno/conta", "/aluno/lista-espera"] as const;
@@ -31,6 +44,7 @@ export const TEACHER_ROUTES = [
   "/professor/cadernos",
   "/professor/revisoes",
   "/professor/estatisticas",
+  "/professor/simulados",
   "/professor/conta",
 ] as const;
 
@@ -38,13 +52,16 @@ export const PROTECTED_ROUTES = [...STUDENT_ROUTES, ...TEACHER_ROUTES] as const;
 
 /** Título esperado no `<h1>` de cada tela. */
 export const PAGE_TITLES: Record<string, string> = {
-  "/aluno": "Metas da semana",
-  "/aluno/planejamento": "Planejamento",
-  "/aluno/teoria": "Estudo da teoria",
+  "/aluno": "Minha semana",
+  "/aluno/planejamento": "Meu curso",
+  "/aluno/teoria": "Aulas",
   "/aluno/disciplinas": "Disciplinas",
   "/aluno/cadernos": "Cadernos TEC",
   "/aluno/estatisticas": "Estatísticas",
   "/aluno/revisoes": "Controle de revisões",
+  "/aluno/flashcards": "Flashcards",
+  "/aluno/flashcards/estatisticas": "Estatísticas dos flashcards",
+  "/aluno/simulados": "Simulados",
   "/aluno/conta": "Meus dados",
   "/aluno/lista-espera": "Lista de espera",
   "/professor": "Meus alunos",
@@ -55,6 +72,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/professor/cadernos": "Cadernos TEC",
   "/professor/revisoes": "Revisões",
   "/professor/estatisticas": "Estatísticas",
+  "/professor/simulados": "Simulados presenciais",
   "/professor/conta": "Meus dados",
 };
 

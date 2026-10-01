@@ -18,7 +18,7 @@
 import { expect, test } from "../fixtures/index.ts";
 import { query } from "../fixtures/db.ts";
 import { addTheoryCatalog, createScenario } from "../fixtures/scenario.ts";
-import { STUDENT_STUDY_ROUTES, studentPageOf } from "../support/routes.ts";
+import { STUDENT_STUDY_ROUTES, STUDENT_WEEK_ALL_DAYS, studentPageOf } from "../support/routes.ts";
 import { alert, content, testId } from "../support/ui.ts";
 
 /** Dá ao aluno do cenário um registro de estudo reconhecível. */
@@ -35,6 +35,10 @@ async function study(
 
 test.describe("F-ISO-01 · leitura", () => {
   test("o aluno 2 não vê nada do aluno 1", async ({ page, signIn, scenario }) => {
+    // Percorre TODAS as telas de estudo, e `/aluno/flashcards` traz a
+    // biblioteca editorial inteira: com a suíte em paralelo, os 45 s do
+    // orçamento padrão não cobrem a volta completa.
+    test.slow();
     await study(scenario, 85);
     const outro = await createScenario({ withPlan: false });
 
@@ -61,7 +65,7 @@ test.describe("F-ISO-01 · leitura", () => {
     const outro = await createScenario();
 
     await signIn(outro.student);
-    await page.goto("/aluno");
+    await page.goto(STUDENT_WEEK_ALL_DAYS);
 
     await expect(content(page)).toContainText(outro.planName);
     await expect(page.locator("body")).not.toContainText(scenario.planName);
@@ -136,7 +140,7 @@ test.describe("F-ISO-02 · a query string não é uma porta", () => {
     const outro = await createScenario();
 
     await signIn(outro.student);
-    await page.goto("/aluno?semana=1");
+    await page.goto(`${STUDENT_WEEK_ALL_DAYS}&semana=1`);
 
     await expect(page.locator("body")).not.toContainText(scenario.goals[0]!.title);
   });

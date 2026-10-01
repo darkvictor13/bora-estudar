@@ -132,7 +132,7 @@ test("passo 5 · a teoria acaba na última página, e não antes", () => {
  * Passo 6 e 7 — questões iniciais e liberação da próxima aula
  * ------------------------------------------------------------------ */
 
-test("passo 6/7 · a aula só fecha com teoria lida E o mínimo de questões", () => {
+test("a meta de prática depende apenas das questões", () => {
   const aula = lesson({ id: "l1" });
 
   // Teoria lida, questões faltando: não fecha.
@@ -140,11 +140,10 @@ test("passo 6/7 · a aula só fecha com teoria lida E o mínimo de questões", (
     isLessonComplete(aula, progress({ lessonId: "l1", theoryDone: true, initialQuestionsDone: 14 }), 15),
     false,
   );
-  // Questões feitas, teoria faltando: também não fecha. É a metade que se
-  // perde ao reescrever — encerrar a sessão não conclui a aula.
+  // A leitura é apoio e não altera o resultado da prática.
   assert.equal(
     isLessonComplete(aula, progress({ lessonId: "l1", theoryDone: false, initialQuestionsDone: 20 }), 15),
-    false,
+    true,
   );
   // As duas coisas: fecha.
   assert.equal(
@@ -162,7 +161,7 @@ test("passo 6/7 · a aula só fecha com teoria lida E o mínimo de questões", (
   );
 });
 
-test("passo 7 · a aula atual é a primeira não concluída", () => {
+test("a aula atual é a última disponibilizada pelo professor", () => {
   const aulas = [
     lesson({ id: "a0", position: 1, lessonCode: "A00" }),
     lesson({ id: "a1", position: 2, lessonCode: "A01" }),
@@ -170,11 +169,11 @@ test("passo 7 · a aula atual é a primeira não concluída", () => {
   ];
 
   const nenhuma = currentLesson(aulas, new Map());
-  assert.equal(nenhuma?.lesson.id, "a0");
+  assert.equal(nenhuma?.lesson.id, "a2");
   assert.equal(nenhuma?.courseFinished, false);
 
   const primeiraFeita = new Map([["a0", progress({ lessonId: "a0", lessonDone: true })]]);
-  assert.equal(currentLesson(aulas, primeiraFeita)?.lesson.id, "a1");
+  assert.equal(currentLesson(aulas, primeiraFeita)?.lesson.id, "a2");
 
   // Todas concluídas: devolve a ÚLTIMA com `courseFinished`, e não `null` —
   // "sem aula" é o oposto do que aconteceu com quem terminou a disciplina.
@@ -192,7 +191,7 @@ test("a ordem das aulas é a do catálogo, não a da consulta", () => {
     lesson({ id: "a0", position: 1, lessonCode: "A00" }),
     lesson({ id: "a1", position: 2, lessonCode: "A01" }),
   ];
-  assert.equal(currentLesson(aulas, new Map())?.lesson.id, "a0");
+  assert.equal(currentLesson(aulas, new Map())?.lesson.id, "a2");
 });
 
 /* ------------------------------------------------------------------ *
@@ -242,6 +241,22 @@ test("passo 8 · duas regras na mesma aula viram duas revisões", () => {
   );
 });
 
+test("em dia com as aulas PUBLICADAS não é disciplina encerrada", () => {
+  // O aluno só enxerga o que o professor publicou. Concluir as duas no ar
+  // vence a revisão da primeira pelo espaçamento, e só ela: a da segunda
+  // espera a próxima aula, que ainda não foi publicada.
+  const aulas = [0, 1].map((i) => lesson({ id: `a${i}`, position: i + 1, lessonCode: `A0${i}` }));
+  const feitas = new Map(
+    ["a0", "a1"].map((id) => [id, progress({ lessonId: id, lessonDone: true })]),
+  );
+
+  const parcial = dueReviews(aulas, feitas, [rule({ lessonSpacing: 1 })], false);
+  assert.deepEqual(parcial.map((d) => d.lesson.id), ["a0"]);
+
+  // A mesma lista dada como a disciplina inteira vence as duas.
+  assert.equal(dueReviews(aulas, feitas, [rule({ lessonSpacing: 1 })]).length, 2);
+});
+
 test("aula não concluída não gera revisão, mesmo com a disciplina avançada", () => {
   const aulas = [0, 1, 2, 3, 4].map((i) =>
     lesson({ id: `a${i}`, position: i + 1, lessonCode: `A0${i}` }),
@@ -272,15 +287,14 @@ test("sem regra configurada não nasce revisão nenhuma", () => {
  * Diagnóstico
  * ------------------------------------------------------------------ */
 
-test("disciplina sem página auditada recebe DIAGNÓSTICO, não página inventada", () => {
+test("disciplina sem página auditada permite acessar a aula sem inventar página", () => {
   const semTeoria = [
     lesson({ id: "m1", hasTheory: false, theoryStartPage: null, theoryEndPage: null }),
     lesson({ id: "m2", hasTheory: false, theoryStartPage: null, theoryEndPage: null }),
   ];
 
   assert.deepEqual(diagnose("Matemática Financeira", semTeoria, semTeoria[0]!, true, "Aula 1"), {
-    kind: "subject_not_audited",
-    subject: "Matemática Financeira",
+    kind: "ok",
   });
 
   // A falta é descoberta pelo DADO. No dia em que a auditoria cobrir a
@@ -304,7 +318,6 @@ test("os outros dois diagnósticos", () => {
 
   const semPagina = [lesson({ id: "a0", theoryEndPage: null }), lesson({ id: "a1" })];
   assert.deepEqual(diagnose("Português", semPagina, semPagina[0]!, true, "Aula 00"), {
-    kind: "lesson_without_pages",
-    lesson: "Aula 00",
+    kind: "ok",
   });
 });

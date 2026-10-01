@@ -91,8 +91,11 @@ export function TeacherStudent() {
       return;
     }
     setClassError(null);
-    setClassMessage(chosenClass ? "Turma salva." : "Aluno tirado da turma.");
+    // O aviso vem DEPOIS da revalidação: antes dela `card.classId` ainda é o
+    // antigo, e uma segunda escolha feita ao ver "Turma salva." matricularia
+    // de novo em vez de mover — e bateria no índice de uma turma por aluno.
     await revalidate();
+    setClassMessage(chosenClass ? "Turma salva." : "Aluno tirado da turma.");
   }
 
   return (

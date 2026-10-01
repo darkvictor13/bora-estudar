@@ -1,5 +1,6 @@
 # Dependências
 node_modules/
+.pnpm-store/
 .pnp
 .pnp.*
 
@@ -8,6 +9,8 @@ out/
 build/
 dist/
 *.tsbuildinfo
+/output/
+/tmp/
 
 # Ambiente — nunca versionar credenciais
 .env
