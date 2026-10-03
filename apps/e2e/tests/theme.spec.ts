@@ -2,7 +2,8 @@
  * §8 do `docs/fluxos-e2e.md` — tema claro e escuro.
  *
  * Implementa F-TEMA-01 a F-TEMA-08, os critérios CA-01 a CA-08 da spec
- * `docs/specs/11-tema-claro-escuro.md`.
+ * `docs/specs/11-tema-claro-escuro.md`, e F-TEMA-09, que existe por causa de
+ * um defeito: falha de rede ao verificar a sessão apagava o tema.
  *
  * ## O TEMA PERDEU A CONTA NO SCHEMA DE 14/09/2026
  *
@@ -353,6 +354,61 @@ test.describe("F-TEMA-08 · sem escolha", () => {
 
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
     await expect(toggle(studentPage)).toHaveAccessibleName("Tema escuro");
+    expect(await storedTheme(studentPage, scenario.student.id)).toBeNull();
+  });
+});
+
+test.describe("F-TEMA-09 · a sessão que não pôde ser verificada", () => {
+  test("uma falha de rede ao verificar não apaga a escolha nem desloga", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator("h1")).toBeVisible();
+    await toggle(studentPage).click();
+    await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
+
+    // Era o "Lançar tempo": um link que recarrega a página, e UMA requisição de
+    // verificação perdida na recarga. A falha virava "sessão expirada", o tema
+    // era apagado, e a pessoa voltava logada — mas no claro.
+    let failures = 1;
+    await studentPage.route(/\/auth\/v1\/user/, (route) =>
+      failures-- > 0 ? route.abort("internetdisconnected") : route.continue(),
+    );
+
+    await studentPage.reload();
+    await expect(studentPage.getByText("Sem conexão")).toBeVisible();
+    await expect(studentPage).toHaveURL(/\/aluno/);
+    await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
+    expect(await storedTheme(studentPage, scenario.student.id)).toBe("dark");
+
+    await studentPage.reload();
+    await expect(studentPage.locator("h1")).toBeVisible();
+    await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
+  });
+
+  test("a sessão que o servidor RECUSA continua deslogando e apagando", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno");
+    await expect(studentPage.locator("h1")).toBeVisible();
+    await toggle(studentPage).click();
+    await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
+
+    // O outro lado da correção: token inválido é deslogado de fato, e aí o tema
+    // some como manda R-TEMA-13 e R-TEMA-14.
+    await studentPage.route(/\/auth\/v1\/user/, (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ code: 401, error_code: "bad_jwt", msg: "invalid JWT" }),
+      }),
+    );
+
+    await studentPage.reload();
+    await expect(studentPage).toHaveURL(/\/entrar/);
+    await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
     expect(await storedTheme(studentPage, scenario.student.id)).toBeNull();
   });
 });

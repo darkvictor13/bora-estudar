@@ -298,6 +298,7 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 | F-TEMA-06 | os dois papéis |
 | F-TEMA-07 | contraste AA nos dois temas, medido em cada tela |
 | F-TEMA-08 | sem escolha, abre claro mesmo com o sistema no escuro |
+| F-TEMA-09 | falha de rede ao verificar a sessão não apaga o tema nem desloga; sessão recusada pelo servidor, sim |
 
 ### Relato de erro — `tests/observability.spec.ts`
 

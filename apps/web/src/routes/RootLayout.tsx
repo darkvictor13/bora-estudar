@@ -1,8 +1,10 @@
 import { theme } from "@bora/ui";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Outlet, useMatches } from "react-router";
+
+import { RouteError } from "@/routes/RouteError";
 
 const DEFAULT_TITLE = "Fronteira Concursos";
 
@@ -56,9 +58,35 @@ export function RootLayout() {
   }, [matches]);
 
   return (
+    <ThemeShell>
+      <Outlet />
+    </ThemeShell>
+  );
+}
+
+function ThemeShell({ children }: { children: ReactNode }) {
+  return (
     <ThemeProvider theme={theme} colorSchemeNode={null} storageManager={null} storageWindow={null}>
       <CssBaseline />
-      <Outlet />
+      {children}
     </ThemeProvider>
+  );
+}
+
+/**
+ * O `ErrorBoundary` da raiz, COM o tema em volta.
+ *
+ * O boundary substitui o elemento da rota que o declara — e na raiz esse
+ * elemento é o `RootLayout`, que é quem fornece o tema. Sem embrulhar de novo,
+ * o erro de um loader de layout (a sessão que não pôde ser verificada, a
+ * leitura de `profiles` que falhou) chegava a `RouteError` sem
+ * `theme.vars`, a própria tela de erro quebrava, e a pessoa via uma página em
+ * branco.
+ */
+export function RootError() {
+  return (
+    <ThemeShell>
+      <RouteError />
+    </ThemeShell>
   );
 }
