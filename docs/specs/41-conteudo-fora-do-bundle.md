@@ -1,6 +1,6 @@
 # 41 — Conteúdo fora do bundle
 
-**Situação:** não implementada · **Fluxos e2e:** nenhum novo; F-FLASH-03 a F-FLASH-05 e F-LEI-01 a F-LEI-03 como regressão
+**Situação:** implementada em 03/10/2026 · **Fluxos e2e:** nenhum novo; F-FLASH-03 a F-FLASH-05 e F-LEI-01 a F-LEI-03 como regressão
 
 Fecha o que as specs [38](38-biblioteca-de-flashcards-no-banco.md),
 [39](39-biblioteca-de-flashcards-lida-do-banco.md) e
@@ -84,7 +84,7 @@ Varrer depois de publicar só diz que o conteúdo já saiu.
 | Conteúdo | `apps/web/src/data/**` → `content/flashcards/*.json` e `content/laws/library/**` (R-PUB-02), conteúdo intacto |
 | Geradores | `scripts/build-pf-flashcards.mjs`, `scripts/import-police-flashcards.mjs`, `scripts/build-law-library.mjs`, `scripts/build-law-exam-maps.mjs`: caminho de saída |
 | Carga | `scripts/load-library-flashcards.mjs`, `scripts/load-law-library.mjs`: caminho de entrada |
-| Testes de script | `scripts/law-library.test.mjs`, `scripts/police-flashcards.test.mjs`: caminho; `scripts/check-dist-content.test.mjs` (novo) |
+| Testes de script | `scripts/law-library.test.mjs`, `scripts/police-flashcards.test.mjs`: caminho; `scripts/check-dist-content.test.mjs` (novo). Os três rodam no `npm run check`, por `test:scripts` em `package.json`. *(Achado na implementação: os dois primeiros não rodavam em lugar nenhum.)* |
 | Varredura | `scripts/check-dist-content.mjs` (novo) |
 | CI | `.github/workflows/ci.yml`, `deploy-staging.yml`, `deploy-producao.yml`: um passo cada (R-PUB-08) |
 | Fixtures | `apps/web/src/lib/api/fixtures-library.ts` e `fixtures-laws.ts` leem a amostra; amostra nova em `apps/web/src/lib/api/fixtures-content.ts` |
@@ -101,12 +101,18 @@ Nenhuma rota, componente, RPC ou migration.
 |---|---|---|
 | CA-01 | O `dist` compilado não contém nenhuma linha de cartão ou de artigo com 40 caracteres ou mais, nem crua nem escapada. | `scripts/check-dist-content.mjs` no `ci.yml` e nos dois deploys |
 | CA-02 | A varredura reprova um `dist` com um trecho real (cru, e escapado com aspas e quebra de linha), nomeando arquivo e trecho. Aprova um `dist` limpo e um que contenha só a amostra. | `scripts/check-dist-content.test.mjs` |
-| CA-03 | `apps/web/src/data/` não existe, e nenhum arquivo de `apps/web/src` referencia `content/` ou um JSON de conteúdo, por import estático, dinâmico ou `new URL`. | `apps/web/src/lib/content-boundary.test.ts` |
+| CA-03 | `apps/web/src/data/` não existe, nenhum arquivo de `apps/web/src` referencia `content/` ou um JSON de conteúdo (por import estático, dinâmico ou `new URL`), e `apps/web/public/` não tem JSON. | `apps/web/src/lib/content-boundary.test.ts` |
 | CA-04 | Os JSON chegam a `content/` como renomeação pura. A biblioteca de cartões regenerada a partir dos Markdown é idêntica à versionada. O lote de leis lido de `content/` tem 15 leis e 768 artigos íntegros. | `git diff --find-renames=100%` do commit sem alteração de conteúdo; `scripts/police-flashcards.test.mjs`; `scripts/law-library.test.mjs` |
 | CA-05 | A carga lida de `content/` produz o mesmo banco: 5.108 cartões, 14 matérias, 101 decks, 46 normas, 15 leis, 768 artigos e três editais com 69 itens. Uma segunda carga não escreve nada. | `supabase/tests/17_library_content.sql` (01), `18_laws.sql` (01, 02), `scripts/load-library-flashcards.test.mjs` (CA-03), `scripts/load-law-library.test.mjs` (CA-02) |
 | CA-06 | A `fixtures` cumpre o contrato com a amostra: o catálogo vem sem texto e o deck com texto; os quatro avisos aparecem; o alias resolve; o deck histórico aparece marcado; a lei abre por artigo; o edital marca como disponível só a norma que tem texto; as marcações gravam e apagam. | `apps/web/src/lib/api/fixtures.test.ts` |
 | CA-07 | O filtro e a cobertura do mapa de edital funcionam sobre a amostra. | `apps/web/src/lib/domain/law-exam-maps.test.ts` |
 | CA-08 | Contra o banco, as telas de flashcards e de leis continuam iguais. | F-FLASH-03, F-FLASH-04, F-FLASH-05, F-LEI-01, F-LEI-02, F-LEI-03 (regressão) |
+
+Medido na implementação: o `dist` passou de 30 arquivos em `assets/` (3,7 MB)
+para 12 (1,6 MB). A varredura achou 9.025 trechos no `dist` de 01/10/2026: 6.352
+no chunk dos cartões e o resto nos 15 chunks de lei. O chunk dos mapas de edital
+ela não pega, porque títulos e recortes ficam abaixo de 40 caracteres. Quem
+segura os mapas e o índice é o CA-03.
 
 Nenhum fluxo e2e novo. O que esta spec garante é a **ausência** de um arquivo
 no `dist`, e um navegador não enxerga chunk que ninguém carrega: o da `fixtures`

@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { flashcardEditorialNote, libraryReviewDeckIds, libraryReviewSources, normalizeLibraryReviews } from "./library-flashcards.ts";
 import { scheduleFlashcardReview } from "./flashcards.ts";
@@ -41,21 +38,4 @@ test("exibe ressalvas fornecidas pelo arquivo sem declarar auditoria própria", 
   assert.match(flashcardEditorialNote("revoked")!, /histórico/);
   assert.match(flashcardEditorialNote("pending_check")!, /pendente/);
   assert.equal(flashcardEditorialNote(null), null);
-});
-
-// Spec 39, CA-10: o arquivo da biblioteca só entra por import dinâmico, no
-// chunk da `fixtures`. Um import estático o devolveria ao bundle principal.
-test("nenhum módulo do site importa estaticamente o JSON da biblioteca", () => {
-  const src = fileURLToPath(new URL("../../", import.meta.url));
-  const files: string[] = [];
-  const walk = (dir: string) => {
-    for (const name of readdirSync(dir)) {
-      const path = join(dir, name);
-      if (statSync(path).isDirectory()) walk(path);
-      else if (/\.(ts|tsx)$/.test(name) && !name.endsWith(".test.ts")) files.push(path);
-    }
-  };
-  walk(src);
-  const offenders = files.filter((file) => /^\s*import[^(]*pf2029-[a-z]+-flashcards\.json/m.test(readFileSync(file, "utf8")));
-  assert.deepEqual(offenders, []);
 });

@@ -33,10 +33,10 @@ const VERIFICATION = { pendente_fonte_oficial_individual: "pending_official_sour
 const slug = (text) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export function readLawLibrary({
-  index = data("apps/web/src/data/laws/index.json"),
-  maps = data("apps/web/src/data/laws/exam-maps.json"),
+  index = data("content/laws/library/index.json"),
+  maps = data("content/laws/library/exam-maps.json"),
   master = data("content/laws/vade-mecum-base-v1/04_LISTA_MESTRA_INICIAL.json"),
-  text = (id) => data(`apps/web/src/data/laws/text/${id}.json`),
+  text = (id) => data(`content/laws/library/text/${id}.json`),
 } = {}) {
   const subjects = [];
   for (const law of index) {

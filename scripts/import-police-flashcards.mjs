@@ -111,7 +111,7 @@ export function parseFlashcardSource(body) {
 }
 
 export function buildCatalog() {
-  const legacy = JSON.parse(readFileSync(new URL("apps/web/src/data/pf2029-informatica-flashcards.json", root), "utf8"));
+  const legacy = JSON.parse(readFileSync(new URL("content/flashcards/pf2029-informatica-flashcards.json", root), "utf8"));
   const files = readdirSync(sources).filter((name) => name.endsWith(".md")).sort();
   const claimedLegacyIds = new Set();
   const report = { totalCards: 0, subjects: [], legacy: { preserved: 0, aliases: 0, unmapped: [] } };
@@ -178,7 +178,7 @@ export function buildCatalog() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { catalog, report } = buildCatalog();
-  writeFileSync(new URL("apps/web/src/data/pf2029-policial-flashcards.json", root), `${JSON.stringify(catalog, null, 2)}\n`);
+  writeFileSync(new URL("content/flashcards/pf2029-policial-flashcards.json", root), `${JSON.stringify(catalog, null, 2)}\n`);
   writeFileSync(new URL("content/flashcards/pf2029-v2/import-report.json", root), `${JSON.stringify(report, null, 2)}\n`);
   console.log(`${catalog.subjects.length} matérias, ${catalog.totalCards} cartões. IDs antigos preservados: ${report.legacy.preserved}; aliases: ${report.legacy.aliases}; não mapeados: ${report.legacy.unmapped.length}.`);
 }

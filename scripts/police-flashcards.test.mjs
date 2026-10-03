@@ -12,11 +12,11 @@ test("importa exatamente os 5108 cartões, separados em 14 matérias e 101 tópi
   assert.equal(decks.length, 101);
   assert.equal(new Set(decks.map((d) => d.id)).size, decks.length);
   assert.ok(decks.every((d) => d.cards.length && !/^Complement/i.test(d.title)));
-  assert.deepEqual(catalog, JSON.parse(readFileSync(new URL("../apps/web/src/data/pf2029-policial-flashcards.json", import.meta.url), "utf8")));
+  assert.deepEqual(catalog, JSON.parse(readFileSync(new URL("../content/flashcards/pf2029-policial-flashcards.json", import.meta.url), "utf8")));
 });
 
 test("todo cartão antigo continua endereçável sem descartar revisões", () => {
-  const old = JSON.parse(readFileSync(new URL("../apps/web/src/data/pf2029-informatica-flashcards.json", import.meta.url), "utf8"));
+  const old = JSON.parse(readFileSync(new URL("../content/flashcards/pf2029-informatica-flashcards.json", import.meta.url), "utf8"));
   const references = new Set(catalog.subjects[0].decks.flatMap((deck) => deck.cards.flatMap((card) => [`${deck.id}:${card.id}`, ...card.previousReviews.map((ref) => `${ref.deckId}:${ref.cardId}`)])));
   for (const deck of old.decks) for (const card of deck.cards) assert.ok(references.has(`${deck.id}:${card.id}`), card.front);
   assert.equal(report.legacy.preserved, 1120);
