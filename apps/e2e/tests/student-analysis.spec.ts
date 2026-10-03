@@ -214,6 +214,16 @@ test.describe("F-CONTA-01 · meus dados", () => {
     await expect(field(studentPage, "email")).toBeDisabled();
   });
 
+  test("mostra o nome do professor de quem tem um", async ({ studentPage, scenario }) => {
+    // `profiles_select` não deixa o aluno ler a linha do professor. A consulta
+    // direta voltava vazia EM SILÊNCIO, e a tela dizia "Ainda sem professor" a
+    // quem tinha um. O nome vem de `my_teacher()`.
+    await studentPage.goto("/aluno/conta");
+
+    await expect(content(studentPage)).toContainText(scenario.teacher.name);
+    await expect(content(studentPage)).not.toContainText("Ainda sem professor");
+  });
+
   test("nome curto é recusado, com o campo marcado", async ({ studentPage }) => {
     await studentPage.goto("/aluno/conta");
 
