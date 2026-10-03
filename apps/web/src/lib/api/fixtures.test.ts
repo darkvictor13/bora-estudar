@@ -25,12 +25,12 @@ test("calendário de constância usa os dias com registro de estudo", async () =
 let counter = 0;
 const requestId = () => `req-${(counter += 1)}`;
 
-test("Informática V2 mantém nove decks e salva revisões por deck", async () => {
+// Spec 41, R-PUB-05: a biblioteca da `fixtures` é a amostra sintética. Os
+// números do conteúdo real são afirmados pela carga (17_library_content.sql).
+test("a amostra tem duas matérias, e cada deck salva revisões só para os próprios cartões", async () => {
   const catalog = await api.loadLibraryFlashcardCatalog();
-  const informatica = catalog.subjects.find((subject) => subject.id === "informatica")!;
-  assert.equal(informatica.decks.length, 9);
-  assert.equal(informatica.decks.reduce((sum, deck) => sum + deck.cardIds.length, 0), 1175);
-  const [first, second] = informatica.decks;
+  assert.deepEqual(catalog.subjects.map((subject) => subject.id), ["amostra-redes", "amostra-direito"]);
+  const [first, second] = catalog.subjects[0]!.decks;
   assert.ok(first && second);
   const firstCard = first.cardIds[0];
   assert.ok(firstCard);
@@ -43,9 +43,8 @@ test("Informática V2 mantém nove decks e salva revisões por deck", async () =
   assert.equal((await api.loadLibraryFlashcardReviews([second.id])).length, 0);
 });
 
-test("cada uma das 14 matérias aceita avaliação sem misturar o histórico", async () => {
+test("cada matéria aceita avaliação sem misturar o histórico", async () => {
   const catalog = await api.loadLibraryFlashcardCatalog();
-  assert.equal(catalog.subjects.length, 14);
   for (const subject of catalog.subjects) {
     const deck = subject.decks[0]!;
     const card = { id: deck.cardIds[0]! };
@@ -61,24 +60,27 @@ test("cada uma das 14 matérias aceita avaliação sem misturar o histórico", a
 // Spec 39, CA-06: o catálogo chega sem texto, e o texto chega por deck.
 test("o catálogo traz ids e tópicos; o deck traz o texto, com o aviso editorial", async () => {
   const catalog = await api.loadLibraryFlashcardCatalog();
-  const summary = catalog.subjects.flatMap((subject) => subject.decks).find((deck) => deck.id === "pf2029-informatica-01")!;
+  const decks = catalog.subjects.flatMap((subject) => subject.decks);
+  const summary = decks.find((deck) => deck.id === "amostra-redes-01")!;
   assert.ok(summary.cardIds.length > 0 && summary.topics.length > 0);
   assert.equal("cards" in summary, false);
   const deck = await api.loadLibraryFlashcardDeck(summary.id);
   assert.ok(deck);
   assert.deepEqual(deck.cards.map((card) => card.id), summary.cardIds);
-  assert.equal(deck.subject.name, "Informática");
-  assert.equal(await api.loadLibraryFlashcardDeck("pf2029-nao-existe"), null);
-  const notices = new Set(Object.values(FIXTURE_STATUS_NOTICES));
-  const flagged = (await Promise.all(catalog.subjects.flatMap((subject) => subject.decks).map((item) => api.loadLibraryFlashcardDeck(item.id))))
-    .flatMap((item) => item?.cards ?? []).filter((card) => card.notice !== null);
-  assert.ok(flagged.length > 0);
-  assert.ok(flagged.every((card) => notices.has(card.notice!)));
+  assert.equal(deck.subject.name, "Redes (amostra)");
+  assert.equal(await api.loadLibraryFlashcardDeck("amostra-nao-existe"), null);
+  const cards = (await Promise.all(decks.map((item) => api.loadLibraryFlashcardDeck(item.id)))).flatMap((item) => item?.cards ?? []);
+  assert.ok(cards.some((card) => card.notice === null));
+  assert.deepEqual(new Set(cards.flatMap((card) => card.notice ?? [])), new Set(Object.values(FIXTURE_STATUS_NOTICES)));
+  assert.deepEqual(decks.filter((item) => item.historical).map((item) => item.id), ["amostra-direito-historico"]);
 });
 
-test("o catálogo traz os oito aliases da consolidação de Informática", async () => {
+test("o alias da amostra leva a revisão do cartão antigo para o novo", async () => {
   const { aliases } = await api.loadLibraryFlashcardCatalog();
-  assert.equal(aliases.length, 8);
+  assert.deepEqual(aliases, [{
+    oldDeckId: "amostra-redes-01", oldCardId: "5a000000-0000-4000-8000-000000000099",
+    deckId: "amostra-redes-02", cardId: "5a000000-0000-4000-8000-000000000006",
+  }]);
 });
 
 test("deck pessoal cria cartões e revisões sem alterar a biblioteca editorial", async () => {
@@ -782,40 +784,42 @@ test("simulado: o professor vê os nomes, o aluno só o próprio e 'Colega'", as
   assert.equal(studentView.results.length, teacherView.results.filter((row) => row.score !== null).length);
 });
 
-// Spec 40, CA-09: o contrato do Vade Mecum.
-test("a biblioteca de leis traz 15 leis em 4 matérias, e o texto por lei", async () => {
+// Spec 40, CA-09: o contrato do Vade Mecum, sobre a amostra (spec 41). As 15
+// leis reais são afirmadas pela carga (18_laws.sql).
+test("a biblioteca de leis traz as leis em matérias, e o texto por lei", async () => {
   const library = await api.loadLawLibrary();
-  assert.equal(library.laws.length, 15);
-  assert.deepEqual(library.subjects, ["Legislação Penal Especial", "Direitos Humanos e Proteção", "Direito Processual Penal", "Direito Administrativo e Transparência"]);
-  const drugs = library.laws.find((law) => law.id === "ld")!;
-  assert.equal(drugs.canonicalId, "BR-FED-LEI-11343-2006");
-  const document = await api.loadLawDocument("ld");
-  assert.equal(document?.articles.length, drugs.articleCount);
+  assert.deepEqual(library.laws.map((law) => law.id), ["amostra-um", "amostra-dois"]);
+  assert.deepEqual(library.subjects, ["Matéria A (amostra)", "Matéria B (amostra)"]);
+  const first = library.laws.find((law) => law.id === "amostra-um")!;
+  assert.equal(first.canonicalId, "BR-AMOSTRA-LEI-1-2026");
+  for (const law of library.laws) assert.equal((await api.loadLawDocument(law.id))?.articles.length, law.articleCount, law.id);
   assert.equal(await api.loadLawDocument("nao-existe"), null);
 });
 
 test("os mapas de edital dizem quais normas têm texto na biblioteca", async () => {
   const { maps } = await api.loadExamMaps();
-  assert.deepEqual(maps.map((map) => map.shortName), ["PMPR", "PPPR", "PRF"]);
+  assert.deepEqual(maps.map((map) => map.shortName), ["AMOSTRA"]);
   const library = new Set((await api.loadLawLibrary()).laws.map((law) => law.id));
-  for (const item of maps.flatMap((map) => map.sections.flatMap((section) => section.items))) {
+  const items = maps.flatMap((map) => map.sections.flatMap((section) => section.items));
+  assert.ok(items.some((item) => item.available) && items.some((item) => !item.available));
+  for (const item of items) {
     assert.equal(item.available, item.libraryId !== null);
     if (item.libraryId) assert.ok(library.has(item.libraryId), item.libraryId);
   }
 });
 
 test("as marcações gravam a diferença, e repetir a mesma chave não muda nada", async () => {
-  const mark = { id: "a9000000-0000-4000-8000-000000000001", articleId: "lai-art-1", paragraphIndex: 0, start: 8, end: 16, style: "highlight", color: "yellow", quote: "Esta Lei", prefix: "Art. 1º ", suffix: " dispõe sobre" } as const;
+  const mark = { id: "a9000000-0000-4000-8000-000000000001", articleId: "amostra-um-art-1", paragraphIndex: 0, start: 8, end: 25, style: "highlight", color: "yellow", quote: "Esta Lei Exemplar", prefix: "Art. 1º ", suffix: " organiza a" } as const;
   const first = requestId();
-  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [], next: [mark], requestId: first })).ok);
-  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [], next: [mark], requestId: first })).ok);
-  assert.deepEqual(await api.loadLawMarks("lai"), [mark]);
+  assert.ok((await api.saveLawMarks({ lawId: "amostra-um", previous: [], next: [mark], requestId: first })).ok);
+  assert.ok((await api.saveLawMarks({ lawId: "amostra-um", previous: [], next: [mark], requestId: first })).ok);
+  assert.deepEqual(await api.loadLawMarks("amostra-um"), [mark]);
   const recolored = { ...mark, color: "mint" } as const;
-  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [mark], next: [recolored], requestId: requestId() })).ok);
-  assert.deepEqual((await api.loadLawMarks("lai")).map((item) => item.color), ["mint"]);
-  assert.ok((await api.saveLawMarks({ lawId: "lai", previous: [recolored], next: [], requestId: requestId() })).ok);
-  assert.deepEqual(await api.loadLawMarks("lai"), []);
-  assert.deepEqual(await api.loadLawMarks("ld"), []);
+  assert.ok((await api.saveLawMarks({ lawId: "amostra-um", previous: [mark], next: [recolored], requestId: requestId() })).ok);
+  assert.deepEqual((await api.loadLawMarks("amostra-um")).map((item) => item.color), ["mint"]);
+  assert.ok((await api.saveLawMarks({ lawId: "amostra-um", previous: [recolored], next: [], requestId: requestId() })).ok);
+  assert.deepEqual(await api.loadLawMarks("amostra-um"), []);
+  assert.deepEqual(await api.loadLawMarks("amostra-dois"), []);
 });
 
 // Spec 42, CA-08: o grifo nos flashcards grava a diferença, por deck.

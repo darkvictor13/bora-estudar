@@ -173,6 +173,12 @@ jobs:
       - name: Nenhum sourcemap vai para o ar
         run: find apps/web/dist -name '*.map' -print -delete
 
+      # Spec 41: varre o dist que VAI PARA O AR, depois de tirar os .map e
+      # antes de publicar. O do ci.yml não serve: este job recompila com as
+      # variáveis reais. O script é quem guarda a regra; aqui só é chamado.
+      - name: Nenhum conteúdo editorial vai para o ar
+        run: node scripts/check-dist-content.mjs apps/web/dist
+
       - name: Publicar no Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

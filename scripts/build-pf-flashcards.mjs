@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = new URL("../", import.meta.url);
 const source = new URL("content/flashcards/PF2029_INFORMATICA_COMPLETO_FLASHCARDS.md", root);
-const output = new URL("apps/web/src/data/pf2029-informatica-flashcards.json", root);
+const output = new URL("content/flashcards/pf2029-informatica-flashcards.json", root);
 const lines = readFileSync(source, "utf8").replace(/\r\n/g, "\n").split("\n");
 const decks = [];
 const byNumber = new Map();

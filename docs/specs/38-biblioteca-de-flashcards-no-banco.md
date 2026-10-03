@@ -67,7 +67,7 @@ sem ninguém perceber.
 
 | Id | Regra |
 |---|---|
-| R-BIB-16 | `scripts/load-library-flashcards.mjs` lê `apps/web/src/data/pf2029-policial-flashcards.json` e o JSON legado de Informática (só para os oito cartões consolidados) e escreve tudo numa transação só, por conexão direta (`pg`). Carga pela metade não existe. |
+| R-BIB-16 | `scripts/load-library-flashcards.mjs` lê `content/flashcards/pf2029-policial-flashcards.json` *(era `apps/web/src/data/`; mudou na spec 41)* e o JSON legado de Informática (só para os oito cartões consolidados) e escreve tudo numa transação só, por conexão direta (`pg`). Carga pela metade não existe. |
 | R-BIB-17 | A carga é idempotente: rodar duas vezes com o mesmo arquivo não muda linha nenhuma — upsert por PK, comparando conteúdo antes de escrever, para que `updated_at` só ande quando o texto andou. |
 | R-BIB-18 | Cartão que estava no banco e sumiu do arquivo é **retirado**, nunca apagado. Cartão retirado que volta ao arquivo é reativado. |
 | R-BIB-19 | Os oito cartões consolidados de Informática entram como retirados, nos decks antigos, com alias para o equivalente atual — é o que permite à spec 39 validar a FK sobre as revisões que já existem. |

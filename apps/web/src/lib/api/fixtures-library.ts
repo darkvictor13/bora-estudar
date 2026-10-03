@@ -1,22 +1,19 @@
 import type { LibraryFlashcardAlias, LibraryFlashcardCatalog, LibraryFlashcardDeck, LibraryFlashcardNotice } from "./contract.ts";
+import { SAMPLE_FLASHCARD_SUBJECTS, type SampleSubject } from "./fixtures-content.ts";
 
 /**
- * A biblioteca da implementação `fixtures`, lida do mesmo arquivo que a carga
- * leva ao banco (spec 39, R-BIB-32).
+ * A biblioteca da implementação `fixtures`, montada a partir da amostra
+ * sintética de `fixtures-content.ts` (spec 41, R-PUB-05).
  *
- * Import DINÂMICO: o arquivo sai do bundle principal e vira um chunk que só é
- * baixado quando a `fixtures` o pede. Decidido na entrevista da spec 39 — o
- * chunk continua publicado em `dist`.
+ * Até a spec 41 ela lia o arquivo real por import dinâmico (spec 39,
+ * R-BIB-32), e o Vite publicava esse arquivo como chunk em `dist`, aberto a
+ * quem não tinha conta. O conteúdo real chega ao site só pelo banco.
  */
-
-interface FileCard { id: string; topic: string; front: string; back: string; status?: string; previousReviews?: { deckId: string; cardId: string }[] }
-interface FileDeck { id: string; number: string; title: string; historical: boolean; cards: FileCard[] }
-interface FileSubject { id: string; subject: string; sourceFile: string; auditLabel: string; auditPartial: boolean; decks: FileDeck[] }
 
 /**
  * Os status que geram aviso, como `library_flashcard_statuses` os carrega na
  * migration `20261001120000`. O teste da carga confere a tabela do banco; o de
- * `fixtures.test.ts`, que estas duas listas dizem a mesma coisa para o arquivo.
+ * `fixtures.test.ts`, que a amostra exercita cada aviso.
  */
 export const FIXTURE_STATUS_NOTICES: Readonly<Record<string, LibraryFlashcardNotice>> = {
   historico_revogado: "revoked",
@@ -37,12 +34,11 @@ interface FixtureLibrary {
 let pending: Promise<FixtureLibrary> | null = null;
 
 export function fixtureLibrary(): Promise<FixtureLibrary> {
-  pending ??= import("../../data/pf2029-policial-flashcards.json", { with: { type: "json" } })
-    .then(({ default: file }) => build((file as { subjects: FileSubject[] }).subjects));
+  pending ??= Promise.resolve(build(SAMPLE_FLASHCARD_SUBJECTS));
   return pending;
 }
 
-function build(subjects: readonly FileSubject[]): FixtureLibrary {
+function build(subjects: readonly SampleSubject[]): FixtureLibrary {
   const aliases: LibraryFlashcardAlias[] = [];
   const decks = new Map<string, LibraryFlashcardDeck>();
   const catalog: LibraryFlashcardCatalog = {

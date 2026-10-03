@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDir = path.join(root, "content", "laws", "vade-mecum-base-v1");
-const outputFile = path.join(root, "apps", "web", "src", "data", "laws", "exam-maps.json");
-const lawIndexFile = path.join(root, "apps", "web", "src", "data", "laws", "index.json");
+const outputFile = path.join(root, "content", "laws", "library", "exam-maps.json");
+const lawIndexFile = path.join(root, "content", "laws", "library", "index.json");
 
 const files = [
   { file: "01_MAPA_PMPR_2025.md", id: "pmpr-2025", shortName: "PMPR", title: "PMPR Soldado 2025", accent: "Soldado" },
