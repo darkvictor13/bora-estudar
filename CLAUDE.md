@@ -90,6 +90,7 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `library_flashcards`, `library_flashcard_subjects`, `library_flashcard_aliases` e as duas de referência | ninguém | SELECT e nada mais; o texto do cartão só com acesso vigente ou professor. Carga por `scripts/load-library-flashcards.mjs`, no deploy |
 | `legal_norms`, `laws`, `law_articles`, `law_subjects`, `exam_notices` e filhas | ninguém | SELECT e nada mais; o texto do artigo só com acesso vigente ou professor. Carga por `scripts/load-law-library.mjs`, no deploy |
 | `law_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar e alterar exigem acesso vigente |
+| `flashcard_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar, alterar e apagar exigem acesso vigente. O cartão é `card_kind` mais um par de colunas por tipo, e a CHECK `flashcard_marks_card_ref_check` exige o par do tipo e nulos nos outros |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 

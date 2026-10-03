@@ -7,7 +7,11 @@
  * para um id que não existia mais. Hoje cada cartão é uma linha, e remover é
  * marca.
  */
-import { expect, test } from "../fixtures/index.ts";
+import { randomUUID } from "node:crypto";
+
+import type { Page } from "@playwright/test";
+
+import { authenticate, expect, test } from "../fixtures/index.ts";
 import { count, one, query } from "../fixtures/db.ts";
 import { addTheoryCatalog } from "../fixtures/scenario.ts";
 import { alert } from "../support/ui.ts";
@@ -175,5 +179,166 @@ test.describe("F-FLASH-05 · cartão corrigido no banco", () => {
     } finally {
       await query("update public.library_flashcards set front = $1 where id = $2", [card.front, card.id]);
     }
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Grifo nos flashcards (spec 42)
+ * ------------------------------------------------------------------ */
+
+/** Seleciona `quote` dentro de um lado do cartão, como um arrasto terminado. */
+async function selectInCard(page: Page, side: "front" | "back", quote: string): Promise<void> {
+  const text = page.locator(`[data-flashcard-side="${side}"]`);
+  await expect(text).toContainText(quote);
+  await text.evaluate((element, wanted) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const index = node.textContent?.indexOf(wanted) ?? -1;
+      if (index < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + wanted.length);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      return;
+    }
+    throw new Error(`trecho não encontrado: ${wanted}`);
+  }, quote);
+}
+
+async function markInCard(page: Page, side: "front" | "back", quote: string): Promise<void> {
+  await selectInCard(page, side, quote);
+  await page.getByRole("button", { name: "Marca-texto" }).click();
+}
+
+function cardMarks(page: Page, side: "front" | "back") {
+  return page.locator(`[data-flashcard-side="${side}"] [data-testid="flashcard-mark"]`);
+}
+
+/** Vira o cartão e espera ele ter virado — o clique no texto vira com atraso. */
+async function reveal(page: Page): Promise<void> {
+  const card = page.getByTestId("flashcard-flip");
+  await card.click({ position: { x: 12, y: 12 } });
+  await expect(card).toHaveAttribute("data-flipped", "true");
+}
+
+/** Um deck pessoal com um cartão, criado como o aluno o criaria. */
+async function personalDeck(studentId: string, front: string, back: string): Promise<string> {
+  const deckId = randomUUID();
+  await query(
+    "insert into public.personal_flashcard_decks (id, student_id, subject, title) values ($1, $2, 'Direito Penal', 'Grifos')",
+    [deckId, studentId],
+  );
+  await query(
+    "insert into public.personal_flashcards (id, deck_id, student_id, front, back) values ($1, $2, $3, $4, $5)",
+    [randomUUID(), deckId, studentId, front, back],
+  );
+  return deckId;
+}
+
+test.describe("F-GRIFO-01 · grifo na conta", () => {
+  test("o grifo do verso da biblioteca e o da frente do pessoal aparecem em outra sessão", async ({ studentPage, scenario, browser, baseURL }) => {
+    const libraryUrl = "/aluno/flashcards?deck=pf2029-informatica-02";
+    await studentPage.goto(libraryUrl);
+    await reveal(studentPage);
+    const back = (await studentPage.locator('[data-flashcard-side="back"]').textContent()) ?? "";
+    const quote = back.trim().split(/\s+/).slice(0, 2).join(" ");
+    await markInCard(studentPage, "back", quote);
+    await expect(cardMarks(studentPage, "back")).toHaveText([quote]);
+    // A gravação sai depois da pintura: navegar antes de ela voltar a cancelaria.
+    await expect.poll(() => count("select count(*) from public.flashcard_marks where student_id = $1", [scenario.student.id])).toBe(1);
+
+    const personalUrl = `/aluno/flashcards?meuDeck=${await personalDeck(scenario.student.id, "O que é crime?", "Fato típico, ilícito e culpável.")}`;
+    await studentPage.goto(personalUrl);
+    await markInCard(studentPage, "front", "crime");
+    await expect(cardMarks(studentPage, "front")).toHaveText(["crime"]);
+    await expect.poll(() => count("select count(*) from public.flashcard_marks where student_id = $1", [scenario.student.id])).toBe(2);
+
+    // Outro "aparelho": contexto novo, sem nada do primeiro além do login.
+    if (!baseURL) throw new Error("baseURL não configurada no projeto do Playwright");
+    const other = await browser.newContext({ baseURL });
+    try {
+      await authenticate(other, scenario.student, baseURL);
+      const page = await other.newPage();
+      await page.goto(libraryUrl);
+      await reveal(page);
+      await expect(cardMarks(page, "back")).toHaveText([quote]);
+      await expect(cardMarks(page, "front")).toHaveCount(0);
+      await page.goto(personalUrl);
+      await expect(cardMarks(page, "front")).toHaveText(["crime"]);
+    } finally {
+      await other.close();
+    }
+  });
+});
+
+test.describe("F-GRIFO-02 · grifo ancorado pelo trecho", () => {
+  test("reescrito o cartão antes do grifo, o grifo acompanha; apagado o trecho, o cartão avisa", async ({ page, signIn, scenario }) => {
+    const catalog = await addTheoryCatalog(scenario);
+    const aula = catalog.lessons[0]!;
+    const cardId = randomUUID();
+    const original = "Dez dias, se o indiciado estiver preso.";
+    await query(
+      `insert into public.theory_lesson_flashcards (id, theory_lesson_id, teacher_id, position, front, back)
+       values ($1, $2, $3, 1, 'Qual o prazo do inquérito?', $4)`,
+      [cardId, aula.id, scenario.teacher.id, original],
+    );
+
+    await signIn(scenario.student);
+    await page.goto(`/aluno/flashcards?aula=${aula.id}`);
+    await reveal(page);
+    await markInCard(page, "back", "estiver preso");
+    await expect.poll(() => count("select count(*) from public.flashcard_marks where student_id = $1", [scenario.student.id])).toBe(1);
+
+    await query("update public.theory_lesson_flashcards set back = $1 where id = $2", [`Em regra, ${original}`, cardId]);
+    await page.reload();
+    await reveal(page);
+    await expect(cardMarks(page, "back")).toHaveText(["estiver preso"]);
+
+    await query("update public.theory_lesson_flashcards set back = $1 where id = $2", ["Dez dias, se o indiciado estiver solto.", cardId]);
+    await page.reload();
+    await expect(page.getByText(/Uma marcação sua neste cartão não foi encontrada no texto atual/)).toBeVisible();
+    await reveal(page);
+    await expect(cardMarks(page, "back")).toHaveCount(0);
+    // Continua gravada: a correção do texto não apaga marcação (R-GRIFO-13).
+    expect(await count("select count(*) from public.flashcard_marks where student_id = $1", [scenario.student.id])).toBe(1);
+  });
+});
+
+test.describe("F-GRIFO-03 · virar, selecionar e desfazer", () => {
+  test("clique vira, seleção não vira, e o desfazer remove o grifo de vez", async ({ studentPage, scenario }) => {
+    const url = `/aluno/flashcards?meuDeck=${await personalDeck(scenario.student.id, "Qual é o prazo do inquérito policial?", "Dez dias.")}`;
+    await studentPage.goto(url);
+    const card = studentPage.getByTestId("flashcard-flip");
+
+    // Arrastar sobre o texto seleciona, e o cartão não vira.
+    const front = studentPage.locator('[data-flashcard-side="front"]');
+    const box = await front.boundingBox();
+    if (!box) throw new Error("a frente do cartão não está na tela");
+    await studentPage.mouse.move(box.x + 2, box.y + box.height / 2);
+    await studentPage.mouse.down();
+    await studentPage.mouse.move(box.x + box.width - 2, box.y + box.height / 2, { steps: 8 });
+    await studentPage.mouse.up();
+    await expect(studentPage.getByText(/1 trecho selecionado/)).toBeVisible();
+    await studentPage.waitForTimeout(500); // o atraso do clique no texto já passou
+    await expect(card).toHaveAttribute("data-flipped", "false");
+
+    await studentPage.getByRole("button", { name: "Marca-texto" }).click();
+    await expect(cardMarks(studentPage, "front")).toHaveCount(1);
+    await expect.poll(() => count("select count(*) from public.flashcard_marks where student_id = $1", [scenario.student.id])).toBe(1);
+
+    await studentPage.getByRole("button", { name: "Desfazer marcação" }).click();
+    await expect(cardMarks(studentPage, "front")).toHaveCount(0);
+    await expect.poll(() => count("select count(*) from public.flashcard_marks where student_id = $1", [scenario.student.id])).toBe(0);
+
+    // Clique simples continua virando.
+    await card.click();
+    await expect(card).toHaveAttribute("data-flipped", "true");
+
+    await studentPage.reload();
+    await expect(studentPage.locator('[data-flashcard-side="front"]')).toBeVisible();
+    await expect(cardMarks(studentPage, "front")).toHaveCount(0);
   });
 });

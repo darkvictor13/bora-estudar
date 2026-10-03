@@ -118,6 +118,7 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 | Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `goals-confirm`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
 | Conta | `account-form`, `waitlist-form` |
+| Leitura e grifo | `flashcard-flip` (+`data-flipped`), `flashcard-answer`, `flashcard-mark` e `law-mark` (+`data-style`, `data-color`; o do cartão também `data-side`) |
 | Erro | `error-code` — o identificador do evento relatado, e só existe quando houve relato |
 
 ### Duas armadilhas do harness
@@ -267,6 +268,9 @@ diff mostra a omissão.
 | F-FLASH-03 | biblioteca editorial: revisar o mesmo cartão duas vezes (INSERT e depois UPDATE) |
 | F-FLASH-04 | spec [39](specs/39-biblioteca-de-flashcards-lida-do-banco.md): a lista de decks e a busca por tópico chegam sem o texto dos cartões |
 | F-FLASH-05 | spec 39: cartão corrigido no banco aparece corrigido no deck, sem build novo |
+| F-GRIFO-01 | spec [42](specs/42-grifo-nos-flashcards.md): o grifo do verso de um cartão da biblioteca e o da frente de um cartão pessoal aparecem numa sessão nova, na revisão seguinte de cada cartão |
+| F-GRIFO-02 | spec 42: reescrito o cartão da aula antes do trecho grifado, o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar |
+| F-GRIFO-03 | spec 42: clique simples vira o cartão; terminar uma seleção não vira; desfazer remove o último grifo, e ele continua removido depois de recarregar |
 
 ### Leis — `tests/laws.spec.ts`
 
@@ -318,13 +322,7 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir.
-
-| Id | Prova | Spec |
-|---|---|---|
-| F-GRIFO-01 | o aluno grifa o verso de um cartão da biblioteca e a frente de um cartão pessoal; numa sessão nova, os dois grifos aparecem na revisão seguinte de cada cartão | [42](specs/42-grifo-nos-flashcards.md) |
-| F-GRIFO-02 | o professor reescreve o cartão da aula antes do trecho grifado e o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar | 42 |
-| F-GRIFO-03 | clique simples vira o cartão; terminar uma seleção não vira; desfazer remove o último grifo, e ele continua removido depois de recarregar | 42 |
+seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
 
 ---
 

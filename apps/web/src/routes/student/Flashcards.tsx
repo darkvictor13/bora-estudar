@@ -19,14 +19,19 @@ import LinearProgress from "@mui/material/LinearProgress";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Empty, PageHeader } from "@bora/ui";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { Link, useLoaderData, useNavigate, useRevalidator, type LoaderFunctionArgs } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, newRequestId, type FlashcardCard, type FlashcardGrade, type FlashcardReview, type LibraryFlashcardDeckSummary, type LibraryFlashcardNotice, type LibraryFlashcardSubject, type PersonalFlashcardDeck, type Result, type TheoryLesson } from "@/lib/api";
+import { MarkingToolbar, markSx } from "@/components/MarkingToolbar";
+import { api, newRequestId, type FlashcardCard, type FlashcardDeckRef, type FlashcardMark, type FlashcardSide, type FlashcardTextRange, type LawMarkColor, type LawMarkStyle, type FlashcardGrade, type FlashcardReview, type LibraryFlashcardDeckSummary, type LibraryFlashcardNotice, type LibraryFlashcardSubject, type PersonalFlashcardDeck, type Result, type TheoryLesson } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
 import { flashcardDeckProgress, flashcardIntervalLabel, flashcardSessionQueue, flashcardStudyStats, scheduleFlashcardReview } from "@/lib/domain/flashcards";
+import { anchorFlashcardMarks, eraseFlashcardRanges, paintFlashcardRanges, sameCard, withFlashcardQuotes } from "@/lib/domain/flashcard-markings";
 import { flashcardEditorialNote, lessonReviewFromLibrary, libraryCardCount, libraryDeckCards } from "@/lib/domain/library-flashcards";
+import { segmentText } from "@/lib/domain/text-markings";
+import { selectedTexts } from "@/lib/ui/textSelection";
+import { useMarkingSession } from "@/lib/ui/useMarkingSession";
 import { ROUTES } from "@/lib/routes";
 
 export async function flashcardsLoader({ request }: LoaderFunctionArgs) {
@@ -48,7 +53,12 @@ export async function flashcardsLoader({ request }: LoaderFunctionArgs) {
   const personalDecks = await api.listPersonalFlashcardDecks();
   const selectedPersonalDeck = personalDeckId ? personalDecks.find((item) => item.id === personalDeckId) ?? null : null;
   const personalReviews = (await api.loadPersonalFlashcardReviews(selectedPersonalDeck ? [selectedPersonalDeck.id] : personalDecks.map((item) => item.id))).map((review): FlashcardReview => ({ ...review, lessonId: review.deckId }));
-  return { catalog, hasPlan: Boolean(plan), lessons, lesson, reviews, requestedLesson: Boolean(lessonId), selectedDeck, requestedDeck: Boolean(deckId), libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck: Boolean(personalDeckId), personalReviews };
+  // O grifo é do deck aberto, e só dele (spec 42).
+  const markDeck: FlashcardDeckRef | null = lesson ? { kind: "lesson", deckId: lesson.id }
+    : selectedDeck ? { kind: "library", deckId: selectedDeck.id }
+    : selectedPersonalDeck ? { kind: "personal", deckId: selectedPersonalDeck.id } : null;
+  const marks = markDeck ? await api.loadFlashcardMarks(markDeck) : [];
+  return { marks, catalog, hasPlan: Boolean(plan), lessons, lesson, reviews, requestedLesson: Boolean(lessonId), selectedDeck, requestedDeck: Boolean(deckId), libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck: Boolean(personalDeckId), personalReviews };
 }
 
 type LoaderData = Awaited<ReturnType<typeof flashcardsLoader>>;
@@ -66,7 +76,19 @@ interface SessionDeck {
   readonly flashcardCards: readonly (FlashcardCard & { readonly notice?: LibraryFlashcardNotice | null })[];
 }
 
-function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: SessionDeck; initialReviews: readonly FlashcardReview[]; onGrade: (cardId: string, grade: FlashcardGrade) => Promise<Result<FlashcardReview>> }) {
+/** Quanto o ponteiro anda entre apertar e soltar para o clique ser um arrasto. */
+const DRAG_DISTANCE = 4;
+
+function FlashcardSession({ lesson, deck, initialReviews, initialMarks, onGrade, onSaveMarks }: {
+  lesson: SessionDeck;
+  deck: FlashcardDeckRef;
+  initialReviews: readonly FlashcardReview[];
+  /** Como estão gravadas na conta; a sessão as reancora no texto atual. */
+  initialMarks: readonly FlashcardMark[];
+  onGrade: (cardId: string, grade: FlashcardGrade) => Promise<Result<FlashcardReview>>;
+  /** Grava UMA ação: o antes e o depois (spec 42, R-GRIFO-17). */
+  onSaveMarks: (previous: readonly FlashcardMark[], next: readonly FlashcardMark[]) => Promise<Result<null>>;
+}) {
   const cards = lesson.flashcardCards;
   const [reviews, setReviews] = useState<readonly FlashcardReview[]>(initialReviews);
   const [queue, setQueue] = useState<string[]>(() => flashcardSessionQueue(cards, initialReviews));
@@ -83,6 +105,77 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
   const studyStats = flashcardStudyStats(cards, reviews);
   const nextDue = [...reviews].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))[0];
 
+  // A reancoragem roda uma vez, na montagem: o que perdeu o trecho continua
+  // gravado, não é pintado e o cartão o conta (R-GRIFO-13).
+  const [anchored] = useState(() => anchorFlashcardMarks(initialMarks, cards));
+  const { marks, change, undoLast, canUndo, saveError } = useMarkingSession<FlashcardMark>(anchored.placed, onSaveMarks);
+  const [selection, setSelection] = useState<FlashcardTextRange[]>([]);
+  const flipCard = useRef<HTMLDivElement>(null);
+  const pendingFlip = useRef<number | undefined>(undefined);
+  const pressedAt = useRef<{ x: number; y: number } | null>(null);
+  const visibleSide: FlashcardSide = revealed ? "back" : "front";
+  const cardRef = card ? { ...deck, cardId: card.id } : null;
+  const lostHere = card ? anchored.lost.get(card.id) ?? 0 : 0;
+
+  useEffect(() => {
+    const pending = pendingFlip;
+    return () => window.clearTimeout(pending.current);
+  }, []);
+
+  const clearSelection = () => {
+    setSelection([]);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const flip = () => {
+    clearSelection();
+    setRevealed((current) => !current);
+  };
+
+  // Só o lado que está à vista: o outro está no DOM, virado, e um arrasto
+  // pode passar por ele sem que ninguém o veja (R-GRIFO-21).
+  const captureSelection = () => {
+    const root = flipCard.current;
+    if (!root || !cardRef) return;
+    setSelection(selectedTexts(root, "[data-flashcard-side]")
+      .filter(({ element }) => element.dataset.flashcardSide === visibleSide)
+      .map(({ start, end }) => ({ card: cardRef, side: visibleSide, start, end })));
+  };
+
+  const paint = (style: LawMarkStyle, color: LawMarkColor) => {
+    if (selection.length === 0) return;
+    change(withFlashcardQuotes(paintFlashcardRanges(marks, selection, style, color), cards));
+  };
+
+  const erase = () => {
+    if (selection.length === 0) return;
+    change(withFlashcardQuotes(eraseFlashcardRanges(marks, selection), cards));
+  };
+
+  // R-GRIFO-20: clique simples vira; terminar uma seleção não vira. O que
+  // separa os dois é o ponteiro ter andado entre apertar e soltar — e não haver
+  // texto selecionado, porque clicar sobre a seleção ainda não a desfez quando
+  // o clique chega. No texto, o primeiro clique pode ser o começo de um duplo
+  // clique que seleciona a palavra, e virar ali a esconderia: espera o segundo.
+  const clickCard = (event: MouseEvent<HTMLElement>) => {
+    const from = pressedAt.current;
+    pressedAt.current = null;
+    if (from && Math.hypot(event.clientX - from.x, event.clientY - from.y) > DRAG_DISTANCE) return;
+    window.clearTimeout(pendingFlip.current);
+    if (event.detail > 1) return;
+    if (event.target instanceof Element && event.target.closest("[data-flashcard-side]")) {
+      pendingFlip.current = window.setTimeout(flip, 300);
+      return;
+    }
+    flip();
+  };
+
+  const renderSide = (text: string, side: FlashcardSide) =>
+    segmentText(text, cardRef ? marks.filter((mark) => mark.side === side && sameCard(mark.card, cardRef)) : []).map((segment, index) => (
+      <Box component="span" key={index} sx={markSx(segment.mark)}
+        {...(segment.mark ? { "data-testid": "flashcard-mark", "data-style": segment.mark.style, "data-color": segment.mark.color, "data-side": side } : {})}>{segment.text}</Box>
+    ));
+
   async function grade(value: FlashcardGrade) {
     if (!card || !revealed || pending) return;
     setPending(true);
@@ -95,6 +188,7 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
     setReviews((current) => [...current.filter((item) => item.cardId !== card.id), result.data]);
     setQueue((current) => current.slice(1));
     setAnswered((current) => current + 1);
+    clearSelection();
     setRevealed(false);
     setError(null);
   }
@@ -114,7 +208,7 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
       if (event.code === "Space") {
         if (event.target instanceof HTMLElement && event.target.closest('[data-testid="flashcard-flip"]')) return;
         event.preventDefault();
-        setRevealed((current) => !current);
+        flip();
       } else if (revealed && /^[1-3]$/.test(event.key)) {
         event.preventDefault();
         const gradeValue = GRADES[Number(event.key) - 1]?.key;
@@ -168,6 +262,22 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
         {editorialNote && <Box sx={{ mb: 2 }}><Alert status="warning">{editorialNote}</Alert></Box>}
         {card ? (
           <>
+            <MarkingToolbar
+              selectionCount={selection.length}
+              canUndo={canUndo}
+              selectHint="Selecione um trecho do cartão"
+              onPaint={paint}
+              onErase={erase}
+              onUndo={undoLast}
+              onDismiss={clearSelection}
+              sx={{ mb: 1.5 }}
+            />
+            {saveError && <Box sx={{ mb: 1.5 }}><Alert status="warning">Não foi possível salvar a última marcação: {saveError} Recarregue a página para ver o que ficou gravado.</Alert></Box>}
+            {lostHere > 0 && (
+              <Box sx={{ mb: 1.5 }}><Alert status="info">
+                {lostHere === 1 ? "Uma marcação sua neste cartão não foi encontrada" : `${lostHere} marcações suas neste cartão não foram encontradas`} no texto atual: o trecho foi alterado ou retirado. {lostHere === 1 ? "Ela continua guardada, mas não aparece" : "Elas continuam guardadas, mas não aparecem"} no cartão.
+              </Alert></Box>
+            )}
             <Box sx={{ mb: 2, perspective: "1200px" }}>
               <Box
                 role="button"
@@ -175,12 +285,16 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
                 data-testid="flashcard-flip"
                 aria-label={revealed ? "Voltar à pergunta" : "Virar cartão para ver resposta"}
                 data-flipped={revealed}
-                onClick={() => setRevealed((current) => !current)}
+                ref={flipCard}
+                onMouseDown={(event) => { pressedAt.current = { x: event.clientX, y: event.clientY }; }}
+                onClick={clickCard}
+                onMouseUp={captureSelection}
+                onTouchEnd={captureSelection}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
                   event.stopPropagation();
-                  setRevealed((current) => !current);
+                  flip();
                 }}
                 sx={{ display: "block", width: "100%", p: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", "&:focus-visible .flashcard-face": { outline: "3px solid #1AAE80", outlineOffset: 3 } }}
               >
@@ -196,9 +310,11 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
                     {currentReview && <Typography variant="caption" component="p" sx={{ color: "#5A6964", mt: 0.5 }}>
                       {currentReview.state === "review" ? "Em revisão" : currentReview.state === "relearning" ? "Reaprendendo" : "Em aprendizado"} · {currentReview.reviewCount} {currentReview.reviewCount === 1 ? "resposta" : "respostas"} · última: {currentReview.lastGrade === "again" ? "errei" : currentReview.lastGrade === "hard" ? "dúvida" : "acertei"}
                     </Typography>}
-                    <Typography component="p" sx={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, py: 2, textAlign: "center", fontSize: { xs: "1.15rem", md: "1.4rem" }, lineHeight: 1.55, fontWeight: 650, whiteSpace: "pre-wrap" }}>
-                      {card.front}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, py: 2 }}>
+                      <Typography component="p" data-flashcard-side="front" sx={{ textAlign: "center", fontSize: { xs: "1.15rem", md: "1.4rem" }, lineHeight: 1.55, fontWeight: 650, whiteSpace: "pre-wrap", cursor: "text" }}>
+                        {renderSide(card.front, "front")}
+                      </Typography>
+                    </Box>
                     <Typography variant="caption" component="p" sx={{ color: "#5A6964", textAlign: "center" }}>Clique ou pressione Espaço para virar</Typography>
                   </Box>
                   <Box className="flashcard-face" data-testid="flashcard-answer" aria-hidden={!revealed} sx={(theme) => ({
@@ -207,7 +323,9 @@ function FlashcardSession({ lesson, initialReviews, onGrade }: { lesson: Session
                     backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)",
                   })}>
                     <Typography component="h2" sx={{ color: "#126347", fontSize: "0.9rem", fontWeight: 800, mb: 2, textTransform: "uppercase" }}>Resposta</Typography>
-                    <Typography component="p" sx={{ flex: 1, lineHeight: 1.65, whiteSpace: "pre-wrap", fontSize: { xs: "1rem", md: "1.1rem" } }}>{card.back}</Typography>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography component="p" data-flashcard-side="back" sx={{ lineHeight: 1.65, whiteSpace: "pre-wrap", fontSize: { xs: "1rem", md: "1.1rem" }, cursor: "text" }}>{renderSide(card.back, "back")}</Typography>
+                    </Box>
                     <Typography variant="caption" component="p" sx={{ color: "#5A6964", mt: 2, textAlign: "center" }}>Clique para voltar à pergunta</Typography>
                   </Box>
                 </Box>
@@ -454,7 +572,7 @@ function PersonalDeckGroup({ decks, reviews }: { decks: readonly PersonalFlashca
 }
 
 export function Flashcards() {
-  const { catalog, hasPlan, lessons, lesson, reviews, requestedLesson, selectedDeck, requestedDeck, libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck, personalReviews } = useLoaderData() as LoaderData;
+  const { marks, catalog, hasPlan, lessons, lesson, reviews, requestedLesson, selectedDeck, requestedDeck, libraryReviews, personalDecks, selectedPersonalDeck, requestedPersonalDeck, personalReviews } = useLoaderData() as LoaderData;
   const [search, setSearch] = useState("");
   const [deckDialog, setDeckDialog] = useState(false);
   const [cardDialog, setCardDialog] = useState(false);
@@ -518,7 +636,8 @@ export function Flashcards() {
         {lesson && (
           <>
             {(lesson.flashcardCards ?? []).length > 0 ? (
-              <FlashcardSession key={lesson.id} lesson={{ ...lesson, flashcardCards: lesson.flashcardCards ?? [] }} initialReviews={reviews} onGrade={(cardId, grade) => api.gradeFlashcard({ lessonId: lesson.id, cardId, grade, requestId: newRequestId() })} />
+              <FlashcardSession key={lesson.id} lesson={{ ...lesson, flashcardCards: lesson.flashcardCards ?? [] }} deck={{ kind: "lesson", deckId: lesson.id }} initialReviews={reviews} initialMarks={marks}
+                onSaveMarks={(previous, next) => api.saveFlashcardMarks({ deck: { kind: "lesson", deckId: lesson.id }, previous, next, requestId: newRequestId() })} onGrade={(cardId, grade) => api.gradeFlashcard({ lessonId: lesson.id, cardId, grade, requestId: newRequestId() })} />
             ) : (
               <Card title={`Flashcards da aula · ${lesson.lessonCode}`} action={<Badge tone="neutral">Em preparação</Badge>}>
                 <Typography variant="body2">O professor ainda não cadastrou cartões para esta aula.</Typography>
@@ -535,7 +654,8 @@ export function Flashcards() {
         {selectedDeck && (
           <>
           {selectedSubject?.auditPartial && <Box sx={{ mb: 2 }}><Alert status="info">Status informado no material: {selectedSubject.auditLabel}. Os cartões sinalizados para conferência mantêm essa indicação durante o estudo.</Alert></Box>}
-          <FlashcardSession key={selectedDeck.id} lesson={{ id: selectedDeck.id, subject: selectedSubject?.name ?? "Área Policial", lessonCode: selectedDeck.title, flashcardCards: selectedDeck.cards }} initialReviews={libraryReviews} onGrade={async (cardId, grade) => {
+          <FlashcardSession key={selectedDeck.id} lesson={{ id: selectedDeck.id, subject: selectedSubject?.name ?? "Área Policial", lessonCode: selectedDeck.title, flashcardCards: selectedDeck.cards }} deck={{ kind: "library", deckId: selectedDeck.id }} initialReviews={libraryReviews} initialMarks={marks}
+            onSaveMarks={(previous, next) => api.saveFlashcardMarks({ deck: { kind: "library", deckId: selectedDeck.id }, previous, next, requestId: newRequestId() })} onGrade={async (cardId, grade) => {
             const result = await api.gradeLibraryFlashcard({ deckId: selectedDeck.id, cardId, grade, requestId: newRequestId() });
             return result.ok ? { ok: true, data: lessonReviewFromLibrary(result.data) } : result;
           }} />
@@ -547,7 +667,8 @@ export function Flashcards() {
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.5 }}>
               <Button variant="contained" startIcon={<AddCircleIcon />} onClick={() => { setFormError(null); setCardDialog(true); }}>Adicionar cartão</Button>
             </Box>
-            {selectedPersonalDeck.cards.length > 0 ? <FlashcardSession key={`${selectedPersonalDeck.id}:${selectedPersonalDeck.cards.length}`} lesson={{ id: selectedPersonalDeck.id, subject: selectedPersonalDeck.subject, lessonCode: selectedPersonalDeck.title, flashcardCards: selectedPersonalDeck.cards }} initialReviews={personalReviews} onGrade={async (cardId, grade) => {
+            {selectedPersonalDeck.cards.length > 0 ? <FlashcardSession key={`${selectedPersonalDeck.id}:${selectedPersonalDeck.cards.length}`} lesson={{ id: selectedPersonalDeck.id, subject: selectedPersonalDeck.subject, lessonCode: selectedPersonalDeck.title, flashcardCards: selectedPersonalDeck.cards }} deck={{ kind: "personal", deckId: selectedPersonalDeck.id }} initialReviews={personalReviews} initialMarks={marks}
+              onSaveMarks={(previous, next) => api.saveFlashcardMarks({ deck: { kind: "personal", deckId: selectedPersonalDeck.id }, previous, next, requestId: newRequestId() })} onGrade={async (cardId, grade) => {
               const result = await api.gradePersonalFlashcard({ deckId: selectedPersonalDeck.id, cardId, grade, requestId: newRequestId() });
               return result.ok ? { ok: true, data: { ...result.data, lessonId: result.data.deckId } } : result;
             }} /> : <Empty icon="🗂️">Este deck ainda está vazio. Adicione o primeiro cartão para começar a estudar.</Empty>}

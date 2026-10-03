@@ -360,3 +360,28 @@ begin
   end if;
   raise notice '32 OK  o Vade Mecum e so leitura para authenticated';
 end $$;
+
+-- ---------- flashcard_marks: só posição, âncora, estilo e cor (spec 42, R-GRIFO-10) ----------
+do $$
+declare
+  v_coluna text;
+  v_sobra  text := '';
+begin
+  foreach v_coluna in array array['id', 'student_id', 'card_kind', 'library_deck_id', 'library_card_id',
+    'lesson_id', 'lesson_card_id', 'personal_deck_id', 'personal_card_id', 'side', 'created_at', 'updated_at']
+  loop
+    if has_column_privilege('authenticated', 'public.flashcard_marks', v_coluna, 'update') then
+      v_sobra := v_sobra || ' ' || v_coluna;
+    end if;
+  end loop;
+  if v_sobra <> '' then
+    raise exception 'FALHOU: flashcard_marks deixa atualizar o contexto:%', v_sobra;
+  end if;
+  foreach v_coluna in array array['start_offset', 'end_offset', 'quote', 'prefix', 'suffix', 'style', 'color']
+  loop
+    if not has_column_privilege('authenticated', 'public.flashcard_marks', v_coluna, 'update') then
+      raise exception 'FALHOU: flashcard_marks nao deixa atualizar %', v_coluna;
+    end if;
+  end loop;
+  raise notice '33 OK  flashcard_marks: so posicao, ancora, estilo e cor no grant update';
+end $$;

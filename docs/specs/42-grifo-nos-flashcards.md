@@ -1,6 +1,6 @@
 # 42 — Grifo nos flashcards
 
-**Situação:** não implementada · **Fluxos e2e:** F-GRIFO-01 a F-GRIFO-03
+**Situação:** implementada em 03/10/2026 · **Fluxos e2e:** F-GRIFO-01 a F-GRIFO-03
 
 Primeira de duas. Esta põe as marcações de cartão no banco e o grifo dentro da
 revisão; a **43** traz a leitura do deck inteiro, que grifa nas mesmas
@@ -72,7 +72,7 @@ ninguém perceber — o defeito que a 40 já resolveu para as leis.
 | Id | Regra |
 |---|---|
 | R-GRIFO-19 | O aluno grifa no cartão aberto, na frente e no verso, sem sair da sessão — também no modo foco. As ferramentas são as da lei: marca-texto, sublinhado, tachado, contorno, apagar a marcação do trecho, sete cores e desfazer. |
-| R-GRIFO-20 | **Clique simples continua virando o cartão; terminar uma seleção de texto não vira.** Espaço, Enter e o atalho do modo foco seguem como hoje. Quem não grifa não percebe diferença. *(Decidido na entrevista.)* |
+| R-GRIFO-20 | **Clique simples continua virando o cartão; terminar uma seleção de texto não vira.** O que separa os dois é o ponteiro ter andado entre apertar e soltar, e não haver texto selecionado — clicar sobre uma seleção ainda não a desfez quando o clique chega. No texto do cartão, o clique espera 300 ms antes de virar: pode ser o primeiro de um duplo clique que seleciona a palavra. Espaço, Enter e o atalho do modo foco seguem como hoje. *(Decidido na entrevista.)* |
 | R-GRIFO-21 | A seleção vale dentro de um lado só. O trecho que atravessa da pergunta para a resposta não é marcável. |
 | R-GRIFO-22 | O grifo aparece na revisão seguinte do mesmo cartão, em qualquer aparelho, e não muda nada na revisão espaçada: não entra em intervalo, nota, contador nem estatística. |
 
@@ -95,13 +95,13 @@ clique sem seleção         → vira o cartão (R-GRIFO-20)
 
 | Camada | Item |
 |---|---|
-| Migration | uma: `flashcard_marks`, enums `flashcard_card_kind` e `flashcard_side`, grants, policies, gatilho `updated_at` |
+| Migration | `supabase/migrations/20261003120000_flashcard_marks.sql` — uma: `flashcard_marks`, enums `flashcard_card_kind` e `flashcard_side`, grants, policies, gatilho `updated_at` |
 | RPCs | nenhuma — escrita direta, como `law_marks` |
-| Contrato | `loadFlashcardMarks`, `saveFlashcardMarks`; tipos `FlashcardMark`, `FlashcardCardRef`, `SaveFlashcardMarksInput` |
-| Adaptadores | `lib/api/supabase/flashcard-marks.ts` (novo), fixture equivalente |
-| Domínio | a âncora, o diff e a pintura de `lib/domain/law-markings.ts` passam a valer para os dois textos; o lado do cartão faz o papel do parágrafo |
-| Componentes | a barra de marcação sai de `LawContinuousReader.tsx` para um componente compartilhado; `FlashcardSession` em `routes/student/Flashcards.tsx` a usa |
-| Testes | `supabase/tests/19_flashcard_marks.sql`, `01_grants.sql`, o teste de domínio da âncora, `lib/api/fixtures.test.ts`, `apps/e2e/tests/flashcards.spec.ts` |
+| Contrato | `lib/api/flashcard-marks.ts`: `loadFlashcardMarks`, `saveFlashcardMarks`; tipos `FlashcardMark`, `FlashcardCardRef`, `FlashcardDeckRef`, `SaveFlashcardMarksInput` |
+| Adaptadores | `lib/api/supabase/flashcard-marks.ts`; `lib/api/fixtures-flashcard-marks.ts` |
+| Domínio | `lib/domain/text-markings.ts` (novo): pintura, âncora, reancoragem e diff sem saber de onde vem o texto. `law-markings.ts` passa a usá-lo, com as mesmas exportações; `flashcard-markings.ts` (novo) é o equivalente para o lado do cartão, mais a resolução de alias |
+| Componentes | `components/MarkingToolbar.tsx` (novo): a barra que saiu de `LawContinuousReader.tsx`. `lib/ui/useMarkingSession.ts` (fila de gravação e desfazer) e `lib/ui/textSelection.ts` (seleção em posição de caractere), usados pelas duas telas. `FlashcardSession` em `routes/student/Flashcards.tsx` |
+| Testes | `supabase/tests/19_flashcard_marks.sql` (22), `01_grants.sql` (33), `07_schema.sql` (13, com os números novos), `lib/domain/flashcard-markings.test.ts`, `lib/api/fixtures.test.ts`, `apps/e2e/tests/flashcards.spec.ts` |
 
 ---
 
@@ -109,13 +109,13 @@ clique sem seleção         → vira o cartão (R-GRIFO-20)
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | O aluno lê e escreve só as próprias marcações; o colega e o professor leem zero, alteram zero e apagam zero (contado por linhas). | `supabase/tests/19_flashcard_marks.sql` |
-| CA-02 | `student_id`, `card_kind`, `side` e as colunas de referência estão fora do grant de UPDATE (`42501`). | `19_flashcard_marks.sql` e `01_grants.sql` |
-| CA-03 | São recusados: referência de outro tipo preenchida junto, par incompleto, cartão pessoal de outro aluno, `quote` de tamanho errado, cartão da biblioteca retirado, cartão de aula apagado e aula não publicada. | `19_flashcard_marks.sql` |
-| CA-04 | Com o acesso vencido o aluno lê as próprias marcações e não cria, não altera e não apaga nenhuma. | `19_flashcard_marks.sql` |
-| CA-05 | Apagar cartão pessoal apaga as marcações dele; retirar cartão da biblioteca e marcar cartão de aula como apagado as mantêm; apagar a aula com marcação é recusado. | `19_flashcard_marks.sql` |
-| CA-06 | Reancorar por lado: trecho no lugar pinta no lugar; deslocado pinta no lugar novo; repetido escolhe pelo contexto; sumido não pinta e é contado; o grifo do verso nunca se reancora na frente. | teste de domínio da âncora |
-| CA-07 | A marcação gravada num cartão antigo da biblioteca aparece no cartão que o substituiu por alias. | teste de domínio da âncora e `lib/api/fixtures.test.ts` |
+| CA-01 | O aluno lê e escreve só as próprias marcações; o colega e o professor leem zero, alteram zero e apagam zero (contado por linhas). | `supabase/tests/19_flashcard_marks.sql` (01, 14, 15, 22) |
+| CA-02 | `student_id`, `card_kind`, `side` e as colunas de referência estão fora do grant de UPDATE (`42501`). | `19_flashcard_marks.sql` (02 a 05) e `01_grants.sql` (33) |
+| CA-03 | São recusados: referência de outro tipo preenchida junto, par incompleto, cartão pessoal de outro aluno, `quote` de tamanho errado, cartão da biblioteca retirado, cartão de aula apagado e aula não publicada. | `19_flashcard_marks.sql` (06 a 13) |
+| CA-04 | Com o acesso vencido o aluno lê as próprias marcações e não cria, não altera e não apaga nenhuma. | `19_flashcard_marks.sql` (16 a 18) |
+| CA-05 | Apagar cartão pessoal apaga as marcações dele; retirar cartão da biblioteca e marcar cartão de aula como apagado as mantêm; apagar a aula com marcação é recusado. | `19_flashcard_marks.sql` (19 a 21) |
+| CA-06 | Reancorar por lado: trecho no lugar pinta no lugar; deslocado pinta no lugar novo; repetido escolhe pelo contexto; sumido não pinta e é contado; o grifo do verso nunca se reancora na frente. | `lib/domain/flashcard-markings.test.ts` |
+| CA-07 | A marcação gravada num cartão antigo da biblioteca aparece no cartão que o substituiu por alias. | `flashcard-markings.test.ts` e `lib/api/fixtures.test.ts` |
 | CA-08 | O contrato de marcações de cartão é o mesmo nas duas implementações, inclusive o diff vazio para listas iguais. | `lib/api/fixtures.test.ts` |
 | CA-09 | O aluno grifa o verso de um cartão da biblioteca e a frente de um cartão pessoal; numa sessão nova, os dois grifos aparecem na revisão seguinte de cada cartão. | F-GRIFO-01 |
 | CA-10 | O professor reescreve o cartão da aula antes do trecho grifado e o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar. | F-GRIFO-02 |

@@ -22,7 +22,7 @@ function toSubject(row: SubjectRow) {
   return { id: row.id, name: row.name, sourceFile: row.source_file, auditLabel: row.audit_label, auditPartial: row.audit_partial };
 }
 
-async function loadAliases(): Promise<readonly LibraryFlashcardAlias[]> {
+export async function loadAliases(): Promise<readonly LibraryFlashcardAlias[]> {
   const { data, error } = await supabase.from("library_flashcard_aliases").select("old_deck_id,old_card_id,deck_id,card_id");
   if (error) throwDb(error);
   return ((data ?? []) as AliasRow[]).map((row) => ({ oldDeckId: row.old_deck_id, oldCardId: row.old_card_id, deckId: row.deck_id, cardId: row.card_id }));

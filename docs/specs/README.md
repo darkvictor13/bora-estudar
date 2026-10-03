@@ -69,7 +69,7 @@ de lá vira uma spec nova antes de virar código.
 | 39 | [Biblioteca de flashcards lida do banco](39-biblioteca-de-flashcards-lida-do-banco.md) | FK da revisão para o cartão, catálogo sem texto, deck sob demanda |
 | 40 | [Leis, editais e marcações no banco](40-leis-editais-e-marcacoes-no-banco.md) | Normas por `canonical_id`, texto por artigo, mapas de edital por vínculo e marcações na conta, ancoradas pelo trecho |
 | 41 | [Conteúdo fora do bundle](41-conteudo-fora-do-bundle.md) | Cartões, leis e editais saem do `dist`; `fixtures` com amostra sintética; varredura do `dist` antes de publicar |
-| 42 | [Grifo nos flashcards](42-grifo-nos-flashcards.md) | **Não implementada.** Marcações de cartão no banco, nos três tipos e nos dois lados, ancoradas pelo trecho; grifar dentro da revisão |
+| 42 | [Grifo nos flashcards](42-grifo-nos-flashcards.md) | Marcações de cartão no banco, nos três tipos e nos dois lados, ancoradas pelo trecho; grifar dentro da revisão |
 
 ---
 
