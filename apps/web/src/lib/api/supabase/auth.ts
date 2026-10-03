@@ -10,18 +10,34 @@ import { supabase } from "@/lib/supabase/client";
 import { ROUTES } from "@/lib/routes";
 import { readLocalTheme, writeLocalTheme } from "@/lib/theme";
 
-import type {
-  Account,
-  AccountInput,
-  Credentials,
-  Result,
-  Session,
-  SignUpInput,
-  ThemePreference,
+import {
+  ApiThrownError,
+  type Account,
+  type AccountInput,
+  type Credentials,
+  type Result,
+  type Session,
+  type SignUpInput,
+  type ThemePreference,
 } from "../contract.ts";
 import { checkCredentials, checkName, checkPassword, checkSignUp } from "../validation.ts";
 import { done, fail, failure, translateAuthError, translateDbError } from "./errors.ts";
 import { currentSession } from "./session.ts";
+
+/**
+ * `currentSession` para quem ESCREVE.
+ *
+ * Ela lança quando não consegue verificar a sessão — rede caída não é estar
+ * deslogado —, e escrita devolve `Result`, nunca lança.
+ */
+async function sessionForWrite(): Promise<Result<Session | null>> {
+  try {
+    return done(await currentSession());
+  } catch (error) {
+    if (error instanceof ApiThrownError) return fail(error.code, error.message);
+    throw error;
+  }
+}
 
 export const authApi = {
   loadSession: currentSession,
@@ -33,7 +49,9 @@ export const authApi = {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return failure(translateAuthError(error));
 
-    const session = await currentSession();
+    const found = await sessionForWrite();
+    if (!found.ok) return failure(found.error);
+    const session = found.data;
     if (!session) return fail("unknown", "Entramos, mas seu perfil não foi encontrado.");
     return done(session);
   },
@@ -51,7 +69,9 @@ export const authApi = {
     });
     if (error) return failure(translateAuthError(error));
 
-    const session = await currentSession();
+    const found = await sessionForWrite();
+    if (!found.ok) return failure(found.error);
+    const session = found.data;
     if (!session) {
       // Confirmação de e-mail ligada: a conta existe, a sessão ainda não.
       return fail("validation", "Confirme seu e-mail para entrar.");
@@ -122,7 +142,9 @@ export const authApi = {
   async saveAccount({ name }: AccountInput): Promise<Result<Account>> {
     const invalid = checkName(name);
     if (invalid) return failure(invalid);
-    const session = await currentSession();
+    const found = await sessionForWrite();
+    if (!found.ok) return failure(found.error);
+    const session = found.data;
     if (!session) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
 
     const { error } = await supabase
@@ -154,7 +176,9 @@ export const authApi = {
   },
 
   async saveThemePreference(theme: ThemePreference): Promise<Result<void>> {
-    const session = await currentSession();
+    const found = await sessionForWrite();
+    if (!found.ok) return failure(found.error);
+    const session = found.data;
     if (!session) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
     writeLocalTheme(session.profileId, theme);
     return done(undefined);
