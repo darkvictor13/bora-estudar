@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import catalog from "../../data/laws/exam-maps.json" with { type: "json" };
+import { SAMPLE_EXAM_MAPS } from "../api/fixtures-content.ts";
 import {
   filterLawExamMap,
   getLawExamMap,
@@ -9,30 +9,30 @@ import {
   type LawExamMap,
 } from "./law-exam-maps.ts";
 
-// O arquivo é a fonte da carga (spec 40); o teste o usa como dado de entrada.
-const LAW_EXAM_MAPS: readonly LawExamMap[] = catalog.maps;
+// A amostra da `fixtures` (spec 41). Os três editais reais são afirmados pela
+// carga (18_laws.sql); aqui importa só a regra.
+const LAW_EXAM_MAPS: readonly LawExamMap[] = SAMPLE_EXAM_MAPS.maps;
 
-test("provides PMPR, PPPR and PRF maps", () => {
-  assert.deepEqual(LAW_EXAM_MAPS.map((map) => map.shortName), ["PMPR", "PPPR", "PRF"]);
-  for (const map of LAW_EXAM_MAPS) {
-    assert.ok(map.canonicalId.startsWith("EDITAL-"));
-    assert.ok(map.sections.length > 0);
-    assert.ok(map.sections.every((section) => section.items.length > 0));
-  }
+test("an unknown id falls back to the first map", () => {
+  assert.equal(getLawExamMap(LAW_EXAM_MAPS, "nao-existe").id, "amostra-2026");
+  assert.equal(getLawExamMap(LAW_EXAM_MAPS, null).id, "amostra-2026");
+  assert.throws(() => getLawExamMap([], null), /Nenhum mapa/);
 });
 
 test("reports library coverage without double counting repeated norms", () => {
-  const prf = getLawExamMap(LAW_EXAM_MAPS, "prf-2021");
-  const stats = getLawExamMapStats(prf);
-  const unique = new Set(prf.sections.flatMap((section) => section.items.map((item) => item.canonicalId)));
-  assert.equal(stats.total, unique.size);
-  assert.equal(stats.pending, stats.total - stats.available);
-  assert.ok(stats.coverage >= 0 && stats.coverage <= 100);
+  const map = getLawExamMap(LAW_EXAM_MAPS, "amostra-2026");
+  const repeated: LawExamMap = { ...map, sections: [...map.sections, map.sections[0]!] };
+  for (const subject of [map, repeated]) {
+    assert.deepEqual(getLawExamMapStats(subject), { total: 3, available: 2, pending: 1, coverage: 67 });
+  }
 });
 
 test("finds a law by title, scope or canonical id", () => {
-  const pmpr = getLawExamMap(LAW_EXAM_MAPS, "pmpr-2025");
-  assert.equal(filterLawExamMap(pmpr, "Maria da Penha").flatMap((section) => section.items).length, 1);
-  assert.equal(filterLawExamMap(pmpr, "medidas protetivas").flatMap((section) => section.items).length, 1);
-  assert.equal(filterLawExamMap(pmpr, "BR-FED-LEI-8072-1990").flatMap((section) => section.items).length, 1);
+  const map = getLawExamMap(LAW_EXAM_MAPS, "amostra-2026");
+  const count = (query: string) => filterLawExamMap(map, query).flatMap((section) => section.items).length;
+  assert.equal(count("Amostra Um"), 1);
+  assert.equal(count("medidas protetivas"), 1);
+  assert.equal(count("BR-AMOSTRA-LEI-2-2026"), 1);
+  assert.equal(count("   "), 3);
+  assert.equal(count("nada casa com isto"), 0);
 });

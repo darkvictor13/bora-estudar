@@ -315,6 +315,19 @@ vai buscar seu critério de aceitação.
 
 ---
 
+## Fluxos que ainda não existem
+
+Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
+seção da área, no commit em que o teste passa a existir.
+
+| Id | Prova | Spec |
+|---|---|---|
+| F-GRIFO-01 | o aluno grifa o verso de um cartão da biblioteca e a frente de um cartão pessoal; numa sessão nova, os dois grifos aparecem na revisão seguinte de cada cartão | [42](specs/42-grifo-nos-flashcards.md) |
+| F-GRIFO-02 | o professor reescreve o cartão da aula antes do trecho grifado e o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar | 42 |
+| F-GRIFO-03 | clique simples vira o cartão; terminar uma seleção não vira; desfazer remove o último grifo, e ele continua removido depois de recarregar | 42 |
+
+---
+
 ## Os quatro `fixme`, e por que continuam visíveis
 
 Nenhum é bug de interface: os dois primeiros esperam o banco, e os dois do tema

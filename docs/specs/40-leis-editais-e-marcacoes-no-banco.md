@@ -74,9 +74,9 @@ marcar/apagar     → nova lista → diff por id → saveLawMarks (fila) → INS
 | Migration | `supabase/migrations/20261001180000_law_library.sql` — uma |
 | Banco | `law_subjects`, `legal_norms`, `laws`, `law_articles`, `exam_notices`, `exam_notice_sections`, `exam_notice_items`, `law_marks`; enums `legal_norm_sphere`, `legal_norm_verification`, `law_mark_style`, `law_mark_color`; `vw_law_library` |
 | Carga | `scripts/load-law-library.mjs` + `.test.mjs`; passo no job `banco` dos dois deploys; `db:reset` e `run.sh` |
-| Conteúdo | os textos saem de `apps/web/public/laws/` para `apps/web/src/data/laws/text/`; `index.json` ganha `canonicalId` e perde `contentPath` |
+| Conteúdo | os textos saem de `apps/web/public/laws/` para `apps/web/src/data/laws/text/`; `index.json` ganha `canonicalId` e perde `contentPath`. *Desde a spec [41](41-conteudo-fora-do-bundle.md), os três moram em `content/laws/library/` e não vão mais para o `dist`.* |
 | Contrato | `loadLawLibrary`, `loadLawDocument`, `loadExamMaps`, `loadLawMarks`, `saveLawMarks` |
-| Adaptadores | `lib/api/supabase/laws.ts` (novo); `lib/api/fixtures-laws.ts` (novo, import dinâmico) |
+| Adaptadores | `lib/api/supabase/laws.ts` (novo); `lib/api/fixtures-laws.ts` (novo; import dinâmico até a spec 41, amostra sintética depois) |
 | Domínio | `lib/domain/law-markings.ts`: `anchorLawMarks`, `diffLawMarks`, `withLawQuotes`; `law-library.ts` e `law-exam-maps.ts` sem JSON |
 | Tela | `routes/student/Laws.tsx`, `components/student/LawContinuousReader.tsx`, `components/student/LawExamMaps.tsx` |
 | Testes | `supabase/tests/18_laws.sql`, `01_grants.sql` (32), `scripts/load-law-library.test.mjs`, `lib/domain/law-markings.test.ts`, `lib/api/fixtures.test.ts`, `apps/e2e/tests/laws.spec.ts` |

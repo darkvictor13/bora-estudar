@@ -34,7 +34,7 @@ coisas continuam valendo como antes:
 | R-BIB-29 | O texto chega por deck, só quando o aluno abre o deck. |
 | R-BIB-30 | O aviso editorial do cartão vem de `editorial_notice` (spec 38, R-BIB-09). A frase continua no front, uma por valor do enum. |
 | R-BIB-31 | Os aliases vêm de `library_flashcard_aliases`. A regra de leitura não muda: a memória mais recente entre o par antigo e o novo vence, e a resposta seguinte grava no par novo. |
-| R-BIB-32 | O arquivo deixa de ser importado pelo código do site. A implementação `fixtures` o carrega por import dinâmico, num chunk separado. *(Decidido na entrevista: o chunk continua publicado em `dist`.)* |
+| R-BIB-32 | O arquivo deixa de ser importado pelo código do site. ~~A implementação `fixtures` o carrega por import dinâmico, num chunk separado. *(Decidido na entrevista: o chunk continua publicado em `dist`.)*~~ **Revogada em 03/10/2026 pela spec [41](41-conteudo-fora-do-bundle.md):** o chunk deixava o conteúdo aberto a quem não tinha conta. A `fixtures` usa uma amostra sintética, e o arquivo mora em `content/`. |
 
 ---
 
@@ -56,7 +56,7 @@ revisar                     → gradeLibraryFlashcard       → confere cartão 
 | Banco | FK `library_flashcard_reviews_card_fk`; índice `(deck_id, card_id)` no lugar de `library_flashcard_reviews_deck_idx`; policies de INSERT e UPDATE; `vw_library_flashcard_decks` + `card_ids`, `topics` |
 | Carga | `scripts/load-library-flashcards.mjs` valida a FK no fim |
 | Contrato | `loadLibraryFlashcardCatalog`, `loadLibraryFlashcardDeck`; tipos `LibraryCatalog`, `LibraryDeckContent`, `LibraryFlashcardNotice` |
-| Adaptadores | `lib/api/supabase/library-flashcards.ts`; `lib/api/fixtures-library.ts` (novo, import dinâmico) |
+| Adaptadores | `lib/api/supabase/library-flashcards.ts`; `lib/api/fixtures-library.ts` (novo; import dinâmico até a spec 41, amostra sintética depois) |
 | Domínio | `lib/domain/library-flashcards.ts` sem o JSON; aliases por parâmetro |
 | Rotas | `routes/student/Flashcards.tsx`, `routes/student/FlashcardStatistics.tsx` |
 | Testes | `supabase/tests/17_library_content.sql` (11 a 18), `11_library_flashcards.sql` passa a usar um cartão real; `apps/e2e/tests/flashcards.spec.ts` (F-FLASH-04, 05) |
@@ -76,7 +76,7 @@ revisar                     → gradeLibraryFlashcard       → confere cartão 
 | CA-07 | A lista de decks e a busca por tópico funcionam sem baixar o texto dos cartões. | F-FLASH-04 |
 | CA-08 | Um cartão corrigido no banco aparece corrigido no deck sem build novo do site. | F-FLASH-05 |
 | CA-09 | A revisão de um cartão da biblioteca continua gravando duas vezes, pelo INSERT e pelo UPDATE. | F-FLASH-03 (regressão) |
-| CA-10 | Nenhum módulo do site importa estaticamente o JSON da biblioteca. | `lib/domain/library-flashcards.test.ts` |
+| CA-10 | Nenhum módulo do site importa estaticamente o JSON da biblioteca. | substituído pelo CA-03 da spec 41, que vale para qualquer forma de import: `lib/content-boundary.test.ts` |
 
 ---
 
@@ -84,5 +84,6 @@ revisar                     → gradeLibraryFlashcard       → confere cartão 
 
 - **Editor de cartão.** Continua sendo o importador.
 - **Paginação do deck.** O maior deck tem 259 cartões; a leitura é inteira.
-- **Tirar o chunk de `dist`.** Decidido na entrevista; se o conteúdo precisar
-  deixar de ser publicado, a `fixtures` passa a usar uma amostra sintética.
+- ~~**Tirar o chunk de `dist`.**~~ Feito pela spec [41](41-conteudo-fora-do-bundle.md),
+  pelo caminho que esta linha previa: a `fixtures` passou a usar uma amostra
+  sintética.

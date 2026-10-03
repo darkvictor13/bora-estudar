@@ -6,8 +6,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDir = path.join(root, "content", "laws", "source");
 // Fora de `public/` desde a spec 40: o site lê o texto do banco, e só a
 // implementação `fixtures` o importa, por import dinâmico.
-const textDir = path.join(root, "apps", "web", "src", "data", "laws", "text");
-const indexPath = path.join(root, "apps", "web", "src", "data", "laws", "index.json");
+const textDir = path.join(root, "content", "laws", "library", "text");
+const indexPath = path.join(root, "content", "laws", "library", "index.json");
 
 // A matéria vem da pasta do pacote; o texto de cada norma permanece canônico.
 // O terceiro campo é o `canonical_id` da norma (spec 40, R-LEI-02).

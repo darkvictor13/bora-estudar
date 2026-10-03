@@ -1,27 +1,16 @@
-import type { LawDocument, LawEntry, LawExamMaps, LawLibrary, LawMark, LawsApi, SaveLawMarksInput } from "./laws.ts";
+import type { LawLibrary, LawMark, LawsApi, SaveLawMarksInput } from "./laws.ts";
 import type { Result } from "./contract.ts";
 import { diffLawMarks } from "../domain/law-markings.ts";
+import { SAMPLE_EXAM_MAPS, SAMPLE_LAW_INDEX, SAMPLE_LAW_TEXTS } from "./fixtures-content.ts";
 
 /**
- * O Vade Mecum da implementação `fixtures`, lido dos mesmos arquivos que a
- * carga leva ao banco (spec 40). Import DINÂMICO, como a biblioteca de
- * flashcards (spec 39, R-BIB-32): os arquivos viram chunks à parte, baixados
- * só quando a `fixtures` os pede.
+ * O Vade Mecum da implementação `fixtures`: duas leis inventadas e um edital,
+ * de `fixtures-content.ts` (spec 41, R-PUB-05). O texto real chega ao site só
+ * pelo banco.
  */
 
-interface IndexEntry extends Omit<LawEntry, "articleCount"> { readonly articleCount: number }
-
-let library: Promise<LawLibrary> | null = null;
-let maps: Promise<LawExamMaps> | null = null;
+const library: LawLibrary = { laws: SAMPLE_LAW_INDEX, subjects: [...new Set(SAMPLE_LAW_INDEX.map((law) => law.subject))] };
 const marks = new Map<string, LawMark[]>();
-
-function loadIndex(): Promise<LawLibrary> {
-  library ??= import("../../data/laws/index.json", { with: { type: "json" } }).then(({ default: index }) => {
-    const laws = index as readonly IndexEntry[];
-    return { laws, subjects: [...new Set(laws.map((law) => law.subject))] };
-  });
-  return library;
-}
 
 export function resetFixtureLawMarks(): void {
   marks.clear();
@@ -29,16 +18,9 @@ export function resetFixtureLawMarks(): void {
 
 export function createLawFixtures(later: <T>(value: T) => Promise<T>, once: <T>(requestId: string, run: () => Result<T>) => Result<T>): LawsApi {
   return {
-    loadLawLibrary: async () => later(await loadIndex()),
-    loadLawDocument: async (lawId: string) => {
-      if (!(await loadIndex()).laws.some((law) => law.id === lawId)) return later(null);
-      const { default: document } = await import(`../../data/laws/text/${lawId}.json`, { with: { type: "json" } }) as { default: LawDocument };
-      return later(document);
-    },
-    loadExamMaps: async () => {
-      maps ??= import("../../data/laws/exam-maps.json", { with: { type: "json" } }).then(({ default: file }) => file as LawExamMaps);
-      return later(await maps);
-    },
+    loadLawLibrary: () => later(library),
+    loadLawDocument: (lawId: string) => later(SAMPLE_LAW_TEXTS[lawId] ?? null),
+    loadExamMaps: () => later(SAMPLE_EXAM_MAPS),
     loadLawMarks: (lawId: string) => later([...(marks.get(lawId) ?? [])]),
     saveLawMarks: (input: SaveLawMarksInput) => later(once(input.requestId, () => {
       const diff = diffLawMarks(input.previous, input.next);

@@ -58,6 +58,11 @@ jobs:
           VITE_SUPABASE_URL: https://exemplo.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
 
+      # Spec 41: nenhum cartão ou artigo de content/ dentro do dist. Os deploys
+      # repetem a chamada no dist que publicam, que é outro build.
+      - name: Nenhum conteúdo editorial no bundle
+        run: node scripts/check-dist-content.mjs apps/web/dist
+
       # Lê o dist e valida a configuração sem publicar nada. Medido: o
       # --dry-run não exige credencial do Cloudflare, então este job roda igual
       # numa PR vinda de fork, que não recebe secret nenhum.

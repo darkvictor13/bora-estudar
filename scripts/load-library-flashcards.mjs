@@ -31,8 +31,8 @@ import { pathToFileURL } from "node:url";
 import pg from "pg";
 
 const root = new URL("../", import.meta.url);
-const CURRENT = new URL("apps/web/src/data/pf2029-policial-flashcards.json", root);
-const LEGACY = new URL("apps/web/src/data/pf2029-informatica-flashcards.json", root);
+const CURRENT = new URL("content/flashcards/pf2029-policial-flashcards.json", root);
+const LEGACY = new URL("content/flashcards/pf2029-informatica-flashcards.json", root);
 const LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 
 /** Os dois arquivos, achatados nas linhas que as tabelas recebem. */
