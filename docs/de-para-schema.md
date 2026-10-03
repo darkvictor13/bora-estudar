@@ -58,7 +58,9 @@ sem origem no banco anterior: o conteúdo vinha de um JSON publicado com o site.
 `20261001180000_law_library` faz o mesmo com as leis (spec 40) — `legal_norms`,
 `laws`, `law_articles`, `law_subjects`, `exam_notices`, `exam_notice_sections`,
 `exam_notice_items` — e acrescenta `law_marks`, as marcações de leitura, que
-antes ficavam no `localStorage`. Coluna 01/10.
+antes ficavam no `localStorage`. Coluna 01/10. `20261003120000_flashcard_marks`
+(spec 42) acrescenta `flashcard_marks`, o grifo nos três tipos de cartão, sem
+origem no banco anterior: os cartões não tinham marcação. Coluna 03/10.
 
 | origem | destino |
 |---|---|
@@ -913,25 +915,28 @@ tabelas, o enum do aviso editorial, seis FKs e `vw_library_flashcard_decks`; e
 `(deck_id, card_id)` no lugar do de `deck_id`, que era prefixo dele. E
 `20261001180000` (spec 40), o Vade Mecum: oito tabelas — normas, leis,
 artigos, matérias, os três níveis do mapa de edital e `law_marks` —, quatro
-enums e `vw_law_library`. É a
+enums e `vw_law_library`. A coluna **03/10** acrescenta `20261003120000`
+(spec 42), o grifo nos flashcards: `flashcard_marks`, os enums
+`flashcard_card_kind` e `flashcard_side`, quatro FKs — o aluno e uma por tipo
+de cartão — e quatro policies. É a
 última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
 
-| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 |
-|---|---|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 |
-| Colunas | 326 | 294 | 294 | 302 | 401 | 495 |
-| Policies | 79 | 63 | 62 | 64 | 99 | 115 |
-| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 |
-| Índices | 85 | 81 | 92 | 97 | 128 | 154 |
-| Views | 0 | 1 | 1 | 1 | 1 | 3 |
-| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 |
+| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 |
+|---|---|---|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 |
+| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 |
+| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 |
+| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.

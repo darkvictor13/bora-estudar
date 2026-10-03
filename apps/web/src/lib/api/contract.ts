@@ -1263,6 +1263,8 @@ export type { MockExam, MockExamInput, MockExamResult, MockExamSubject, MockExam
 import type { MockExamsApi } from "./mock-exams.ts";
 export type { LawArticle, LawDocument, LawEntry, LawExamMap, LawExamMapItem, LawExamMapSection, LawExamMaps, LawLibrary, LawMark, LawMarkColor, LawMarkStyle, LawsApi, LawTextRange, SaveLawMarksInput } from "./laws.ts";
 import type { LawsApi } from "./laws.ts";
+export type { FlashcardCardKind, FlashcardCardRef, FlashcardDeckRef, FlashcardMark, FlashcardMarksApi, FlashcardSide, FlashcardTextRange, SaveFlashcardMarksInput } from "./flashcard-marks.ts";
+import type { FlashcardMarksApi } from "./flashcard-marks.ts";
 
 export interface BoraApi
   extends AuthApi,
@@ -1281,4 +1283,5 @@ export interface BoraApi
     TeacherNotebooksApi,
     TeacherClassesApi,
     MockExamsApi,
-    LawsApi {}
+    LawsApi,
+    FlashcardMarksApi {}

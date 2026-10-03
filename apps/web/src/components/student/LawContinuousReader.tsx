@@ -1,24 +1,16 @@
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutwardOutlined";
-import BorderColorIcon from "@mui/icons-material/BorderColorOutlined";
-import CloseIcon from "@mui/icons-material/CloseOutlined";
-import CropSquareIcon from "@mui/icons-material/CropSquareOutlined";
-import FormatStrikethroughIcon from "@mui/icons-material/FormatStrikethroughOutlined";
-import FormatUnderlinedIcon from "@mui/icons-material/FormatUnderlinedOutlined";
-import BackspaceIcon from "@mui/icons-material/BackspaceOutlined";
-import MouseIcon from "@mui/icons-material/MouseOutlined";
-import UndoIcon from "@mui/icons-material/UndoOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card } from "@bora/ui";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { MarkingToolbar, markSx } from "@/components/MarkingToolbar";
 import type { Result } from "@/lib/api";
+import { selectedTexts } from "@/lib/ui/textSelection";
+import { useMarkingSession } from "@/lib/ui/useMarkingSession";
 import type { LawDocument, LawEntry } from "@/lib/domain/law-library";
 import {
-  LAW_MARK_COLORS,
   anchorLawMarks,
   eraseLawRanges,
   paintLawRanges,
@@ -41,79 +33,20 @@ interface Props {
   readonly onSaveMarks: (previous: readonly LawMark[], next: readonly LawMark[]) => Promise<Result<null>>;
 }
 
-const TOOLS: readonly { style: LawMarkStyle; label: string; icon: ReactNode }[] = [
-  { style: "highlight", label: "Marca-texto", icon: <BorderColorIcon fontSize="small" /> },
-  { style: "underline", label: "Sublinhar", icon: <FormatUnderlinedIcon fontSize="small" /> },
-  { style: "strike", label: "Tachar", icon: <FormatStrikethroughIcon fontSize="small" /> },
-  { style: "outline", label: "Contornar", icon: <CropSquareIcon fontSize="small" /> },
-];
-
-const COLOR_LABELS: Readonly<Record<LawMarkColor, string>> = {
-  yellow: "Amarelo",
-  mint: "Verde",
-  blue: "Azul",
-  pink: "Rosa",
-  lilac: "Lilás",
-  peach: "Pêssego",
-  salmon: "Salmão",
-};
-
 function selectedParagraphRanges(root: HTMLElement): LawTextRange[] {
-  const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return [];
-  const range = selection.getRangeAt(0);
-  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return [];
-
-  const result: LawTextRange[] = [];
-  for (const paragraph of root.querySelectorAll<HTMLElement>("[data-law-paragraph]")) {
-    if (!range.intersectsNode(paragraph)) continue;
-    const articleId = paragraph.dataset.articleId;
-    const paragraphIndex = Number(paragraph.dataset.paragraphIndex);
-    if (!articleId || !Number.isInteger(paragraphIndex)) continue;
-
-    const whole = document.createRange();
-    whole.selectNodeContents(paragraph);
-    const portion = range.cloneRange();
-    if (portion.compareBoundaryPoints(Range.START_TO_START, whole) < 0) {
-      portion.setStart(whole.startContainer, whole.startOffset);
-    }
-    if (portion.compareBoundaryPoints(Range.END_TO_END, whole) > 0) {
-      portion.setEnd(whole.endContainer, whole.endOffset);
-    }
-    const prefix = whole.cloneRange();
-    prefix.setEnd(portion.startContainer, portion.startOffset);
-    const start = prefix.toString().length;
-    const end = start + portion.toString().length;
-    if (end > start) result.push({ articleId, paragraphIndex, start, end });
-  }
-  return result;
-}
-
-function markSx(mark: LawMark | null) {
-  if (!mark) return undefined;
-  const color = LAW_MARK_COLORS[mark.color];
-  switch (mark.style) {
-    case "highlight": return { backgroundColor: color, color: "#18201e", borderRadius: "2px" };
-    case "underline": return { textDecoration: `underline 3px ${color}`, textUnderlineOffset: "3px" };
-    case "strike": return { textDecoration: `line-through 2px ${color}` };
-    case "outline": return { boxShadow: `inset 0 0 0 2px ${color}`, borderRadius: "3px" };
-  }
+  return selectedTexts(root, "[data-law-paragraph]").flatMap(({ element, start, end }) => {
+    const articleId = element.dataset.articleId;
+    const paragraphIndex = Number(element.dataset.paragraphIndex);
+    return articleId && Number.isInteger(paragraphIndex) ? [{ articleId, paragraphIndex, start, end }] : [];
+  });
 }
 
 export function LawContinuousReader({ law, document: lawDocument, initialMarks, requestedArticleId, onActiveArticle, onSaveMarks }: Props) {
   // A reancoragem roda uma vez, na montagem: as que perderam o trecho
   // continuam gravadas, não são pintadas e são contadas (R-LEI-13).
   const [anchored] = useState(() => anchorLawMarks(initialMarks, lawDocument));
-  const [marks, setMarks] = useState<LawMark[]>(anchored.placed);
+  const { marks, change, undoLast, canUndo, saveError } = useMarkingSession<LawMark>(anchored.placed, onSaveMarks);
   const [selection, setSelection] = useState<LawTextRange[]>([]);
-  const [style, setStyle] = useState<LawMarkStyle>("highlight");
-  const [color, setColor] = useState<LawMarkColor>("yellow");
-  const [saveError, setSaveError] = useState<string | null>(null);
-  // As gravações de uma aba saem em fila (R-LEI-15): a segunda ação só vai ao
-  // banco depois de a primeira voltar, e a ordem do banco é a da tela.
-  const saving = useRef<Promise<void>>(Promise.resolve());
-  const [undoCount, setUndoCount] = useState(0);
-  const undo = useRef<LawMark[][]>([]);
   const content = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -154,30 +87,14 @@ export function LawContinuousReader({ law, document: lawDocument, initialMarks, 
     if (content.current) setSelection(selectedParagraphRanges(content.current));
   };
 
-  const persist = (previous: readonly LawMark[], next: readonly LawMark[]) => {
-    saving.current = saving.current.then(async () => {
-      const result = await onSaveMarks(previous, next);
-      setSaveError(result.ok ? null : result.error.message);
-    });
-  };
-
-  const changeMarks = (changed: LawMark[]) => {
-    const next = withLawQuotes(changed, lawDocument);
-    undo.current.push(marks);
-    if (undo.current.length > 30) undo.current.shift();
-    setUndoCount(undo.current.length);
-    setMarks(next);
-    persist(marks, next);
-  };
-
   const paint = (nextStyle: LawMarkStyle, nextColor: LawMarkColor) => {
     if (selection.length === 0) return;
-    changeMarks(paintLawRanges(marks, selection, nextStyle, nextColor));
+    change(withLawQuotes(paintLawRanges(marks, selection, nextStyle, nextColor), lawDocument));
   };
 
   const erase = () => {
     if (selection.length === 0) return;
-    changeMarks(eraseLawRanges(marks, selection));
+    change(withLawQuotes(eraseLawRanges(marks, selection), lawDocument));
   };
 
   const dismiss = () => {
@@ -198,45 +115,16 @@ export function LawContinuousReader({ law, document: lawDocument, initialMarks, 
         </Box>
       </Card>
 
-      <Box sx={(theme) => ({
-        position: "sticky", top: { xs: 112, md: 104 }, zIndex: 5,
-        display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.4,
-        p: 0.8, border: `1px solid ${theme.vars.palette.surface.border}`,
-        borderRadius: `${theme.brand.radius.md}px`,
-        backgroundColor: theme.vars.palette.surface.raised,
-        boxShadow: "0 10px 28px rgba(0,0,0,0.13)",
-      })} onMouseDown={(event) => event.preventDefault()} aria-label="Ferramentas de marcação">
-        <Tooltip title="Selecione um trecho da lei"><IconButton size="small" aria-label="Selecionar texto" onClick={dismiss}><MouseIcon fontSize="small" /></IconButton></Tooltip>
-        {TOOLS.map((tool) => (
-          <Tooltip key={tool.style} title={tool.label}>
-            <span><IconButton size="small" aria-label={tool.label} aria-pressed={style === tool.style} disabled={!selection.length} onClick={() => { setStyle(tool.style); paint(tool.style, color); }} sx={{ backgroundColor: style === tool.style ? "action.selected" : undefined }}>{tool.icon}</IconButton></span>
-          </Tooltip>
-        ))}
-        <Tooltip title="Apagar marcação do trecho"><span><IconButton size="small" aria-label="Apagar marcação" disabled={!selection.length} onClick={erase}><BackspaceIcon fontSize="small" /></IconButton></span></Tooltip>
-        <Box aria-hidden="true" sx={{ width: "1px", flex: "0 0 1px", height: 25, backgroundColor: "divider", mx: 0.4 }} />
-        {(Object.keys(LAW_MARK_COLORS) as LawMarkColor[]).map((tone) => (
-          <Tooltip key={tone} title={COLOR_LABELS[tone]}>
-            <span><IconButton
-              size="small"
-              aria-label={`Marcar em ${COLOR_LABELS[tone].toLowerCase()}`}
-              aria-pressed={color === tone}
-              onClick={() => { setColor(tone); paint(style, tone); }}
-              sx={{ p: 0.35, border: color === tone ? "2px solid" : "2px solid transparent", borderColor: color === tone ? "text.primary" : "transparent" }}
-            ><Box sx={{ width: 18, height: 18, borderRadius: "50%", backgroundColor: LAW_MARK_COLORS[tone], border: "1px solid rgba(0,0,0,0.12)" }} /></IconButton></span>
-          </Tooltip>
-        ))}
-        <Tooltip title="Desfazer última marcação"><span><IconButton size="small" aria-label="Desfazer marcação" disabled={!undoCount} onClick={() => {
-          const previous = undo.current.pop();
-          if (!previous) return;
-          setUndoCount(undo.current.length);
-          setMarks(previous);
-          persist(marks, previous);
-        }}><UndoIcon fontSize="small" /></IconButton></span></Tooltip>
-        <Tooltip title="Limpar seleção"><span><IconButton size="small" aria-label="Limpar seleção" disabled={!selection.length} onClick={dismiss}><CloseIcon fontSize="small" /></IconButton></span></Tooltip>
-        <Typography variant="caption" color="text.secondary" sx={{ ml: "auto", px: 0.6 }}>
-          {selection.length ? `${selection.length} trecho${selection.length > 1 ? "s" : ""} selecionado${selection.length > 1 ? "s" : ""}` : "Selecione um trecho para marcar"}
-        </Typography>
-      </Box>
+      <MarkingToolbar
+        selectionCount={selection.length}
+        canUndo={canUndo}
+        selectHint="Selecione um trecho da lei"
+        onPaint={paint}
+        onErase={erase}
+        onUndo={undoLast}
+        onDismiss={dismiss}
+        sx={{ position: "sticky", top: { xs: 112, md: 104 }, zIndex: 5, boxShadow: "0 10px 28px rgba(0,0,0,0.13)" }}
+      />
       {saveError && <Alert status="warning">Não foi possível salvar a última marcação: {saveError} Recarregue a página para ver o que ficou gravado.</Alert>}
       {anchored.lost.length > 0 && (
         <Alert status="info">

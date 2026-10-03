@@ -817,3 +817,41 @@ test("as marcações gravam a diferença, e repetir a mesma chave não muda nada
   assert.deepEqual(await api.loadLawMarks("lai"), []);
   assert.deepEqual(await api.loadLawMarks("ld"), []);
 });
+
+// Spec 42, CA-08: o grifo nos flashcards grava a diferença, por deck.
+test("as marcações de cartão gravam a diferença, e repetir a mesma chave não muda nada", async () => {
+  const deck = { kind: "personal", deckId: "d1000000-0000-4000-8000-000000000001" } as const;
+  const mark = {
+    id: "a9100000-0000-4000-8000-000000000001", card: { ...deck, cardId: "d2000000-0000-4000-8000-000000000001" },
+    side: "back", start: 0, end: 8, style: "highlight", color: "yellow", quote: "Dez dias", prefix: "", suffix: ", se preso.",
+  } as const;
+  const first = requestId();
+  assert.ok((await api.saveFlashcardMarks({ deck, previous: [], next: [mark], requestId: first })).ok);
+  assert.ok((await api.saveFlashcardMarks({ deck, previous: [], next: [mark], requestId: first })).ok);
+  assert.deepEqual(await api.loadFlashcardMarks(deck), [mark]);
+  const recolored = { ...mark, color: "mint" } as const;
+  assert.ok((await api.saveFlashcardMarks({ deck, previous: [mark], next: [recolored], requestId: requestId() })).ok);
+  assert.deepEqual((await api.loadFlashcardMarks(deck)).map((item) => item.color), ["mint"]);
+  // O mesmo id de deck em outro tipo de cartão é outro deck.
+  assert.deepEqual(await api.loadFlashcardMarks({ ...deck, kind: "lesson" }), []);
+  assert.ok((await api.saveFlashcardMarks({ deck, previous: [recolored], next: [], requestId: requestId() })).ok);
+  assert.deepEqual(await api.loadFlashcardMarks(deck), []);
+});
+
+// Spec 42, CA-07: lê o alias do catálogo, para valer com qualquer amostra.
+test("a marcação do cartão antigo da biblioteca aparece no deck do cartão que o substituiu", async () => {
+  const [alias] = (await api.loadLibraryFlashcardCatalog()).aliases;
+  assert.ok(alias, "a biblioteca da fixture precisa de ao menos um alias");
+  const oldDeck = { kind: "library", deckId: alias.oldDeckId } as const;
+  const mark = {
+    id: "a9100000-0000-4000-8000-000000000002", card: { ...oldDeck, cardId: alias.oldCardId },
+    side: "front", start: 0, end: 1, style: "underline", color: "blue", quote: "x", prefix: "", suffix: "",
+  } as const;
+  assert.ok((await api.saveFlashcardMarks({ deck: oldDeck, previous: [], next: [mark], requestId: requestId() })).ok);
+  const shown = await api.loadFlashcardMarks({ kind: "library", deckId: alias.deckId });
+  assert.deepEqual(shown.map((item) => [item.id, item.card.deckId, item.card.cardId]), [[mark.id, alias.deckId, alias.cardId]]);
+  // Alterar a marcação resolvida não a desamarra do par gravado.
+  const recolored = { ...shown[0]!, color: "pink" } as const;
+  assert.ok((await api.saveFlashcardMarks({ deck: { kind: "library", deckId: alias.deckId }, previous: shown, next: [recolored], requestId: requestId() })).ok);
+  assert.deepEqual((await api.loadFlashcardMarks({ kind: "library", deckId: alias.deckId })).map((item) => item.color), ["pink"]);
+});

@@ -324,6 +324,101 @@ export type Database = {
         }
         Relationships: []
       }
+      flashcard_marks: {
+        Row: {
+          card_kind: Database["public"]["Enums"]["flashcard_card_kind"]
+          color: Database["public"]["Enums"]["law_mark_color"]
+          created_at: string
+          end_offset: number
+          id: string
+          lesson_card_id: string | null
+          lesson_id: string | null
+          library_card_id: string | null
+          library_deck_id: string | null
+          personal_card_id: string | null
+          personal_deck_id: string | null
+          prefix: string
+          quote: string
+          side: Database["public"]["Enums"]["flashcard_side"]
+          start_offset: number
+          student_id: string
+          style: Database["public"]["Enums"]["law_mark_style"]
+          suffix: string
+          updated_at: string
+        }
+        Insert: {
+          card_kind: Database["public"]["Enums"]["flashcard_card_kind"]
+          color: Database["public"]["Enums"]["law_mark_color"]
+          created_at?: string
+          end_offset: number
+          id: string
+          lesson_card_id?: string | null
+          lesson_id?: string | null
+          library_card_id?: string | null
+          library_deck_id?: string | null
+          personal_card_id?: string | null
+          personal_deck_id?: string | null
+          prefix?: string
+          quote: string
+          side: Database["public"]["Enums"]["flashcard_side"]
+          start_offset: number
+          student_id: string
+          style: Database["public"]["Enums"]["law_mark_style"]
+          suffix?: string
+          updated_at?: string
+        }
+        Update: {
+          card_kind?: Database["public"]["Enums"]["flashcard_card_kind"]
+          color?: Database["public"]["Enums"]["law_mark_color"]
+          created_at?: string
+          end_offset?: number
+          id?: string
+          lesson_card_id?: string | null
+          lesson_id?: string | null
+          library_card_id?: string | null
+          library_deck_id?: string | null
+          personal_card_id?: string | null
+          personal_deck_id?: string | null
+          prefix?: string
+          quote?: string
+          side?: Database["public"]["Enums"]["flashcard_side"]
+          start_offset?: number
+          student_id?: string
+          style?: Database["public"]["Enums"]["law_mark_style"]
+          suffix?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcard_marks_lesson_card_fk"
+            columns: ["lesson_card_id", "lesson_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lesson_flashcards"
+            referencedColumns: ["id", "theory_lesson_id"]
+          },
+          {
+            foreignKeyName: "flashcard_marks_library_card_fk"
+            columns: ["library_deck_id", "library_card_id"]
+            isOneToOne: false
+            referencedRelation: "library_flashcards"
+            referencedColumns: ["deck_id", "id"]
+          },
+          {
+            foreignKeyName: "flashcard_marks_personal_card_fk"
+            columns: ["personal_card_id", "personal_deck_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "personal_flashcards"
+            referencedColumns: ["id", "deck_id", "student_id"]
+          },
+          {
+            foreignKeyName: "flashcard_marks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flashcard_reviews: {
         Row: {
           card_id: string
@@ -2906,6 +3001,8 @@ export type Database = {
     Enums: {
       access_grant_action: "grant" | "suspend"
       access_status: "pending" | "active" | "suspended" | "expired"
+      flashcard_card_kind: "library" | "lesson" | "personal"
+      flashcard_side: "front" | "back"
       goal_status: "pending" | "in_progress" | "completed" | "skipped"
       goal_type:
         | "theory"
@@ -3077,6 +3174,8 @@ export const Constants = {
     Enums: {
       access_grant_action: ["grant", "suspend"],
       access_status: ["pending", "active", "suspended", "expired"],
+      flashcard_card_kind: ["library", "lesson", "personal"],
+      flashcard_side: ["front", "back"],
       goal_status: ["pending", "in_progress", "completed", "skipped"],
       goal_type: [
         "theory",
