@@ -325,7 +325,11 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
+seção da área, no commit em que o teste passa a existir.
+
+| Id | Cobre |
+|---|---|
+| F-META-08 | sem acesso vigente, a semana não muda: concluir, reabrir, pular e registrar recusam, e a tela diz que o acesso venceu — QA-07 |
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.

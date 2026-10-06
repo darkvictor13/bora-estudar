@@ -7,6 +7,11 @@
 > `extra` mais o registro, criados na mesma operação pela tela — são cinco
 > tipos, os da v2, e o tipo vive no título da meta.
 
+> **Atualizada em 06/10/2026 (QA-04, QA-10, QA-11, QA-14, QA-27, N-02, N-07).** `record_extra_study` existe
+> de novo, com outra forma: o aluno escolhe a DATA (de `starts_on` até hoje), a RPC deriva semana, dia e
+> posição e grava a meta e o registro numa transação, com `request_id`. R-EXTRA-20 a R-EXTRA-28 valem; as
+> regras R-EXTRA-08, -09, -11, -13 e -18 estão marcadas abaixo como substituídas.
+
 ---
 
 ## Problema
@@ -55,12 +60,12 @@ escreva, custa migração de dado.
 |---|---|
 | R-EXTRA-06 | Registrar estudo extra é **execução**, e vai por RPC: `record_extra_study`. Ela **cria** linha em `goals`, e o aluno não tem — nem passa a ter — `insert` nessa tabela. |
 | R-EXTRA-07 | O registro nasce `completed`, com `completed_at = now()`. Não existe "estudo extra planejado pelo aluno": é o registro de algo que já aconteceu. Meta de estudo extra **planejada pelo professor** continua nascendo `pending` e sendo fechada por `complete_goal`. |
-| R-EXTRA-08 | O aluno escolhe a **semana** e o **dia** do registro. `day_order` é calculado pela RPC — o maior do dia mais um —, nunca pelo cliente. É a mesma regra de `apply_study_plan_batch`. |
-| R-EXTRA-09 | Exige planejamento `active`, e a semana precisa existir nele — ou seja, ter ao menos uma meta. Registrar estudo numa semana que o professor ainda não montou criaria uma semana fantasma no seletor do painel. |
+| R-EXTRA-08 | **Substituída por R-EXTRA-20.** O aluno escolhe a **semana** e o **dia** do registro. `day_order` é calculado pela RPC — o maior do dia mais um —, nunca pelo cliente. É a mesma regra de `apply_study_plan_batch`. |
+| R-EXTRA-09 | **Substituída por R-EXTRA-21.** Exige planejamento `active`, e a semana precisa existir nele — ou seja, ter ao menos uma meta. Registrar estudo numa semana que o professor ainda não montou criaria uma semana fantasma no seletor do painel. |
 | R-EXTRA-10 | `created_by` é o **aluno**; `teacher_id` e `student_id` vêm do planejamento, nunca de parâmetro. `type` é `extra_study`, `block_id` é nulo e `batch_id` é nulo — o registro não pertence a lote nenhum. |
-| R-EXTRA-11 | O tempo é obrigatório, entre **1 e 240 minutos**, gravado em `spent_minutes` — a mesma coluna e o mesmo teto da spec [12](12-conclusao-de-meta.md), com a `check` `goal_spent_minutes_range` valendo igual. |
+| R-EXTRA-11 | **Substituída por R-EXTRA-24.** O tempo é obrigatório, entre **1 e 240 minutos**, gravado em `spent_minutes` — a mesma coluna e o mesmo teto da spec [12](12-conclusao-de-meta.md), com a `check` `goal_spent_minutes_range` valendo igual. |
 | R-EXTRA-12 | O título é **derivado do tipo**, não digitado: "Estudo extra — Anki". O que a pessoa quer escrever vai em `student_note`. Título livre viraria o campo multiuso que a v96 tinha. |
-| R-EXTRA-13 | Idempotência **com payload**: `request_id` + `reserve_operation`, com hash de plano, semana, dia, tipo, minutos e observação. Um duplo clique não cria dois registros. |
+| R-EXTRA-13 | **Substituída por R-EXTRA-25.** Idempotência **com payload**: `request_id` + `reserve_operation`, com hash de plano, semana, dia, tipo, minutos e observação. Um duplo clique não cria dois registros. |
 
 ### Desfazer
 
@@ -75,8 +80,22 @@ escreva, custa migração de dado.
 | Id | Regra |
 |---|---|
 | R-EXTRA-17 | O registro entra em `vw_goal_performance.minutes_spent` como qualquer meta sem bateria, pelo `coalesce` que a spec 12 criou. Nenhuma view nova, nenhum contador. |
-| R-EXTRA-18 | Ele **não** entra em nenhum número de desempenho: `questions_answered` e `correct_answers` continuam vindo só do ledger. Estudo extra tem tempo, não tem acerto — é a regra que a v84 já enunciava. |
+| R-EXTRA-18 | **Substituída por R-EXTRA-23.** Ele **não** entra em nenhum número de desempenho: `questions_answered` e `correct_answers` continuam vindo só do ledger. Estudo extra tem tempo, não tem acerto — é a regra que a v84 já enunciava. |
 | R-EXTRA-19 | Ele conta como meta concluída da semana, então mexe em "X de Y metas concluídas" e no progresso da spec [17](17-ficha-da-turma.md) — subindo **os dois lados** da fração, porque a meta é criada já concluída. |
+
+### Hoje (QA de 06/10/2026)
+
+| Id | Regra |
+|---|---|
+| R-EXTRA-20 | O aluno escolhe a **data**, de `study_plans.starts_on` até hoje, e não mais semana e dia. A RPC calcula a semana (`(data − starts_on) / 7 + 1`), o dia (`isodow`) e a posição (`max(day_position) + 1` do dia, com o plano travado: N-02, o segundo extra do mesmo dia). |
+| R-EXTRA-21 | Exige plano `active` e acesso vigente. Uma semana sem meta passa a existir com o registro, e não se exige mais que a semana já tenha meta. |
+| R-EXTRA-22 | O "hoje" da tela é o do aparelho (D-11), e `checkExtraStudyDate` recusa o dia seguinte. O banco aceita até o dia em que já é hoje em algum lugar do planeta (UTC+14): ele não conhece o fuso do aparelho, e fixar um fuso recusaria quem viaja. O teto do servidor só barra o futuro absurdo (QA-11). |
+| R-EXTRA-23 | O registro extra grava questões e acertos e **entra no desempenho**, como a tela sempre fez. Substitui R-EXTRA-18. |
+| R-EXTRA-24 | Valem os limites de D-04 (0 a 240 minutos, 0 a 500 questões, acertos até o total, não tudo zero), nas mesmas CHECKs de `goal_entries` (spec [12](12-conclusao-de-meta.md), R-CONC-23). |
+| R-EXTRA-25 | Idempotência por `goal_entries.request_id` (`goal_entries_request_uidx`). O payload são as colunas da meta (plano, título, matéria) mais as do registro, `studied_on` incluída; mesma chave com outro payload é recusada com `23505`. |
+| R-EXTRA-26 | A data sugerida é o dia escolhido no calendário quando ele não passa de hoje. Sem dia escolhido, é hoje quando hoje está na semana vista. Semana futura também sugere hoje; semana passada sugere o primeiro dia dela (QA-14). |
+| R-EXTRA-27 | Abrir o diálogo pausa o cronômetro e vincula o tempo, sem escrever durante o render (QA-27). **Cancelar retoma o cronômetro**, se ele estava correndo (D-16). Lançar zera o cronômetro. |
+| R-EXTRA-28 | **O dia do estudo é guardado** em `goal_entries.studied_on` (N-07, D-18). O dia de qualquer registro é `studied_on`, ou o dia LOCAL de `created_at` quando a coluna é nula, e vale para a sequência, o calendário, o desempenho do dia, as séries por dia e por mês e o recorte por ano. Quem impõe o teto é `goal_entries_studied_on_check`. |
 
 ---
 
@@ -140,6 +159,13 @@ veio do seed, e a migration o converte antes de trocar o tipo.
 | CA-10 | O aluno continua sem `insert` direto em `goals` | **sem cobertura**: `record_extra_study` e o enum não foram portados |
 | CA-11 | `apply_study_plan_batch` continua aceitando o texto do payload e gravando o enum | **sem cobertura**: `record_extra_study` e o enum não foram portados |
 | CA-12 | As duas funções não têm `execute` para `public` e declaram `search_path` fixo | **sem cobertura**: `record_extra_study` e o enum não foram portados |
+| CA-13 | Dois estudos extras no mesmo dia cabem, em posições diferentes | F-EXTRA-01 e `03_goals.sql` |
+| CA-14 | Data antes do início do planejamento ou depois de hoje é recusada com a frase da regra, e nenhuma meta é criada | F-EXTRA-01 e `validation.test.ts` |
+| CA-15 | Com "Semana inteira", a data sugerida é hoje, e o caminho do cronômetro abre com a data de hoje | F-EXTRA-01 e `week.test.ts` |
+| CA-16 | Abrir o diálogo com o cronômetro correndo não escreve durante o render; cancelar retoma o cronômetro | F-EXTRA-01 |
+| CA-17 | A resposta que se perde e a tentativa repetida deixam uma meta e um registro só; a mesma chave com outro payload é recusada | F-EXTRA-01 e `03_goals.sql` |
+| CA-18 | `goal_entries_studied_on_check` recusa um dia futuro em lugar nenhum do planeta | `07_schema.sql` |
+| CA-19 | Um extra lançado para ontem conta ontem: na semana, na série por dia e no recorte por ano | F-EXTRA-01, F-EST-01 e `03_goals.sql` |
 
 ---
 
