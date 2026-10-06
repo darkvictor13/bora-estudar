@@ -571,3 +571,42 @@ gravar e perder a resposta (F-GPLAN-01).
 
 **Correção** ativar é uma chamada só à RPC. Ativar o que já está ativo passou a ser sucesso, porque é a
 retentativa depois de uma resposta perdida. Spec 14, R-GPLAN-02 e CA-08.
+
+---
+
+### QA-06 · MÉDIO · O erro de escrita chega cru, e cada queda de rede vira relato
+
+`translateDbError` só conhecia `42501`, `P0001`, `23505`, `23503` e `PGRST116`. O resto caía no `default`
+com `error.message` e código `unknown`: a queda de rede lia "TypeError: Failed to fetch" na tela (o texto muda
+por navegador), o corpo de gateway que não era JSON ia inteiro para o diálogo, as violações de CHECK saíam em
+inglês, e todas elas viravam um evento no Sentry. É da mesma classe do BUG-09, dado como corrigido, e a
+correção dele cobria só as baterias.
+
+**Reproduzir** `route.abort("internetdisconnected")` no `POST /rest/v1/goal_entries` e gravar um registro de
+estudo (F-META-03), ou na criação de turma (F-OBS-01).
+
+**Correção** `error-translation.ts` (puro): `code === ""` é `offline`, com a frase do login — a rede se
+reconhece pelo código, nunca pelo texto; corpo sem `code` é `unknown` com frase fixa e continua relatado;
+`23514`, `22P02`, `22003` e `23502` viram `validation` genérico. O preço, dito em voz alta: `validation` não é
+relatado, então uma CHECK que chega ao banco por falta de regra em `validation.ts` só é pega pelo teste do PR
+que escreve a regra. `session.ts` passou a lançar `unauthenticated` (e não `not_found`) para sessão vencida.
+`notebooks.ts` e `teacher-theory.ts` deixaram de ignorar o `error` do select que decide entre UPDATE e INSERT.
+
+---
+
+### N-01 · ALTO · `once()` guardava para sempre a promessa REJEITADA
+
+Quando a operação LANÇAVA (`requireSession`, `throwDb`, `currentSession` com a rede caída), o `.then` que
+limpava a chave só rodava no sucesso: a rejeição ficava no mapa, toda retentativa com o mesmo `requestId`
+devolvia a mesma rejeição sem reexecutar, saía uma `unhandledrejection` por falha, e `RecordStudyDialog` e
+`ExtraStudyDialog` ficavam presos em "Registrando…"/"Salvando…" porque o `await onSubmit` rejeitava antes do
+`setPending(false)`. As escritas fora de `once` que chamam helper que lança tinham o mesmo defeito, sem a
+memória.
+
+**Reproduzir** derrubar só `/auth/v1/user` uma vez e lançar um estudo extra (F-EXTRA-01). Medido: com a
+memória antiga o alerta nunca aparece e o botão não volta.
+
+**Correção** `createOnce` (`request-memory.ts`, puro) converte o throw em `failure` — a promessa nunca rejeita
+e a chave é liberada —, e `settle` faz o mesmo para a escrita fora de `once`: `joinWaitlist`,
+`saveReviewSpacing`, `setClassTheoryCatalog`, `enrollStudent`, `clearPendingGoals`, as quatro de simulado e
+`saveAccount`. O throw que escapa é relatado por `recoverThrown`, com a causa, se for `unknown`.

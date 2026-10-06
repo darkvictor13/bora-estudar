@@ -66,7 +66,9 @@ e só o trocam no sucesso (`RecordStudyDialog.tsx:38, :68-70`;
 `ExtraStudyDialog.tsx:80`), e o botão fica preso em "Registrando…" ou
 "Salvando…" até recarregar.
 
-**As escritas afetadas:**
+**As escritas afetadas** (os números de linha são os de antes dos PRs 1 e 3, que
+reescreveram `teacher-goals.ts` e `teacher-plans.ts` por RPC; a varredura final
+deve ser refeita por `grep`, não por linha):
 
 | Dentro de `once`, com helper que lança | Fora de `once`, com helper que lança |
 |---|---|
@@ -75,7 +77,7 @@ e só o trocam no sucesso (`RecordStudyDialog.tsx:38, :68-70`;
 | `personal-flashcards.ts`: `:72`, `:87`, `:112` | `teacher-classes.ts`: `setClassTheoryCatalog` `:140`, `enrollStudent` `:190` |
 | `flashcards.ts:187`, `library-flashcards.ts:111`, `laws.ts:103`, `flashcard-marks.ts:75` | `mock-exams.ts`: `createMockExam` `:60`, `saveMockExamScore` `:77`, `saveMockExamSubject` `:96`, `saveMockExamSubjectScore` `:112` |
 | `teacher-classes.ts:80`, `teacher-plans.ts:82`, `teacher-goals.ts:199` e `:262` | `auth.ts`: `saveAccount` `:142`, porque `loadAccount` lança DEPOIS do update |
-| `teacher-theory.ts`: `:64`, `:191`, `:304`, `:593`; `teacher-students.ts`: `grantAccess`/`revokeAccess` (via `writeAccess`, `cardOf`) | |
+| `teacher-theory.ts`: `:64`, `:191`, `:304`, `:593`; `teacher-students.ts`: `grantAccess`/`revokeAccess` (via `writeAccess`, `cardOf`) | `teacher-goals.ts`: `clearPendingGoals` (nasceu no PR 1 e chama `loadWeek` depois do RPC) |
 
 Só `auth.ts:33-40` (`sessionForWrite`) converte direito hoje.
 
@@ -317,8 +319,12 @@ Node 24, com import relativo `./error-translation.ts`:
    - o alerta do diálogo diz "Sem conexão…", e o botão volta a ser "Lançar
      estudo" e está habilitado;
    - clique de novo: o diálogo fecha, há **uma** meta `extra` com aquela
-     matéria, e `consoleErrors` está vazio. Antes da correção aparece um
-     `pageerror` de promessa rejeitada.
+     matéria, e nenhuma entrada de `consoleErrors` começa por `pageerror`
+     (antes da correção aparece um de promessa rejeitada). **Não se compara o
+     array inteiro:** o `ExtraStudyDialog` já loga, ao abrir, "Cannot update a
+     component (`StudyTimerBar`) while rendering…", porque
+     `pauseStudyTimerForRecord()` roda no inicializador de `useState`. É defeito
+     de outro assunto, não corrigido aqui.
    - **Rode antes da correção:** o teste fica vermelho no botão preso em
      "Salvando…".
 3. **F-OBS-01**, em `apps/e2e/tests/observability.spec.ts`: "uma escrita que
@@ -330,6 +336,14 @@ Node 24, com import relativo `./error-translation.ts`:
      caso nenhum. O que o teste prova é que a escrita chegou ao código
      `offline`, e é o código que decide o relato (`observability.ts:44-51`).
      A asserção sobre `saidas` enuncia a regra, como no teste de cima.
+
+## Também mudou no código, e o PR 4 aperta
+
+- `teacher.spec.ts`: as quatro asserções de "rede caindo"/"resposta perdida" de
+  F-PROF-10 (gerar a semana) e F-GPLAN-01 (ativar) que os PRs 1 e 3 deixaram em
+  `toBeVisible()` passam a conferir a frase "Sem conexão. Verifique a rede e
+  tente de novo.".
+- `clearPendingGoals` entra em `settle` (ver tabela).
 
 ## Critério de pronto
 

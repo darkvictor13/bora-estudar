@@ -658,7 +658,12 @@ declare o próprio `ErrorBoundary` sem passar por lá nasce sem relato.
 **Erro de escrita NÃO é lançado** — o contrato devolve `Result`. Quem relata é
 `fail`/`failure` em `lib/api/supabase/errors.ts`, quando o código é `unknown`.
 Adaptador novo que monte o `Result` na mão, sem passar por essas duas funções,
-grava um erro que ninguém vai ver.
+grava um erro que ninguém vai ver. **Escrita que chama helper que LANÇA**
+(`requireSession`, `throwDb`, `readFailure`) roda dentro de `once` ou `settle`,
+que convertem o throw em `failure` — o `await` que rejeitava deixava o botão
+preso em "Registrando…", e o `once` de antes guardava a promessa rejeitada, de
+modo que a retentativa devolvia o mesmo erro até recarregar. Nada de try/catch em
+componente.
 
 **Filtre por `ApiErrorCode`, nunca pela mensagem.** `throwDb` e `readFailure`
 lançam `ApiThrownError` justamente para o código sobreviver ao `throw`. Casar a
