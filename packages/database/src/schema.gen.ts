@@ -530,8 +530,10 @@ export type Database = {
           minutes: number
           note: string | null
           questions: number
+          request_id: string | null
           score: number | null
           student_id: string
+          studied_on: string | null
           teacher_id: string
           theory_stage: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers: number | null
@@ -545,8 +547,10 @@ export type Database = {
           minutes?: number
           note?: string | null
           questions?: number
+          request_id?: string | null
           score?: number | null
           student_id: string
+          studied_on?: string | null
           teacher_id: string
           theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers?: number | null
@@ -560,8 +564,10 @@ export type Database = {
           minutes?: number
           note?: string | null
           questions?: number
+          request_id?: string | null
           score?: number | null
           student_id?: string
+          studied_on?: string | null
           teacher_id?: string
           theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers?: number | null
@@ -3013,6 +3019,33 @@ export type Database = {
           id: string
           name: string
         }[]
+      }
+      record_extra_study: {
+        Args: {
+          p_correct_answers: number
+          p_date: string
+          p_kind: string
+          p_minutes: number
+          p_note?: string
+          p_questions: number
+          p_request_id: string
+          p_study_plan_id: string
+          p_subject: string
+        }
+        Returns: string
+      }
+      record_goal_entry: {
+        Args: {
+          p_correct_answers: number
+          p_goal_id: string
+          p_manual_lesson?: string
+          p_minutes: number
+          p_note?: string
+          p_questions: number
+          p_request_id: string
+          p_theory_stage?: Database["public"]["Enums"]["theory_stage"]
+        }
+        Returns: string
       }
       set_student_access: {
         Args: {

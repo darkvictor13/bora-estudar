@@ -69,6 +69,27 @@ do $$ declare r record; begin
  end if;
 end $$;
 
+-- N-07: o recorte por ano segue o DIA ESTUDADO. Um registro lançado em
+-- 2027-01-01 01:00 UTC com `studied_on` em 2026-12-31 é de 2026.
+reset role;
+select app_test.act_as_owner();
+insert into public.goal_entries(id,goal_id,teacher_id,student_id,questions,correct_answers,created_at,studied_on)
+values ('fe000000-0000-4000-8000-0000000000a1','fd000000-0000-4000-8000-000000000001',
+        'fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000002',
+        10,5,'2027-01-01 01:00+00','2026-12-31');
+set role authenticated;
+select app_test.act_as('fa000000-0000-4000-8000-000000000002');
+do $$ declare r record; begin
+ select * into r from public.student_question_comparison(2026);
+ if r.student_questions <> 110 then
+   raise exception 'FALHOU: o registro do dia 31/12 nao entrou em 2026 (%)', row_to_json(r);
+ end if;
+ select * into r from public.student_question_comparison(2027);
+ if r.student_questions <> 0 then
+   raise exception 'FALHOU: o registro estudado em 2026 entrou em 2027 (%)', row_to_json(r);
+ end if;
+end $$;
+
 -- Quem saiu da turma não recebe mais a distribuição dos ex-colegas — e, fora
 -- da amostra, cinco colegas seriam cinco notas exatas.
 reset role;

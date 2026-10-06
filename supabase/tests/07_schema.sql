@@ -180,7 +180,7 @@ begin
   foreach v_nome in array array[
     'find_student_by_email', 'link_student', 'set_student_access',
     'generate_week', 'clear_pending_goals', 'week_replacement_preview',
-    'activate_study_plan'
+    'activate_study_plan', 'record_goal_entry', 'record_extra_study'
   ] loop
     select p.oid into v_oid from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
@@ -211,7 +211,7 @@ begin
   if v_erro <> '' then
     raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
   end if;
-  raise notice '08 OK  as sete RPCs sao chamaveis so por authenticated, nominalmente';
+  raise notice '08 OK  as nove RPCs sao chamaveis so por authenticated, nominalmente';
 end $$;
 
 -- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
@@ -451,3 +451,71 @@ begin
 end $$;
 rollback;
 select app_test.act_as_owner();
+
+-- ---------- Um registro de estudo tem teto e piso no banco (QA-10, D-04) ----------
+--
+-- Como dono, para exercitar a CHECK e não a RLS nem o grant. Cada estado
+-- proibido aceito derruba a suíte, e não só quebra o código.
+do $$
+declare
+  v_caso record;
+begin
+  for v_caso in
+    select * from (values
+      ('minutos negativos',            -1,   0,  0),
+      ('minutos acima de 240',         241,  0,  0),
+      ('questoes acima de 500',        10,   501, 0),
+      ('questoes negativas',           10,   -1, 0),
+      ('acertos acima das questoes',   10,   5,  6),
+      ('acertos negativos',            10,   5,  -1),
+      ('registro todo zerado',         0,    0,  0)
+    ) as t(descricao, minutos, questoes, acertos)
+  loop
+    begin
+      insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
+      values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+              '22222222-2222-4222-8222-222222222222', v_caso.minutos, v_caso.questoes, v_caso.acertos);
+      raise exception 'FALHOU: goal_entries aceitou %', v_caso.descricao;
+    exception when check_violation then
+      null;
+    end;
+  end loop;
+  raise notice '19 OK  goal_entries recusa minutos, questoes e acertos fora da regra, e o registro vazio';
+end $$;
+
+-- ---------- O dia estudado não é futuro em lugar nenhum (N-07) ----------
+do $$ begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, studied_on)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 10, current_date + 3);
+  raise exception 'FALHOU: goal_entries aceitou studied_on tres dias no futuro';
+exception when check_violation then
+  raise notice '20 OK  goal_entries_studied_on_check recusa o dia futuro';
+end $$;
+
+-- ---------- request_id é único: é a idempotência das duas RPCs ----------
+do $$
+declare v_chave uuid := gen_random_uuid();
+begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note, request_id)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21', v_chave);
+  begin
+    insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note, request_id)
+    values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+            '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21', v_chave);
+    raise exception 'FALHOU: goal_entries aceitou dois registros com o mesmo request_id';
+  exception when unique_violation then
+    null;
+  end;
+  -- Nulo repete: o bundle no ar insere sem a chave.
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21');
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21');
+  delete from public.goal_entries
+   where note = 'teste-07-21';
+  raise notice '21 OK  goal_entries_request_uidx: chave unica, e nulo repete';
+end $$;
