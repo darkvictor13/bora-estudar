@@ -53,7 +53,7 @@ O banco local tem hoje **6 alunos com dois ativos**, criados pelo QA:
   `request_id`. O único parâmetro é a identidade do alvo, e "este plano está
   ativo" é estado, não incremento: ativar de novo o que já está ativo devolve a
   linha sem escrever nada. O índice garante que o estado final nunca tem dois
-  ativos. A trava `for update` sobre os planejamentos do aluno serializa duas
+  ativos. A trava `for no key update` sobre os planejamentos do aluno serializa duas
   chamadas, de modo que a segunda enxerga o resultado da primeira em vez de
   bater no índice.
 - **Nome do parâmetro: `p_study_plan_id`, e não `p_plan_id`.** É o nome que a
@@ -163,6 +163,7 @@ O banco local tem hoje **6 alunos com dois ativos**, criados pelo QA:
      -- WITH CHECK de `study_plans_update`.
      if not found
         or v_plan.teacher_id <> v_uid
+        or not public.is_teacher()
         or not public.is_teacher_of(v_plan.student_id) then
        raise exception 'planejamento nao encontrado, ou nao e seu' using errcode = '42501';
      end if;
@@ -171,11 +172,15 @@ O banco local tem hoje **6 alunos com dois ativos**, criados pelo QA:
      -- sempre na ordem do id (duas chamadas nunca se esperam em ciclo). Travar só
      -- o alvo, como a versão de agosto fazia, não basta: duas abas ativando
      -- planos DIFERENTES não disputam a mesma linha, e a segunda bate no índice.
+     --
+     -- `no key update`, e não `update`: `status` não é chave, e `for update`
+     -- bloquearia o `for key share` que a FK pega quando o aluno lança estudo
+     -- extra. É o modo de `generate_week`.
      perform 1
         from public.study_plans p
        where p.student_id = v_plan.student_id
        order by p.id
-         for update;
+         for no key update;
 
      -- Releitura DEPOIS da trava: quem esperou decide pelo que a outra
      -- transação gravou, e não pelo que leu antes de esperar.
@@ -236,7 +241,10 @@ O banco local tem hoje **6 alunos com dois ativos**, criados pelo QA:
      natural. A frase "arquiva o anterior ANTES de ativar … a ordem inversa bate
      no índice" sai, porque descrevia o caminho de duas requisições.
 
-4. **Fixture**, em `apps/web/src/lib/api/fixtures.ts:1407-1436`. Hoje
+4. **Fixture**, em `apps/web/src/lib/api/fixtures.ts`. `PLAN` é `const`
+   declarada depois de `seedState()`, que roda na inicialização do módulo: o
+   plano semeado vem de uma função, `seedPlan()` (zona morta, como em
+   `seedStudents`). Hoje
    `listPlans`, `activatePlan` e `archivePlan` devolvem o `PLAN` constante, e
    `createPlan` devolve `status: "active"`, o contrário do Supabase. Para a
    fixture mutar e recusar:
@@ -358,6 +366,11 @@ Cada teste cria o segundo plano por SQL: `insert into public.study_plans
 
 ## Armadilhas
 
+- **A trava é `for no key update`, e não `for update`.** O `status` não é
+  chave, e `for update` conflita com o `for key share` que a FK de `goals` pega
+  quando o aluno lança estudo extra: o aluno esperaria a ativação do
+  professor. `generate_week` usa o mesmo modo, na linha do plano, e por isso
+  as duas não formam ciclo (conferido ao implementar).
 - **A função tem de ser `volatile`** (o padrão; não declare `stable`). Em
   READ COMMITTED, cada comando de uma função volátil tira snapshot novo. É isso
   que faz o `update` depois da trava enxergar o ativo que a outra transação
