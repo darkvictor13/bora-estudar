@@ -21,7 +21,7 @@ import {
   type TheoryCatalog,
 } from "../fixtures/scenario.ts";
 import { STUDENT_WEEK_ALL_DAYS } from "../support/routes.ts";
-import { alert, field, goalRow, testId } from "../support/ui.ts";
+import { alert, content, field, goalRow, testId } from "../support/ui.ts";
 
 type Page = import("@playwright/test").Page;
 
@@ -416,5 +416,189 @@ test.describe("F-TEO-07 · o controle por disciplina", () => {
   test("sem catálogo vinculado, a tela explica em vez de ficar vazia", async ({ studentPage }) => {
     await studentPage.goto("/aluno/teoria");
     await expect(testId(studentPage, "empty")).toContainText("ainda não tem aulas vinculadas");
+  });
+});
+
+/**
+ * O PIOR CASO da retentativa: o servidor grava e o navegador nunca recebe a
+ * resposta. Antes, as questões iniciais liam um contador, somavam e gravavam, e a
+ * nova tentativa somava de novo.
+ */
+async function loseNextResponse(page: Page, rpc: string): Promise<void> {
+  await page.route(
+    `**/rest/v1/rpc/${rpc}`,
+    async (route) => {
+      await route.fetch();
+      await route.abort();
+    },
+    { times: 1 },
+  );
+}
+
+test.describe("F-TEO-08 · QA-04 · questões iniciais com a resposta perdida somam uma vez", () => {
+  test("a nova tentativa soma uma vez, e o ledger tem um registro só", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const { catalog, goalId } = await withCatalog(scenario, { initialQuestions: 15 });
+    await loseNextResponse(studentPage, "record_initial_questions");
+
+    await openTheory(studentPage, goalId);
+    await tab(studentPage, "Questões");
+    await field(studentPage, "questions").fill("10");
+    await field(studentPage, "correctAnswers").fill("8");
+    const registrar = testId(studentPage, "initial-questions-form").getByRole("button");
+    await registrar.click();
+
+    const dialog = testId(studentPage, "theory-dialog");
+    await expect(alert(dialog, "error")).toBeVisible();
+
+    // O MESMO formulário, a mesma chave: o banco devolve o que já gravou.
+    await registrar.click();
+    await expect(testId(studentPage, "initial-questions-count")).toHaveText("10/15");
+    await expect(alert(dialog, "error")).toHaveCount(0);
+
+    expect(
+      await one<{ initial_questions_done: number }>(
+        "select initial_questions_done from public.theory_progress where theory_lesson_id = $1",
+        [catalog.lessons[0]!.id],
+      ),
+    ).toMatchObject({ initial_questions_done: 10 });
+    expect(
+      await count("select count(*) from public.goal_entries where goal_id = $1", [goalId]),
+    ).toBe(1);
+  });
+
+  test("trocar os números depois da resposta perdida é recusado, e o banco fica com 10", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const { catalog, goalId } = await withCatalog(scenario, { initialQuestions: 15 });
+    await loseNextResponse(studentPage, "record_initial_questions");
+
+    await openTheory(studentPage, goalId);
+    await tab(studentPage, "Questões");
+    await field(studentPage, "questions").fill("10");
+    await field(studentPage, "correctAnswers").fill("8");
+    const registrar = testId(studentPage, "initial-questions-form").getByRole("button");
+    await registrar.click();
+    const dialog = testId(studentPage, "theory-dialog");
+    await expect(alert(dialog, "error")).toBeVisible();
+
+    await field(studentPage, "questions").fill("12");
+    await registrar.click();
+    await expect(alert(dialog, "error")).toContainText("outros valores");
+
+    expect(
+      await one<{ initial_questions_done: number }>(
+        "select initial_questions_done from public.theory_progress where theory_lesson_id = $1",
+        [catalog.lessons[0]!.id],
+      ),
+    ).toMatchObject({ initial_questions_done: 10 });
+    expect(
+      await count("select count(*) from public.goal_entries where goal_id = $1", [goalId]),
+    ).toBe(1);
+  });
+});
+
+test.describe("F-TEO-09 · QA-04 · a revisão com a resposta perdida soma uma vez", () => {
+  test("no modal, o formulário continua aberto e a nova tentativa fecha a revisão", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const { catalog, goalId } = await withCatalog(scenario, {
+      initialQuestions: 5,
+      reviewSpacing: 1,
+    });
+
+    // Fecha a aula 1 pelo modal: a revisão nasce na mesma transação (R-TEO-23).
+    await openTheory(studentPage, goalId);
+    await tab(studentPage, "Questões");
+    await field(studentPage, "questions").fill("5");
+    await field(studentPage, "correctAnswers").fill("5");
+    await testId(studentPage, "initial-questions-form").getByRole("button").click();
+    await expect(testId(studentPage, "initial-questions-count")).toHaveText("5/5");
+
+    await loseNextResponse(studentPage, "record_review_questions");
+    await tab(studentPage, "Revisões");
+    const review = testId(studentPage, "theory-review");
+    await review.getByRole("button", { name: "Registrar" }).click();
+    await field(studentPage, "questions").fill("10");
+    await field(studentPage, "correctAnswers").fill("8");
+    await review.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(alert(testId(studentPage, "theory-dialog"), "error")).toBeVisible();
+    // O formulário NÃO fechou: era o que impedia repetir o mesmo envio.
+    await expect(field(studentPage, "questions")).toBeVisible();
+
+    await review.getByRole("button", { name: "Salvar" }).click();
+    await expect(
+      studentPage.locator('[data-testid="theory-review"][data-status="completed"]'),
+    ).toHaveCount(1);
+
+    expect(
+      await one<{ questions_answered: number; status: string }>(
+        "select questions_answered, status::text from public.theory_reviews where theory_lesson_id = $1",
+        [catalog.lessons[0]!.id],
+      ),
+    ).toMatchObject({ questions_answered: 10, status: "completed" });
+    expect(
+      await count(
+        `select count(*) from public.theory_review_entries e
+           join public.theory_reviews r on r.id = e.theory_review_id
+          where r.theory_lesson_id = $1`,
+        [catalog.lessons[0]!.id],
+      ),
+    ).toBe(1);
+  });
+
+  test("em /aluno/revisoes, a mesma coisa pela linha da revisão", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const catalog = await addTheoryCatalog(scenario, { initialQuestions: 5, reviewSpacing: 1 });
+    await addTheoryGoal(scenario, catalog.subject);
+
+    // A revisão da aula 1 já nasceu, como o 5a deixa nascer: linha direta, de
+    // pré-condição. O que se exercita aqui é registrar, não criar.
+    await query(
+      `insert into public.theory_progress
+         (study_plan_id, student_id, theory_lesson_id, current_page, theory_done,
+          initial_questions_done, initial_questions_complete, lesson_done)
+       values ($1, $2, $3, 17, true, 5, true, true)`,
+      [scenario.planId, scenario.student.id, catalog.lessons[0]!.id],
+    );
+    const reviewRow = await one<{ id: string }>(
+      `insert into public.theory_reviews
+         (study_plan_id, student_id, theory_lesson_id, review_number, minimum_questions)
+       values ($1, $2, $3, 1, 10) returning id`,
+      [scenario.planId, scenario.student.id, catalog.lessons[0]!.id],
+    );
+
+    await loseNextResponse(studentPage, "record_review_questions");
+    await studentPage.goto("/aluno/revisoes");
+    const row = studentPage.locator(`[data-testid="review-row"][data-review-id="${reviewRow.id}"]`);
+    await row.getByRole("button", { name: "Registrar" }).click();
+    await field(studentPage, "questions").fill("10");
+    await field(studentPage, "correctAnswers").fill("8");
+    await row.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(alert(content(studentPage), "error")).toBeVisible();
+    await expect(field(studentPage, "questions")).toBeVisible();
+
+    await row.getByRole("button", { name: "Salvar" }).click();
+    await expect(row).toHaveAttribute("data-status", "completed");
+
+    expect(
+      await one<{ questions_answered: number }>(
+        "select questions_answered from public.theory_reviews where id = $1",
+        [reviewRow.id],
+      ),
+    ).toMatchObject({ questions_answered: 10 });
+    expect(
+      await count("select count(*) from public.theory_review_entries where theory_review_id = $1", [
+        reviewRow.id,
+      ]),
+    ).toBe(1);
   });
 });
