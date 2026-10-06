@@ -9,8 +9,9 @@
  * `once()` é a defesa contra o CLIQUE DUPLO, dentro da aba. Onde a retentativa
  * importa de verdade — a resposta que se perde e a aba que recarrega —, quem
  * garante é o banco: `access_grants_request_uidx` (`set_student_access`),
- * `goal_batches.id` (`generate_week`) e `goal_entries_request_uidx`
- * (`record_goal_entry`, `record_extra_study`). Escrita nova com payload e sem
+ * `goal_batches.id` (`generate_week`), `goal_entries_request_uidx`
+ * (`record_goal_entry`, `record_extra_study`, `record_initial_questions`) e
+ * `theory_review_entries_request_uidx` (`record_review_questions`). Escrita nova com payload e sem
  * uma dessas chaves só tem esta memória, e ela não sobrevive a um recarregar.
  */
 import { recoverThrown } from "./errors.ts";

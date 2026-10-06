@@ -618,22 +618,43 @@ rede "cai". O throw de dentro do `once()` já não tem caminho nessa tela, e que
 
 ---
 
-### QA-04 · ALTO · Registrar estudo duplica na retentativa (parcial: a teoria é o 5b)
+### QA-04 · ALTO · Registrar estudo duplica na retentativa (parcial: o caminho direto só fecha no 5c)
 
 `recordStudy` eram dois pedidos (INSERT em `goal_entries`, UPDATE `pending` → `in_progress`) e `recordExtraStudy`
 três (meta, registro e um DELETE de compensação). A única defesa era `once()`, que esquece a chave quando a
 tentativa falha: o servidor gravava, a resposta se perdia, e a nova tentativa gravava de novo. `goal_entries` não
 tinha `request_id`.
 
+Na teoria era pior: `recordInitialQuestions` e `recordReviewQuestions` LIAM um contador, somavam e gravavam. A
+retentativa somava duas vezes e duplicava o registro; duas abas perdiam uma das somas; a queda entre a soma e o
+INSERT deixava progresso sem ledger; e concluir a aula e criar as revisões eram duas escritas com o erro
+ignorado. A questão de revisão não ia para ledger nenhum (era só `questions_answered`, mantido à mão), e a
+retentativa do envio que FECHOU a revisão voltava "Esta revisão já foi concluída". A chave ainda nascia no clique
+(`newRequestId()` dentro do envio), e o formulário de revisão do modal fechava antes do resultado.
+
 **Reproduzir** deixar o servidor gravar e derrubar a resposta, uma vez, em `rpc/record_goal_entry` e em
-`rpc/record_extra_study` (F-META-03 e F-EXTRA-01; `03_goals` casos 32 a 38).
+`rpc/record_extra_study` (F-META-03 e F-EXTRA-01; `03_goals` casos 32 a 38) e, na teoria, em
+`rpc/record_initial_questions` e `rpc/record_review_questions` (F-TEO-08 e F-TEO-09; `06_theory` casos 16 a 26).
 
 **Correção** migration `20261006224256_student_study_entries`: `goal_entries.request_id`, índice único
 `goal_entries_request_uidx`, e as RPCs `record_goal_entry` e `record_extra_study`, uma transação cada, que travam
 a meta (ou o plano) ANTES de buscar a chave e comparam as colunas do registro. Mesma chave com outra carga é
 `23505`, e a tela diz "Este estudo já foi registrado com outros valores". Spec 12, R-CONC-21 e R-CONC-22; spec
-19, R-EXTRA-25. **Parcial:** `recordInitialQuestions` e `recordReviewQuestions` (teoria) ainda leem, somam e gravam
-um contador, e o INSERT direto do aluno continua aceito — são os PRs 5b e 5c.
+19, R-EXTRA-25.
+
+**Teoria (PR 5b)** migration `20261006231152_record_theory_questions`: `record_initial_questions` insere em
+`goal_entries` com `request_id` e a aula (`goal_entries.theory_lesson_id`, FK composta), e SÓ SE inseriu agora soma
+o progresso (`x = x + n`, um upsert que serializa duas abas), fecha a aula e cria as revisões, numa transação.
+`record_review_questions` grava no ledger novo `theory_review_entries` (`request_id` UNIQUE) e soma; o replay vem
+antes de "já concluída". O mínimo é o da regra da AULA (`initial_questions_required`), e o TypeScript passou a ler
+pela aula também. `checkQuestionRecord` (1 a 500 questões, acertos de 0 ao total) vale para as duas implementações,
+e a chave de retentativa nasce quando o formulário abre (`TheoryDialog`, `Reviews`) e só muda depois do sucesso.
+Spec 32, R-TEO-21 a R-TEO-24. A spec 32, R-TEO-06, exigia "teoria lida E mínimo", e o código (e a spec 36) fechavam
+só pelas questões: o texto foi corrigido.
+
+**Parcial:** o INSERT direto do aluno em `goal_entries`, a escrita das colunas de contagem de `theory_progress` e
+`theory_reviews` continuam aceitos, porque o bundle no ar os usa — o PR 5c os revoga, depois de este bundle estar
+publicado em staging.
 
 ---
 

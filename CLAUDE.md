@@ -80,7 +80,8 @@ O de-para coluna a coluna, contra o banco de origem, está em
 |---|---|---|
 | `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan` |
 | `goal_entries` | o aluno, com acesso vigente | **registrar** por `record_goal_entry` e `record_extra_study` (o INSERT direto ainda é aceito, até o 5c); apagar exige acesso vigente e é direto; `request_id`, `studied_on` e `created_at` ficam fora do grant de INSERT, e quem os escreve são as RPCs |
-| `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
+| `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna; **a página** é escrita direta, mas as **questões** (`initial_questions_done`, a conclusão da aula, `questions_answered`) são de `record_initial_questions` e `record_review_questions` (o direto ainda é aceito, até o 5c) |
+| `theory_review_entries` | ninguém | SELECT e nada mais: escrita é de `record_review_questions` |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
 | `profiles.access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: `link_student` e `set_student_access` |
@@ -160,11 +161,12 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** As sete que existem —
+**Toda RPC mutante precisa ser segura a retentativa.** As nove que existem —
 `link_student` e `set_student_access`, de `20260918120000`, mais `generate_week`
 e `clear_pending_goals`, de `20261006214424`, `activate_study_plan`, de
-`20261006221607`, e `record_goal_entry` e `record_extra_study`, de
-`20261006224256` — nasceram assim, uma em cada forma:
+`20261006221607`, `record_goal_entry` e `record_extra_study`, de
+`20261006224256`, e `record_initial_questions` e `record_review_questions`, de
+`20261006231152` — nasceram assim, uma em cada forma:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
@@ -183,6 +185,13 @@ e `clear_pending_goals`, de `20261006214424`, `activate_study_plan`, de
   da busca pela chave (`for no key update` na meta ou no plano), e a busca vem
   ANTES da checagem de acesso: se a primeira tentativa gravou e o acesso venceu em
   seguida, a retentativa responde "gravado".
+  **`record_initial_questions` e `record_review_questions` também**: a primeira
+  usa o mesmo `goal_entries_request_uidx` (com `theory_lesson_id` no payload), e a
+  segunda um ledger próprio, `theory_review_entries.request_id` UNIQUE, porque
+  `goal_entries.goal_id` é obrigatório e a revisão não tem meta. Os contadores
+  (`initial_questions_done`, `questions_answered`) continuam colunas, com UM
+  escritor: a RPC, numa instrução que soma (`x = x + n`) depois de o ledger aceitar
+  a linha. Na revisão, o replay vem ANTES da recusa "já concluída".
 - **Naturalmente idempotente** — `link_student` não recebe `request_id`, porque
   não há payload a comparar: o único parâmetro já é a identidade do alvo. Quem
   garante é a COLUNA `profiles.teacher_id`, que cabe um valor só, com a escrita

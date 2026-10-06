@@ -7,7 +7,7 @@
 | Bugs | QA-04 (a parte da teoria: questões iniciais e questões de revisão) |
 | Branch | `fix/qa-5b-questoes-da-teoria` |
 | Depende de | 5a mergeado, e por ele 1, 3 e 4. Do 5a vêm `goal_entries.request_id`, `goal_entries_request_uidx`, as CHECKs de `goal_entries`, o grant de INSERT por coluna, `checkStudyEntry`, `MAX_ENTRY_QUESTIONS`, `STUDY_REPLAY_CONFLICT`, `parseCount`, o `case "P0002"` de `errors.ts` e o `once(requestId, run, payload)` da fixture. Do 4 vêm o `""` → `offline` e o `once()` que captura throw |
-| Migration | sim |
+| Migration | sim, uma: `supabase migration new record_theory_questions` (gerou `20261006231152_record_theory_questions.sql`) |
 
 ## O defeito
 
@@ -486,8 +486,10 @@ A validação também diverge:
 
 5. **Adaptador.**
    - Mova o `studyWriteError` local do 5a (`week.ts`: `23505` → `STUDY_REPLAY_CONFLICT`,
-     o resto por `translateDbError`) para `supabase/errors.ts`, exportado, e use-o nos
-     dois arquivos.
+     o resto por `translateDbError`) para `supabase/error-translation.ts` (puro, como
+     `translateDbError`, e testável pelo runner do Node), reexportado por
+     `supabase/errors.ts`, e use-o nos dois arquivos. O caso entra em
+     `error-translation.test.ts`.
    - `supabase/theory.ts`:
      - `recordInitialQuestions`:
        - `checkQuestionRecord` antes do `once()`, como `grantAccess`
@@ -523,8 +525,11 @@ A validação também diverge:
        diálogo com `key={theory?.lesson?.id ?? "closed"}`: ao reabrir, ele relê o
        progresso, e quem reabre vê se a primeira tentativa contou.
    - `routes/student/Overview.tsx:377-392`:
-     - um helper liga `pending`, chama a API, passa por `afterTheoryWrite` e devolve
-       `result.ok ? null : result.error`;
+     - um helper (`recordTheory`) liga `pending`, chama a API e, **só no sucesso**, passa
+       por `afterTheoryWrite`; devolve `result.ok ? null : result.error`. A falha NÃO vai
+       para o `error` da página (que fica atrás do modal e duplicaria o alerta): quem a
+       mostra é o `TheoryDialog`, que guarda a falha em estado próprio e a limpa no
+       envio seguinte e na troca de aba;
      - `onSaveProgress` fica como está: gravar a página leva a coluna a um valor, não
        acumula.
    - `routes/student/Reviews.tsx:64-78`: a mesma regra.
@@ -538,9 +543,10 @@ A validação também diverge:
    - `06_theory.sql`: bloco novo no fim (ver Testes).
    - `07_schema.sql`:
      - teste 06: `goal_entries_theory_lesson_fk` e `theory_review_entries_review_fk` na
-       lista, e o texto "catorze" acompanha;
-     - teste 08: as duas RPCs na lista;
-     - teste 13: +1 tabela e +2 FKs sobre o número que a `main` tiver.
+       lista, e o texto acompanha ("quinze" vira "dezessete": a lista já tinha quinze
+       depois dos PRs 1 e 3);
+     - teste 08: as duas RPCs na lista ("as nove RPCs" vira "as onze");
+     - teste 13: +1 tabela e +2 FKs sobre o número que a `main` tiver (51 → 52 e 91 → 93).
 
 8. **E2E** em `apps/e2e/tests/student-theory.spec.ts` (ver Testes). `F-TEO-08` e `F-TEO-09`
    saem de "Fluxos que ainda não existem" e vão para a tabela da teoria em
@@ -551,11 +557,14 @@ A validação também diverge:
      - em "Toda RPC mutante precisa ser segura a retentativa", as duas RPCs novas entram
        na forma 1, ao lado das do 5a;
      - na tabela da fronteira, uma linha nova: `theory_review_entries | ninguém | SELECT e
-       nada mais: escrita é de record_review_questions`.
+       nada mais: escrita é de record_review_questions`, e a linha de `theory_progress` e
+       `theory_reviews` diz que as questões passam pelas RPCs. A contagem de RPCs sobe de
+       sete para nove.
    - `docs/de-para-schema.md`:
-     - uma coluna nova em "Estado dos dois lados", medida pelas consultas da seção. O
-       delta esperado é +1 tabela, +8 colunas, +1 policy, +2 CHECKs, +2 FKs, +5 índices e
-       +5 funções;
+     - uma coluna nova em "Estado dos dois lados" (`06/10 · 5b`), medida pelas consultas da
+       seção. O delta esperado é +1 tabela, +8 colunas, +1 policy, +2 CHECKs, +2 FKs,
+       +5 índices e +5 funções, e **foi esse o medido** (52 tabelas, 530 colunas, 121
+       policies, 139 CHECKs, 93 FKs, 168 índices, 44 funções);
      - em `registros` → `goal_entries`, a linha `—` | `theory_lesson_id` | "nova (QA de
        06/10/2026)".
    - `docs/bugs-encontrados.md`: QA-04 deixa de ser parcial.
@@ -573,12 +582,17 @@ request ids usam o prefixo `c1…`; confira com grep que o 5a não o usou.
 | 18 | Bruno | a mesma chave com 9 questões | `unique_violation` |
 | 19 | Ana, depois Bruno | Ana cria `theory_review_rules` 1 e 2 para `forenses`; Bruno registra 5 com outra chave | 15, `lesson_done = true` e duas revisões da aula: a 1 da fixture, intacta pelo `do nothing`, e a 2 nova |
 | 20 | Fabi | na meta `a5…05` | `insufficient_privilege` |
-| 21 | Carla | na meta do Bruno; depois, a chave do 16 na meta `a5…04`, dela | `no_data_found`; `unique_violation`, sem vazar nada |
+| 21 | Carla | na meta do Bruno; depois, a chave do 16 na meta `a5…04`, dela | `no_data_found`; `unique_violation`, sem vazar nada (a implementação numerou 21a e 21b) |
 | 22 | Ana, depois Bruno | Ana cria `b2…02` em rascunho; Bruno registra nela | `no_data_found` |
 | 23 | Bruno | 0 questões, 501 questões, acertos > total | `check_violation` nos três |
 | 24 | Bruno | na revisão `b4…01` (mínimo 15), em sequência: 10; o replay; outro payload; +5; +1 com chave nova; o replay do +5 | 10; 10; `unique_violation`; 15 e `completed`; `raise_exception` com `like '%conclu%'`; sucesso, e não conflito |
 | 25 | Fabi | na revisão `b4…02` | `insufficient_privilege` |
 | 26 | Bruno, Ana, Carla | INSERT direto em `theory_review_entries`; leitura | o INSERT do Bruno dá `insufficient_privilege`; Bruno e Ana leem 2, Carla 0 |
+
+Os request ids da implementação usam o prefixo `c5…` (o `c1…` já é o dos perfis de
+`07_schema.sql`). No caso 24 o `raise exception 'FALHOU…'` tem o mesmo SQLSTATE (P0001) da
+recusa esperada, e o handler `when raise_exception` o engoliria: a implementação usa uma
+bandeira (`v_aceitou`) e levanta a falha fora do bloco.
 
 Dentro do `do $$`, chame assim:
 `select * into v_row from public.record_initial_questions('c1…'::uuid, …);`.
@@ -601,7 +615,9 @@ Dentro do `do $$`, chame assim:
   clica de novo;
 - a revisão fica `data-status="completed"`, com `questions_answered = 10` e uma linha em
   `theory_review_entries`;
-- em outro teste: o mesmo em `/aluno/revisoes`, pela `review-row`.
+- em outro teste: o mesmo em `/aluno/revisoes`, pela `review-row`. A pré-condição ali é a
+  linha de `theory_reviews` inserida direto (como o `F-REV-01` já faz): o que se exercita é
+  registrar, e não criar a revisão.
 
 Não há teste de duas abas: não dá para forçar a intercalação de forma determinística. Quem
 a garante é o `on conflict do update`, numa instrução só, e o teste 19 cobre duas chaves
