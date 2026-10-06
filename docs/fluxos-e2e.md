@@ -243,6 +243,8 @@ diff mostra a omissão.
 | F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
 | F-PROF-05 | gerar a semana preserva o concluído e o estudo registrado; só sai o que está pendente, pulado ou em andamento sem registro; a prévia conta o que fica; não há modo de substituição — QA-01 |
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
+| F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
+| F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
 | F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno |
 | F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
@@ -322,12 +324,7 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir.
-
-| Id | Cobre |
-|---|---|
-| F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
-| F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
+seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.
