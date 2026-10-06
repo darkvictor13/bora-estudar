@@ -326,7 +326,12 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
+seção da área, no commit em que o teste passa a existir.
+
+| Id | Cobre |
+|---|---|
+| F-TEO-08 | questões iniciais com a resposta perdida somam uma vez, e mudar os números na retentativa é recusado — QA-04 |
+| F-TEO-09 | a revisão com a resposta perdida soma uma vez, no modal e em `/aluno/revisoes` — QA-04 |
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.

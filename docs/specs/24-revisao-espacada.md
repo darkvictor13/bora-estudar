@@ -5,6 +5,9 @@
 > **Atualizada em 14/09/2026.** A grade passou a viver em `theory_review_rules` e `theory_reviews`, dentro do
 > fluxo da teoria; `review_spacings` e `review_cycles` não foram portadas. O
 > espaçamento continua sendo do professor, e o aluno continua sem editá-lo.
+>
+> **Atualizada em 06/10/2026 (QA-04).** Registrar questões da revisão é
+> `record_review_questions` (spec [32](32-fluxo-da-teoria.md), R-TEO-21 e R-TEO-24).
 
 ---
 
