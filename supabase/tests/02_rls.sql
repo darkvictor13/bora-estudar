@@ -37,17 +37,19 @@ begin
   raise notice '02 OK  o aluno enxerga as proprias metas, e so elas';
 end $$;
 
--- ---------- Registro na meta de outro: barrado pela FK composta ----------
+-- ---------- Registro na meta de outro: barrado antes da FK ----------
 --
--- `goal_entries_insert` exige `student_id = auth.uid()`, e `student_id` é da
--- PRÓPRIA linha — quem insere escolhe o valor. O que recusa é a FK composta.
+-- Desde o 5c `authenticated` não tem INSERT em `goal_entries`: o privilégio é conferido
+-- antes da RLS e da FK, e levanta 42501. A FK composta `goal_entries_goal_fk` continua
+-- conferida pelo teste 06 de `07_schema.sql`, e o isolamento pela RPC está em
+-- `record_goal_entry` na meta da Carla (`03_goals.sql`, `no_data_found`).
 do $$ begin
   insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
   values ('a5000000-0000-4000-8000-000000000004',
           '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',30,10,9);
   raise exception 'FALHOU: Bruno lancou registro na meta da Carla';
-exception when foreign_key_violation then
-  raise notice '03 OK  goal_entries_goal_fk recusa registro na meta de outro aluno';
+exception when insufficient_privilege then
+  raise notice '03 OK  goal_entries nao aceita INSERT direto: registro na meta de outro aluno recusado';
 end $$;
 
 -- ---------- Escrita na meta de outro: filtrada em silêncio ----------

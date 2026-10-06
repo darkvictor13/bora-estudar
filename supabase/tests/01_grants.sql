@@ -89,10 +89,16 @@ exception when insufficient_privilege then
   raise notice '09 OK  goal_entries.goal_id fora do grant update';
 end $$;
 
+-- Corrigir é apagar e registrar de novo (spec 19, R-EXTRA-16): `goal_entries` não tem
+-- UPDATE para `authenticated` (spec 12, R-CONC-27, PR 5c). Antes do 5c este teste
+-- esperava o contrário, e o aluno reescrevia `questions` de um registro que já tinha
+-- somado em `initial_questions_done`.
 do $$ begin
   update public.goal_entries set minutes = 50
    where id = 'a6000000-0000-4000-8000-000000000001';
-  raise notice '10 OK  o aluno corrige os minutos do proprio registro';
+  raise exception 'FALHOU: o aluno corrigiu os minutos de um registro, e registro nao se edita';
+exception when insufficient_privilege then
+  raise notice '10 OK  o aluno nao edita registro de estudo: corrigir e apagar e registrar de novo';
 end $$;
 
 do $$
@@ -404,6 +410,8 @@ end $$;
 
 -- ---------- goal_entries: a chave, o dia estudado e o carimbo são das RPCs ----------
 --
+-- Desde o 5c o INSERT inteiro saiu do grant (testes 36 a 42); este teste continua como a
+-- prova mais barata de que nenhuma dessas três colunas voltou a ser escrevível.
 -- `request_id` sustenta a idempotência de `record_goal_entry` e `record_extra_study`;
 -- `studied_on` e `created_at` definem o DIA do registro. Com qualquer um deles no
 -- grant de INSERT, o aluno datava o próprio estudo ou fabricava a chave. Privilégio
@@ -429,4 +437,106 @@ begin
     end;
   end loop;
   raise notice '35 OK  goal_entries: request_id, studied_on e created_at fora do grant insert';
+end $$;
+
+-- ---------- O 5c: o que virou RPC não tem grant direto (QA-04) ----------
+--
+-- Privilégio de COLUNA e de TABELA levanta 42501 sempre, mesmo sem linha nenhuma
+-- casando: aqui a exceção é a prova, e o `raise exception` no fim do bloco é o que faz a
+-- suíte falhar no dia em que o grant voltar.
+-- Bruno inserindo registro na meta que é dele: antes era o INSERT direto do bundle antigo.
+do $$ begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
+  values ('a5000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 20, 10, 8);
+  raise exception 'FALHOU: o aluno inseriu registro direto em goal_entries';
+exception when insufficient_privilege then
+  raise notice '36 OK  goal_entries nao aceita INSERT do aluno: so as tres RPCs de registro';
+end $$;
+
+do $$ begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
+  values ('a5000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111',
+          '33333333-3333-4333-8333-333333333333', 20, 10, 8);
+  raise exception 'FALHOU: o aluno inseriu registro na meta de outro aluno';
+exception when insufficient_privilege then
+  raise notice '37 OK  goal_entries: INSERT na meta alheia recusado antes de qualquer FK';
+end $$;
+
+do $$ begin
+  update public.theory_progress set initial_questions_done = 1
+   where id = 'b3000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: o aluno escreveu o contador de questoes iniciais';
+exception when insufficient_privilege then
+  raise notice '38 OK  theory_progress.initial_questions_done fora do grant update';
+end $$;
+
+do $$ begin
+  update public.theory_progress set lesson_done = true
+   where id = 'b3000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: o aluno concluiu a aula sem passar pelo ledger';
+exception when insufficient_privilege then
+  raise notice '39 OK  theory_progress.lesson_done fora do grant update';
+end $$;
+
+do $$ begin
+  insert into public.theory_progress (student_id, study_plan_id, theory_lesson_id, initial_questions_done)
+  values ('22222222-2222-4222-8222-222222222222', 'a2000000-0000-4000-8000-000000000001',
+          'b2000000-0000-4000-8000-000000000001', 99);
+  raise exception 'FALHOU: o aluno inseriu progresso ja com o contador preenchido';
+exception when insufficient_privilege then
+  raise notice '40 OK  theory_progress: INSERT com o contador recusado (o privilegio vem antes da FK)';
+end $$;
+
+do $$ begin
+  insert into public.theory_reviews (student_id, study_plan_id, theory_lesson_id, review_number)
+  values ('22222222-2222-4222-8222-222222222222', 'a2000000-0000-4000-8000-000000000001',
+          'b2000000-0000-4000-8000-000000000001', 9);
+  raise exception 'FALHOU: o aluno criou a propria revisao';
+exception when insufficient_privilege then
+  raise notice '41 OK  theory_reviews nao aceita INSERT: a revisao nasce em record_initial_questions';
+end $$;
+
+do $$
+declare v_coluna text;
+begin
+  foreach v_coluna in array array['questions_answered', 'minimum_questions', 'status'] loop
+    begin
+      execute format(
+        'update public.theory_reviews set %I = %s where id = %L', v_coluna,
+        case v_coluna when 'status' then '''completed''' else '1' end,
+        'b4000000-0000-4000-8000-000000000001');
+      raise exception 'FALHOU: o aluno escreveu % da propria revisao', v_coluna;
+    exception when insufficient_privilege then
+      null;
+    end;
+  end loop;
+  raise notice '42 OK  theory_reviews nao aceita UPDATE: nem o minimo, nem o contador, nem o status';
+end $$;
+
+-- A leitura continua escrita direta: gravar a página leva a coluna a um valor (R-TEO-20).
+do $$ begin
+  update public.theory_progress set current_page = 21
+   where id = 'b3000000-0000-4000-8000-000000000001';
+  raise notice '43 OK  theory_progress.current_page continua no grant (a leitura e direta)';
+end $$;
+
+-- O professor também perdeu: nenhuma tela dele registra, e quem afirma ter estudado é
+-- quem estudou (D-19).
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana, professora
+do $$ begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes)
+  values ('a5000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 30);
+  raise exception 'FALHOU: o professor registrou estudo em nome do aluno';
+exception when insufficient_privilege then
+  raise notice '44 OK  goal_entries nao aceita INSERT nem do professor (D-19)';
+end $$;
+
+do $$ begin
+  update public.goal_entries set minutes = 50
+   where id = 'a6000000-0000-4000-8000-000000000001';
+  raise exception 'FALHOU: o professor editou o registro do aluno';
+exception when insufficient_privilege then
+  raise notice '45 OK  goal_entries nao aceita UPDATE nem do professor (D-19)';
 end $$;

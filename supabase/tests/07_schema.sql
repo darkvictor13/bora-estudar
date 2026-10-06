@@ -511,7 +511,7 @@ begin
   exception when unique_violation then
     null;
   end;
-  -- Nulo repete: o bundle no ar insere sem a chave.
+  -- Nulo repete: os registros anteriores à coluna ficam sem chave.
   insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note)
   values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
           '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21');
@@ -521,4 +521,81 @@ begin
   delete from public.goal_entries
    where note = 'teste-07-21';
   raise notice '21 OK  goal_entries_request_uidx: chave unica, e nulo repete';
+end $$;
+
+-- ---------- O que virou RPC não tem grant direto (QA-04, PR 5c) ----------
+--
+-- Varredura por catálogo: não depende de nenhum cenário, e acusa o dia em que um grant
+-- de coluna voltar por uma migration futura. `has_any_column_privilege` enxerga também
+-- o grant de TABELA, que `revoke (col)` não tira.
+do $$
+declare v_erro text := ''; v_coluna text;
+begin
+  if has_any_column_privilege('authenticated', 'public.goal_entries', 'INSERT') then
+    v_erro := v_erro || ' goal_entries(insert)';
+  end if;
+  if has_any_column_privilege('authenticated', 'public.goal_entries', 'UPDATE') then
+    v_erro := v_erro || ' goal_entries(update)';
+  end if;
+  if has_any_column_privilege('authenticated', 'public.theory_reviews', 'INSERT') then
+    v_erro := v_erro || ' theory_reviews(insert)';
+  end if;
+  if has_any_column_privilege('authenticated', 'public.theory_reviews', 'UPDATE') then
+    v_erro := v_erro || ' theory_reviews(update)';
+  end if;
+  foreach v_coluna in array array['initial_questions_done', 'initial_questions_complete',
+                                  'initial_questions_complete_at', 'lesson_done', 'lesson_done_at'] loop
+    if has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'INSERT') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(insert)';
+    end if;
+    if has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'UPDATE') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(update)';
+    end if;
+  end loop;
+  -- O contrário: a leitura do PDF continua escrita direta, no INSERT e no UPDATE.
+  foreach v_coluna in array array['current_page', 'theory_done', 'theory_done_at'] loop
+    if not has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'INSERT') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(falta insert)';
+    end if;
+    if not has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'UPDATE') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(falta update)';
+    end if;
+  end loop;
+  -- `anon` nunca teve; confere que nenhum dos dois caminhos reabriu para ele.
+  if has_any_column_privilege('anon', 'public.goal_entries', 'INSERT')
+     or has_any_column_privilege('anon', 'public.theory_reviews', 'INSERT') then
+    v_erro := v_erro || ' anon(insert)';
+  end if;
+  if v_erro <> '' then
+    raise exception 'FALHOU: escrita de execucao com grant direto:%', v_erro;
+  end if;
+  raise notice '22 OK  o que virou RPC nao tem grant direto (a leitura da teoria continua)';
+end $$;
+
+-- As quatro RPCs que sustentam a escrita fechada precisam ser SECURITY DEFINER: uma
+-- `security invoker` dependeria dos grants que o 5c revogou e quebraria em silêncio.
+do $$
+declare v_nome text;
+begin
+  foreach v_nome in array array['record_goal_entry', 'record_extra_study',
+                                'record_initial_questions', 'record_review_questions'] loop
+    if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                    where n.nspname = 'public' and p.proname = v_nome and p.prosecdef) then
+      raise exception 'FALHOU: % nao e security definer, e o 5c fechou o grant que ela usaria', v_nome;
+    end if;
+  end loop;
+  raise notice '23 OK  as quatro RPCs de registro sao security definer';
+end $$;
+
+-- `goals_insert` só aceita o professor: o ramo do aluno saiu, e a policy não pode
+-- voltar a citar `student_id`.
+do $$
+declare v_check text;
+begin
+  select pg_get_expr(p.polwithcheck, p.polrelid) into v_check
+    from pg_policy p where p.polname = 'goals_insert' and p.polrelid = 'public.goals'::regclass;
+  if v_check is null or v_check like '%student_id%' or v_check like '%has_active_access%' then
+    raise exception 'FALHOU: goals_insert voltou a ter ramo do aluno: %', v_check;
+  end if;
+  raise notice '24 OK  goals_insert so aceita o professor';
 end $$;
