@@ -168,14 +168,16 @@ expect(saidas).toEqual([]);
   de navegação genérico. É a mesma ideia de `fixtures/tec.ts`: nenhuma
   requisição sai da máquina.
 - **Rode o F-AUTH-14 antes do passo 3.** Os três primeiros payloads precisam
-  ficar vermelhos. O quarto, pela leitura do código, já passa hoje, e está ali
-  para segurar a armadilha da normalização. Se algum dos três não ficar
-  vermelho, o teste não reproduz o defeito: conserte o teste antes do código.
+  ficar vermelhos. O quarto também fica vermelho, mas por outro motivo: o
+  `redirect` recebe o texto cru e a página para em `/evil.example/x`, DENTRO do
+  site (conferido na implementação do PR), num destino que ninguém escolheu. Ele
+  está ali para segurar a armadilha da normalização. Se algum dos três do QA não
+  ficar vermelho, o teste não reproduz o defeito: conserte o teste antes do código.
 
 ## Critério de pronto
 
 - [ ] `npm run check` verde (inclui `routes.test.ts`, que exige Node 24).
-- [ ] F-AUTH-14 vermelho antes do passo 3 nos três payloads do QA, e verde depois.
+- [ ] F-AUTH-14 vermelho antes do passo 3 (os três do QA saem para o host; o quarto para em `/evil.example/x`), e verde depois.
 - [ ] F-AUTH-10/11/12 continuam verdes: a recuperação de senha de ponta a
       ponta ainda chega a `/redefinir-senha`.
 - [ ] `grep -n 'startsWith("//")' apps/web/src` não acha nada.

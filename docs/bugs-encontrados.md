@@ -518,3 +518,23 @@ banco e voltava `22P02`. `goals.week_number` e `goals.planned_minutes` não tinh
 **Correção** `checkWeekNumber` no contrato, chamado pelas duas implementações, recusa fora de 1 a 520 com a
 frase "1 a 520"; o banco tem `goals_week_number_check` e `goals_planned_minutes_check`.
 Spec 04, R-GEN-17.
+
+---
+
+### QA-02 · ALTO · `/confirmar?next=` redireciona para fora do site
+
+`AuthCallback` aceitava qualquer `next` que começasse com `/` e não com `//`, e o destino é o mesmo com
+código válido ou sem: bastava um link, sem login. `/\evil.example/x` e `/\\evil.example` o React Router
+lê como URL absoluta (`^[\\/]{2}`) e abre com `location.assign`; `/<TAB>/evil.example/x` o navegador
+resolve como `//evil.example/x`, o `pushState` lança e o router cai no mesmo `location.assign`.
+
+Há uma quarta forma, que é a correção ingênua: `new URL("/.//evil.example/x", base).pathname` é
+`//evil.example/x`, mesma origem para o `URL` e URL absoluta para o router.
+
+**Reproduzir** abrir `/confirmar?next=` com `encodeURIComponent` de cada payload (F-AUTH-14). Antes da
+correção os quatro ficavam fora de `/redefinir-senha`: três saíam para `evil.example`, e `/.//evil.example/x`
+parava em `/evil.example/x`, dentro do site mas num destino que ninguém escolheu.
+
+**Correção** `safeInternalPath` (`lib/routes.ts`) resolve contra uma origem fictícia e recusa outra origem, o
+`pathname` normalizado que começa com duas barras e as telas públicas; recusado, vale o destino padrão de
+quem chama. O login (QA-25, PR 6) usa a mesma função. Spec 01, R-AUTH-16 e CA-16.
