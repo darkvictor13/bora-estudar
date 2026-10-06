@@ -7,14 +7,14 @@
  * respondida na versão anterior — uma hora de estudo do aluno, que não pode ser
  * recriada.
  *
- * Quem cumpria essa promessa era `reserve_operation`, que comparava o hash do
- * payload na tabela `operations`. **As duas saíram no schema de 14/09/2026.**
- * Enquanto não voltarem, o que existe é isto: uma memória do processo, que
- * cobre o caso comum — clique duplo, retentativa dentro da mesma aba — e não
- * cobre o caso caro: a aba que recarrega no meio da gravação, ou duas abas.
+ * A promessa de verdade mora no banco, num índice UNIQUE por tabela de execução
+ * (a lista, e as escritas naturalmente idempotentes, estão em `idempotency.ts`).
+ * O que existe aqui é uma memória do processo, que cobre o caso comum — clique
+ * duplo, retentativa dentro da mesma aba — e não cobre o caso caro: a aba que
+ * recarrega no meio da gravação, ou duas abas.
  *
- * É defesa parcial, e está escrito aqui para ninguém confundir com a de verdade.
- * O pedido à frente do banco é `operations` + `reserve_operation` de volta.
+ * É defesa parcial, e está escrito aqui para ninguém confundir com a de verdade:
+ * escrita que acumula sem uma chave no banco volta a gravar duas vezes.
  *
  * Puro de propósito (só `import type`): `errors.ts` puxa `@/lib/observability`,
  * que o runner do Node não avalia. Quem relata é o `recover` injetado.

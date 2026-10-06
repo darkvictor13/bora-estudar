@@ -618,7 +618,7 @@ rede "cai". O throw de dentro do `once()` já não tem caminho nessa tela, e que
 
 ---
 
-### QA-04 · ALTO · Registrar estudo duplica na retentativa (parcial: o caminho direto só fecha no 5c)
+### QA-04 · ALTO · Registrar estudo duplica na retentativa (fechado, e o caminho direto também)
 
 `recordStudy` eram dois pedidos (INSERT em `goal_entries`, UPDATE `pending` → `in_progress`) e `recordExtraStudy`
 três (meta, registro e um DELETE de compensação). A única defesa era `once()`, que esquece a chave quando a
@@ -652,9 +652,19 @@ e a chave de retentativa nasce quando o formulário abre (`TheoryDialog`, `Revie
 Spec 32, R-TEO-21 a R-TEO-24. A spec 32, R-TEO-06, exigia "teoria lida E mínimo", e o código (e a spec 36) fechavam
 só pelas questões: o texto foi corrigido.
 
-**Parcial:** o INSERT direto do aluno em `goal_entries`, a escrita das colunas de contagem de `theory_progress` e
-`theory_reviews` continuam aceitos, porque o bundle no ar os usa — o PR 5c os revoga, depois de este bundle estar
-publicado em staging.
+**Caminho direto fechado em 06/10/2026 (PR 5c)** migration `20261006233436_close_direct_execution_writes`:
+`goal_entries` perde INSERT e UPDATE para `authenticated`, professor incluído (D-19; corrigir é apagar e registrar
+de novo); `goals_insert` fica só com o ramo do professor, então o aluno não cria meta `extra` nem `reinforcement`
+(estudo extra é `record_extra_study`) e nenhuma meta nasce com resultado preenchido; `theory_progress` perde, no
+INSERT e no UPDATE, `initial_questions_done`, `initial_questions_complete(_at)` e `lesson_done(_at)`, e fica com a
+leitura (`current_page`, `theory_done`, `theory_done_at`); `theory_reviews` perde INSERT e UPDATE, e a policy
+`for all` dá lugar a `theory_reviews_delete`. Antes disso quem chamasse a API sem passar pela RPC voltava a ter
+todos os defeitos acima: o aluno reescrevia `questions` de um registro que já tinha somado, baixava o mínimo da
+própria revisão para 1 ou a marcava concluída. As quatro RPCs são `security definer` e não dependem dos grants
+revogados. Spec 12, R-CONC-27; spec 19, R-EXTRA-06; spec 32, R-TEO-20. Testes: `01_grants` 10 e 36 a 45, `02_rls`
+03, `03_goals` 02, 02b, 02c, 03, 21 e 31, `06_theory` 02 e `07_schema` 22 a 24. Nenhum dado foi alterado e nenhuma
+constraint nasceu. **Esta migration só pode ser aplicada depois de o 5b estar publicado em staging:** uma aba aberta
+com o bundle anterior passa a receber `42501` ao registrar estudo, e recarregar resolve.
 
 ---
 

@@ -949,25 +949,29 @@ policy `theory_review_entries_select`, duas CHECKs, as FKs compostas
 da FK composta) e `goal_entries_theory_lesson_idx` — e cinco funções:
 `record_initial_questions` e `record_review_questions` em `public`,
 `initial_questions_required`, `replay_initial_questions` e `replay_review_entry`
-em `app_private`. É a
+em `app_private`. A coluna **06/10 · 5c** acrescenta `20261006233436` (QA-04, fecha o
+caminho direto): só policies e privilégios — as policies caem duas
+(`goal_entries_insert` e `goal_entries_update`), `goals_insert` perde o ramo do
+aluno, e `theory_reviews_write` (`for all`) dá lugar a `theory_reviews_delete`,
+uma troca neutra. Nenhuma tabela, coluna, constraint, índice ou função nova. É a
 última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
 
-| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 | 06/10 | 06/10 · 5b |
-|---|---|---|---|---|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 | 51 / 51 | 52 / 52 |
-| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 522 | 530 |
-| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 | 120 | 121 |
-| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 | 20 | 20 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 137 | 139 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 | 91 | 93 |
-| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 163 | 168 |
-| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 | 3 | 3 |
-| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 | 51 | 51 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 39 | 44 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 | 06/10 | 06/10 · 5b | 06/10 · 5c |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 | 51 / 51 | 52 / 52 | 52 / 52 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 522 | 530 | 530 |
+| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 | 120 | 121 | 119 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 | 20 | 20 | 20 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 137 | 139 | 139 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 | 91 | 93 | 93 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 163 | 168 | 168 |
+| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 | 3 | 3 | 3 |
+| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 | 51 | 51 | 51 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 39 | 44 | 44 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.

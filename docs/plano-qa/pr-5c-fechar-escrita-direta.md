@@ -348,3 +348,35 @@ de que nenhuma tela usava o caminho fechado. Os que mais importam:
 - **Criar `reinforcement` pelo aluno.** Não existe caminho hoje; quando existir, nasce
   como RPC.
 - **Descontar progresso ao apagar registro de questões iniciais** (ver o 5b).
+
+## Notas da implementação (06/10/2026)
+
+Onde o plano divergiu do código e do `CLAUDE.md`; vale o que está aqui.
+
+- **A pré-condição de deploy não foi cumprida, e este PR não relaxa nada por causa disso.**
+  O 5c foi escrito sobre a pilha local (1, 2, 3, 4, 5a e 5b), sem nada enviado ao GitHub nem a
+  staging. **Só pode ser mergeado depois de o `deploy-staging` do 5b estar verde nos jobs de banco
+  e de site, e de o bundle antigo — que ainda escreve direto em `goal_entries`, `theory_progress`
+  e `theory_reviews` — ter sido substituído.** Mergear antes quebra o registro de estudo de
+  qualquer aba com o bundle anterior (`42501`).
+- **Os `grep` do passo 2** foram rodados na pilha local (o bundle do 5b), e não na `main`; os dois
+  primeiros saíram vazios e o terceiro mostrou só `current_page`, `theory_done` e
+  `theory_done_at`. Repita-os na `main` quando o 5b for mergeado e cole a saída na descrição.
+  Uma varredura mais larga (todo `.insert/.upsert/.update` do adaptador) confirmou que nenhuma
+  escrita direta restante toca as quatro tabelas, fora o `update` de status em `goals` e a
+  escrita da leitura em `theory_progress`.
+- **Id da regra de `goal_entries`: R-CONC-27**, e não R-CONC-26, que o 5a já usou
+  (`studied_on` nulo no registro de meta). A ressalva "o INSERT direto ainda é aceito, até o 5c"
+  não existia mais nas specs: ela morava só no `CLAUDE.md` e em dois comentários de teste, e saiu
+  dos três.
+- **O cabeçalho que ainda tinha a frase de `operations` + `reserve_operation` é o de
+  `request-memory.ts`**, não o de `idempotency.ts` (o 5a já tinha limpado este último). Os dois
+  foram reescritos, e `idempotency.ts` agora lista as chaves com payload, as naturalmente
+  idempotentes e as escritas diretas que ficam só com `once()`.
+- **Policies vigentes** (`pg_policies`) conferidas antes do `alter`: `goals_insert` não tinha
+  ganhado condição nova no ramo do professor, então ficou só `teacher_id = auth.uid()`. As quatro
+  RPCs têm `prosecdef = true`, e a `07_schema` passou a conferir isso.
+- **Testes de banco além do plano:** os casos 02b e 02c de `03_goals` (reforço já com resultado,
+  e o estudo extra pela RPC), o 21 de `03_goals` (o registro na meta gerada passou a ser pela
+  `record_goal_entry`), e o 24 da `07_schema` (a `goals_insert` não cita mais `student_id`).
+- **O de-para** ganhou a coluna "06/10 · 5c": policies 121 para 119, os demais números iguais.

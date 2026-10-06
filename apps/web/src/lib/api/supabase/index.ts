@@ -23,8 +23,6 @@
  * - **Bateria de questões.** `quiz_sessions` e o ledger são SELECT e nada
  *   mais; a escrita é de RPC, e as RPCs não foram portadas. A tela do aluno
  *   não tem por onde começar uma bateria, e é deliberado — ver CLAUDE.md.
- * - **Idempotência de verdade.** `operations` e `reserve_operation` saíram;
- *   `idempotency.ts` cobre o clique duplo e diz o que não cobre.
  * - **Anular bateria.** A escrita fechada de `quiz_sessions` é a defesa certa;
  *   a operação precisa nascer como RPC. Ver `teacher-students.ts`.
  * - **Resgatar cupom.** `coupons` está sem policy e sem grant, de propósito.

@@ -78,9 +78,10 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 | | Quem escreve | Como |
 |---|---|---|
-| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan` |
-| `goal_entries` | o aluno, com acesso vigente | **registrar** por `record_goal_entry` e `record_extra_study` (o INSERT direto ainda é aceito, até o 5c); apagar exige acesso vigente e é direto; `request_id`, `studied_on` e `created_at` ficam fora do grant de INSERT, e quem os escreve são as RPCs |
-| `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna; **a página** é escrita direta, mas as **questões** (`initial_questions_done`, a conclusão da aula, `questions_answered`) são de `record_initial_questions` e `record_review_questions` (o direto ainda é aceito, até o 5c) |
+| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan`; o aluno não insere meta, e estudo extra é `record_extra_study` |
+| `goal_entries` | ninguém direto | INSERT só por `record_goal_entry`, `record_extra_study` e `record_initial_questions`, com `request_id` UNIQUE; sem UPDATE (corrigir é apagar e registrar de novo); DELETE pela policy, com acesso vigente para o aluno |
+| `theory_progress` | o aluno, com acesso vigente | direto, só a leitura (`current_page`, `theory_done`, `theory_done_at`), com grant por coluna no INSERT e no UPDATE; questões iniciais e conclusão da aula só por `record_initial_questions` |
+| `theory_reviews` | ninguém direto | nascem em `record_initial_questions`, avançam em `record_review_questions`; o aluno só apaga a dela |
 | `theory_review_entries` | ninguém | SELECT e nada mais: escrita é de `record_review_questions` |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
@@ -99,8 +100,11 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 Escrita de execução continua fechada porque é onde moram a máquina de estados,
 a idempotência por `request_id` e o ledger append-only — coisas que uma tela
-não tem como respeitar sozinha. Se uma tela precisa mexer em execução e não
-existe RPC, **crie a RPC; não afrouxe o grant.** As três operações que hoje não
+não tem como respeitar sozinha. `goal_entries` e `theory_reviews` entram na
+lista do que é escrito por RPC: desde `20261006233436` (PR 5c) o INSERT e o
+UPDATE diretos não existem para `authenticated`, nem para o professor, e o
+privilégio de coluna recusa com `42501` antes de a RLS ou a FK serem lidas.
+Se uma tela precisa mexer em execução e não existe RPC, **crie a RPC; não afrouxe o grant.** As três operações que hoje não
 têm RPC lançam com o motivo em `apps/web/src/lib/api/supabase/`, e é assim que
 devem continuar até a RPC existir.
 
