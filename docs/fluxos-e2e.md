@@ -180,6 +180,7 @@ diff mostra a omissão.
 | F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera, sem professor e sem acesso |
 | F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido |
 | F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações |
+| F-AUTH-14 | `/confirmar?next=` não manda para fora do site — QA-02 |
 | F-CONTA-01 | meus dados: o nome salva, o resto é contexto — `tests/student-analysis.spec.ts` |
 
 ### Casca e navegação — `tests/shell.spec.ts`
