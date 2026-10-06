@@ -47,9 +47,11 @@
  *    este aluno tem acesso" e "quem o liberou". O que continua faltando é o
  *    registro de RESGATE DE CUPOM: `coupons` não guarda quem usou o código, e
  *    `redeemCoupon` segue sem caminho (ver o item de `access.ts`).
- * 3. **Substituição segura é só regra de UI hoje.** `generateWeek` promete não
- *    tocar em meta concluída (LEIA-ME v108.3); nada no schema impede. Vale a
- *    pena um índice ou um gatilho, e até lá o adaptador é o único guardião.
+ * 3. ~~**Substituição segura é só regra de UI hoje.**~~ **Resolvida em
+ *    06/10/2026.** `generate_week` apaga e insere numa transação só, o critério
+ *    do que fica mora em `app_private.goal_is_preserved`, e
+ *    `goal_entries_goal_fk` é `no action`: nenhum caminho apaga meta com estudo
+ *    registrado. O modo de substituir a semana inteira saiu (spec 04, R-GEN-12).
  */
 
 /* ------------------------------------------------------------------ *
@@ -1050,24 +1052,24 @@ export interface TeacherPlansApi {
 /* --- Gerar metas --- */
 
 /**
- * A SUBSTITUIÇÃO SEGURA (LEIA-ME v108.3) É REGRA DE PRODUTO.
+ * GERAR A SEMANA TEM UMA REGRA SÓ.
  *
- * - `safe` — só substitui meta `pending`, `in_progress` ou `skipped`. Meta
- *   concluída fica de pé, com os registros dela.
- * - `full` — "Replanejar semana inteira". Caminho separado, e exige
- *   confirmação na tela antes de chegar aqui.
+ * - **Fica de pé** a meta concluída e a meta com estudo registrado ou bateria.
+ * - **Sai** a pendente, a pulada e a em andamento sem registro.
  *
- * Um enum de dois valores em vez de um `boolean` chamado `force`: quem lê a
- * chamada precisa ver qual dos dois caminhos está sendo tomado, e `force: true`
- * não diz o que vai ser destruído.
+ * Não existe modo que apague mais do que isso: concluir já é uma afirmação do
+ * aluno sobre o que fez, e estudo registrado não se apaga. O modo que
+ * substituía a semana inteira saiu em 06/10/2026 por decisão do dono do produto
+ * (spec 04, R-GEN-12).
+ *
+ * O `requestId` nasce com a prévia e é reusado em toda tentativa de gravá-la:
+ * o banco (`goal_batches`) devolve o replay sem reexecutar.
  */
-export type ReplaceMode = "safe" | "full";
-
 export interface GenerateWeekInput {
   readonly studyPlanId: Uuid;
   readonly requestId: RequestId;
+  /** Inteiro de 1 a 520 (`checkWeekNumber`). */
   readonly weekNumber: number;
-  readonly mode: ReplaceMode;
   /** Peso por disciplina, quando o professor ajusta a distribuição. */
   readonly weights?: Readonly<Record<string, number>>;
   /** Copiar a semana anterior em vez de distribuir do zero. */
@@ -1084,14 +1086,17 @@ export interface GenerateWeekPreview {
   readonly days: readonly DayGroup[];
   readonly goalsToCreate: number;
   readonly goalsToReplace: number;
-  /** Metas concluídas que o modo `safe` vai preservar. */
+  /** Concluídas ou com estudo registrado: ficam de pé. */
   readonly goalsPreserved: number;
 }
 
 export interface TeacherGoalsApi {
   previewWeek(input: GenerateWeekInput): Promise<GenerateWeekPreview>;
   generateWeek(input: GenerateWeekInput): Promise<Result<Week>>;
-  /** Limpa as metas pendentes da semana, sem tocar nas concluídas. */
+  /**
+   * Apaga o que Gerar substituiria — pendentes, puladas e em andamento sem
+   * registro —, sem inserir nada. Não tem botão: ver a spec 04, R-GEN-20.
+   */
   clearPendingGoals(studyPlanId: Uuid, weekNumber: number, requestId: RequestId): Promise<Result<Week>>;
 }
 

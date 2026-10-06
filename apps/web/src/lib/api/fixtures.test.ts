@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
+import { ApiThrownError } from "./contract.ts";
 import { fixturesApi as api, resetFixtures, setFixtureRole } from "./fixtures.ts";
 import { FIXTURE_STATUS_NOTICES } from "./fixtures-library.ts";
 
@@ -458,7 +459,7 @@ test("professor controla a publicação sem depender das questões do aluno", as
   assert.equal((await api.loadTheoryGoal(goal.id)).lesson?.id, second.id);
 });
 
-test("gerar semana no modo seguro preserva o que já foi concluído", async () => {
+test("gerar a semana preserva o que já foi concluído", async () => {
   const antes = await api.loadWeek("plano", 1);
   const concluidas = antes.days
     .flatMap((day) => day.goals)
@@ -469,7 +470,6 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
     studyPlanId: "plano",
     requestId: requestId(),
     weekNumber: 1,
-    mode: "safe",
   });
   assert.equal(previa.goalsPreserved, 1);
 
@@ -477,7 +477,6 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
     studyPlanId: "plano",
     requestId: requestId(),
     weekNumber: 1,
-    mode: "safe",
   });
   assert.ok(gerada.ok);
 
@@ -488,29 +487,75 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
   assert.equal(sobreviveu.spentMinutes, 95, "e com os registros dela");
 });
 
-test("replanejar a semana inteira é o caminho que apaga a concluída", async () => {
-  const antes = await api.loadWeek("plano", 1);
-  const concluida = antes.days.flatMap((day) => day.goals).find((g) => g.status === "completed")!;
+test("gerar preserva a concluída SEM registro, e tira a pulada e a pendente", async () => {
+  const semana = (await api.loadWeek("plano", 1)).days.flatMap((day) => day.goals);
+  const pendente = semana.find((goal) => goal.status === "pending")!;
+  const outraPendente = semana.filter((goal) => goal.status === "pending")[1]!;
+  const pulada = semana.find((goal) => goal.status === "skipped")!;
 
-  const previa = await api.previewWeek({
-    studyPlanId: "plano",
-    requestId: requestId(),
-    weekNumber: 1,
-    mode: "full",
-  });
-  assert.equal(previa.goalsPreserved, 0, "a prévia avisa antes de qualquer escrita");
+  // Concluir é afirmação do aluno: a meta fica de pé mesmo sem registro.
+  assert.ok((await api.completeGoal(pendente.id, requestId())).ok);
+  assert.ok((await api.skipGoal(outraPendente.id, requestId())).ok);
 
-  const gerada = await api.generateWeek({
-    studyPlanId: "plano",
-    requestId: requestId(),
-    weekNumber: 1,
-    mode: "full",
-  });
+  const previa = await api.previewWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.equal(previa.goalsPreserved, 2, "a que tinha registro e a concluída sem registro");
+
+  const gerada = await api.generateWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
   assert.ok(gerada.ok);
-  assert.equal(
-    gerada.data.days.flatMap((day) => day.goals).find((goal) => goal.id === concluida.id),
-    undefined,
-  );
+  const ids = gerada.data.days.flatMap((day) => day.goals).map((goal) => goal.id);
+  assert.ok(ids.includes(pendente.id), "a concluída sem registro continua");
+  assert.ok(!ids.includes(pulada.id), "a pulada saiu");
+  assert.ok(!ids.includes(outraPendente.id), "a que acabou de ser pulada saiu");
+});
+
+test("meta EM ANDAMENTO com estudo registrado sobrevive a gerar, e a prévia a conta", async () => {
+  const pendente = (await api.loadWeek("plano", 1)).days
+    .flatMap((day) => day.goals)
+    .find((goal) => goal.status === "pending")!;
+  const registrada = await api.recordStudy({
+    goalId: pendente.id,
+    requestId: requestId(),
+    minutes: 40,
+    questions: 0,
+    correctAnswers: 0,
+  });
+  assert.ok(registrada.ok);
+  assert.equal(registrada.data.status, "in_progress");
+
+  const previa = await api.previewWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.equal(previa.goalsPreserved, 2);
+
+  const gerada = await api.generateWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.ok(gerada.ok);
+  const sobreviveu = gerada.data.days.flatMap((day) => day.goals).find((goal) => goal.id === pendente.id);
+  assert.ok(sobreviveu, "a meta com registro continua lá");
+  assert.equal(sobreviveu.status, "in_progress");
+  assert.equal(sobreviveu.entries.length, 1, "com o registro");
+});
+
+test("semana fora de 1 a 520 é recusada nas duas operações", async () => {
+  const antes = await api.loadWeek("plano", 1);
+  for (const weekNumber of [0, -3, 1.5, 521]) {
+    const input = { studyPlanId: "plano", requestId: requestId(), weekNumber };
+    await assert.rejects(api.previewWeek(input), (error: unknown) => {
+      assert.ok(error instanceof ApiThrownError);
+      assert.equal(error.code, "validation");
+      assert.match(error.message, /1 a 520/);
+      return true;
+    });
+    const gerada = await api.generateWeek(input);
+    assert.equal(gerada.ok, false);
+  }
+  assert.deepEqual(await api.loadWeek("plano", 1), antes);
+});
+
+test("as metas novas entram depois das preservadas, sem repetir a casa do dia", async () => {
+  const gerada = await api.generateWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.ok(gerada.ok);
+  const casas = gerada.data.days
+    .flatMap((day) => day.goals)
+    .map((goal) => `${goal.weekday}:${goal.dayPosition}`);
+  assert.equal(new Set(casas).size, casas.length);
 });
 
 test("o tema começa sem escolha, e a ausência não é o mesmo que claro", async () => {

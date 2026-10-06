@@ -10,7 +10,7 @@
  * chamam as mesmas funções antes de qualquer ida ao servidor, o que também
  * significa que nome curto não gasta uma viagem de rede para ser recusado.
  */
-import type { ApiError, Credentials, SignUpInput } from "./contract.ts";
+import type { ApiError, Credentials, GenerateWeekInput, SignUpInput } from "./contract.ts";
 
 /** O mínimo que o GoTrue aceita, e o mesmo número que a v2 pedia. */
 export const MIN_PASSWORD_LENGTH = 6;
@@ -87,4 +87,26 @@ export function checkAccessMonths(months: number): ApiError | null {
 export function checkClassName(name: string): ApiError | null {
   if (name.trim().length < MIN_NAME_LENGTH) return invalid("Dê um nome à turma.", "name");
   return null;
+}
+
+/** Dez anos de semanas. É o mesmo número de `goals_week_number_check`. */
+export const MAX_WEEK_NUMBER = 520;
+
+export function checkWeekNumber(week: number, field = "weekNumber"): ApiError | null {
+  if (!Number.isInteger(week) || week < 1 || week > MAX_WEEK_NUMBER) {
+    return invalid(
+      field === "copyFromWeek"
+        ? `A semana a copiar precisa ser um número inteiro de 1 a ${MAX_WEEK_NUMBER}.`
+        : `A semana precisa ser um número inteiro de 1 a ${MAX_WEEK_NUMBER}.`,
+      field,
+    );
+  }
+  return null;
+}
+
+export function checkGenerateWeek(input: GenerateWeekInput): ApiError | null {
+  return (
+    checkWeekNumber(input.weekNumber) ??
+    (input.copyFromWeek === undefined ? null : checkWeekNumber(input.copyFromWeek, "copyFromWeek"))
+  );
 }

@@ -101,10 +101,12 @@ import type {
   WeekSummary,
   Weekday,
 } from "./contract.ts";
+import { ApiThrownError } from "./contract.ts";
 import {
   checkAccessMonths,
   checkClassName,
   checkCredentials,
+  checkGenerateWeek,
   checkName,
   checkPassword,
   checkSignUp,
@@ -684,6 +686,15 @@ function buildWeek(weekNumber: number): Week {
     summary: summarize(goals),
     days,
   };
+}
+
+/**
+ * O critério de `app_private.goal_is_preserved`: concluída, ou com estudo
+ * registrado. Nenhuma bateria da fixture aponta para uma meta, então o terceiro
+ * motivo do banco (`quiz_sessions`) não tem o que conferir aqui.
+ */
+function isPreserved(row: GoalRow): boolean {
+  return row.status === "completed" || entriesOf(row.id).length > 0;
 }
 
 function findGoal(goalId: Uuid): GoalRow | undefined {
@@ -1436,40 +1447,55 @@ export const fixturesApi: BoraApi = {
     later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, status: "archived" }))),
 
   previewWeek: (input: GenerateWeekInput) => {
+    const invalid = checkGenerateWeek(input);
+    if (invalid) return Promise.reject(new ApiThrownError("validation", invalid.message));
+
     const existing = state.goals.filter((row) => row.weekNumber === input.weekNumber);
-    const preserved = existing.filter((row) => row.status === "completed");
+    const preserved = existing.filter(isPreserved);
     return later<GenerateWeekPreview>({
       weekNumber: input.weekNumber,
       days: buildWeek(input.weekNumber).days,
       goalsToCreate: 7,
-      // No modo seguro, meta concluída não é substituída — é preservada.
-      goalsToReplace:
-        input.mode === "full" ? existing.length : existing.length - preserved.length,
-      goalsPreserved: input.mode === "full" ? 0 : preserved.length,
+      goalsToReplace: existing.length - preserved.length,
+      goalsPreserved: preserved.length,
     });
   },
 
-  generateWeek: (input: GenerateWeekInput) =>
-    later(
+  generateWeek: (input: GenerateWeekInput) => {
+    const invalid = checkGenerateWeek(input);
+    if (invalid) return later<Result<Week>>({ ok: false, error: invalid });
+
+    return later(
       once(input.requestId, () => {
-        if (input.mode === "safe") {
-          // Só sai o que ainda não foi concluído.
-          state.goals = state.goals.filter(
-            (row) => row.weekNumber !== input.weekNumber || row.status === "completed",
-          );
-        } else {
-          state.goals = state.goals.filter((row) => row.weekNumber !== input.weekNumber);
+        // Só sai o que não foi feito: a concluída e a com estudo registrado ficam.
+        state.goals = state.goals.filter(
+          (row) => row.weekNumber !== input.weekNumber || isPreserved(row),
+        );
+
+        // As novas entram DEPOIS da maior posição que sobrou em cada dia, como
+        // `generate_week` — duas metas na mesma casa do dia não existem.
+        const incoming = seedGoals()
+          .map((row) => ({ ...row, weekNumber: input.weekNumber }))
+          .sort((a, b) => a.weekday - b.weekday || a.dayPosition - b.dayPosition);
+        const placed = new Map<number, number>();
+        for (const row of incoming) {
+          const kept = state.goals
+            .filter((goal) => goal.weekNumber === input.weekNumber && goal.weekday === row.weekday)
+            .reduce((max, goal) => Math.max(max, goal.dayPosition), 0);
+          const position = Math.max(kept, placed.get(row.weekday) ?? 0) + 1;
+          placed.set(row.weekday, position);
+          state.goals.push({ ...row, dayPosition: position });
         }
-        state.goals.push(...seedGoals().map((row) => ({ ...row, weekNumber: input.weekNumber })));
         return done(buildWeek(input.weekNumber));
       }),
-    ),
+    );
+  },
 
   clearPendingGoals: (_studyPlanId: Uuid, weekNumber: number, requestId: RequestId) =>
     later(
       once(requestId, () => {
         state.goals = state.goals.filter(
-          (row) => row.weekNumber !== weekNumber || row.status === "completed",
+          (row) => row.weekNumber !== weekNumber || isPreserved(row),
         );
         return done(buildWeek(weekNumber));
       }),

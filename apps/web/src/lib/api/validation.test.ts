@@ -9,7 +9,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { checkCredentials, checkName, checkPassword, checkSignUp } from "./validation.ts";
+import {
+  checkCredentials,
+  checkGenerateWeek,
+  checkName,
+  checkPassword,
+  checkSignUp,
+  checkWeekNumber,
+} from "./validation.ts";
 
 test("entrar sem e-mail ou sem senha pede os dois, sem culpar um campo", () => {
   // Sem `field`: apontar o e-mail quando faltam os dois manda a pessoa
@@ -47,4 +54,22 @@ test("o cadastro recusa na ordem em que a pessoa preenche", () => {
 test("o nome é medido sem os espaços em volta", () => {
   assert.equal(checkName("  Jo  ")?.field, "name");
   assert.equal(checkName("  Ana  "), null);
+});
+
+test("a semana é um inteiro de 1 a 520, e a frase diz isso", () => {
+  assert.equal(checkWeekNumber(1), null);
+  assert.equal(checkWeekNumber(520), null);
+  for (const semana of [0, 521, -3, 1.5, Number.NaN]) {
+    const erro = checkWeekNumber(semana);
+    assert.equal(erro?.field, "weekNumber", `semana ${semana}`);
+    assert.match(erro!.message, /1 a 520/);
+  }
+});
+
+test("a semana a copiar aponta o campo dela", () => {
+  const base = { studyPlanId: "plano", requestId: "req", weekNumber: 1 };
+  assert.equal(checkGenerateWeek({ ...base, copyFromWeek: 2 }), null);
+  const erro = checkGenerateWeek({ ...base, copyFromWeek: 0 });
+  assert.equal(erro?.field, "copyFromWeek");
+  assert.match(erro!.message, /semana a copiar/);
 });

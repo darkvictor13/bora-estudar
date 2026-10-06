@@ -1,26 +1,26 @@
 /**
- * GERAR A SEMANA — e a substituição segura do LEIA-ME v108.3.
+ * GERAR A SEMANA.
  *
  * É a operação mais cara de desfazer do produto: uma geração descuidada apaga
- * o que o aluno já estudou. Três coisas a protegem, e as três são de produto,
- * não de implementação:
+ * o que o aluno já estudou. O que a protege é de produto, e hoje o BANCO a
+ * garante — este adaptador deixou de ser o único guardião (spec 04):
  *
- * 1. **A prévia vem antes da escrita.** `previewWeek` monta exatamente o que
- *    `generateWeek` faria e não grava nada. A tela mostra, o professor confere.
- * 2. **O modo `safe` só substitui meta PENDENTE, EM ANDAMENTO ou PULADA.**
- *    Meta concluída fica de pé, com os registros dela. É o padrão.
- * 3. **`full` é caminho separado** — "Replanejar semana inteira" —, e a tela
- *    exige confirmação antes de chegar aqui. Um `boolean force` não serviria:
- *    quem lê a chamada precisa ver qual dos dois caminhos está sendo tomado.
- *
- * O banco NÃO garante isto hoje: não há constraint que impeça apagar meta
- * concluída. Enquanto não houver, este adaptador é o único guardião — e é o
- * motivo de a regra estar escrita aqui em vez de espalhada pela tela.
+ * 1. **A prévia vem antes da escrita.** `previewWeek` monta o que `generateWeek`
+ *    faria e não grava nada. As contagens do que fica e do que sai vêm de
+ *    `week_replacement_preview`, que usa o mesmo critério da geração.
+ * 2. **Há um comportamento só.** Sai a meta pendente, a pulada e a em andamento
+ *    sem registro; fica a concluída e a com estudo registrado ou bateria. O
+ *    critério mora em `app_private.goal_is_preserved`, e não existe modo que
+ *    apague mais.
+ * 3. **`generate_week` é uma transação**, idempotente por `goal_batches.id` (o
+ *    `requestId`), e `goal_entries_goal_fk` é `no action`: nem o `DELETE` direto
+ *    leva o estudo registrado embora.
  */
 import { supabase } from "@/lib/supabase/client";
 import { groupIntoDays, weekBounds } from "@/lib/domain/week";
 import { planWeek, type SubjectWeight } from "@/lib/domain/teacher";
 import { WEEKDAY_NAMES } from "@bora/ui";
+import type { Json } from "@bora/database";
 
 import type {
   GenerateWeekInput,
@@ -33,16 +33,12 @@ import type {
   Weekday,
 } from "../contract.ts";
 import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { checkGenerateWeek } from "../validation.ts";
 import { once } from "./idempotency.ts";
 import { loadWeek } from "./week.ts";
 
 /** Os dias em que a v2 distribui: segunda a sábado. Domingo fica de folga. */
 const DEFAULT_WEEKDAYS: readonly Weekday[] = [1, 2, 3, 4, 5, 6];
-
-/** Meta que o modo `safe` PRESERVA. */
-function isPreserved(status: string): boolean {
-  return status === "completed";
-}
 
 interface Context {
   studyPlanId: Uuid;
@@ -51,7 +47,6 @@ interface Context {
   startsOn: string;
   weeklyGoals: number;
   subjects: readonly SubjectWeight[];
-  existing: readonly { id: string; status: string; subject: string; weekday: number }[];
 }
 
 async function context(input: GenerateWeekInput): Promise<Context> {
@@ -72,14 +67,6 @@ async function context(input: GenerateWeekInput): Promise<Context> {
 
   if (subjectsError) throwDb(subjectsError);
 
-  const { data: existing, error: existingError } = await supabase
-    .from("goals")
-    .select("id,status,subject,weekday")
-    .eq("study_plan_id", input.studyPlanId)
-    .eq("week_number", input.weekNumber);
-
-  if (existingError) throwDb(existingError);
-
   return {
     studyPlanId: plan.id,
     teacherId: plan.teacher_id,
@@ -92,7 +79,6 @@ async function context(input: GenerateWeekInput): Promise<Context> {
       // geração — é o "peso por matéria" da v2.
       weight: input.weights?.[row.name] ?? row.weight,
     })),
-    existing: existing ?? [],
   };
 }
 
@@ -155,12 +141,22 @@ async function copyFrom(
 }
 
 export async function previewWeek(input: GenerateWeekInput): Promise<GenerateWeekPreview> {
+  const invalid = checkGenerateWeek(input);
+  if (invalid) readFailure(invalid.message, "validation");
+
   const ctx = await context(input);
   const rows = await build(input, ctx);
 
-  const preserved =
-    input.mode === "safe" ? ctx.existing.filter((goal) => isPreserved(goal.status)).length : 0;
-  const replaced = ctx.existing.length - preserved;
+  const { data: counts, error } = await supabase.rpc("week_replacement_preview", {
+    p_study_plan_id: input.studyPlanId,
+    p_week_number: input.weekNumber,
+  });
+  if (error) throwDb(error);
+  const { goals_total: total, goals_preserved: preserved } = counts?.[0] ?? {
+    goals_total: 0,
+    goals_preserved: 0,
+  };
+  const replaced = total - preserved;
 
   const bounds = weekBounds(ctx.startsOn, input.weekNumber);
 
@@ -196,7 +192,35 @@ export async function previewWeek(input: GenerateWeekInput): Promise<GenerateWee
   };
 }
 
+/** A meta no formato que `generate_week` lê. Ausente vai como `null`: `Json` não aceita `undefined`. */
+function toPayload(row: PlannedRow): Json {
+  return {
+    weekday: row.weekday,
+    weekday_name: WEEKDAY_NAMES[row.weekday - 1]!,
+    day_position: row.day_position,
+    type: row.type,
+    subject: row.subject,
+    title: row.title,
+    planned_minutes: row.planned_minutes,
+    lesson: row.lesson ?? null,
+    block: row.block ?? null,
+    notebook_block_id: row.notebook_block_id ?? null,
+  };
+}
+
+/**
+ * Gera a semana numa transação.
+ *
+ * A validação fica FORA do `once()`, como `grantAccess` faz: recusa não gasta
+ * viagem nem prende o id. O `once()` cobre o clique duplo dentro da aba sem ida
+ * ao servidor; quem garante de verdade é `goal_batches`, cuja PK é o
+ * `requestId` — a tela o gera uma vez por prévia, e uma retentativa depois de a
+ * resposta se perder volta como replay, sem tocar em `goals`.
+ */
 export function generateWeek(input: GenerateWeekInput): Promise<Result<Week>> {
+  const invalid = checkGenerateWeek(input);
+  if (invalid) return Promise.resolve(failure<Week>(invalid));
+
   return once(input.requestId, async () => {
     const ctx = await context(input);
     const rows = await build(input, ctx);
@@ -208,77 +232,37 @@ export function generateWeek(input: GenerateWeekInput): Promise<Result<Week>> {
       );
     }
 
-    // A SUBSTITUIÇÃO SEGURA, aqui. No modo `safe` a meta concluída sobrevive —
-    // com os registros dela, que têm FK para ela e sumiriam junto.
-    const toRemove = ctx.existing
-      .filter((goal) => input.mode === "full" || !isPreserved(goal.status))
-      .map((goal) => goal.id);
-
-    if (toRemove.length > 0) {
-      const { error } = await supabase.from("goals").delete().in("id", toRemove);
-      if (error) return failure<Week>(translateDbError(error));
-    }
-
-    // As posições recomeçam de onde as preservadas pararam: duas metas na mesma
-    // (semana, dia, posição) colidem no índice único.
-    const preservedPerDay = new Map<number, number>();
-    if (input.mode === "safe") {
-      for (const goal of ctx.existing.filter((candidate) => isPreserved(candidate.status))) {
-        preservedPerDay.set(goal.weekday, (preservedPerDay.get(goal.weekday) ?? 0) + 1);
-      }
-    }
-
-    const { error } = await supabase.from("goals").insert(
-      rows.map((row) => ({
-        study_plan_id: ctx.studyPlanId,
-        teacher_id: ctx.teacherId,
-        student_id: ctx.studentId,
-        week_number: input.weekNumber,
-        weekday: row.weekday,
-        weekday_name: WEEKDAY_NAMES[row.weekday - 1]!,
-        day_position: row.day_position + (preservedPerDay.get(row.weekday) ?? 0),
-        type: row.type,
-        subject: row.subject,
-        title: row.title,
-        planned_minutes: row.planned_minutes,
-        lesson: row.lesson ?? null,
-        block: row.block ?? null,
-        notebook_block_id: row.notebook_block_id ?? null,
-      })),
-    );
-
+    const { error } = await supabase.rpc("generate_week", {
+      p_request_id: input.requestId,
+      p_study_plan_id: input.studyPlanId,
+      p_week_number: input.weekNumber,
+      p_goals: rows.map(toPayload),
+    });
     if (error) return failure<Week>(translateDbError(error));
     return done(await loadWeek(ctx.studyPlanId, input.weekNumber));
   });
 }
 
 /**
- * Limpa as metas PENDENTES da semana.
+ * Apaga o que Gerar substituiria — pendentes, puladas e em andamento sem
+ * registro — e nada insere. Concluída e estudo registrado nunca saem.
  *
- * Nunca toca nas concluídas — é o mesmo princípio da substituição segura, e é
- * por isso que esta operação existe separada de "replanejar": o professor que
- * quer esvaziar a semana quase sempre quer manter o que o aluno já fez.
+ * Sem `once()`, como `linkStudent`, e o `requestId` fica na assinatura do
+ * contrato sem ir ao banco: a função é naturalmente idempotente, porque só
+ * apaga, o critério é reavaliado contra o estado atual sob a trava do plano, e
+ * o pior caso (corrida com um registro do aluno) é segurado por
+ * `goal_entries_goal_fk`.
  */
-export function clearPendingGoals(
+export async function clearPendingGoals(
   studyPlanId: Uuid,
   weekNumber: number,
   requestId: RequestId,
 ): Promise<Result<Week>> {
-  return once(requestId, async () => {
-    const { data, error } = await supabase
-      .from("goals")
-      .select("id,status")
-      .eq("study_plan_id", studyPlanId)
-      .eq("week_number", weekNumber);
-
-    if (error) return failure<Week>(translateDbError(error));
-
-    const toRemove = (data ?? []).filter((goal) => !isPreserved(goal.status)).map((goal) => goal.id);
-    if (toRemove.length > 0) {
-      const { error: deleteError } = await supabase.from("goals").delete().in("id", toRemove);
-      if (deleteError) return failure<Week>(translateDbError(deleteError));
-    }
-
-    return done(await loadWeek(studyPlanId, weekNumber));
+  void requestId;
+  const { error } = await supabase.rpc("clear_pending_goals", {
+    p_study_plan_id: studyPlanId,
+    p_week_number: weekNumber,
   });
+  if (error) return failure<Week>(translateDbError(error));
+  return done(await loadWeek(studyPlanId, weekNumber));
 }
