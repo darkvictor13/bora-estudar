@@ -202,12 +202,13 @@ diff mostra a omissão.
 |---|---|
 | F-META-01 | os quatro números do cabeçalho saem dos REGISTROS, não das metas |
 | F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona |
-| F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam; rede caindo mostra "Sem conexão", e a retentativa no mesmo diálogo grava uma vez — QA-06 |
+| F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam; rede caindo mostra "Sem conexão", e a retentativa no mesmo diálogo grava uma vez — QA-06; a resposta que se perde grava um registro só — QA-04; minutos negativos, acima de 240 e fracionados são recusados e nada é gravado — QA-10 |
 | F-META-04 | concluir e reabrir devolve o estado que os registros justificam |
 | F-META-05 | meta de bateria não se mexe pela tela |
 | F-META-06 | aluno sem planejamento ativo: as três telas explicam em vez de quebrar |
 | F-META-07 | planejamento em rascunho é o mesmo que nenhum |
-| F-EXTRA-01 | estudo fora das metas: cria meta e registro numa operação só; falha que LANÇA não prende o diálogo — N-01 |
+| F-META-08 | sem acesso vigente, a semana não muda: concluir e registrar recusam, a tela diz que o acesso venceu e o banco fica como estava — QA-07 |
+| F-EXTRA-01 | estudo fora das metas: cria meta e registro numa operação só; a leitura do plano que cai não prende o diálogo — N-01; a resposta que se perde cria uma meta só — QA-04; dois extras no mesmo dia cabem — N-02; data fora de [início do planejamento, hoje] é recusada — QA-11; com "Semana inteira" a data sugerida é hoje — QA-14; abrir com o cronômetro correndo não escreve no render e Cancelar o retoma — QA-27, D-16; o extra de ontem conta ontem na semana — N-07 |
 | F-PLAN-01 | o planejamento como o aluno o vê: identidade, números e ciclo por peso |
 | F-DISC-01 | disciplinas e blocos, só leitura |
 | F-ALU-01 | todas as telas do aluno abrem — `tests/student.spec.ts` |
@@ -228,7 +229,7 @@ diff mostra a omissão.
 
 | Id | Cobre |
 |---|---|
-| F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso |
+| F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso; o extra de ontem cai em ontem na série por dia — N-07 |
 | F-REV-01 | a grade de revisão mostra o espaçamento do professor; a vencida é marcada; o reforço tem lugar próprio |
 | F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde |
 | F-CUP-01 | resgatar cupom libera o acesso — **`fixme`** |
@@ -325,11 +326,7 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir.
-
-| Id | Cobre |
-|---|---|
-| F-META-08 | sem acesso vigente, a semana não muda: concluir, reabrir, pular e registrar recusam, e a tela diz que o acesso venceu — QA-07 |
+seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.
