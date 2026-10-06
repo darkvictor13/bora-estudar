@@ -58,7 +58,7 @@ escreva, custa migração de dado.
 
 | Id | Regra |
 |---|---|
-| R-EXTRA-06 | Registrar estudo extra é **execução**, e vai por RPC: `record_extra_study`. Ela **cria** linha em `goals`, e o aluno não tem — nem passa a ter — `insert` nessa tabela. |
+| R-EXTRA-06 | Registrar estudo extra é **execução**, e vai por RPC: `record_extra_study`. Ela **cria** linha em `goals`, e o aluno não tem — nem passa a ter — `insert` nessa tabela. *(Verdade desde o PR 5c, 06/10/2026: até lá o ramo do aluno em `goals_insert` ainda aceitava meta `extra` e `reinforcement`, e a meta podia nascer com `spent_minutes` e questões preenchidos. Hoje só o professor insere em `goals`.)* |
 | R-EXTRA-07 | O registro nasce `completed`, com `completed_at = now()`. Não existe "estudo extra planejado pelo aluno": é o registro de algo que já aconteceu. Meta de estudo extra **planejada pelo professor** continua nascendo `pending` e sendo fechada por `complete_goal`. |
 | R-EXTRA-08 | **Substituída por R-EXTRA-20.** O aluno escolhe a **semana** e o **dia** do registro. `day_order` é calculado pela RPC — o maior do dia mais um —, nunca pelo cliente. É a mesma regra de `apply_study_plan_batch`. |
 | R-EXTRA-09 | **Substituída por R-EXTRA-21.** Exige planejamento `active`, e a semana precisa existir nele — ou seja, ter ao menos uma meta. Registrar estudo numa semana que o professor ainda não montou criaria uma semana fantasma no seletor do painel. |
