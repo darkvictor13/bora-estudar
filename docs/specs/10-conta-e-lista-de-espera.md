@@ -28,6 +28,8 @@ não podem depender de planejamento, de meta nem de bateria.
 | R-CTA-04 | O `UPDATE` é filtrado por `session.profileId`, e a RLS de `profiles` confirma. Um aluno não edita o perfil de outro. |
 | R-CTA-05 | Ao salvar com sucesso, a revalidação re-roda os loaders de **todas** as rotas casadas, incluindo o do layout — que é quem alimenta o nome na sidebar. É por isso que o nome novo aparece lá sem recarregar. |
 | R-CTA-06 | O rótulo do e-mail usa `<label htmlFor>` de verdade. Um `<span>` solto não é anunciado por leitor de tela. |
+| R-CTA-15 | O cartão Acesso mostra o professor do aluno **pelo nome**, lido por `my_teacher()`. A policy `profiles_select` só abre a própria linha e as dos próprios alunos, então um `select` direto na linha do professor volta vazio — e era isso que fazia o aluno vinculado ler "Ainda sem professor" (QA-08). A leitura que falha é erro, não ausência: o adaptador lança. |
+| R-CTA-16 | "Válido até" é um **instante** (`timestamptz`), mostrado no fuso do aparelho (D-11): um vencimento às 22h de Brasília aparece no dia dele, não no seguinte (N-04, QA-20). |
 
 ### Lista de espera
 
@@ -98,6 +100,7 @@ na Lista de espera.
 | CA-06 | Faltando qualquer um dos três obrigatórios, a action recusa com mensagem única | F-ALU-05 |
 | CA-07 | Com acesso liberado, a tela mostra "Seu acesso já está liberado." | F-ALU-05 |
 | CA-08 | As duas telas abrem com assinatura `suspended` | F-ALU-07 |
+| CA-10 | Aluno vinculado vê o nome do professor no cartão Acesso; sem vínculo, "Ainda sem professor" | F-CONTA-01 |
 | CA-09 | Um aluno não consegue alterar o perfil de outro | **sem cobertura** na suíte de telas; coberto por RLS em `supabase/tests/02_rls.sql` |
 
 ---

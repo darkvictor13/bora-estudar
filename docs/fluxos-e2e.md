@@ -110,14 +110,14 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 |---|---|
 | Casca | `content`, `sidebar`, `sidebar-toggle`, `sidebar-foot`, `nav-item`, `user-chip`, `user-name`, `sign-out`, `theme-toggle`, `theme-unsaved` |
 | Primitivas | `alert` (+`data-status`), `badge`, `card`, `metric`, `metric-value`, `page-header`, `empty`, `day-chip` |
-| Autenticação | `auth-card`, `auth-overlay` |
+| Autenticação | `auth-card`, `auth-overlay`, `existing-account` |
 | Semana do aluno | `week-hero`, `week-stat`, `week-stat-value`, `day-group`, `day-count`, `goal-row` (+`data-goal-id`, `data-status`), `goal-check`, `goal-actions`, `goal-blocked`, `goal-theory`, `record-study-dialog`, `extra-study-dialog` |
 | Teoria | `theory-dialog`, `theory-tabs`, `theory-subject`, `theory-percent`, `theory-review`, `theory-save-continue`, `theory-save-end`, `initial-questions-form`, `initial-questions-count`, `lesson-row` (+`data-lesson-id`) |
 | Revisões e reforço | `review-row` (+`data-review-id`), `review-rule`, `spacing-form`, `cycle-row`, `reinforcement-row` |
 | Gráficos | `chart-bar`, `chart-point`, `chart-single-value`, `chart-table`, `chart-tooltip`, `ranked-row`, `ranked-target` |
 | Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
-| Conta | `account-form`, `waitlist-form` |
+| Conta | `account-form`, `account-access`, `waitlist-form` |
 | Leitura e grifo | `flashcard-flip` (+`data-flipped`), `flashcard-answer`, `flashcard-mark` e `law-mark` (+`data-style`, `data-color`; o do cartão também `data-side`) |
 | Erro | `error-code` — o identificador do evento relatado, e só existe quando houve relato |
 
@@ -171,17 +171,18 @@ diff mostra a omissão.
 
 | Id | Cobre |
 |---|---|
-| F-AUTH-01 | anônimo é mandado para o login, em toda rota protegida |
+| F-AUTH-01 | anônimo é mandado para o login, em toda rota protegida, com `?next=` apontando para ela |
 | F-AUTH-02/03 | credencial recusada, sem revelar se a conta existe; campos vazios validados pela action |
 | F-AUTH-04 | login leva cada papel para a própria casa |
 | F-AUTH-05 | papel errado é devolvido para a própria casa |
 | F-AUTH-06 | tela pública com sessão ativa redireciona |
 | F-AUTH-07 | logout apaga o cookie e a área volta a barrar |
 | F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera, sem professor e sem acesso |
-| F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido |
+| F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido — com os links "Entrar" e "Esqueci minha senha" junto da frase (QA-29) |
 | F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações |
+| F-AUTH-13 | o link profundo volta depois do login: `next` pelo guarda, por papel errado, externo e por navegação do cliente — QA-25 |
 | F-AUTH-14 | `/confirmar?next=` não manda para fora do site — QA-02 |
-| F-CONTA-01 | meus dados: o nome salva, o resto é contexto — `tests/student-analysis.spec.ts` |
+| F-CONTA-01 | meus dados nos dois papéis: o aluno vê o nome do professor, o professor não vê o cartão Acesso, o nome salva — `tests/student-analysis.spec.ts` (QA-08, QA-21) |
 
 ### Casca e navegação — `tests/shell.spec.ts`
 
@@ -243,7 +244,7 @@ diff mostra a omissão.
 |---|---|
 | F-PROF-01 | todas as telas do professor abrem |
 | F-PROF-02 | a lista abre pelos atrasados; filtros somam; o recorte fica na URL |
-| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer |
+| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer; vigência vencida aparece "Venceu em" (QA-20) |
 | F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
 | F-PROF-05 | gerar a semana preserva o concluído e o estudo registrado; só sai o que está pendente, pulado ou em andamento sem registro; a prévia conta o que fica; não há modo de substituição — QA-01 |
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
@@ -254,7 +255,7 @@ diff mostra a omissão.
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
 | F-TREV-01 | é na tela do professor que o espaçamento se configura |
 | F-TEST-01 | estatísticas do professor: as mesmas do aluno, apontadas para o planejamento dele |
-| F-VINC-01 a F-VINC-08 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
+| F-VINC-01 a F-VINC-09 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data, e a barra do aluno acompanhar liberar e bloquear sem F5 (F-VINC-09, QA-09) — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-MATR-01 a F-MATR-05 | turmas: criar, renomear, matricular, mover, recusar apagar turma com aluno, filtrar por `?turma=` — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
 

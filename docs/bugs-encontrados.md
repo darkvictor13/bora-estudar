@@ -458,12 +458,18 @@ Não há "Meus dados" na sidebar do professor, e `updateProfile` exige
 
 ### GAP-04 · INFO · Cadastro repetido não confirma nada
 
-Com a confirmação de e-mail desligada no ambiente local, cadastrar um e-mail já
-existente devolve "Já existe uma conta com este e-mail" — o comportamento certo
-em desenvolvimento. Em produção, com confirmação ligada, o GoTrue responde
-sucesso genérico para não revelar quais e-mails existem, e a pessoa vai para a
-lista de espera de uma conta que não é dela. Vale decidir o texto dessa tela
-antes de ligar a confirmação.
+Com a confirmação de e-mail desligada, cadastrar um e-mail já existente devolve
+"Já existe uma conta com este e-mail". Com ela ligada, o GoTrue responde sucesso
+genérico para não revelar quais e-mails existem, e a pessoa iria para a lista de
+espera de uma conta que não é dela.
+
+**Decidido em 06/10/2026 (D-14, QA-29): a frase FICA.** Não há produção, e staging
+também roda sem confirmação; com ela desligada o GoTrue responde 422 a QUALQUER
+chamador, então esconder a frase na tela não tira a informação de quem chama a API
+direto — só ligar a confirmação corrige, e isso espera staging entregar e-mail
+([`plano-email-staging.md`](plano-email-staging.md)). Mitigação: `sign_in_sign_ups = 30`
+por 5 min por IP, e os links "Entrar" e "Esqueci minha senha" na própria mensagem.
+Revisitar quando a confirmação for ligada. Spec 01, R-AUTH-18.
 
 ---
 

@@ -29,7 +29,7 @@ bloqueio. Quem chamasse `nav('dashboard')` pelo console entrava.
 | R-ACC-05 | Duas rotas são alcançáveis sem acesso liberado: `/aluno/conta` e `/aluno/lista-espera`, listadas em `STUDENT_ROUTES_WITHOUT_ACCESS`. |
 | R-ACC-06 | Sem acesso, as cinco telas de estudo redirecionam para `/aluno/lista-espera`. |
 | R-ACC-07 | Na sidebar, item sem acesso vira `<span aria-disabled="true">` **sem destino** — não um `<Link>` desabilitado. Um Link continua navegando no clique, o loader redireciona de volta, e a pessoa dá a volta inteira para não sair do lugar. |
-| R-ACC-08 | `hasAccess` é recalculado a cada navegação (ver R-AUTH-10). Quando o professor libera o acesso, a próxima navegação do aluno já entra. |
+| R-ACC-08 | `hasAccess` é recalculado a cada navegação (ver R-AUTH-10). Quando o professor libera o acesso, a próxima navegação do aluno já entra — e quando bloqueia, a próxima já o barra. Para isso o layout do aluno **revalida a cada troca de caminho** (`shouldRevalidate`): o React Router não reexecuta o loader de uma rota que continua casada quando só o filho muda, e sem isso a barra seguia com os itens do estado antigo até o F5 (QA-09). |
 | R-ACC-09 | O aluno pode **ler** `subscriptions` (a própria) e não pode inseri-la nem ativá-la: a tentativa é `42501`. O `GRANT UPDATE` existe para o professor; a RLS é quem restringe a quem. |
 | R-ACC-10 | Sem planejamento ativo, as telas de estudo abrem e mostram "Nenhum planejamento ativo." — acesso liberado e planejamento ativo são condições independentes. |
 

@@ -1,6 +1,6 @@
 # 13 — Vínculo, acesso e turmas
 
-**Situação:** implementada · **Comparativo:** §12 item 2 · **Fluxos e2e:** F-VINC-01 a F-VINC-08 e F-MATR-01 a F-MATR-05
+**Situação:** implementada · **Comparativo:** §12 item 2 · **Fluxos e2e:** F-VINC-01 a F-VINC-09 e F-MATR-01 a F-MATR-05
 
 > **Reescrita e implementada em 18/09/2026**, pela migration
 > `20260918120000_link_access_and_classes.sql`. A versão anterior desta spec
@@ -134,6 +134,8 @@ significa para `public.has_active_access()`:
 | R-VINC-29 | **Idempotência com payload.** `access_grants.request_id` é `UNIQUE`; a RPC compara o payload guardado (`student_id`, `action`, `months`) e, sendo igual, devolve o resultado da primeira chamada sem reexecutar. Payload diferente com o mesmo `request_id` é rejeitado. O `request_id` é gerado **uma vez, na origem** — gerá-lo no ponto de uso transforma a proteção do servidor em decoração. |
 | R-VINC-30 | `access_grants` é o **histórico**: uma linha por liberação e por bloqueio, com quem fez, quantos meses e a vigência resultante. Responde "desde quando este aluno tem acesso", que é a lacuna nº 2 de `lib/api/contract.ts`. Referencia `profiles` com `on delete restrict`, como `quiz_sessions`: liberação órfã é dado que nenhuma tela explica. |
 | R-VINC-31 | `access_grants` tem `select` para `authenticated`, com policy `student_id = auth.uid() or teacher_id = auth.uid()`, e **zero** `insert`, `update` e `delete`. Por isso, e só por isso, ela não leva FK composta: a defesa 3 do `CLAUDE.md` existe para linha montada por quem escreve, e aqui ninguém fora da RPC escreve. Amarrar `(student_id, teacher_id)` a `profiles` seria ainda pior — quebraria no dia em que o aluno trocar de professor, apagando o histórico de quem o liberou antes. |
+| R-VINC-32 | **Liberar e bloquear valem na PRÓXIMA navegação do aluno pela barra, sem recarregar.** O layout do aluno revalida a cada troca de caminho (R-ACC-08): liberado, os itens de estudo se habilitam e o aviso some; suspenso, os itens voltam a ficar inertes e o aviso volta (QA-09). |
+| R-VINC-33 | **A vigência na ficha tem três textos**, com a data no fuso do aparelho: sem vigência, "Sem vigência. A primeira liberação conta a partir de hoje."; com vigência futura, "Vigência atual até dd/mm/aaaa. Liberar soma ao que ainda falta."; vencida, "Venceu em dd/mm/aaaa. A liberação conta a partir de hoje." — a RPC conta de `greatest(now(), …)` (R-VINC-17), e dizer "soma ao que falta" a quem já venceu era mentira. A lista e a ficha usam `effectiveAccess`: quem passou da data aparece "Vencido", e não "Liberado" (QA-20; `has_active_access()` recusa a escrita desde o instante exato, `access_expires_at > now()`). |
 
 ### Turmas
 
@@ -268,6 +270,8 @@ pronto, e o custo é contrato e tela.
 | CA-20 | `?turma=` filtra a lista; valor inválido devolve a lista inteira sem erro de console | F-MATR-04 |
 | CA-21 | Um professor não matricula aluno de outro, nem em turma de outro — as duas recusas são do banco | F-MATR-05 e `supabase/tests/02_rls.sql` |
 | CA-22 | `teacher_id` e `student_id` continuam fora do `grant update` de `class_students`, e `classes` passa a conceder `update` só de `name` e `description` | `supabase/tests/01_grants.sql` |
+| CA-23 | Com o aluno navegando, liberar e bloquear pela RPC mudam a barra e o aviso na navegação seguinte, sem recarregar | F-VINC-09 |
+| CA-24 | A ficha mostra "Vigência atual até <data>" depois da primeira liberação, e "Venceu em <data>" com a data vencida — a data no fuso do aparelho | F-VINC-06 e F-PROF-03 |
 
 ---
 
