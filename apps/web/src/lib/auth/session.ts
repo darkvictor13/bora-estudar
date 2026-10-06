@@ -33,10 +33,12 @@ let inFlight: Promise<SessionContext | null> | null = null;
  * o contexto no mesmo instante; sem isso seriam duas idas ao servidor de auth
  * e quatro consultas por navegação.
  *
- * A memoização é liberada quando a consulta termina, de propósito. Guardar o
- * contexto entre navegações deixaria `hasAccess` velho: o professor libera o
- * acesso e o aluno continuaria empurrado para a lista de espera até recarregar
- * a página. Cada navegação volta a perguntar.
+ * A memoização é liberada quando a consulta termina, de propósito. Guardá-la
+ * entre navegações deixaria `hasAccess` velho: o professor libera o acesso e o
+ * aluno continuaria empurrado para a lista de espera até recarregar a página.
+ * Quem faz o layout perguntar de novo, a cada troca de tela, é o
+ * `shouldRevalidate` da rota dele (R-ACC-08, QA-09): sem ele o loader do layout
+ * não reexecuta quando só o filho muda.
  */
 export function getSessionContext(): Promise<SessionContext | null> {
   if (!inFlight) {
@@ -58,33 +60,56 @@ export function getSessionContext(): Promise<SessionContext | null> {
 }
 
 /**
- * Exige sessão. Redireciona para o login se não houver.
+ * O destino a que o login devolve: o que o pedido queria abrir.
+ *
+ * Sai de `request.url`, e NUNCA de `location`: numa navegação do cliente o
+ * loader roda antes de a URL mudar, e `location` ainda é a tela de onde a pessoa
+ * saiu — o login a devolveria para lá. Por outro lado `request.url` jamais traz
+ * `#` (o router o tira), então o fragmento só pode vir de `location`, e só vale
+ * quando `location` é este mesmo destino: a PRIMEIRA carga, em que o endereço
+ * digitado ainda é o da barra. Numa navegação do cliente o fragmento de
+ * `location` é da tela anterior e não é deste destino (R-AUTH-06).
+ */
+function destinationOf(request: Request): string {
+  const url = new URL(request.url);
+  const path = url.pathname + url.search;
+  const firstLoad = location.pathname === url.pathname && location.search === url.search;
+  return firstLoad ? path + location.hash : path;
+}
+
+/**
+ * Exige sessão. Redireciona para o login se não houver, levando o destino em
+ * `?next=` para o login devolver a pessoa ao que ela queria abrir (R-AUTH-17).
  *
  * O `redirect` do React Router devolve uma Response, e quem a LANÇA de dentro
  * de um loader entrega o controle ao router. Por isso `throw` e não `return`:
  * um `return` aqui viraria o valor de retorno desta função, e o loader
  * seguiria em frente com uma sessão inexistente.
  *
- * O FRAGMENTO VAI JUNTO. Um redirecionamento HTTP preserva o `#` por conta do
- * navegador; o `redirect` do router monta a URL nova só com o caminho e o joga
- * fora. Descartar fragmento num redirecionamento de login é perda de estado em
- * qualquer rota que venha a usá-lo.
+ * O FRAGMENTO VIAJA DENTRO DO `next`. O `redirect` do router monta a URL nova só
+ * com o caminho e jogaria o `#` fora; dentro do parâmetro ele sobrevive até o
+ * login, que o devolve junto com o destino.
+ *
+ * O `request` é OBRIGATÓRIO nas três guardas, para o compilador listar todo
+ * chamador: o redirect do loader MAIS FUNDO vence (`findRedirect` percorre os
+ * resultados de trás para frente), então se só o layout montasse o `next`, o
+ * `requireRole` da página redirecionaria sem ele e é esse que valeria.
  */
-export async function requireSession(): Promise<SessionContext> {
+export async function requireSession(request: Request): Promise<SessionContext> {
   const session = await getSessionContext();
   if (!session) {
     // Sem sessão o tema é claro, e a cópia local deste aparelho some junto
     // (R-TEMA-13 e R-TEMA-14). É aqui que a sessão EXPIRADA é notada — o
     // logout limpa por conta própria, mas quem some sozinho passa por aqui.
     forgetTheme();
-    throw redirect(`${ROUTES.signIn}${location.hash}`);
+    throw redirect(`${ROUTES.signIn}?next=${encodeURIComponent(destinationOf(request))}`);
   }
   return session;
 }
 
 /** Exige um papel específico. Manda para a home do papel real se não bater. */
-export async function requireRole(role: UserRole): Promise<SessionContext> {
-  const session = await requireSession();
+export async function requireRole(role: UserRole, request: Request): Promise<SessionContext> {
+  const session = await requireSession(request);
   if (session.role === role) return session;
 
   // Nunca redirecione para a rota que acabou de recusar a pessoa: é assim que
@@ -100,8 +125,8 @@ export async function requireRole(role: UserRole): Promise<SessionContext> {
  * o layout precisa continuar renderizando a sidebar e as duas telas livres —
  * dados e lista de espera — para quem ainda aguarda liberação.
  */
-export async function requireStudentAccess(): Promise<SessionContext> {
-  const session = await requireRole("student");
+export async function requireStudentAccess(request: Request): Promise<SessionContext> {
+  const session = await requireRole("student", request);
   if (!session.hasAccess) throw redirect(ROUTES.student.waitlist);
   return session;
 }

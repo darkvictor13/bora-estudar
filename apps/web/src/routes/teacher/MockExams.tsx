@@ -16,10 +16,11 @@ import { MockExamRanking, formatScore } from "@/components/MockExamRanking";
 import { MockExamSubjectAnalysis } from "@/components/MockExamSubjectAnalysis";
 import { api, newRequestId, type Result } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { formatDate } from "@/lib/domain/dates";
 import { localDate } from "@/lib/domain/schedule";
 
 export async function teacherMockExamsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
   const [exams, classes, students] = await Promise.all([api.listMockExams(), api.listClasses(), api.listStudents({})]);
   const asked = new URL(request.url).searchParams.get("simulado");
   const selected = exams.find((exam) => exam.id === asked) ?? exams[0] ?? null;
@@ -120,7 +121,7 @@ export function TeacherMockExams() {
           onChange={(event) => { setError(null); setNotice(null); setParams({ simulado: event.target.value }); }} sx={{ mb: 2 }}>
           {exams.map((exam) => <MenuItem key={exam.id} value={exam.id}>{exam.title} · {exam.className} · {exam.published ? "Publicado" : "Rascunho"}</MenuItem>)}
         </TextField>
-        <Card title={selected.title} sub={`${selected.className} · ${selected.examDate.split("-").reverse().join("/")} · Máximo: ${formatScore(selected.maxScore)} pontos`}
+        <Card title={selected.title} sub={`${selected.className} · ${formatDate(selected.examDate)} · Máximo: ${formatScore(selected.maxScore)} pontos`}
           action={<Badge tone={selected.published ? "success" : "neutral"}>{selected.published ? "Publicado" : "Rascunho"}</Badge>}>
           <Typography sx={{ mb: 2 }}>{selected.published ? "O ranking está visível para os alunos da turma. Retire a publicação para corrigir notas." : "As notas ainda não estão visíveis para os alunos. Salve cada nota antes de publicar."}</Typography>
           <Button variant="outlined" disabled={pending || (!selected.published && savedCount === 0)} onClick={() => {

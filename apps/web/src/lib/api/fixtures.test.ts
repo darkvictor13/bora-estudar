@@ -714,7 +714,14 @@ test("liberar SOMA ao que ainda falta, e o mesmo request_id não soma duas vezes
   const chave = requestId();
   const primeira = await api.grantAccess({ studentId: aluna!.studentId, requestId: chave, months: 3 });
   assert.ok(primeira.ok);
-  assert.ok(primeira.data.accessExpiresAt! > antes, "quem renova antes do fim não perde dia pago");
+  assert.ok(
+    Date.parse(primeira.data.accessExpiresAt!) > Date.parse(antes),
+    "quem renova antes do fim não perde dia pago",
+  );
+  // Meses de calendário, como `make_interval(months => 3)`: 90 dias a mais não.
+  const esperado = new Date(antes);
+  esperado.setUTCMonth(esperado.getUTCMonth() + 3);
+  assert.equal(primeira.data.accessExpiresAt, esperado.toISOString());
 
   const repetida = await api.grantAccess({ studentId: aluna!.studentId, requestId: chave, months: 3 });
   assert.ok(repetida.ok);
@@ -726,6 +733,21 @@ test("liberar SOMA ao que ainda falta, e o mesmo request_id não soma duas vezes
     (student) => student.studentId === aluna!.studentId,
   );
   assert.equal(relida?.accessExpiresAt, primeira.data.accessExpiresAt);
+});
+
+test("liberar quem JÁ VENCEU conta a partir de hoje, e não da data vencida", async () => {
+  const [vencido] = await api.listStudents({ access: "expired" });
+  assert.ok(vencido?.accessExpiresAt);
+
+  const liberada = await api.grantAccess({
+    studentId: vencido.studentId,
+    requestId: requestId(),
+    months: 1,
+  });
+  assert.ok(liberada.ok);
+  assert.equal(liberada.data.access, "active");
+  // 2026-09-14 (o "hoje" da fixture) + 1 mês de calendário, e não 2026-09-08 + 1.
+  assert.equal(liberada.data.accessExpiresAt, "2026-10-14T12:00:00.000Z");
 });
 
 test("a vigência é de 1, 3, 6 ou 12 meses — o resto é recusado", async () => {
@@ -808,6 +830,20 @@ test("renomear a turma aparece também na linha do aluno", async () => {
 
   const alunos = await api.listStudents({ classId: turmaA!.id });
   assert.deepEqual(new Set(alunos.map((student) => student.className)), new Set(["Fiscal 2028"]));
+});
+
+test("Meus dados traz o nome do professor COM vínculo, e nada sem ele (QA-08, QA-21)", async () => {
+  const aluna = await api.loadAccount();
+  assert.equal(aluna.teacherName, "Professor de Exemplo");
+  assert.equal(aluna.profileId, "22222222-2222-4222-8222-222222222222");
+
+  setFixtureRole("teacher");
+  const professor = await api.loadAccount();
+  assert.equal(professor.teacherName, null, "professor não tem professor");
+  assert.equal(professor.profileId, "33333333-3333-4333-8333-333333333333");
+
+  setFixtureRole("student");
+  assert.equal((await api.loadAccount()).teacherName, "Professor de Exemplo");
 });
 
 test("simulado: o professor vê os nomes, o aluno só o próprio e 'Colega'", async () => {

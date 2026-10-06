@@ -20,8 +20,8 @@ import { requireStudentAccess } from "@/lib/auth/session";
  * associada por id, coisas que o `<details>` da v2 dava de graça e que a
  * marcação com `onclick` dela tinha perdido.
  */
-export async function subjectsLoader() {
-  await requireStudentAccess();
+export async function subjectsLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { subjects: [] as readonly Subject[], hasPlan: false };

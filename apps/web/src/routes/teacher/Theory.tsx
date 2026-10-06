@@ -36,7 +36,7 @@ import { ROUTES } from "@/lib/routes";
  * aluno baixar o catálogo inteiro para abrir a tela de metas.
  */
 export async function teacherTheoryLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const catalogs = await api.listCatalogs();
   const catalogId = new URL(request.url).searchParams.get("catalogo") ?? catalogs[0]?.id ?? null;

@@ -30,7 +30,7 @@ import { formatMinutes } from "@/lib/domain/week";
  * mesmo número.
  */
 export async function teacherStatisticsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const [allPlans, classes] = await Promise.all([api.listPlans(), api.listClasses()]);
   const activePlans = allPlans.filter((plan) => plan.status === "active");

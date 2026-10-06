@@ -16,6 +16,7 @@ import {
   type RequestId,
   type StudentCard,
 } from "@/lib/api";
+import { formatInstant, hasExpired } from "@/lib/domain/dates";
 
 /**
  * LIBERAR E BLOQUEAR O ACESSO DO ALUNO.
@@ -87,9 +88,13 @@ export function AccessForm({ card }: { card: StudentCard }) {
       {message && <Alert status="success">{message}</Alert>}
 
       <Typography variant="body2" sx={{ mb: 1.5 }}>
-        {card.accessExpiresAt
-          ? `Vigência atual até ${card.accessExpiresAt}. Liberar soma ao que ainda falta.`
-          : "Sem vigência. A primeira liberação conta a partir de hoje."}
+        {/* Três textos (R-VINC-33): a RPC conta de `greatest(now(), …)`, então dizer
+            "soma ao que falta" a quem já venceu seria mentira. */}
+        {!card.accessExpiresAt
+          ? "Sem vigência. A primeira liberação conta a partir de hoje."
+          : hasExpired(card.accessExpiresAt)
+            ? `Venceu em ${formatInstant(card.accessExpiresAt)}. A liberação conta a partir de hoje.`
+            : `Vigência atual até ${formatInstant(card.accessExpiresAt)}. Liberar soma ao que ainda falta.`}
       </Typography>
 
       <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>

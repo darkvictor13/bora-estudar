@@ -111,6 +111,13 @@ export const router = createBrowserRouter([
 
       {
         loader: studentLayoutLoader,
+        // O layout não tem caminho, e o React Router não reexecuta o loader de uma
+        // rota que continua casada quando só o filho muda: liberado ou suspenso, a
+        // barra seguia com os itens do estado antigo até o F5 (QA-09, R-ACC-08).
+        // Declarar DESLIGA o padrão inteiro: o `||` devolve o que o router faria
+        // sozinho (revalidate(), search nova) e acrescenta a troca de tela.
+        shouldRevalidate: ({ currentUrl, nextUrl, defaultShouldRevalidate }) =>
+          defaultShouldRevalidate || currentUrl.pathname !== nextUrl.pathname,
         Component: StudentLayout,
         children: [
           {
@@ -284,7 +291,8 @@ export const router = createBrowserRouter([
                 handle: { title: "Estatísticas · Fronteira Concursos" },
               },
               {
-                // A mesma tela de `/aluno/conta`: mesmos campos, mesmo action.
+                // A mesma tela de `/aluno/conta`, com texto por papel e sem o cartão
+                // Acesso (R-CONTA-09): mesmos campos, mesma action.
                 path: ROUTES.teacher.account,
                 loader: accountLoader,
                 Component: Account,

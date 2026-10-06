@@ -22,6 +22,7 @@ import { MonthlyStudyChart } from "@/components/MonthlyStudyChart";
 import { SubjectPerformanceCard } from "@/components/SubjectPerformanceCard";
 import { api, type Statistics as StatisticsData, type WeeklyQuestionComparison, type SubjectPeerComparison } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { formatDayMonth } from "@/lib/domain/dates";
 import { questionAccuracy } from "@/lib/domain/question-performance";
 import { formatMinutes } from "@/lib/domain/week";
 
@@ -32,7 +33,7 @@ import { formatMinutes } from "@/lib/domain/week";
  * cores divide o mesmo total de respostas entre acertos e erros.
  */
 export async function studentStatisticsLoader({ request }: { request: Request }) {
-  await requireStudentAccess();
+  await requireStudentAccess(request);
   const params = new URL(request.url).searchParams;
 
   const plan = await api.loadActivePlanOrNull();
@@ -170,7 +171,7 @@ export function StudentStatistics() {
                     [theme.breakpoints.down("sm")]: { gridTemplateColumns: "1fr", gap: 0.6 },
                   })}>
                     <Typography variant="body2" component="span" sx={{ fontWeight: 700 }}>
-                      {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
+                      {formatDayMonth(day.date)}
                     </Typography>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>{day.questions} questões respondidas</Typography>

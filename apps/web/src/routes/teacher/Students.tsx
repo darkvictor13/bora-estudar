@@ -29,7 +29,7 @@ import { formatMinutes } from "@/lib/domain/week";
  * produto até 18/09/2026.
  */
 export async function teacherStudentsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const params = new URL(request.url).searchParams;
   const search = params.get("busca") ?? "";

@@ -5,8 +5,8 @@ import { StudyTimerFocus } from "@/components/StudyTimer";
 import { requireStudentAccess } from "@/lib/auth/session";
 import { ROUTES } from "@/lib/routes";
 
-export async function timerLoader() {
-  await requireStudentAccess();
+export async function timerLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
   return null;
 }
 

@@ -11,6 +11,7 @@
  * justifica: um ano de estudo de um aluno são algumas centenas de linhas.
  */
 import { supabase } from "@/lib/supabase/client";
+import { formatDayMonth } from "@/lib/domain/dates";
 import { streakDays } from "@/lib/domain/week";
 import { questionsByDay } from "@/lib/domain/question-performance";
 import { classQuestionDistribution } from "@/lib/domain/class-question-distribution";
@@ -405,7 +406,7 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
         (row) => entryDay(dayOf(row)),
         (row) => row.minutes,
       ),
-      (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`,
+      formatDayMonth,
     ),
     minutesByMonth: ordered(
       sumBy(rows, (row) => entryDay(dayOf(row)).slice(0, 7), (row) => row.minutes),

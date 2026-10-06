@@ -21,6 +21,7 @@ import {
   type StudyPlanSummary,
 } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { formatDate, todayLocal } from "@/lib/domain/dates";
 
 /**
  * Planejamentos — criar, editar, ativar e arquivar.
@@ -30,8 +31,8 @@ import { requireRole } from "@/lib/auth/session";
  * diz isso antes de ser clicado. Um "ativar" que silenciosamente desativa outro
  * é a forma mais rápida de um professor perder o planejamento que montou.
  */
-export async function teacherPlansLoader() {
-  await requireRole("teacher");
+export async function teacherPlansLoader({ request }: { request: Request }) {
+  await requireRole("teacher", request);
 
   const [plans, students] = await Promise.all([api.listPlans(), api.listStudents({})]);
   return { plans, students };
@@ -124,7 +125,7 @@ function PlanDialog({
               label="Início"
               name="startsOn"
               type="date"
-              defaultValue={plan?.startsOn ?? new Date().toISOString().slice(0, 10)}
+              defaultValue={plan?.startsOn ?? todayLocal()}
             />
             <Field
               label="Data da prova"
@@ -236,8 +237,8 @@ export function TeacherPlans() {
                   sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}
                 >
                   <Typography variant="caption" sx={{ flex: 1, minWidth: 0 }}>
-                    Início em {plan.startsOn}
-                    {plan.examDate ? ` · prova em ${plan.examDate}` : ""}
+                    Início em {formatDate(plan.startsOn)}
+                    {plan.examDate ? ` · prova em ${formatDate(plan.examDate)}` : ""}
                   </Typography>
 
                   <Button size="small" variant="text" onClick={() => setDialog({ open: true, plan })}>

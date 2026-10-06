@@ -13,6 +13,7 @@ import { GoalRow } from "@/components/student/GoalRow";
 import { WeekHero } from "@/components/student/WeekHero";
 import { StudyCalendar } from "@/components/student/StudyCalendar";
 import { StudyStreakDialog } from "@/components/student/StudyStreakDialog";
+import { formatDayMonth } from "@/lib/domain/dates";
 import { calendarDays, dailyQuestionPerformance, localDate, matchesSchedule, scheduleFilter } from "@/lib/domain/schedule";
 import { defaultExtraDate } from "@/lib/domain/week";
 import {
@@ -38,7 +39,7 @@ import { requireStudentAccess } from "@/lib/auth/session";
  * semana corrente depois de ela ter ido olhar a anterior.
  */
 export async function overviewLoader({ request }: { request: Request }) {
-  await requireStudentAccess();
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { plan: null, week: null, weeks: [] as readonly WeekOption[] };
@@ -102,7 +103,7 @@ function DayGroupCard({
         <Typography variant="overline" component="h2" sx={{ fontSize: "0.6875rem" }}>
           {WEEKDAY_NAMES[weekday - 1]}
           {" · "}
-          {date.slice(8, 10)}/{date.slice(5, 7)}
+          {formatDayMonth(date)}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
           <Typography variant="numeric" component="span" data-testid="day-count">

@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "../fixtures/index.ts";
 import { asUser, one, query } from "../fixtures/db.ts";
 import { addTheoryCatalog, addTheoryGoal, setAccess } from "../fixtures/scenario.ts";
-import { alert, content, field, testId } from "../support/ui.ts";
+import { alert, cardByTitle, content, field, testId } from "../support/ui.ts";
 
 type Page = import("@playwright/test").Page;
 
@@ -230,6 +230,52 @@ test.describe("F-REV-01 · a grade de revisão", () => {
     await expect(content(studentPage)).toContainText("Reforços");
     await expect(content(studentPage)).toContainText("execução de baterias está sendo reescrita");
     await expect(studentPage.locator('[data-testid="reinforcement-row"]')).toHaveCount(0);
+  });
+});
+
+test.describe("F-CONTA-01 · meus dados — QA-08 e QA-21", () => {
+  test("o aluno vinculado vê o NOME do professor, e não 'Ainda sem professor'", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto("/aluno/conta");
+
+    // A policy `profiles_select` não abre a linha do professor; quem a devolve é
+    // `my_teacher()`. A consulta direta voltava vazia e a tela mentia (QA-08).
+    const access = testId(studentPage, "account-access");
+    await expect(access).toContainText(scenario.teacher.name);
+    await expect(access).not.toContainText("Ainda sem professor");
+  });
+
+  test("o professor abre a PRÓPRIA conta, sem o cartão Acesso e sem 'fale com seu professor'", async ({
+    teacherPage,
+  }) => {
+    await teacherPage.goto("/professor/conta");
+
+    await expect(teacherPage.locator("h1")).toHaveText("Meus dados");
+    // `count()` não espera: o h1 acima é a espera dos loaders da rota.
+    await expect(cardByTitle(teacherPage, "Acesso")).toHaveCount(0);
+    await expect(testId(teacherPage, "account-access")).toHaveCount(0);
+    await expect(content(teacherPage)).not.toContainText("fale com seu professor");
+    await expect(content(teacherPage)).not.toContainText("Ainda sem professor");
+    await expect(content(teacherPage)).not.toContainText("O que o seu professor vê sobre você");
+    await expect(content(teacherPage)).toContainText("Como os seus alunos veem você");
+    await expect(content(teacherPage)).toContainText("A troca de e-mail ainda não está disponível.");
+
+    // Salvar o nome continua funcionando.
+    await field(teacherPage, "name").fill("Professor Renomeado E2E");
+    await testId(teacherPage, "account-form").getByRole("button", { name: "Salvar" }).click();
+    await expect(alert(teacherPage, "success")).toContainText("Dados salvos");
+    await expect(testId(teacherPage, "user-chip")).toContainText("Professor Renomeado E2E");
+  });
+
+  test.describe("sem vínculo", () => {
+    test.use({ scenarioOptions: { withLink: false, access: "pending", withPlan: false } });
+
+    test("o aluno sem professor lê 'Ainda sem professor'", async ({ studentPage }) => {
+      await studentPage.goto("/aluno/conta");
+      await expect(testId(studentPage, "account-access")).toContainText("Ainda sem professor");
+    });
   });
 });
 

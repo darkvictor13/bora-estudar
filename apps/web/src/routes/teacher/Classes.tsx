@@ -37,8 +37,8 @@ import { ROUTES } from "@/lib/routes";
  * `protect_class_with_students`. Esconder o botão faria a regra existir só aqui
  * — e uma regra que só existe na tela é o que este repositório trata como bug.
  */
-export async function teacherClassesLoader() {
-  await requireRole("teacher");
+export async function teacherClassesLoader({ request }: { request: Request }) {
+  await requireRole("teacher", request);
 
   const [classes, students] = await Promise.all([api.listClasses(), api.listStudents({})]);
   return { classes, students };

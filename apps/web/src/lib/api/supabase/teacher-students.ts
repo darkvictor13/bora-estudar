@@ -34,7 +34,7 @@ import type {
 import { checkAccessMonths, checkStudentEmail } from "../validation.ts";
 import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
 import { once } from "./idempotency.ts";
-import { PLAN_COLUMNS, requireSession, today, toPlan, type PlanRow } from "./session.ts";
+import { effectiveAccess, PLAN_COLUMNS, requireSession, today, toPlan, type PlanRow } from "./session.ts";
 import { loadStatistics } from "./statistics.ts";
 
 interface ProfileRow {
@@ -143,7 +143,9 @@ export async function listStudents(
       // expõe. O professor identifica o aluno pelo nome e pela turma; achar
       // pelo e-mail é `findStudentByEmail`, que passa por RPC.
       email: "",
-      access: student.access_status,
+      // Pelo RELÓGIO, como a sessão do aluno: quem passou da data aparece "Vencido",
+      // e o filtro "Vencido" o acha (QA-20, R-VINC-33).
+      access: effectiveAccess(student),
       accessExpiresAt: student.access_expires_at,
       classId: studentClass?.id ?? null,
       className: studentClass?.name ?? null,

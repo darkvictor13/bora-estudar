@@ -22,7 +22,7 @@ import { requireRole } from "@/lib/auth/session";
  * reação a desempenho baixo do outro.
  */
 export async function teacherReviewsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const plans = (await api.listPlans()).filter((plan) => plan.status === "active");
   const planId = new URL(request.url).searchParams.get("plano") ?? plans[0]?.id ?? null;

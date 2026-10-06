@@ -21,7 +21,7 @@ import {
   type ThemePreference,
 } from "../contract.ts";
 import { checkCredentials, checkName, checkPassword, checkSignUp } from "../validation.ts";
-import { done, fail, failure, settle, translateAuthError, translateDbError } from "./errors.ts";
+import { done, fail, failure, settle, throwDb, translateAuthError, translateDbError } from "./errors.ts";
 import { currentSession } from "./session.ts";
 
 /**
@@ -60,12 +60,14 @@ export const authApi = {
     const invalid = checkSignUp({ email, password, name });
     if (invalid) return failure(invalid);
 
-    // O papel vai no metadata: o gatilho que cria o perfil lê `role` de lá.
-    // Cadastro público só cria ALUNO; professor é criado por dentro.
+    // Só o nome vai no metadado. O gatilho que cria o perfil IGNORA `role` de
+    // propósito (migration 20260914190000): `raw_user_meta_data` é escrito pelo
+    // cliente, e quem mandasse `{"role":"teacher"}` nasceria professor. Cadastro
+    // público só cria ALUNO; professor é criado por dentro.
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name: name.trim(), role: "student" } },
+      options: { data: { name: name.trim() } },
     });
     if (error) return failure(translateAuthError(error));
 
@@ -110,23 +112,23 @@ export const authApi = {
     const session = await currentSession();
     if (!session) throw new Error("Sem sessão.");
 
-    let teacherName: string | null = null;
-    if (session.teacherId) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("name")
-        .eq("id", session.teacherId)
-        .maybeSingle();
-      teacherName = data?.name ?? null;
-    }
-
+    // O nome do professor vem de `my_teacher()`, e não de um `select` em
+    // `profiles`: a policy `profiles_select` só abre a própria linha e as dos
+    // próprios alunos, então a consulta direta voltava vazia e a tela dizia
+    // "Ainda sem professor" a quem tinha (QA-08). A RPC devolve TABELA, e o
+    // cliente entrega um array. O erro NÃO se descarta: falha de leitura não é
+    // ausência de professor.
+    //
     // `profiles.plan` é texto livre no schema de 14/09/2026 — o nome do plano
     // comercial, não o planejamento de estudo. Vai cru para a tela.
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
-      .eq("id", session.profileId)
-      .maybeSingle();
+    const [teacher, planRead] = await Promise.all([
+      session.teacherId ? supabase.rpc("my_teacher") : null,
+      supabase.from("profiles").select("plan").eq("id", session.profileId).maybeSingle(),
+    ]);
+    if (teacher?.error) throwDb(teacher.error);
+    if (planRead.error) throwDb(planRead.error);
+    const teacherName = teacher?.data?.[0]?.name ?? null;
+    const profile = planRead.data;
 
     return {
       profileId: session.profileId,

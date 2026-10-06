@@ -17,8 +17,8 @@ import { ROUTES } from "@/lib/routes";
  * quanto falta para cada uma acabar, e quantas revisões me esperam. A meta da
  * semana abre UMA disciplina; esta tela mostra todas.
  */
-export async function theoryLoader() {
-  await requireStudentAccess();
+export async function theoryLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { subjects: [] as readonly TheorySubjectControl[], hasPlan: false };

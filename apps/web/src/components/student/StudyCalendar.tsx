@@ -6,6 +6,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { Card, WEEKDAY_NAMES } from "@bora/ui";
 import type { DayGroup } from "@/lib/api";
+import { formatDayMonth } from "@/lib/domain/dates";
 import type { ScheduleFilter } from "@/lib/domain/schedule";
 
 export function StudyCalendar({ days, selectedDate, today, filter, subject, subjects, onChange, onToday }: {
@@ -29,7 +30,7 @@ export function StudyCalendar({ days, selectedDate, today, filter, subject, subj
         <Box aria-label="Dias da semana" sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))", xl: "repeat(7, minmax(0, 1fr))" }, gap: 1 }}>
           {days.map((day) => {
             const completed = day.goals.filter((goal) => goal.status === "completed").length;
-            const dateLabel = `${day.date.slice(8, 10)}/${day.date.slice(5, 7)}`;
+            const dateLabel = formatDayMonth(day.date);
             const selected = day.date === selectedDate;
             return (
               <Button key={day.date} variant={selected ? "contained" : "outlined"}

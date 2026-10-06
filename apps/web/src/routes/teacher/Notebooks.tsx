@@ -24,7 +24,7 @@ import { requireRole } from "@/lib/auth/session";
  * encontram o caderno.
  */
 export async function teacherNotebooksLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const plans = await api.listPlans();
   const planId = new URL(request.url).searchParams.get("plano") ?? plans[0]?.id ?? null;

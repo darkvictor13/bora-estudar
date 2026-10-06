@@ -18,6 +18,7 @@ import {
   type StudyPlanSummary,
 } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { formatDayMonth } from "@/lib/domain/dates";
 
 /**
  * Gerar metas — o `p-montarMetas` da v2.
@@ -36,7 +37,7 @@ import { requireRole } from "@/lib/auth/session";
  * e `goal_batches` viraria decoração.
  */
 export async function teacherGoalsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const plans = (await api.listPlans()).filter((plan) => plan.status === "active");
   const params = new URL(request.url).searchParams;
@@ -73,7 +74,7 @@ function PreviewPanel({ preview }: { preview: GenerateWeekPreview }) {
 
       {preview.days.map((day) => (
         <Box key={day.date} sx={{ mb: 1.25 }}>
-          <Card title={`${WEEKDAY_NAMES[day.weekday - 1]} · ${day.date.slice(8, 10)}/${day.date.slice(5, 7)}`}>
+          <Card title={`${WEEKDAY_NAMES[day.weekday - 1]} · ${formatDayMonth(day.date)}`}>
             {day.goals.map((goal) => (
               <Box
                 key={goal.id}

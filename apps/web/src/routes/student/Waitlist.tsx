@@ -24,8 +24,8 @@ import { requireSession } from "@/lib/auth/session";
  * códigos a quem pedir. O resgate precisa nascer como RPC, e oferecer o campo
  * antes disso seria culpar quem digitou o código certo.
  */
-export async function waitlistLoader() {
-  const session = await requireSession();
+export async function waitlistLoader({ request }: { request: Request }) {
+  const session = await requireSession(request);
   return { entry: await api.loadWaitlistEntry(), email: session.email };
 }
 

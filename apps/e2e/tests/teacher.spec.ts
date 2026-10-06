@@ -22,7 +22,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/index.ts";
 import { asUser, count, one, query } from "../fixtures/db.ts";
 import { addTheoryCatalog, addWeek, createUser, joinWaitlist } from "../fixtures/scenario.ts";
-import { alert, content, field, testId } from "../support/ui.ts";
+import { alert, content, field, navItem, testId } from "../support/ui.ts";
 import { PAGE_TITLES, TEACHER_ROUTES } from "../support/routes.ts";
 
 test.describe("F-PROF-01 · todas as telas do professor abrem", () => {
@@ -72,6 +72,16 @@ test.describe("F-PROF-02 · a lista de alunos", () => {
   });
 });
 
+/**
+ * Um instante como a tela o mostra: o fuso do aparelho, que na suíte é
+ * `America/Sao_Paulo` (`playwright.config.ts`). A data esperada SAI DO BANCO e é
+ * formatada aqui — escrevê-la à mão erraria o `2020-06-01` de `expiryFor`, que é
+ * meia-noite UTC e aparece como 31/05/2020 em Brasília (D-11).
+ */
+function aparelho(instante: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(instante);
+}
+
 test.describe("F-PROF-03 · a ficha do aluno", () => {
   test("é uma ROTA, com endereço próprio", async ({ teacherPage, scenario }) => {
     await teacherPage.goto("/professor");
@@ -84,6 +94,56 @@ test.describe("F-PROF-03 · a ficha do aluno", () => {
     // alguém, botão voltar, e título de aba dizendo de quem é a ficha.
     await teacherPage.goBack();
     await expect(teacherPage).toHaveURL(/\/professor$/);
+  });
+
+  test.describe("com a vigência vencida — QA-20", () => {
+    test.use({ scenarioOptions: { access: "expired" } });
+
+    test("a ficha diz 'Venceu em', e não 'soma ao que falta'", async ({
+      teacherPage,
+      scenario,
+    }) => {
+      const { vence } = await one<{ vence: Date }>(
+        "select access_expires_at as vence from public.profiles where id = $1",
+        [scenario.student.id],
+      );
+      const data = aparelho(vence);
+
+      await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+      await expect(testId(teacherPage, "access-form")).toContainText(`Venceu em ${data}`);
+      await expect(testId(teacherPage, "access-form")).toContainText(
+        "A liberação conta a partir de hoje.",
+      );
+      await expect(testId(teacherPage, "access-form")).not.toContainText("soma ao que");
+      await expect(content(teacherPage)).toContainText(`Venceu em ${data}`);
+      // Nada de instante em formato de máquina.
+      await expect(content(teacherPage)).not.toContainText("T00:00:00");
+    });
+
+    test("na lista e na ficha, quem passou da data é 'Vencido', e não 'Liberado'", async ({
+      teacherPage,
+      scenario,
+    }) => {
+      // `access_status` fica `active` até alguém o expirar (R-VINC-28): é o
+      // relógio que decide. Ativo com data vencida é o que a lista mostrava
+      // como "Liberado".
+      await query(
+        "update public.profiles set access_status = 'active' where id = $1",
+        [scenario.student.id],
+      );
+
+      await teacherPage.goto("/professor");
+      const card = teacherPage.locator(
+        `[data-testid="student-card"][data-student-id="${scenario.student.id}"]`,
+      );
+      await expect(card).toHaveCount(1);
+      await expect(card).toContainText("Vencido");
+      await expect(card).not.toContainText("Liberado");
+
+      await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+      await expect(content(teacherPage)).toContainText("Vencido");
+      await expect(content(teacherPage)).not.toContainText("Liberado");
+    });
   });
 
   test("o aluno de outro professor não existe para este", async ({ teacherPage }) => {
@@ -973,9 +1033,15 @@ test.describe("F-VINC · liberar e bloquear", () => {
     await testId(teacherPage, "grant-access").click();
     await expect(alert(teacherPage, "success")).toContainText("1 mês");
 
-    const primeira = await one<{ vence: string }>(
-      "select to_char(access_expires_at, 'YYYY-MM-DD') as vence from public.profiles where id = $1",
+    const primeira = await one<{ vence: string; instante: Date }>(
+      `select to_char(access_expires_at, 'YYYY-MM-DD') as vence, access_expires_at as instante
+         from public.profiles where id = $1`,
       [scenario.student.id],
+    );
+
+    // A vigência aparece em dd/mm/aaaa, no fuso do aparelho — QA-20.
+    await expect(testId(teacherPage, "access-form")).toContainText(
+      `Vigência atual até ${aparelho(primeira.instante)}. Liberar soma ao que ainda falta.`,
     );
 
     await teacherPage.getByRole("combobox", { name: "Vigência" }).click();
@@ -1065,6 +1131,49 @@ test.describe("F-VINC · liberar e bloquear", () => {
     await signIn(scenario.student);
     await teacherPage.goto("/aluno");
     await expect(teacherPage).toHaveURL(/\/aluno\/lista-espera$/);
+  });
+
+  test("F-VINC-09 · liberar e bloquear valem na próxima navegação do aluno, sem F5 — QA-09", async ({
+    studentPage,
+    scenario,
+  }) => {
+    // O professor age em OUTRO aparelho: `teacherPage` e `studentPage` são a mesma
+    // aba, então a liberação vai pela RPC real, como em F-VINC-07.
+    const agir = (action: "grant" | "suspend") =>
+      asUser(scenario.teacher.id, (client) =>
+        client.query("select * from public.set_student_access($1, $2, $3, $4)", [
+          scenario.student.id,
+          action,
+          action === "grant" ? 3 : null,
+          randomUUID(),
+        ]),
+      );
+
+    await studentPage.goto("/aluno/conta");
+    await expect(studentPage.locator("h1")).toHaveText("Meus dados");
+    await expect(navItem(studentPage, "Minha semana")).toHaveAttribute("data-enabled", "false");
+    await expect(alert(studentPage, "warning")).toContainText("ainda não foi liberado");
+
+    await agir("grant");
+
+    // O layout não tem caminho, e o router não reexecutava o loader dele quando
+    // só o filho mudava: a barra seguia inerte até o F5. Nenhum `reload` aqui.
+    await navItem(studentPage, "Lista de espera").click();
+    await expect(studentPage.locator("h1")).toHaveText("Lista de espera");
+    await expect(navItem(studentPage, "Minha semana")).toHaveAttribute("data-enabled", "true");
+    await expect(alert(studentPage, "warning")).toHaveCount(0);
+
+    await navItem(studentPage, "Minha semana").click();
+    await expect(studentPage.locator("h1")).toHaveText("Minha semana");
+
+    // O inverso: suspenso, os itens voltam a ficar inertes e o aviso volta, em vez
+    // de cada clique devolver o aluno à lista de espera sem explicação.
+    await agir("suspend");
+
+    await navItem(studentPage, "Meus dados").click();
+    await expect(studentPage.locator("h1")).toHaveText("Meus dados");
+    await expect(navItem(studentPage, "Minha semana")).toHaveAttribute("data-enabled", "false");
+    await expect(alert(studentPage, "warning")).toContainText("ainda não foi liberado");
   });
 });
 

@@ -183,7 +183,7 @@ export interface Session {
   readonly name: string | null;
   readonly role: Role;
   readonly access: AccessStatus;
-  readonly accessExpiresAt: IsoDate | null;
+  readonly accessExpiresAt: IsoDateTime | null;
   /** O professor do aluno. `null` para o professor. */
   readonly teacherId: Uuid | null;
 }
@@ -226,7 +226,7 @@ export interface Account {
   readonly email: string;
   readonly plan: string | null;
   readonly access: AccessStatus;
-  readonly accessExpiresAt: IsoDate | null;
+  readonly accessExpiresAt: IsoDateTime | null;
   readonly teacherName: string | null;
 }
 
@@ -911,7 +911,7 @@ export interface StudentCard {
   readonly name: string | null;
   readonly email: string;
   readonly access: AccessStatus;
-  readonly accessExpiresAt: IsoDate | null;
+  readonly accessExpiresAt: IsoDateTime | null;
   /**
    * A turma do aluno, ou `null` — um aluno está em uma turma só (R-MATR-03).
    *

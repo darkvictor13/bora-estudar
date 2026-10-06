@@ -59,6 +59,7 @@ import type {
   ImportMasterInput,
   ImportMasterResult,
   IsoDate,
+  IsoDateTime,
   Notebook,
   QuizSessionSummary,
   RecordInitialQuestionsInput,
@@ -137,6 +138,14 @@ let sequence = 0;
 function nextId(prefix: string): Uuid {
   sequence += 1;
   return `${prefix}${String(sequence).padStart(12, "0")}`.slice(0, 36);
+}
+
+/**
+ * Uma data vira o INSTANTE de `access_expires_at` (`timestamptz`). Meio-dia UTC
+ * mantém o mesmo dia em Brasília, que é onde a suíte roda (QA-20).
+ */
+function instantOf(date: IsoDate): IsoDateTime {
+  return `${date}T12:00:00.000Z`;
 }
 
 function addDays(date: IsoDate, days: number): IsoDate {
@@ -547,7 +556,7 @@ function seedState(): State {
       name: "Aluna de Exemplo",
       role: "student",
       access: "active",
-      accessExpiresAt: addDays(TODAY, 120),
+      accessExpiresAt: instantOf(addDays(TODAY, 120)),
       teacherId: TEACHER_ID,
     },
     theme: null,
@@ -619,10 +628,29 @@ function seedState(): State {
 let state = seedState();
 const mockExamContext = { session: () => state.session, students: () => state.students, classes: () => state.classes };
 
+/**
+ * "Meus dados". O nome do professor só existe com vínculo (`teacherId`): a
+ * fixture que o devolvesse sempre — inclusive sem vínculo — foi o que escondeu o
+ * QA-08, em que o adaptador real o lia pela consulta errada.
+ */
+function accountOf(name: string | null): Account {
+  return {
+    profileId: state.session?.profileId ?? STUDENT_ID,
+    name,
+    email: state.session?.email ?? "",
+    plan: "Preparatório PRF",
+    access: state.session?.access ?? "pending",
+    accessExpiresAt: state.session?.accessExpiresAt ?? null,
+    teacherName: state.session?.teacherId ? "Professor de Exemplo" : null,
+  };
+}
+
 /** Somente na implementação de demonstração; não participa da autenticação real. */
 export function setFixtureRole(role: "teacher" | "student") {
   if (state.session) state.session = { ...state.session, role,
     profileId: role === "teacher" ? TEACHER_ID : STUDENT_ID,
+    // Professor não tem professor (R-CONTA-09).
+    teacherId: role === "teacher" ? null : TEACHER_ID,
     name: role === "teacher" ? "Professor de Exemplo" : "Aluna de Exemplo" };
 }
 
@@ -791,32 +819,13 @@ export const fixturesApi: BoraApi = {
     return later<Result<void>>(invalid ? { ok: false, error: invalid } : done(undefined));
   },
 
-  loadAccount: () =>
-    later<Account>({
-      profileId: STUDENT_ID,
-      name: state.session?.name ?? null,
-      email: state.session?.email ?? "",
-      plan: "Preparatório PRF",
-      access: state.session?.access ?? "pending",
-      accessExpiresAt: state.session?.accessExpiresAt ?? null,
-      teacherName: "Professor de Exemplo",
-    }),
+  loadAccount: () => later<Account>(accountOf(state.session?.name ?? null)),
 
   saveAccount: ({ name }: AccountInput) => {
     const invalid = checkName(name);
     if (invalid) return later<Result<Account>>({ ok: false, error: invalid });
     if (state.session) state.session = { ...state.session, name };
-    return later(
-      done<Account>({
-        profileId: STUDENT_ID,
-        name,
-        email: state.session?.email ?? "",
-        plan: "Preparatório PRF",
-        access: state.session?.access ?? "pending",
-        accessExpiresAt: state.session?.accessExpiresAt ?? null,
-        teacherName: "Professor de Exemplo",
-      }),
-    );
+    return later(done<Account>(accountOf(name)));
   },
 
   loadThemePreference: () => later(state.theme),
@@ -1310,7 +1319,7 @@ export const fixturesApi: BoraApi = {
     if (code.trim().toUpperCase() !== "BORA3") {
       return later(fail<Session>("not_found", "Cupom inválido ou já utilizado.", "code"));
     }
-    state.session = { ...state.session!, access: "active", accessExpiresAt: addDays(TODAY, 90) };
+    state.session = { ...state.session!, access: "active", accessExpiresAt: instantOf(addDays(TODAY, 90)) };
     return later(done(state.session));
   },
 
@@ -1426,11 +1435,18 @@ export const fixturesApi: BoraApi = {
 
         // SOMA AO QUE AINDA FALTA, como o banco: quem renova antes do fim não
         // perde dia pago. Uma fixture que zerasse o prazo esconderia o caso.
+        // Como `greatest(now(), …) + make_interval(months => …)`: meses de CALENDÁRIO,
+        // e o que venceu conta a partir de hoje.
+        const now = instantOf(TODAY);
         const from =
-          card.accessExpiresAt && card.accessExpiresAt > TODAY ? card.accessExpiresAt : TODAY;
+          card.accessExpiresAt && Date.parse(card.accessExpiresAt) > Date.parse(now)
+            ? card.accessExpiresAt
+            : now;
+        const until = new Date(from);
+        until.setUTCMonth(until.getUTCMonth() + input.months);
         return done(patchStudent(card.studentId, {
           access: "active",
-          accessExpiresAt: addDays(from, input.months * 30),
+          accessExpiresAt: until.toISOString(),
         }));
       }),
     ),
@@ -2086,7 +2102,7 @@ function seedStudents(): StudentCard[] {
     name: "Aluna de Exemplo",
     email: "aluna@exemplo.com.br",
     access: "active",
-    accessExpiresAt: addDays(TODAY, 120),
+    accessExpiresAt: instantOf(addDays(TODAY, 120)),
     classId: CLASS_A_ID,
     className: "PRF 2027 · Turma A",
     planName: "Preparatório PRF 2027",
@@ -2102,7 +2118,7 @@ function seedStudents(): StudentCard[] {
     name: "Aluno em Atenção",
     email: "atencao@exemplo.com.br",
     access: "active",
-    accessExpiresAt: addDays(TODAY, 30),
+    accessExpiresAt: instantOf(addDays(TODAY, 30)),
     classId: CLASS_A_ID,
     className: "PRF 2027 · Turma A",
     planName: "Preparatório PRF 2027",
@@ -2118,7 +2134,7 @@ function seedStudents(): StudentCard[] {
     name: "Aluno Atrasado",
     email: "atrasado@exemplo.com.br",
     access: "expired",
-    accessExpiresAt: addDays(TODAY, -6),
+    accessExpiresAt: instantOf(addDays(TODAY, -6)),
     classId: null,
     className: null,
     planName: null,
