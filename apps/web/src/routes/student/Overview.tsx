@@ -14,6 +14,7 @@ import { WeekHero } from "@/components/student/WeekHero";
 import { StudyCalendar } from "@/components/student/StudyCalendar";
 import { StudyStreakDialog } from "@/components/student/StudyStreakDialog";
 import { calendarDays, dailyQuestionPerformance, localDate, matchesSchedule, scheduleFilter } from "@/lib/domain/schedule";
+import { defaultExtraDate } from "@/lib/domain/week";
 import {
   api,
   newRequestId,
@@ -142,9 +143,11 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
   const [theoryPending, setTheoryPending] = useState(false);
   const [theoryNotice, setTheoryNotice] = useState<string | null>(null);
   const [extraDate, setExtraDate] = useState<string | null>(() => {
-    if (params.get("estudoExtra") !== "cronometro") return null;
-    const askedDate = params.get("dia");
-    return week?.days.some((day) => day.date === askedDate) ? askedDate : week?.startsOn ?? localDate();
+    if (params.get("estudoExtra") !== "cronometro" || !week) return null;
+    // `?dia=` só vale se for uma data da semana vista; senão, hoje (QA-14).
+    const askedDay = params.get("dia");
+    const selected = askedDay && askedDay >= week.startsOn && askedDay <= week.endsOn && /^\d{4}-\d{2}-\d{2}$/.test(askedDay) ? askedDay : null;
+    return defaultExtraDate(week, selected, localDate());
   });
   const [streakOpen, setStreakOpen] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -233,7 +236,6 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
   };
 
   const subjects = [...new Set(week.days.flatMap((day) => day.goals.map((g) => g.subject)))];
-  const weekOf = weeks.find((option) => option.weekNumber === week.weekNumber);
   const days = calendarDays(week);
   const today = localDate();
   const askedDate = params.get("dia");
@@ -308,7 +310,7 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
             <Button
               variant="outlined"
               size="small"
-              onClick={() => setExtraDate(interactive && selectedDate ? selectedDate : weekOf?.startsOn ?? week.startsOn)}
+              onClick={() => setExtraDate(defaultExtraDate(week, interactive ? selectedDate : null, today))}
             >
               Estudo extra
             </Button>
@@ -350,6 +352,10 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
       </ContentBody>
 
       <RecordStudyDialog
+        // Uma instância por meta: o `requestId` nasce ao abrir (ver o diálogo). O
+        // prefixo importa: o `TheoryDialog` irmão usa "closed" na mesma lista, e
+        // duas chaves iguais fazem o React acusar duplicata.
+        key={`record-${recording?.id ?? "closed"}`}
         goal={recording}
         onClose={() => setRecording(null)}
         onSubmit={(input: RecordStudyInput) => run(() => api.recordStudy(input))}
@@ -396,6 +402,8 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
         key={extraDate}
         studyPlanId={plan.id}
         date={extraDate}
+        minDate={plan.startsOn}
+        maxDate={today}
         subjects={subjects}
         open={extraDate !== null}
         onClose={closeExtraStudy}

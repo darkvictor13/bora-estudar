@@ -10,7 +10,14 @@
  * chamam as mesmas funções antes de qualquer ida ao servidor, o que também
  * significa que nome curto não gasta uma viagem de rede para ser recusado.
  */
-import type { ApiError, Credentials, GenerateWeekInput, SignUpInput } from "./contract.ts";
+import type {
+  ApiError,
+  Credentials,
+  ExtraStudyInput,
+  GenerateWeekInput,
+  IsoDate,
+  SignUpInput,
+} from "./contract.ts";
 
 /** O mínimo que o GoTrue aceita, e o mesmo número que a v2 pedia. */
 export const MIN_PASSWORD_LENGTH = 6;
@@ -110,3 +117,84 @@ export function checkGenerateWeek(input: GenerateWeekInput): ApiError | null {
     (input.copyFromWeek === undefined ? null : checkWeekNumber(input.copyFromWeek, "copyFromWeek"))
   );
 }
+
+/** O teto de um registro de estudo (D-04): o mesmo número de `goal_entries_minutes_check`. */
+export const MAX_ENTRY_MINUTES = 240;
+/** Idem, de `goal_entries_questions_check`. */
+export const MAX_ENTRY_QUESTIONS = 500;
+
+/**
+ * Os números de um registro de estudo, na ordem em que a tela os pede.
+ *
+ * `Number.isInteger` recusa `NaN` (o `parseCount` devolve `NaN` para texto que
+ * não é número inteiro) e 1.5. A frase de "acertos acima das questões" é a que o
+ * e2e confere desde antes de esta regra morar aqui.
+ */
+export function checkStudyEntry(input: {
+  readonly minutes: number;
+  readonly questions: number;
+  readonly correctAnswers: number;
+}): ApiError | null {
+  const { minutes, questions, correctAnswers } = input;
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_ENTRY_MINUTES) {
+    return invalid(
+      `Informe o tempo em minutos inteiros, de 0 a ${MAX_ENTRY_MINUTES} por registro.`,
+      "minutes",
+    );
+  }
+  if (!Number.isInteger(questions) || questions < 0 || questions > MAX_ENTRY_QUESTIONS) {
+    return invalid(
+      `Informe as questões em número inteiro, de 0 a ${MAX_ENTRY_QUESTIONS} por registro.`,
+      "questions",
+    );
+  }
+  if (!Number.isInteger(correctAnswers) || correctAnswers < 0) {
+    return invalid("Informe os acertos em número inteiro, a partir de 0.", "correctAnswers");
+  }
+  if (correctAnswers > questions) {
+    return invalid("Os acertos não podem passar do total de questões.", "correctAnswers");
+  }
+  if (minutes === 0 && questions === 0) {
+    return invalid("Informe o tempo estudado ou as questões feitas.", "minutes");
+  }
+  return null;
+}
+
+/** `AAAA-MM-DD` que sobrevive à ida e volta por `Date`: `2026-02-30` não passa. */
+function isRealIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/** A data do estudo extra vai do início do planejamento até hoje (D-05, D-11). */
+export function checkExtraStudyDate(
+  date: string,
+  planStartsOn: IsoDate,
+  today: IsoDate,
+): ApiError | null {
+  if (!isRealIsoDate(date)) return invalid("Informe a data do estudo.", "date");
+  if (date < planStartsOn || date > today) {
+    return invalid("A data precisa estar entre o início do planejamento e hoje.", "date");
+  }
+  return null;
+}
+
+/** Na ordem dos campos do diálogo: matéria, data, números. */
+export function checkExtraStudy(
+  input: Pick<ExtraStudyInput, "subject" | "date" | "minutes" | "questions" | "correctAnswers">,
+  planStartsOn: IsoDate,
+  today: IsoDate,
+): ApiError | null {
+  if (!input.subject.trim()) return invalid("Informe a matéria.", "subject");
+  return checkExtraStudyDate(input.date, planStartsOn, today) ?? checkStudyEntry(input);
+}
+
+/**
+ * `23505` de `record_goal_entry` e `record_extra_study`: a mesma chave com outra
+ * carga. É raro (a chave nasce uma vez por abertura do diálogo), mas a frase
+ * genérica de `23505`, "Este registro já existe.", mandaria a pessoa tentar de
+ * novo com a mesma chave e o mesmo erro.
+ */
+export const STUDY_REPLAY_CONFLICT =
+  "Este estudo já foi registrado com outros valores. Atualize a página para ver o que foi gravado.";

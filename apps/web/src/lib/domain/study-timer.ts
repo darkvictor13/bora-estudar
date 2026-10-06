@@ -82,3 +82,18 @@ export function addStudyTimerMinutes(state: StudyTimerState, minutes: number): S
   if (state.mode !== "pomodoro" || state.phase !== "focus" || !Number.isInteger(minutes) || minutes <= 0) return state;
   return { ...state, targetMs: state.targetMs + minutes * minute };
 }
+
+/**
+ * Pausa o cronômetro, somando o que correu ao acumulado. Idempotente: pausar um
+ * cronômetro parado devolve o mesmo estado.
+ */
+export function pauseTimer(state: StudyTimerState, now: number): StudyTimerState {
+  if (!state.running) return state;
+  return { ...state, elapsedMs: elapsedStudyTimer(state, now), startedAt: null, running: false };
+}
+
+/** Retoma um cronômetro pausado. Idempotente: retomar o que corre devolve o mesmo estado. */
+export function resumeTimer(state: StudyTimerState, now: number): StudyTimerState {
+  if (state.running) return state;
+  return { ...state, startedAt: now, running: true };
+}

@@ -26,7 +26,7 @@ import { fixtureLibrary } from "./fixtures-library.ts";
 import { createLawFixtures, resetFixtureLawMarks } from "./fixtures-laws.ts";
 import { createFlashcardMarkFixtures, resetFixtureFlashcardMarks } from "./fixtures-flashcard-marks.ts";
 import { questionsByDay } from "../domain/question-performance.ts";
-import { localDate } from "../domain/schedule.ts";
+import { entryDay, localDate } from "../domain/schedule.ts";
 import { streakDays as countStreakDays } from "../domain/week.ts";
 import { MINIMUM_BOX_PLOT_QUESTIONS } from "../domain/class-question-distribution.ts";
 import { PMPR_SOLDADO_2025 } from "../domain/pmpr-soldado.ts";
@@ -106,11 +106,14 @@ import {
   checkAccessMonths,
   checkClassName,
   checkCredentials,
+  checkExtraStudy,
   checkGenerateWeek,
   checkName,
   checkPassword,
   checkSignUp,
   checkStudentEmail,
+  checkStudyEntry,
+  STUDY_REPLAY_CONFLICT,
 } from "./validation.ts";
 
 /* ------------------------------------------------------------------ *
@@ -150,6 +153,10 @@ function done<T>(data: T): Result<T> {
   return { ok: true, data };
 }
 
+function failure<T>(error: ApiError): Result<T> {
+  return { ok: false, error };
+}
+
 /**
  * A latência não é enfeite.
  *
@@ -169,13 +176,29 @@ function later<T>(value: T): Promise<T> {
  * só no adaptador do Supabase, porque é a UI que precisa ser exercitada contra
  * ela: clicar duas vezes em "Concluir" tem de continuar concluindo uma vez.
  */
-const replayed = new Map<RequestId, unknown>();
-function once<T>(requestId: RequestId, run: () => Result<T>): Result<T> {
+const replayed = new Map<RequestId, { readonly outcome: unknown; readonly payload: string | undefined }>();
+/**
+ * `payload` é a carga que a chave guardou: mesma chave com OUTRA carga é
+ * `conflict`, como `goal_entries_request_uidx` faz no banco. Sem ele (as demais
+ * operações), a chave repetida devolve o resultado anterior, como sempre.
+ */
+function once<T>(requestId: RequestId, run: () => Result<T>, payload?: string): Result<T> {
   const seen = replayed.get(requestId);
-  if (seen !== undefined) return seen as Result<T>;
+  if (seen !== undefined) {
+    if (payload !== undefined && seen.payload !== undefined && seen.payload !== payload) {
+      return fail<T>("conflict", STUDY_REPLAY_CONFLICT);
+    }
+    return seen.outcome as Result<T>;
+  }
   const outcome = run();
-  if (outcome.ok) replayed.set(requestId, outcome);
+  if (outcome.ok) replayed.set(requestId, { outcome, payload });
   return outcome;
+}
+
+/** A carga de um estudo, sem a chave: é o que `once` compara. */
+function studyPayload(input: object): string {
+  const { requestId: _requestId, ...rest } = input as { requestId?: string };
+  return JSON.stringify(rest);
 }
 
 /* ------------------------------------------------------------------ *
@@ -541,6 +564,7 @@ function seedState(): State {
         theoryStage: "questions_done",
         manualLesson: null,
         createdAt: `${TODAY}T11:02:00.000Z`,
+        studiedOn: null,
       },
     ],
     progress: new Map([
@@ -659,7 +683,7 @@ function toGoal(row: GoalRow): Goal {
 function summarize(goals: readonly Goal[]): WeekSummary {
   const questions = goals.reduce((total, goal) => total + goal.questionsAnswered, 0);
   const correct = goals.reduce((total, goal) => total + goal.correctAnswers, 0);
-  const streak = countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)), localDate(new Date()));
+  const streak = countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map(entryDay), localDate(new Date()));
 
   return {
     score: questions > 0 ? Math.round((correct / questions) * 1000) / 10 : null,
@@ -813,15 +837,10 @@ export const fixturesApi: BoraApi = {
   recordStudy: (input: RecordStudyInput) =>
     later(
       once(input.requestId, () => {
+        const invalid = checkStudyEntry(input);
+        if (invalid) return failure<Goal>(invalid);
         const row = findGoal(input.goalId);
         if (!row) return fail<Goal>("not_found", "Meta não encontrada.");
-        if (input.correctAnswers > input.questions) {
-          return fail<Goal>(
-            "validation",
-            "Acertos não podem passar do total de questões.",
-            "correctAnswers",
-          );
-        }
 
         state.entries.push({
           id: nextId("a"),
@@ -837,11 +856,13 @@ export const fixturesApi: BoraApi = {
           theoryStage: input.theoryStage ?? null,
           manualLesson: input.manualLesson ?? null,
           createdAt: `${TODAY}T12:00:00.000Z`,
+          // Registrar numa meta é "estudei agora": o dia é o do lançamento.
+          studiedOn: null,
         });
         // Registrar não conclui: move para "em andamento" e para por aí.
         if (row.status === "pending") row.status = "in_progress";
         return done(toGoal(row));
-      }),
+      }, studyPayload(input)),
     ),
 
   removeStudyEntry: (entryId: Uuid, requestId: RequestId) =>
@@ -897,15 +918,22 @@ export const fixturesApi: BoraApi = {
   recordExtraStudy: (input: ExtraStudyInput) =>
     later(
       once(input.requestId, () => {
+        const invalid = checkExtraStudy(input, PLAN.startsOn, TODAY);
+        if (invalid) return failure<Goal>(invalid);
         const weekday = (((new Date(`${input.date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1) as Weekday;
+        // Depois de tudo que já existe no dia (N-02): o segundo extra do dia cabe.
+        const dayPosition =
+          state.goals
+            .filter((goal) => goal.weekNumber === 1 && goal.weekday === weekday)
+            .reduce((max, goal) => Math.max(max, goal.dayPosition), 0) + 1;
         const row: GoalRow = {
           id: nextId("9"),
           type: "extra",
           status: "completed",
           weekday,
-          dayPosition: 99,
+          dayPosition,
           weekNumber: 1,
-          subject: input.subject,
+          subject: input.subject.trim(),
           title: EXTRA_TITLES[input.kind],
           description: input.note ?? null,
           lesson: null,
@@ -930,9 +958,11 @@ export const fixturesApi: BoraApi = {
           theoryStage: null,
           manualLesson: null,
           createdAt: `${TODAY}T12:00:00.000Z`,
+          // N-07: o extra conta no dia escolhido, não no do lançamento.
+          studiedOn: input.date,
         });
         return done(toGoal(row));
-      }),
+      }, studyPayload(input)),
     ),
 
   loadActivePlan: () => later(PLAN),
@@ -1049,6 +1079,7 @@ export const fixturesApi: BoraApi = {
           theoryStage: "questions_in_progress",
           manualLesson: studentLessons().find((lesson) => lesson.id === input.lessonId)?.title ?? null,
           createdAt: new Date().toISOString(),
+          studiedOn: null,
         });
         return done(updated);
       }),
@@ -1122,7 +1153,7 @@ export const fixturesApi: BoraApi = {
       correctAnswers,
       score: Math.round((correctAnswers / questionsAnswered) * 1000) / 10,
       studiedMinutes: STATISTICS.studiedMinutes + extra.reduce((sum, entry) => sum + entry.minutes, 0),
-      streakDays: countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)), localDate(new Date())),
+      streakDays: countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map(entryDay), localDate(new Date())),
       dailyQuestions: questionsByDay(state.entries),
     });
   },
@@ -1182,7 +1213,7 @@ export const fixturesApi: BoraApi = {
     minimumQuestions: 5,
   }))),
 
-  loadStudyDays: (year: number) => later([...new Set(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)))]
+  loadStudyDays: (year: number) => later([...new Set(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map(entryDay))]
     .filter((date) => date.startsWith(`${year}-`)).sort()),
 
   loadFlashcardReviews: (lessonId: Uuid) => later([...flashcardReviews.values()].filter((review) => review.lessonId === lessonId)),

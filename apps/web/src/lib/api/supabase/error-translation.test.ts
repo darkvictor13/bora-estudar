@@ -67,6 +67,13 @@ test("os códigos de antes continuam como eram", () => {
   });
 });
 
+test("P0002 (no_data_found das RPCs de estudo) é not_found, sem vazar a mensagem do banco", () => {
+  assert.deepEqual(translateDbError({ code: "P0002", message: "meta nao encontrada" }), {
+    code: "not_found",
+    message: "Registro não encontrado.",
+  });
+});
+
 test("código desconhecido continua unknown com a mensagem original (F-OBS-01 depende disso)", () => {
   assert.deepEqual(translateDbError({ code: "XX999", message: "x" }), { code: "unknown", message: "x" });
 });

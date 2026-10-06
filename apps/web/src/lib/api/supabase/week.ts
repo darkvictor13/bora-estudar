@@ -9,7 +9,8 @@
  *    Aquelas colunas existem e até estão no grant, mas mantê-las à mão criaria
  *    o segundo caminho escrevendo o mesmo número, que é exatamente o defeito
  *    que a versão anterior tinha. Aqui elas são lidas por ninguém e escritas
- *    por ninguém.
+ *    por ninguém — e `protect_goal_planning_fields` congela as três para o
+ *    aluno (QA-28), então nem uma chamada direta pela API as escreve.
  * 2. **Meta de bateria é intocável.** O gatilho `protect_goal_quiz_result`
  *    recusa mudança de resultado e de estado em meta com `notebook_block_id`,
  *    e só o motor de baterias — que ainda não existe — pode alterá-la. A tela
@@ -24,10 +25,11 @@ import {
   weekBounds,
   weekNumberOf,
 } from "@/lib/domain/week";
+import { entryDay } from "@/lib/domain/schedule";
 import { normalizeSubjectKey } from "@/lib/domain/theory";
-import { WEEKDAY_NAMES } from "@bora/ui";
 
 import type {
+  ApiError,
   ExtraStudyInput,
   Goal,
   GoalStatus,
@@ -41,6 +43,7 @@ import type {
   WeekOption,
   Weekday,
 } from "../contract.ts";
+import { checkExtraStudy, checkStudyEntry, STUDY_REPLAY_CONFLICT } from "../validation.ts";
 import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
 import { theoryRefsBySubject } from "./theory.ts";
 import { once } from "./idempotency.ts";
@@ -51,7 +54,7 @@ import { requireSession, today } from "./session.ts";
  * ------------------------------------------------------------------ */
 
 const ENTRY_COLUMNS =
-  "id,goal_id,minutes,questions,correct_answers,score,note,manual_lesson,theory_stage,created_at";
+  "id,goal_id,minutes,questions,correct_answers,score,note,manual_lesson,theory_stage,created_at,studied_on";
 
 const GOAL_COLUMNS =
   "id,type,status,weekday,day_position,subject,title,description,lesson,block," +
@@ -70,6 +73,7 @@ interface EntryRow {
   manual_lesson: string | null;
   theory_stage: StudyEntry["theoryStage"];
   created_at: string;
+  studied_on: string | null;
 }
 
 interface GoalRow {
@@ -106,6 +110,7 @@ function toEntry(row: EntryRow): StudyEntry {
     theoryStage: row.theory_stage,
     manualLesson: row.manual_lesson,
     createdAt: row.created_at,
+    studiedOn: row.studied_on,
   };
 }
 
@@ -175,12 +180,14 @@ async function entryDates(studentId: Uuid): Promise<readonly IsoDate[]> {
   const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
   const { data, error } = await supabase
     .from("goal_entries")
-    .select("created_at")
+    .select("created_at,studied_on")
     .eq("student_id", studentId)
+    // Um extra é sempre de antes do lançamento: o corte por `created_at` não
+    // perde nenhum dia estudado dentro da janela.
     .gte("created_at", since);
 
   if (error) throwDb(error);
-  return (data ?? []).map((row) => row.created_at.slice(0, 10));
+  return (data ?? []).map((row) => entryDay({ createdAt: row.created_at, studiedOn: row.studied_on }));
 }
 
 export async function listWeeks(studyPlanId: Uuid): Promise<readonly WeekOption[]> {
@@ -300,47 +307,45 @@ const QUIZ_GOAL_REFUSAL =
   "O resultado de uma meta de bateria vem do motor de baterias, que ainda está sendo " +
   "reescrito. Por enquanto ela não pode ser registrada nem concluída pela tela.";
 
+/**
+ * O erro de uma das duas RPCs de estudo.
+ *
+ * `23505` aqui é a mesma chave com outra carga (`goal_entries_request_uidx`), e a
+ * frase genérica de `23505` mandaria a pessoa tentar de novo com a mesma chave. A
+ * outra fonte, rara, é o professor gerando a semana no mesmo instante: também
+ * chega aqui, e a frase de "outros valores" é aceita nesse caso.
+ */
+function studyWriteError(error: { code?: string | null; message: string }): ApiError {
+  if (error.code === "23505") return { code: "conflict", message: STUDY_REPLAY_CONFLICT };
+  return translateDbError(error);
+}
+
 export function recordStudy(input: RecordStudyInput): Promise<Result<Goal>> {
+  // Fora do `once`: recusa de formulário não ocupa a chave nem gasta uma viagem.
+  const invalid = checkStudyEntry(input);
+  if (invalid) return Promise.resolve(failure<Goal>(invalid));
+
+  // O `once` só junta o clique duplo. A garantia é `goal_entries_request_uidx`,
+  // dentro da RPC: a resposta que se perde e a nova tentativa gravam uma vez.
   return once(input.requestId, async () => {
-    if (input.correctAnswers > input.questions) {
-      return fail<Goal>(
-        "validation",
-        "Os acertos não podem passar do total de questões.",
-        "correctAnswers",
-      );
-    }
-    if (input.minutes <= 0 && input.questions <= 0) {
-      return fail<Goal>("validation", "Informe o tempo estudado ou as questões feitas.", "minutes");
-    }
-
-    const context = await goalContext(input.goalId);
-    if (!context) return fail<Goal>("not_found", "Meta não encontrada.");
-    if (isQuizGoal(context)) return fail<Goal>("conflict", QUIZ_GOAL_REFUSAL);
-
-    const { error } = await supabase.from("goal_entries").insert({
-      goal_id: input.goalId,
-      student_id: context.student_id,
-      teacher_id: context.teacher_id,
-      minutes: input.minutes,
-      questions: input.questions,
-      correct_answers: input.correctAnswers,
-      ...(input.note ? { note: input.note } : {}),
-      ...(input.manualLesson ? { manual_lesson: input.manualLesson } : {}),
-      ...(input.theoryStage ? { theory_stage: input.theoryStage } : {}),
+    const { error } = await supabase.rpc("record_goal_entry", {
+      p_request_id: input.requestId,
+      p_goal_id: input.goalId,
+      p_minutes: input.minutes,
+      p_questions: input.questions,
+      p_correct_answers: input.correctAnswers,
+      ...(input.note ? { p_note: input.note } : {}),
+      ...(input.manualLesson ? { p_manual_lesson: input.manualLesson } : {}),
+      ...(input.theoryStage ? { p_theory_stage: input.theoryStage } : {}),
     });
-    if (error) return failure<Goal>(translateDbError(error));
-
-    // REGISTRAR NÃO CONCLUI. Uma meta pode receber vários registros antes de
-    // fechar, e é a separação que o `registro-modal` da v2 tem. O que muda é
-    // só "pendente" virar "em andamento".
-    if (context.status === "pending") {
-      const { error: statusError } = await supabase
-        .from("goals")
-        .update({ status: "in_progress" })
-        .eq("id", input.goalId);
-      if (statusError) return failure<Goal>(translateDbError(statusError));
+    if (error) {
+      // `23514` não chega aqui: `checkStudyEntry` cobre cada CHECK. A meta de
+      // bateria é a RPC recusando em português (P0001), e a tela já não a oferece.
+      return failure<Goal>(studyWriteError(error));
     }
 
+    // A meta é RELIDA, e não montada: registrar também move `pending` para
+    // `in_progress`, e a tela precisa do estado que o banco gravou.
     return reloadGoal(input.goalId);
   });
 }
@@ -356,8 +361,19 @@ export function removeStudyEntry(entryId: Uuid, requestId: RequestId): Promise<R
     if (error) return failure<Goal>(translateDbError(error));
     if (!data) return fail<Goal>("not_found", "Registro não encontrado.");
 
-    const { error: deleteError } = await supabase.from("goal_entries").delete().eq("id", entryId);
+    // O DELETE barrado pela policy FILTRA EM SILÊNCIO: sem contar, a tela
+    // fingiria sucesso com o acesso vencido (N-05).
+    const { error: deleteError, count } = await supabase
+      .from("goal_entries")
+      .delete({ count: "exact" })
+      .eq("id", entryId);
     if (deleteError) return failure<Goal>(translateDbError(deleteError));
+    if (count === 0) {
+      return fail<Goal>(
+        "forbidden",
+        "Você não tem permissão para esta operação, ou seu acesso venceu.",
+      );
+    }
 
     // O estado da meta acompanha o que SOBROU: apagar o último registro de uma
     // meta em andamento devolve "pendente", senão a tela mostra "em andamento"
@@ -420,87 +436,36 @@ export function skipGoal(goalId: Uuid, requestId: RequestId): Promise<Result<Goa
   );
 }
 
-/** Os cinco tipos de estudo extra da v2, no título que a meta recebe. */
-const EXTRA_TITLES: Record<ExtraStudyInput["kind"], string> = {
-  dry_law: "Lei seca",
-  anki: "Anki",
-  mock_exam: "Simulado",
-  review: "Revisão",
-  extra_questions: "Questões extras",
-};
-
 export function recordExtraStudy(input: ExtraStudyInput): Promise<Result<Goal>> {
   return once(input.requestId, async () => {
-    if (input.correctAnswers > input.questions) {
-      return fail<Goal>(
-        "validation",
-        "Os acertos não podem passar do total de questões.",
-        "correctAnswers",
-      );
-    }
-    if (!input.subject.trim()) {
-      return fail<Goal>("validation", "Informe a matéria.", "subject");
-    }
-
-    const session = await requireSession();
+    // O piso é o `starts_on` do planejamento, e quem o lê é o adaptador: a regra
+    // de `validation.ts` recebe a data como dado, igual nas duas implementações.
     const { data: plan, error: planError } = await supabase
       .from("study_plans")
-      .select("id,teacher_id,starts_on")
+      .select("starts_on")
       .eq("id", input.studyPlanId)
       .maybeSingle();
-
     if (planError) return failure<Goal>(translateDbError(planError));
     if (!plan) return fail<Goal>("not_found", "Planejamento não encontrado.");
 
-    const weekNumber = weekNumberOf(plan.starts_on, input.date);
-    // `getUTCDay()` é 0 = domingo; aqui 7 = domingo, como `Weekday`.
-    const weekday = (new Date(`${input.date}T00:00:00Z`).getUTCDay() || 7) as Weekday;
+    const invalid = checkExtraStudy(input, plan.starts_on, today());
+    if (invalid) return failure<Goal>(invalid);
 
-    // O tipo é `extra` porque é o único, junto de `reinforcement`, que a RLS
-    // deixa o ALUNO criar — e é ele que governa quem pode apagar depois.
-    const { data: created, error } = await supabase
-      .from("goals")
-      .insert({
-        study_plan_id: plan.id,
-        teacher_id: plan.teacher_id,
-        student_id: session.profileId,
-        week_number: weekNumber,
-        weekday,
-        weekday_name: WEEKDAY_NAMES[weekday - 1]!,
-        // Depois de tudo que já existe no dia: estudo extra é acréscimo, e
-        // entra no fim da lista em vez de empurrar o que o professor planejou.
-        day_position: 99,
-        type: "extra",
-        subject: input.subject.trim(),
-        title: EXTRA_TITLES[input.kind],
-        planned_minutes: input.minutes,
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      })
-      .select("id")
-      .maybeSingle();
-
-    if (error) return failure<Goal>(translateDbError(error));
-    if (!created) return fail<Goal>("unknown", "A meta não foi criada.");
-
-    const { error: entryError } = await supabase.from("goal_entries").insert({
-      goal_id: created.id,
-      student_id: session.profileId,
-      teacher_id: plan.teacher_id,
-      minutes: input.minutes,
-      questions: input.questions,
-      correct_answers: input.correctAnswers,
-      ...(input.note ? { note: input.note } : {}),
+    // Meta e registro numa transação, com a posição depois da maior do dia (N-02)
+    // e a semana derivada da data. O tipo vive no título, e quem o monta é a RPC.
+    const { data: goalId, error } = await supabase.rpc("record_extra_study", {
+      p_request_id: input.requestId,
+      p_study_plan_id: input.studyPlanId,
+      p_kind: input.kind,
+      p_subject: input.subject.trim(),
+      p_date: input.date,
+      p_minutes: input.minutes,
+      p_questions: input.questions,
+      p_correct_answers: input.correctAnswers,
+      ...(input.note ? { p_note: input.note } : {}),
     });
+    if (error) return failure<Goal>(studyWriteError(error));
 
-    if (entryError) {
-      // A meta sem o registro é lixo que a tela mostraria como estudo de zero
-      // minuto. Desfazer é possível porque o aluno pode apagar as do tipo
-      // `extra` — é a mesma policy que sustenta o botão de remover.
-      await supabase.from("goals").delete().eq("id", created.id);
-      return failure<Goal>(translateDbError(entryError));
-    }
-
-    return reloadGoal(created.id);
+    return reloadGoal(goalId);
   });
 }

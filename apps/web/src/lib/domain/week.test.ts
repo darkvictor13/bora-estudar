@@ -6,8 +6,10 @@ import {
   addDays,
   dateOfWeekday,
   daysBetween,
+  defaultExtraDate,
   formatMinutes,
   groupIntoDays,
+  parseCount,
   statusFromEntries,
   streakDays,
   summarizeWeek,
@@ -49,6 +51,7 @@ function entry(over: Partial<StudyEntry> & { id: string }): StudyEntry {
     theoryStage: null,
     manualLesson: null,
     createdAt: "2026-09-14T10:00:00.000Z",
+    studiedOn: null,
     ...over,
   };
 }
@@ -175,4 +178,29 @@ test("o tempo é escrito como a v2 escreve", () => {
   assert.equal(formatMinutes(60), "1h");
   assert.equal(formatMinutes(135), "2h15");
   assert.equal(formatMinutes(605), "10h05");
+});
+
+test("a data sugerida do estudo extra é hoje, e o primeiro dia só na semana passada", () => {
+  const semana = { startsOn: "2026-09-14", endsOn: "2026-09-20" };
+  // Semana corrente sem dia escolhido: hoje, e não a segunda (QA-14).
+  assert.equal(defaultExtraDate(semana, null, "2026-09-17"), "2026-09-17");
+  // Dia anterior escolhido no calendário: o dia.
+  assert.equal(defaultExtraDate(semana, "2026-09-15", "2026-09-17"), "2026-09-15");
+  // Dia futuro escolhido: hoje.
+  assert.equal(defaultExtraDate(semana, "2026-09-19", "2026-09-17"), "2026-09-17");
+  // Dia escolhido fora da semana vista: ignorado.
+  assert.equal(defaultExtraDate(semana, "2026-09-01", "2026-09-17"), "2026-09-17");
+  // Semana passada: o primeiro dia dela.
+  assert.equal(defaultExtraDate(semana, null, "2026-09-25"), "2026-09-14");
+  // Semana futura: hoje.
+  assert.equal(defaultExtraDate(semana, null, "2026-09-10"), "2026-09-10");
+});
+
+test("parseCount deixa vazio ser zero e entrega o resto inválido à validação", () => {
+  assert.equal(parseCount(""), 0);
+  assert.equal(parseCount("45"), 45);
+  assert.equal(parseCount(" 12 "), 12);
+  for (const raw of ["-30", "1.5", "1e3", "abc"]) {
+    assert.ok(Number.isNaN(parseCount(raw)), raw);
+  }
 });

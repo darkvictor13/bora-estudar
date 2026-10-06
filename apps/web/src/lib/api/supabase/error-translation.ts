@@ -78,6 +78,10 @@ export function translateAuthError(error: Pick<AuthError, "name" | "message" | "
  * como saber que foi isso, mas a tela precisa dizer algo melhor do que
  * "insufficient privilege".
  *
+ * `P0002` é o `no_data_found` que `record_goal_entry` e `record_extra_study`
+ * levantam para meta ou planejamento alheio OU inexistente — os dois dão o mesmo
+ * erro, de propósito, e a tradução não os distingue.
+ *
  * `P0001` é o `raise exception` dos gatilhos de proteção, e a mensagem deles já
  * está em português e já é dirigida a quem está usando: "somente o professor
  * altera o planejamento da meta" é exatamente o que a tela deve mostrar.
@@ -104,6 +108,7 @@ export function translateDbError(error: DbErrorLike): ApiError {
     case "23503":
       return { code: "conflict", message: "O registro depende de outro que não existe." };
     case "PGRST116":
+    case "P0002": // no_data_found: o `raise` das RPCs de estudo para meta ou plano alheio ou inexistente
       return { code: "not_found", message: "Registro não encontrado." };
     case "23514": // check_violation
     case "22P02": // invalid_text_representation ("1.5" num integer)

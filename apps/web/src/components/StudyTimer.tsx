@@ -14,7 +14,7 @@ import Typography from "@mui/material/Typography";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { addStudyTimerMinutes, advanceStudyTimer, changeStudyTimerMode, displayedStudyTimer, elapsedStudyTimer, EMPTY_TIMER, parseStudyTimer, recordedStudyTimer, recordedStudyTimerMinutes, type StudyTimerMode, type StudyTimerState } from "@/lib/domain/study-timer";
+import { addStudyTimerMinutes, advanceStudyTimer, changeStudyTimerMode, displayedStudyTimer, elapsedStudyTimer, EMPTY_TIMER, parseStudyTimer, pauseTimer, recordedStudyTimer, resumeTimer, type StudyTimerMode, type StudyTimerState } from "@/lib/domain/study-timer";
 import type { Theme } from "@/lib/theme";
 
 export const STUDY_TIMER_STORAGE_KEY = "fronteira.study-timer.v1";
@@ -36,16 +36,27 @@ export function readStudyTimer(): StudyTimerState {
   }
 }
 
-/** Pausa o cronômetro e devolve os minutos de foco prontos para o formulário. */
-export function pauseStudyTimerForRecord(): number {
-  if (typeof window === "undefined") return 0;
-  const now = Date.now();
+/**
+ * Pausa o cronômetro, gravando e avisando a barra. Idempotente.
+ *
+ * Grava no `localStorage` e dispara o evento que `StudyTimerBar` escuta: por isso
+ * NUNCA pode rodar durante o render de outro componente (QA-27) — o React acusa
+ * "Cannot update a component while rendering". Quem chama o faz num efeito, ou
+ * num manipulador de evento.
+ */
+export function pauseStudyTimer() {
+  if (typeof window === "undefined") return;
   const current = readStudyTimer();
-  const paused = current.running
-    ? { ...current, elapsedMs: elapsedStudyTimer(current, now), startedAt: null, running: false }
-    : current;
-  saveStudyTimer(paused);
-  return recordedStudyTimerMinutes(paused, now);
+  const next = pauseTimer(current, Date.now());
+  if (next !== current) saveStudyTimer(next);
+}
+
+/** Retoma o cronômetro que o diálogo de estudo extra pausou (D-16). Idempotente. */
+export function resumeStudyTimer() {
+  if (typeof window === "undefined") return;
+  const current = readStudyTimer();
+  const next = resumeTimer(current, Date.now());
+  if (next !== current) saveStudyTimer(next);
 }
 
 /** Consome o tempo já lançado sem mudar o modo escolhido pelo aluno. */
@@ -110,10 +121,7 @@ export function useStudyTimer() {
   }
 
   function pause() {
-    setTimer((current) => {
-      if (!current.running || current.startedAt === null) return current;
-      return { ...current, elapsedMs: elapsedStudyTimer(current, Date.now()), startedAt: null, running: false };
-    });
+    setTimer((current) => pauseTimer(current, Date.now()));
   }
 
   function reset() {

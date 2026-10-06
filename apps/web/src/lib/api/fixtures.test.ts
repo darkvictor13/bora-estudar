@@ -329,7 +329,7 @@ test("estudo extra cria a meta e o registro numa operação só", async () => {
     requestId: requestId(),
     kind: "anki",
     subject: "Português",
-    date: "2026-09-16",
+    date: "2026-09-14",
     minutes: 25,
     questions: 40,
     correctAnswers: 33,
@@ -962,4 +962,87 @@ test("arquivar o planejamento ativo deixa o aluno sem nenhum ativo", async () =>
   assert.ok(original);
   assert.ok((await api.archivePlan(original.id, requestId())).ok);
   assert.equal((await api.listPlans()).filter((plan) => plan.status === "active").length, 0);
+});
+
+/* ---- QA-10, QA-11, N-02, N-07: os limites e a data do estudo ---- */
+
+async function firstPendingGoalId() {
+  const week = await api.loadWeek("plano", 1);
+  return week.days.flatMap((day) => day.goals).find((goal) => goal.status === "pending")!.id;
+}
+
+test("registrar estudo recusa número fora dos limites, com a frase e o campo, e nada é gravado", async () => {
+  const goalId = await firstPendingGoalId();
+  const casos: ReadonlyArray<[string, { minutes: number; questions: number; correctAnswers: number }, string]> = [
+    ["minutos negativos", { minutes: -30, questions: 0, correctAnswers: 0 }, "minutes"],
+    ["minutos acima de 240", { minutes: 241, questions: 0, correctAnswers: 0 }, "minutes"],
+    ["minutos fracionados", { minutes: 1.5, questions: 0, correctAnswers: 0 }, "minutes"],
+    ["questões acima de 500", { minutes: 0, questions: 501, correctAnswers: 0 }, "questions"],
+    ["acertos negativos", { minutes: 10, questions: 5, correctAnswers: -1 }, "correctAnswers"],
+    ["acertos acima das questões", { minutes: 10, questions: 5, correctAnswers: 6 }, "correctAnswers"],
+    ["tudo zero", { minutes: 0, questions: 0, correctAnswers: 0 }, "minutes"],
+  ];
+  for (const [nome, numeros, campo] of casos) {
+    const refused = await api.recordStudy({ goalId, requestId: requestId(), ...numeros });
+    assert.ok(!refused.ok, nome);
+    assert.equal(refused.error.code, "validation", nome);
+    assert.equal(refused.error.field, campo, nome);
+  }
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days.flatMap((day) => day.goals).find((candidate) => candidate.id === goalId)!;
+  assert.equal(goal.entries.length, 0, "nenhuma tentativa gravou");
+});
+
+test("estudo extra recusa data fora de [início do planejamento, hoje], com o campo", async () => {
+  const base = { studyPlanId: "plano", kind: "anki" as const, subject: "Português", minutes: 20, questions: 0, correctAnswers: 0 };
+  const antes = await api.loadWeek("plano", 1);
+  for (const date of ["2026-08-16", "2026-09-15", ""]) {
+    const refused = await api.recordExtraStudy({ ...base, requestId: requestId(), date });
+    assert.ok(!refused.ok, date);
+    assert.equal(refused.error.field, "date", date);
+  }
+  const depois = await api.loadWeek("plano", 1);
+  assert.equal(depois.summary.goalsTotal, antes.summary.goalsTotal, "nenhuma meta extra nasceu");
+  const semMateria = await api.recordExtraStudy({ ...base, requestId: requestId(), subject: " ", date: "2026-09-14" });
+  assert.ok(!semMateria.ok);
+  assert.equal(semMateria.error.field, "subject");
+});
+
+test("dois estudos extras no mesmo dia cabem, em posições diferentes (N-02)", async () => {
+  const base = { studyPlanId: "plano", kind: "anki" as const, minutes: 20, questions: 0, correctAnswers: 0, date: "2026-09-14" };
+  const first = await api.recordExtraStudy({ ...base, requestId: requestId(), subject: "Português" });
+  const second = await api.recordExtraStudy({ ...base, requestId: requestId(), subject: "Direito" });
+  assert.ok(first.ok && second.ok);
+  assert.notEqual(first.data.id, second.data.id);
+  assert.equal(second.data.dayPosition, first.data.dayPosition + 1);
+});
+
+test("a mesma chave com outra carga é conflito, e com a mesma carga devolve o que gravou", async () => {
+  const goalId = await firstPendingGoalId();
+  const key = requestId();
+  const input = { goalId, requestId: key, minutes: 30, questions: 6, correctAnswers: 6 };
+  const first = await api.recordStudy(input);
+  const outra = await api.recordStudy({ ...input, minutes: 31 });
+  assert.ok(first.ok);
+  assert.ok(!outra.ok);
+  assert.equal(outra.error.code, "conflict");
+
+  const extra = { studyPlanId: "plano", requestId: requestId(), kind: "anki" as const, subject: "Português", date: "2026-09-14", minutes: 20, questions: 0, correctAnswers: 0 };
+  const created = await api.recordExtraStudy(extra);
+  const repeated = await api.recordExtraStudy(extra);
+  const diferente = await api.recordExtraStudy({ ...extra, date: "2026-09-13" });
+  assert.ok(created.ok && repeated.ok);
+  assert.equal(repeated.data.id, created.data.id, "a retentativa devolve a mesma meta");
+  assert.ok(!diferente.ok);
+  assert.equal(diferente.error.code, "conflict");
+});
+
+test("o extra lançado para outro dia conta no dia estudado (N-07)", async () => {
+  const lancado = await api.recordExtraStudy({
+    studyPlanId: "plano", requestId: requestId(), kind: "anki", subject: "Português",
+    date: "2026-09-10", minutes: 30, questions: 0, correctAnswers: 0,
+  });
+  assert.ok(lancado.ok);
+  assert.equal(lancado.data.entries[0]!.studiedOn, "2026-09-10");
+  assert.ok((await api.loadStudyDays(2026)).includes("2026-09-10"));
 });

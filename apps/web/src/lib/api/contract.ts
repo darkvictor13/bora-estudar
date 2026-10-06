@@ -272,6 +272,11 @@ export interface StudyEntry {
   /** Aula digitada à mão, quando a meta não aponta para o catálogo. */
   readonly manualLesson: string | null;
   readonly createdAt: IsoDateTime;
+  /**
+   * O dia escolhido no estudo extra; nulo = o dia local de `createdAt`. Leia o dia
+   * do registro por `entryDay` (`lib/domain/schedule.ts`), nunca por um dos dois campos.
+   */
+  readonly studiedOn: IsoDate | null;
 }
 
 export interface Goal {

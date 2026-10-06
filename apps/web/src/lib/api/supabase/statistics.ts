@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase/client";
 import { streakDays } from "@/lib/domain/week";
 import { questionsByDay } from "@/lib/domain/question-performance";
 import { classQuestionDistribution } from "@/lib/domain/class-question-distribution";
-import { localDate } from "@/lib/domain/schedule";
+import { entryDay } from "@/lib/domain/schedule";
 
 import type {
   ClassQuestionDistribution,
@@ -55,12 +55,30 @@ const MONTHS = [
   "jul", "ago", "set", "out", "nov", "dez",
 ] as const;
 
+/**
+ * O recorte por ANO de um registro é o do dia estudado (N-07): um extra lançado
+ * em 2027-01-01 para 2026-12-31 é de 2026. Sem `studied_on`, vale o instante do
+ * lançamento, nos limites locais do ano.
+ *
+ * As aspas em volta do instante são a forma do PostgREST para valor com `.` e `:`
+ * dentro de uma árvore lógica. `.or()` entra com `AND` nos demais filtros.
+ */
+function entryYear(year: number): string {
+  const from = new Date(year, 0, 1).toISOString();
+  const to = new Date(year + 1, 0, 1).toISOString();
+  return (
+    `and(studied_on.gte.${year}-01-01,studied_on.lt.${year + 1}-01-01),` +
+    `and(studied_on.is.null,created_at.gte."${from}",created_at.lt."${to}")`
+  );
+}
+
 interface EntryRow {
   id: string;
   minutes: number;
   questions: number;
   correct_answers: number;
   created_at: string;
+  studied_on: string | null;
   goals: { subject: string; block?: string | null; week_number: number; status: string } | null;
 }
 
@@ -94,8 +112,6 @@ export async function loadClassQuestionDistribution(classId: Uuid, year: number)
     return classQuestionDistribution(studentIds, [], activeStudentIds);
   }
 
-  const from = new Date(year, 0, 1).toISOString();
-  const to = new Date(year + 1, 0, 1).toISOString();
   const rows: { studentId: string; questions: number; correctAnswers: number }[] = [];
   // O Data API pode limitar cada resposta a 1.000 linhas. Paginamos em ordem
   // estável para que uma turma ativa não perca os registros mais recentes.
@@ -107,8 +123,7 @@ export async function loadClassQuestionDistribution(classId: Uuid, year: number)
       .in("student_id", studentIds)
       .in("goals.study_plan_id", activePlanIds)
       .gt("questions", 0)
-      .gte("created_at", from)
-      .lt("created_at", to)
+      .or(entryYear(year))
       .order("id")
       .range(offset, offset + pageSize - 1);
     if (page.error) throwDb(page.error);
@@ -126,21 +141,18 @@ export async function loadClassQuestionDistribution(classId: Uuid, year: number)
 export async function loadStudyDays(year: number): Promise<readonly IsoDate[]> {
   const session = await requireSession();
   if (session.role !== "student") throw new Error("O calendário de estudo pertence ao aluno.");
-  const from = new Date(year, 0, 1).toISOString();
-  const to = new Date(year + 1, 0, 1).toISOString();
   const dates = new Set<IsoDate>();
   const pageSize = 500;
   for (let offset = 0; ; offset += pageSize) {
     const page = await supabase.from("goal_entries")
-      .select("id,created_at,minutes,questions")
+      .select("id,created_at,studied_on,minutes,questions")
       .eq("student_id", session.profileId)
-      .gte("created_at", from)
-      .lt("created_at", to)
+      .or(entryYear(year))
       .order("id")
       .range(offset, offset + pageSize - 1);
     if (page.error) throwDb(page.error);
     const batch = page.data ?? [];
-    for (const row of batch) if (row.minutes > 0 || row.questions > 0) dates.add(localDate(new Date(row.created_at)));
+    for (const row of batch) if (row.minutes > 0 || row.questions > 0) dates.add(entryDay({ createdAt: row.created_at, studiedOn: row.studied_on }));
     if (batch.length < pageSize) break;
   }
   return [...dates].filter((date) => date.startsWith(`${year}-`)).sort();
@@ -290,6 +302,7 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
   const studentId = owner?.student_id ?? session.profileId;
 
   const year = filter.year ?? new Date().getFullYear();
+  // Só a janela das metas concluídas usa estes limites: os registros usam `entryYear`.
   const from = new Date(year, 0, 1).toISOString();
   const to = new Date(year + 1, 0, 1).toISOString();
 
@@ -298,11 +311,10 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
   for (let offset = 0; ; offset += pageSize) {
     const page = await supabase
       .from("goal_entries")
-      .select("id,minutes,questions,correct_answers,created_at,goals!inner(subject,block,week_number,status,study_plan_id)")
+      .select("id,minutes,questions,correct_answers,created_at,studied_on,goals!inner(subject,block,week_number,status,study_plan_id)")
       .eq("student_id", studentId)
       .eq("goals.study_plan_id", planId)
-      .gte("created_at", from)
-      .lt("created_at", to)
+      .or(entryYear(year))
       .order("id")
       .range(offset, offset + pageSize - 1);
     if (page.error) throwDb(page.error);
@@ -354,7 +366,7 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
   }
 
   return {
-    studyTime: rows.filter((row) => row.minutes > 0).map((row) => ({ date: localDate(new Date(row.created_at)), subject: row.goals?.subject ?? "Sem disciplina", minutes: row.minutes })),
+    studyTime: rows.filter((row) => row.minutes > 0).map((row) => ({ date: entryDay({ createdAt: row.created_at, studiedOn: row.studied_on }), subject: row.goals?.subject ?? "Sem disciplina", minutes: row.minutes })),
     byBlock: [...blocks.values()],
     score: questionsAnswered > 0 ? Math.round((correctAnswers / questionsAnswered) * 100) : null,
     questionsAnswered,
@@ -362,7 +374,7 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
     studiedMinutes: rows.reduce((sum, row) => sum + row.minutes, 0),
     goalsCompleted: completedGoals.count ?? 0,
     streakDays: streakDays(
-      rows.filter((row) => row.minutes > 0 || row.questions > 0).map((row) => localDate(new Date(row.created_at))),
+      rows.filter((row) => row.minutes > 0 || row.questions > 0).map((row) => entryDay({ createdAt: row.created_at, studiedOn: row.studied_on })),
       today(),
     ),
     scoreByWeek: weeks.map(([week, totals]) => ({
@@ -376,6 +388,7 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
     dailyQuestions: questionsByDay(
       rows.map((row) => ({
         createdAt: row.created_at,
+        studiedOn: row.studied_on,
         questions: row.questions,
         correctAnswers: row.correct_answers,
       })),
@@ -388,18 +401,23 @@ export async function loadStatistics(filter: StatisticsFilter): Promise<Statisti
       sumBy(
         // Os últimos 14 dias, e não o ano inteiro: uma série de 365 colunas de
         // 2px não é leitura, é textura.
-        rows.filter((row) => row.created_at.slice(0, 10) >= addDays(today(), -13)),
-        (row) => row.created_at.slice(0, 10),
+        rows.filter((row) => entryDay(dayOf(row)) >= addDays(today(), -13)),
+        (row) => entryDay(dayOf(row)),
         (row) => row.minutes,
       ),
       (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`,
     ),
     minutesByMonth: ordered(
-      sumBy(rows, (row) => row.created_at.slice(0, 7), (row) => row.minutes),
+      sumBy(rows, (row) => entryDay(dayOf(row)).slice(0, 7), (row) => row.minutes),
       (iso) => MONTHS[Number(iso.slice(5, 7)) - 1] ?? "?",
     ),
     bySubject,
   };
+}
+
+/** O que `entryDay` lê de uma linha do ledger. */
+function dayOf(row: EntryRow): { createdAt: string; studiedOn: string | null } {
+  return { createdAt: row.created_at, studiedOn: row.studied_on };
 }
 
 function addDays(date: string, days: number): string {

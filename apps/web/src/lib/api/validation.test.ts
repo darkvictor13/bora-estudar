@@ -11,6 +11,9 @@ import { test } from "node:test";
 
 import {
   checkCredentials,
+  checkExtraStudy,
+  checkExtraStudyDate,
+  checkStudyEntry,
   checkGenerateWeek,
   checkName,
   checkPassword,
@@ -72,4 +75,57 @@ test("a semana a copiar aponta o campo dela", () => {
   const erro = checkGenerateWeek({ ...base, copyFromWeek: 0 });
   assert.equal(erro?.field, "copyFromWeek");
   assert.match(erro!.message, /semana a copiar/);
+});
+
+test("um registro de estudo vai de 0 a 240 minutos e de 0 a 500 questões, com a frase do campo", () => {
+  assert.equal(checkStudyEntry({ minutes: 30, questions: 10, correctAnswers: 8 }), null);
+  // Só questões (é a teoria) também é registro.
+  assert.equal(checkStudyEntry({ minutes: 0, questions: 10, correctAnswers: 5 }), null);
+
+  for (const minutes of [-30, 241, 1.5, Number.NaN]) {
+    const error = checkStudyEntry({ minutes, questions: 0, correctAnswers: 0 });
+    assert.equal(error?.field, "minutes", String(minutes));
+    assert.match(error?.message ?? "", /minutos inteiros, de 0 a 240/);
+  }
+  const questions = checkStudyEntry({ minutes: 0, questions: 501, correctAnswers: 0 });
+  assert.equal(questions?.field, "questions");
+  assert.match(questions?.message ?? "", /de 0 a 500/);
+  assert.equal(checkStudyEntry({ minutes: 10, questions: Number.NaN, correctAnswers: 0 })?.field, "questions");
+
+  assert.equal(checkStudyEntry({ minutes: 10, questions: 5, correctAnswers: -1 })?.field, "correctAnswers");
+  assert.equal(
+    checkStudyEntry({ minutes: 10, questions: 5, correctAnswers: 6 })?.message,
+    "Os acertos não podem passar do total de questões.",
+  );
+  assert.deepEqual(checkStudyEntry({ minutes: 0, questions: 0, correctAnswers: 0 }), {
+    code: "validation",
+    message: "Informe o tempo estudado ou as questões feitas.",
+    field: "minutes",
+  });
+});
+
+test("a data do estudo extra vai do início do planejamento até hoje", () => {
+  const inicio = "2026-09-01";
+  const hoje = "2026-09-14";
+  assert.equal(checkExtraStudyDate(inicio, inicio, hoje), null);
+  assert.equal(checkExtraStudyDate(hoje, inicio, hoje), null);
+  for (const date of ["2026-08-31", "2026-09-15"]) {
+    const error = checkExtraStudyDate(date, inicio, hoje);
+    assert.equal(error?.field, "date");
+    assert.match(error?.message ?? "", /entre o início do planejamento e hoje/);
+  }
+  for (const date of ["", "2026-02-30", "14/09/2026"]) {
+    assert.equal(checkExtraStudyDate(date, inicio, hoje)?.message, "Informe a data do estudo.", date);
+  }
+});
+
+test("o estudo extra valida na ordem dos campos: matéria, data, números", () => {
+  const base = { subject: "Português", date: "2026-09-10", minutes: 20, questions: 0, correctAnswers: 0 };
+  assert.equal(checkExtraStudy(base, "2026-09-01", "2026-09-14"), null);
+  assert.equal(
+    checkExtraStudy({ ...base, subject: "  ", date: "x", minutes: -1 }, "2026-09-01", "2026-09-14")?.field,
+    "subject",
+  );
+  assert.equal(checkExtraStudy({ ...base, date: "2026-08-01", minutes: -1 }, "2026-09-01", "2026-09-14")?.field, "date");
+  assert.equal(checkExtraStudy({ ...base, minutes: -1 }, "2026-09-01", "2026-09-14")?.field, "minutes");
 });

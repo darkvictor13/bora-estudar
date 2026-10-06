@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Goal } from "../api/contract.ts";
-import { calendarDays, dailyQuestionPerformance, localDate, matchesSchedule, scheduleFilter } from "./schedule.ts";
+import type { Goal, StudyEntry } from "../api/contract.ts";
+import { calendarDays, dailyQuestionPerformance, entryDay, localDate, matchesSchedule, scheduleFilter } from "./schedule.ts";
 
 const goal: Goal = {
   id: "goal", type: "review", status: "pending", weekday: 3, dayPosition: 1,
@@ -43,7 +43,7 @@ test("aproveitamento diário usa a data da resposta e só conta questões", () =
   const answered = {
     id: "entry-1", goalId: "goal", minutes: 0, questions: 10, correctAnswers: 7,
     score: 70, note: null, theoryStage: "questions_in_progress" as const,
-    manualLesson: null, createdAt: "2026-09-15T12:00:00.000Z",
+    manualLesson: null, createdAt: "2026-09-15T12:00:00.000Z", studiedOn: null,
   };
   const reading = { ...answered, id: "entry-2", questions: 0, correctAnswers: 0, minutes: 40 };
   const day = { date: "2026-09-14", weekday: 1 as const, goals: [{ ...goal, entries: [answered, reading] }] };
@@ -51,4 +51,23 @@ test("aproveitamento diário usa a data da resposta e só conta questões", () =
     questions: 10, correct: 7, wrong: 3, score: 70,
   });
   assert.equal(dailyQuestionPerformance({ days: [day] }, "2026-09-14").score, null);
+});
+
+const entry: StudyEntry = {
+  id: "e", goalId: "goal", minutes: 20, questions: 10, correctAnswers: 8, score: 80,
+  note: null, theoryStage: null, manualLesson: null,
+  createdAt: "2026-09-14T15:00:00.000Z", studiedOn: null,
+};
+
+test("o dia de um registro é o estudado, ou o dia local do lançamento", () => {
+  assert.equal(entryDay({ ...entry, studiedOn: "2026-09-13" }), "2026-09-13");
+  assert.equal(entryDay(entry), localDate(new Date(entry.createdAt)));
+  // Sem a chave (quem monta o registro à mão) também vale.
+  assert.equal(entryDay({ createdAt: entry.createdAt }), localDate(new Date(entry.createdAt)));
+});
+
+test("o desempenho do dia põe o extra de ontem em ontem, e não no dia do lançamento", () => {
+  const week = { days: [{ date: "2026-09-14", weekday: 1 as const, goals: [{ ...goal, entries: [{ ...entry, studiedOn: "2026-09-13" }] }] }] };
+  assert.equal(dailyQuestionPerformance(week, "2026-09-13").questions, 10);
+  assert.equal(dailyQuestionPerformance(week, localDate(new Date(entry.createdAt))).questions, 0);
 });
