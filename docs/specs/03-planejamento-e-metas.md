@@ -27,11 +27,11 @@ um campo de observação (`TIPO_REFORCO:1`, `REFORCO_ORIGEM_ID:<uuid>`,
 
 | Id | Regra |
 |---|---|
-| R-PLAN-01 | **Um planejamento ativo por aluno.** Índice parcial `active_study_plan_uidx` sobre `status = 'active' and deleted_at is null`. Os estados "dois ativos" e — em conjunto com `activate_study_plan` — "zero ativos" são inexprimíveis. |
+| R-PLAN-01 | **Um planejamento ativo por aluno.** Índice parcial `study_plans_one_active_per_student_uidx`, `(student_id) where status = 'active'`. "Dois ativos" e "zero ativos no meio da troca" são inexprimíveis; "zero ativos" como estado final é legítimo (R-GPLAN-05). |
 | R-PLAN-02 | Aluno e professor de um planejamento são pessoas diferentes: `study_plan_not_self`. |
 | R-PLAN-03 | O nome é único por aluno: `study_plan_name_unique`. |
 | R-PLAN-04 | `study_plan_context_uk (id, student_id, teacher_id)` existe para ser **alvo de FK composta** das tabelas filhas. É o que impede a cópia denormalizada de divergir do pai. |
-| R-PLAN-05 | Trocar o planejamento ativo é atômico: `activate_study_plan` arquiva o anterior e ativa o novo na mesma transação. |
+| R-PLAN-05 | Trocar o planejamento ativo é atômico: `activate_study_plan` trava os planejamentos do aluno, arquiva o anterior e ativa o novo na mesma transação; o índice `study_plans_one_active_per_student_uidx` garante o estado final. |
 | R-PLAN-06 | Nada é apagado. Remover é `deleted_at`; FKs de histórico usam `on delete restrict`. |
 
 ### Blocos
@@ -102,7 +102,7 @@ semana com metas, sem quebrar (R-GOAL-01 não é violada porque nada é escrito)
 | CA-06 | Aluno sem planejamento ativo vê "Nenhum planejamento ativo." e nenhum dado alheio | F-ALU-06 |
 | CA-07 | Aluno inserindo meta em planejamento alheio recebe `42501` | F-ISO-02 |
 | CA-08 | Professor renomeando planejamento alheio afeta **zero linhas**, sem erro — a RLS filtra em silêncio no UPDATE | F-ISO-02 |
-| CA-09 | Gravar dois planejamentos `active` para o mesmo aluno viola `active_study_plan_uidx` | `supabase/tests/` |
+| CA-09 | Gravar dois planejamentos `active` para o mesmo aluno viola `study_plans_one_active_per_student_uidx` | `supabase/tests/07_schema.sql` |
 | CA-10 | Duas metas na mesma `(plano, semana, dia, ordem)` violam `goal_position_uidx`; marcar a primeira como excluída libera a posição | `supabase/tests/` |
 
 ---

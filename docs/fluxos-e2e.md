@@ -246,7 +246,7 @@ diff mostra a omissão.
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
 | F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
 | F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
-| F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno |
+| F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno; ativar é uma transação: rede caindo não deixa o aluno sem planejamento, e duas ativações simultâneas terminam com um ativo — QA-03, QA-12 |
 | F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
 | F-TREV-01 | é na tela do professor que o espaçamento se configura |

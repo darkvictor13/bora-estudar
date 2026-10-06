@@ -2,6 +2,11 @@
 
 **Situação:** implementada · **Comparativo:** §12 item 3 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §7 · **Fluxos e2e:** F-GPLAN-01
 
+> **Atualizada em 06/10/2026 (QA-03, QA-12):** o índice e a RPC citados aqui
+> não existiam no schema de 14/09; voltaram na migration
+> `<timestamp>_one_active_study_plan`. Onde esta spec diz `draft`, leia
+> `paused`, que é como o planejamento nasce.
+
 ---
 
 ## Problema
@@ -16,10 +21,11 @@ resolveu o passo anterior: o professor já consegue vincular um aluno e liberar 
 acesso dele. O aluno entra, e vê "Nenhum planejamento ativo. Aguarde seu
 professor montar e ativar um planejamento". O professor não tem como atender.
 
-**E `activate_study_plan` está pronta há tempo, sem ninguém para chamá-la.** Ela
-arquiva o anterior e ativa o novo na mesma transação, com o índice
-`active_study_plan_uidx` tornando impossível terminar com dois ativos ou com
-nenhum. Está testada em `supabase/tests/` e é citada no GAP-02 como RPC órfã.
+**E `activate_study_plan` estava pronta, sem ninguém para chamá-la** — até sair
+com o schema de 14/09 e deixar a tela trocando o ativo por duas escrituras
+soltas (QA-03, QA-12). Hoje ela existe de novo: arquiva o anterior e ativa o
+novo na mesma transação, com o índice `study_plans_one_active_per_student_uidx`
+tornando impossível terminar com dois ativos.
 
 A versão anterior tinha tudo isso e o fazia por escrita direta do navegador:
 `salvarNovoPlanejamentoAluno` (professor.js:4365) inseria o planejamento e, no
@@ -52,10 +58,10 @@ nenhum; ela dá caminho aos que estavam inalcançáveis.
 
 | Id | Regra |
 |---|---|
-| R-GPLAN-01 | Um planejamento **nasce `draft`**, nunca `active`. Criar já ativo esbarraria em `active_study_plan_uidx` quando o aluno já tem um ativo, e a troca atômica é justamente o que `activate_study_plan` existe para fazer. |
-| R-GPLAN-02 | **Ativar é a RPC `activate_study_plan`**, que já existe. Ela arquiva o ativo anterior do mesmo aluno e ativa o escolhido na mesma transação. Nenhuma linha desta spec reimplementa isso no cliente — era o `UPDATE` em massa da v96. |
-| R-GPLAN-03 | `activate_study_plan` é **naturalmente idempotente**: ativar o que já está ativo chega ao mesmo estado, e o `update` que arquiva os demais tem `id <> p_study_plan_id` no predicado. Não recebe `request_id`, e não precisa. |
-| R-GPLAN-04 | **Um ativo por aluno**, garantido pelo índice parcial `active_study_plan_uidx` (`student_id` onde `status = 'active' and deleted_at is null`). É o índice que torna inexprimível o estado "o aluno vê um, o professor edita outro". |
+| R-GPLAN-01 | Um planejamento **nasce `paused`**, nunca `active`. O default da coluna continua `active` (as suítes de invariante inserem sem `status` e dependem disso), mas o adaptador sempre grava `paused`: criar já ativo trocaria o planejamento do aluno antes de o professor conferir, e esbarraria no índice quando o aluno já tem um ativo. |
+| R-GPLAN-02 | **Ativar é a RPC `activate_study_plan(p_study_plan_id)`.** Ela trava os planejamentos do aluno, **arquiva o ativo anterior** e ativa o escolhido, numa transação. Nenhuma linha desta spec reimplementa isso no cliente: eram duas requisições, e a rede caindo entre elas deixava o aluno sem planejamento. A limpeza da migration que criou o índice **pausou** os duplicados; ativar pela tela **arquiva**, porque é gesto do professor. |
+| R-GPLAN-03 | `activate_study_plan` é **naturalmente idempotente**, sem `request_id`: o único parâmetro é a identidade do alvo, e "este plano está ativo" é estado. Ativar o que já está ativo devolve a linha sem escrever. Quem sustenta é o índice `study_plans_one_active_per_student_uidx` (o estado final nunca tem dois ativos) mais a trava `for no key update` sobre os planejamentos do aluno, em ordem de `id` (a segunda chamada enxerga a primeira em vez de bater no índice). |
+| R-GPLAN-04 | **Um ativo por aluno**, garantido pelo índice parcial `study_plans_one_active_per_student_uidx` — `(student_id) where status = 'active'`. Não há `deleted_at` em `study_plans`. É o índice que torna inexprimível o estado "o aluno vê um, o professor edita outro". |
 | R-GPLAN-05 | Arquivar é `update` de `status` para `archived`, escrita direta. Um aluno pode ficar **sem nenhum planejamento ativo** — é estado legítimo, e a tela do aluno já o trata com "Nenhum planejamento ativo". |
 
 ### Quem escreve
@@ -108,7 +114,7 @@ professor abre /professor/planejamentos
       │
       ├─ [Ativar] ──► activate_study_plan(id)
       │      └─ arquiva o ativo anterior E ativa este, na MESMA transação
-      │            └─ active_study_plan_uidx torna "dois ativos" inexprimível
+      │            └─ study_plans_one_active_per_student_uidx torna "dois ativos" inexprimível
       ▼
    o aluno passa a ver a Visão geral com o planejamento;
    /professor/metas passa a aceitar gerar a semana
@@ -134,8 +140,8 @@ aceito, e é melhor que o inverso.
 | Actions | `createStudyPlan`, `activateStudyPlan`, `archiveStudyPlan`, em `lib/data/teacher-actions.ts` |
 | Confirmação | Ativar e arquivar devolvem `redirectTo` com `?feito=`, e a página anuncia |
 | Leitura | `getAllTeacherPlans` (já existe), mais os catálogos ativos e os alunos vinculados |
-| RPCs | **nenhuma nova.** `activate_study_plan` já existe |
-| Migration | **nenhuma** |
+| RPCs | `activate_study_plan` |
+| Migration | `<timestamp>_one_active_study_plan`: o índice único parcial e a RPC |
 | Banco | `study_plans` e `study_plan_blocks`, escrita direta já concedida; `catalog_blocks`, leitura |
 | Protocolo | **nada muda** |
 | Testes | `apps/e2e/tests/teacher.spec.ts` |
@@ -147,17 +153,15 @@ revalidação, levando junto o `useActionState` dono dela. As duas devolvem
 `registerQuizTime` e de `completeGoal`, e foi descoberto no primeiro teste
 vermelho desta spec.
 
-**Esta spec não tem migration nem RPC, e isso é o ponto.** O banco já sabia
-fazer tudo o que ela precisa desde agosto — inclusive a parte difícil, que é a
-troca atômica do planejamento ativo. O que faltava era interface. É o padrão que
-o inventário previu para vários itens da fila.
+**Criar, editar e arquivar seguem sem RPC e sem migration**, como na primeira
+versão desta spec: são planejamento, escrita direta com as três defesas. Só
+ativar precisou voltar ao banco, porque "trocar o ativo" é a parte que uma tela
+não faz sozinha — duas requisições não são uma transação.
 
-**Por que não há teste em `supabase/tests/`.** Não há invariante nova para
-provar: `active_study_plan_uidx`, `study_plan_name_unique`, o `WITH CHECK` de
-`study_plans_teacher_insert` e o grant por coluna já são cobertos por
-`05_teacher_writes.sql` e `01_flow.sql`. Acrescentar asserções que repetem as de
-lá custaria tempo de execução sem cobrir nada novo — o mesmo critério que deixa
-F-BAT-04 fora do e2e.
+**Por que há teste em `supabase/tests/`.** O índice e a RPC são invariante de
+banco: `07_schema` confere que o índice existe e é único, que ativar arquiva o
+anterior e que ativar de novo não muda nada; `02_rls` confere que professor
+alheio e aluno não ativam.
 
 ---
 
@@ -172,6 +176,8 @@ F-BAT-04 fora do e2e.
 | CA-05 | Arquivar troca o estado e **preserva metas e baterias**; o aluno volta ao estado vazio | F-GPLAN-05 |
 | CA-06 | Nome repetido para o mesmo aluno é recusado com mensagem em português, e nada é gravado | F-GPLAN-06 |
 | CA-07 | O `select` de alunos oferece **só quem tem vínculo vigente**; sem aluno vinculado, a tela explica em vez de mostrar um formulário inútil | F-GPLAN-07 |
+| CA-08 | Falha de rede durante a ativação **não deixa o aluno sem planejamento ativo**: o anterior continua ativo até a RPC completar | F-GPLAN-01 |
+| CA-09 | Duas ativações simultâneas para o mesmo aluno terminam com **um** ativo, sem erro | F-GPLAN-01 |
 
 ---
 
