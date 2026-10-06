@@ -285,3 +285,20 @@ begin
   end if;
   raise notice '18 OK  goal_batches: a dona do plano conta 1';
 end $$;
+
+-- ---------- activate_study_plan: professor alheio e aluno não ativam ----------
+select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
+do $$ begin
+  perform public.activate_study_plan('a2000000-0000-4000-8000-000000000001');
+  raise exception 'FALHOU: Davi ativou o planejamento do aluno da Ana';
+exception when insufficient_privilege then
+  raise notice '19 OK  activate_study_plan recusa professor alheio';
+end $$;
+
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$ begin
+  perform public.activate_study_plan('a2000000-0000-4000-8000-000000000001');
+  raise exception 'FALHOU: o aluno ativou o proprio planejamento';
+exception when insufficient_privilege then
+  raise notice '19 OK  activate_study_plan recusa o aluno';
+end $$;

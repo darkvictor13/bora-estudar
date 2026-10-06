@@ -2945,6 +2945,32 @@ export type Database = {
       }
     }
     Functions: {
+      activate_study_plan: {
+        Args: { p_study_plan_id: string }
+        Returns: {
+          area: string
+          class_id: string | null
+          created_at: string
+          exam_date: string | null
+          id: string
+          name: string
+          stage: string
+          starts_on: string
+          status: Database["public"]["Enums"]["study_plan_status"]
+          student_id: string
+          study_model: string
+          target_exam: string | null
+          teacher_id: string
+          updated_at: string
+          weekly_goals: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "study_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_access_teacher: { Args: { p_teacher: string }; Returns: boolean }
       clear_pending_goals: {
         Args: { p_study_plan_id: string; p_week_number: number }
