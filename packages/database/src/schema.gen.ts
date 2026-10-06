@@ -485,6 +485,41 @@ export type Database = {
           },
         ]
       }
+      goal_batches: {
+        Row: {
+          created_at: string
+          id: string
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          week_number: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          week_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          student_id?: string
+          study_plan_id?: string
+          teacher_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_batches_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "teacher_id", "student_id"]
+          },
+        ]
+      }
       goal_entries: {
         Row: {
           correct_answers: number
@@ -2911,6 +2946,10 @@ export type Database = {
     }
     Functions: {
       can_access_teacher: { Args: { p_teacher: string }; Returns: boolean }
+      clear_pending_goals: {
+        Args: { p_study_plan_id: string; p_week_number: number }
+        Returns: number
+      }
       find_student_by_email: {
         Args: { p_email: string }
         Returns: {
@@ -2919,6 +2958,15 @@ export type Database = {
           name: string
           student_id: string
         }[]
+      }
+      generate_week: {
+        Args: {
+          p_goals: Json
+          p_request_id: string
+          p_study_plan_id: string
+          p_week_number: number
+        }
+        Returns: boolean
       }
       has_active_access: { Args: never; Returns: boolean }
       is_teacher: { Args: never; Returns: boolean }
@@ -2995,6 +3043,13 @@ export type Database = {
           student_score: number
           upper_whisker: number
           week_number: number
+        }[]
+      }
+      week_replacement_preview: {
+        Args: { p_study_plan_id: string; p_week_number: number }
+        Returns: {
+          goals_preserved: number
+          goals_total: number
         }[]
       }
     }

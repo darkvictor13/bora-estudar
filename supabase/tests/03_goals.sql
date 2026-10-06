@@ -14,6 +14,10 @@
 --                                  meta a caderno
 --   protect_goal_quiz_result       número de bateria é do motor
 --   freeze_goal_with_sessions      contexto congela quando já existe bateria
+--   generate_week, clear_pending_goals
+--                                  gerar e limpar a semana: uma transação, e
+--                                  nunca o que o aluno estudou (spec 04)
+--   goal_entries_goal_fk           NO ACTION: meta com registro não se apaga
 --
 -- Os gatilhos são BEFORE UPDATE e disparam em ordem alfabética de NOME. Onde
 -- dois pegariam a mesma mudança, o teste confere o assunto da mensagem e não
@@ -170,4 +174,256 @@ do $$ begin
   raise exception 'FALHOU: duas metas ocuparam a mesma casa da semana';
 exception when unique_violation then
   raise notice '14 OK  goals_one_per_slot_idx recusa duas metas na mesma casa';
+end $$;
+
+-- =============================================================================
+-- Gerar a semana (spec 04) — a semana 7 do plano do Bruno
+-- =============================================================================
+-- Cenário próprio, na semana 7, para não depender do que as suítes anteriores
+-- fizeram na 1. Só o caso 27 toca na semana 1, e vem por último porque apaga os
+-- estudos extras dela.
+-- =============================================================================
+reset role;
+select app_test.act_as_owner();
+
+insert into public.goals (
+  id, study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
+  day_position, type, subject, title, planned_minutes, status
+) values
+  ('a5000000-0000-4000-8000-000000000101','a2000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',
+   7,1,'Segunda',1,'theory','Ciências Forenses','Pendente',60,'pending'),
+  ('a5000000-0000-4000-8000-000000000102','a2000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',
+   7,1,'Segunda',2,'theory','Ciências Forenses','Em andamento com registro',60,'in_progress'),
+  ('a5000000-0000-4000-8000-000000000103','a2000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',
+   7,2,'Terça',1,'theory','Ciências Forenses','Concluída sem registro',60,'completed'),
+  ('a5000000-0000-4000-8000-000000000104','a2000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',
+   7,3,'Quarta',1,'theory','Ciências Forenses','Pulada',60,'skipped');
+
+insert into public.goal_entries (id, goal_id, teacher_id, student_id, minutes, questions, correct_answers) values
+  ('a6000000-0000-4000-8000-000000000102','a5000000-0000-4000-8000-000000000102',
+   '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',40,0,0);
+
+set role authenticated;
+
+-- ---------- Quem pode gerar ----------
+select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
+do $$ begin
+  perform public.generate_week('ad000000-0000-4000-8000-0000000000f1',
+    'a2000000-0000-4000-8000-000000000001', 7,
+    '[{"weekday":1,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"X","title":"Invasao","planned_minutes":60}]');
+  raise exception 'FALHOU: Davi gerou a semana de um aluno que nao e dele';
+exception when insufficient_privilege then
+  -- Davi nao enxerga as metas (RLS): a conferencia de que nada mudou e a previa
+  -- da Ana, no caso 17, que ainda conta 4.
+  raise notice '15 OK  professor alheio nao gera a semana';
+end $$;
+
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$ begin
+  perform public.generate_week('ad000000-0000-4000-8000-0000000000f2',
+    'a2000000-0000-4000-8000-000000000001', 7,
+    '[{"weekday":1,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"X","title":"Invasao","planned_minutes":60}]');
+  raise exception 'FALHOU: o aluno gerou a propria semana';
+exception when insufficient_privilege then
+  raise notice '16 OK  o aluno nao gera a propria semana';
+end $$;
+
+-- ---------- A prévia ----------
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_total integer; v_preservadas integer;
+begin
+  select goals_total, goals_preserved into v_total, v_preservadas
+    from public.week_replacement_preview('a2000000-0000-4000-8000-000000000001', 7);
+  if v_total <> 4 or v_preservadas <> 2 then
+    raise exception 'FALHOU: a previa contou (%, %), esperava (4, 2)', v_total, v_preservadas;
+  end if;
+  raise notice '17 OK  a previa conta a concluida e a com registro como preservadas';
+end $$;
+
+select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
+do $$ begin
+  perform * from public.week_replacement_preview('a2000000-0000-4000-8000-000000000001', 7);
+  raise exception 'FALHOU: Davi viu a previa da semana de outro professor';
+exception when insufficient_privilege then
+  raise notice '17 OK  professor alheio nao ve a previa';
+end $$;
+
+-- ---------- Falha no meio: a semana continua como estava (QA-05) ----------
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$ begin
+  perform public.generate_week('ad000000-0000-4000-8000-0000000000e1',
+    'a2000000-0000-4000-8000-000000000001', 7,
+    '[{"weekday":9,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"X","title":"Dia invalido","planned_minutes":60}]');
+  raise exception 'FALHOU: generate_week aceitou weekday 9';
+exception when check_violation then
+  null;
+end $$;
+do $$
+declare v_metas integer; v_registros integer; v_lotes integer;
+begin
+  select count(*) into v_metas from public.goals
+   where study_plan_id = 'a2000000-0000-4000-8000-000000000001' and week_number = 7;
+  select count(*) into v_registros from public.goal_entries
+   where goal_id = 'a5000000-0000-4000-8000-000000000102';
+  select count(*) into v_lotes from public.goal_batches
+   where id = 'ad000000-0000-4000-8000-0000000000e1';
+  if v_metas <> 4 or v_registros <> 1 or v_lotes <> 0 then
+    raise exception 'FALHOU: a falha deixou a semana em % metas, % registro(s), % lote(s)', v_metas, v_registros, v_lotes;
+  end if;
+  raise notice '18 OK  a gravacao que falha deixa a semana como estava';
+end $$;
+
+do $$
+declare v_metas integer;
+begin
+  begin
+    perform public.generate_week('ad000000-0000-4000-8000-0000000000e2',
+      'a2000000-0000-4000-8000-000000000001', 7, '[]');
+    raise exception 'FALHOU: generate_week aceitou semana vazia';
+  exception when raise_exception then
+    if sqlerrm not like '%ao menos uma meta%' then raise; end if;
+  end;
+  begin
+    perform public.generate_week('ad000000-0000-4000-8000-0000000000e3',
+      'a2000000-0000-4000-8000-000000000001', 0,
+      '[{"weekday":1,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"X","title":"S0","planned_minutes":60}]');
+    raise exception 'FALHOU: generate_week aceitou a semana 0';
+  exception when raise_exception then
+    if sqlerrm not like '%1 a 520%' then raise; end if;
+  end;
+  select count(*) into v_metas from public.goals
+   where study_plan_id = 'a2000000-0000-4000-8000-000000000001' and week_number = 7;
+  if v_metas <> 4 then
+    raise exception 'FALHOU: a recusa mexeu na semana (% metas)', v_metas;
+  end if;
+  raise notice '19 OK  semana vazia e semana fora de 1 a 520 sao recusadas sem tocar em nada';
+end $$;
+
+-- ---------- Gerar: sai o que não foi feito, fica o resto ----------
+do $$
+declare v_replay boolean; v_ficaram integer; v_sairam integer; v_seg integer; v_ter integer;
+begin
+  v_replay := public.generate_week('ad000000-0000-4000-8000-000000000001',
+    'a2000000-0000-4000-8000-000000000001', 7,
+    '[{"weekday":1,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"Ciências Forenses","title":"Nova de segunda","planned_minutes":60},
+      {"weekday":2,"weekday_name":"Terça-feira","day_position":1,"type":"theory","subject":"Ciências Forenses","title":"Nova de terça","planned_minutes":60}]');
+  select count(*) into v_ficaram from public.goals
+   where id in ('a5000000-0000-4000-8000-000000000102','a5000000-0000-4000-8000-000000000103');
+  select count(*) into v_sairam from public.goals
+   where id in ('a5000000-0000-4000-8000-000000000101','a5000000-0000-4000-8000-000000000104');
+  select day_position into v_seg from public.goals
+   where study_plan_id = 'a2000000-0000-4000-8000-000000000001' and week_number = 7 and title = 'Nova de segunda';
+  select day_position into v_ter from public.goals
+   where study_plan_id = 'a2000000-0000-4000-8000-000000000001' and week_number = 7 and title = 'Nova de terça';
+  if v_replay or v_ficaram <> 2 or v_sairam <> 0 then
+    raise exception 'FALHOU: replay %, ficaram %, sairam % (esperava false, 2, 0)', v_replay, v_ficaram, v_sairam;
+  end if;
+  if v_seg <> 3 or v_ter <> 2 then
+    raise exception 'FALHOU: posicoes % e % (esperava 3 e 2: depois da maior que sobrou)', v_seg, v_ter;
+  end if;
+  raise notice '20 OK  gerar preserva a concluida e a com registro, e posiciona depois da maior';
+end $$;
+
+-- ---------- O aluno registra na meta nova ----------
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$ begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
+  select g.id, g.teacher_id, g.student_id, 30, 0, 0 from public.goals g
+   where g.study_plan_id = 'a2000000-0000-4000-8000-000000000001' and g.week_number = 7
+     and g.title = 'Nova de segunda';
+  raise notice '21 OK  o aluno registra estudo na meta que acabou de ser gerada';
+end $$;
+
+-- ---------- O replay não reexecuta ----------
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_replay boolean; v_total integer;
+begin
+  v_replay := public.generate_week('ad000000-0000-4000-8000-000000000001',
+    'a2000000-0000-4000-8000-000000000001', 7,
+    '[{"weekday":1,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"Ciências Forenses","title":"Nova de segunda","planned_minutes":60},
+      {"weekday":2,"weekday_name":"Terça-feira","day_position":1,"type":"theory","subject":"Ciências Forenses","title":"Nova de terça","planned_minutes":60}]');
+  select count(*) into v_total from public.goals
+   where study_plan_id = 'a2000000-0000-4000-8000-000000000001' and week_number = 7;
+  if not v_replay or v_total <> 4 then
+    raise exception 'FALHOU: a retentativa reexecutou a geracao (replay %, % metas)', v_replay, v_total;
+  end if;
+  raise notice '22 OK  mesmo pedido depois de gravado devolve sem reexecutar';
+end $$;
+
+do $$ begin
+  perform public.generate_week('ad000000-0000-4000-8000-000000000001',
+    'a2000000-0000-4000-8000-000000000001', 8,
+    '[{"weekday":1,"weekday_name":"Segunda-feira","day_position":1,"type":"theory","subject":"X","title":"Outra semana","planned_minutes":60}]');
+  raise exception 'FALHOU: o mesmo id foi aceito para outra semana';
+exception when raise_exception then
+  if sqlerrm not like '%outra semana%' then raise; end if;
+  raise notice '23 OK  id reusado com outra semana e recusado';
+end $$;
+
+-- ---------- Uma segunda geração preserva a meta que ganhou registro ----------
+do $$
+declare v_total integer; v_titulos text;
+begin
+  perform public.generate_week('ad000000-0000-4000-8000-000000000002',
+    'a2000000-0000-4000-8000-000000000001', 7,
+    '[{"weekday":3,"weekday_name":"Quarta-feira","day_position":1,"type":"theory","subject":"Ciências Forenses","title":"Segunda geracao","planned_minutes":60}]');
+  select count(*), string_agg(title, ' | ' order by title) into v_total, v_titulos from public.goals
+   where study_plan_id = 'a2000000-0000-4000-8000-000000000001' and week_number = 7;
+  if v_total <> 4 or v_titulos like '%Nova de terça%' or v_titulos not like '%Nova de segunda%' then
+    raise exception 'FALHOU: depois da segunda geracao a semana tem % metas: %', v_total, v_titulos;
+  end if;
+  raise notice '24 OK  a meta nova que ganhou registro sobrevive a uma segunda geracao';
+end $$;
+
+-- ---------- O DELETE direto (o caminho do bundle antigo) não leva o estudo ----------
+do $$
+declare v_registros integer;
+begin
+  begin
+    delete from public.goals where id = 'a5000000-0000-4000-8000-000000000102';
+    raise exception 'FALHOU: o DELETE direto apagou meta com estudo registrado';
+  exception when foreign_key_violation then
+    null;
+  end;
+  select count(*) into v_registros from public.goal_entries
+   where goal_id = 'a5000000-0000-4000-8000-000000000102';
+  if v_registros <> 1 then
+    raise exception 'FALHOU: o registro da meta 0102 sumiu (% linhas)', v_registros;
+  end if;
+  raise notice '25 OK  goal_entries_goal_fk e no action: meta com registro nao se apaga';
+end $$;
+
+-- ---------- Limpar apaga o que gerar substituiria ----------
+do $$
+declare v_primeira integer; v_segunda integer; v_ficaram integer;
+begin
+  v_primeira := public.clear_pending_goals('a2000000-0000-4000-8000-000000000001', 7);
+  v_segunda  := public.clear_pending_goals('a2000000-0000-4000-8000-000000000001', 7);
+  select count(*) into v_ficaram from public.goals
+   where id in ('a5000000-0000-4000-8000-000000000102','a5000000-0000-4000-8000-000000000103');
+  if v_primeira <> 1 or v_segunda <> 0 or v_ficaram <> 2 then
+    raise exception 'FALHOU: limpar apagou % e depois %, e ficaram % (esperava 1, 0, 2)', v_primeira, v_segunda, v_ficaram;
+  end if;
+  raise notice '26 OK  limpar apaga so o pendente, e a segunda chamada apaga 0';
+end $$;
+
+-- ---------- Semana 1: a bateria e o registro ficam (por último) ----------
+do $$
+declare v_bateria integer; v_registro integer;
+begin
+  perform public.generate_week('ad000000-0000-4000-8000-000000000003',
+    'a2000000-0000-4000-8000-000000000001', 1,
+    '[{"weekday":5,"weekday_name":"Sexta-feira","day_position":1,"type":"theory","subject":"Ciências Forenses","title":"Sexta nova","planned_minutes":60}]');
+  select count(*) into v_bateria from public.goals where id = 'a5000000-0000-4000-8000-000000000001';
+  select count(*) into v_registro from public.goals where id = 'a5000000-0000-4000-8000-000000000002';
+  if v_bateria <> 1 or v_registro <> 1 then
+    raise exception 'FALHOU: gerar a semana 1 apagou a meta com bateria (%) ou com registro (%)', v_bateria, v_registro;
+  end if;
+  raise notice '27 OK  a meta com bateria e a com registro sobrevivem a gerar';
 end $$;

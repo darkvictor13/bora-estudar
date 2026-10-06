@@ -116,7 +116,8 @@ begin
     'study_plan_theory_catalogs_study_plan_fk',
     'study_plan_theory_catalogs_catalog_fk',
     'theory_progress_study_plan_fk',
-    'theory_reviews_study_plan_fk'
+    'theory_reviews_study_plan_fk',
+    'goal_batches_study_plan_fk'
   ] loop
     select array_length(conkey, 1) into v_colunas
       from pg_constraint where conname = v_nome and contype = 'f';
@@ -131,7 +132,7 @@ begin
   if v_simples <> '' then
     raise exception 'FALHOU: FK que precisa ser composta:%', v_simples;
   end if;
-  raise notice '06 OK  as catorze FKs compostas da auditoria continuam compostas';
+  raise notice '06 OK  as quinze FKs compostas da auditoria continuam compostas';
 end $$;
 
 -- ---------- Nada de `GRANT ALL` por default ----------
@@ -177,7 +178,8 @@ declare
   v_erro text := '';
 begin
   foreach v_nome in array array[
-    'find_student_by_email', 'link_student', 'set_student_access'
+    'find_student_by_email', 'link_student', 'set_student_access',
+    'generate_week', 'clear_pending_goals', 'week_replacement_preview'
   ] loop
     select p.oid into v_oid from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
@@ -208,7 +210,7 @@ begin
   if v_erro <> '' then
     raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
   end if;
-  raise notice '08 OK  as tres RPCs sao chamaveis so por authenticated, nominalmente';
+  raise notice '08 OK  as seis RPCs sao chamaveis so por authenticated, nominalmente';
 end $$;
 
 -- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
@@ -289,12 +291,93 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 50 or v_enums <> 20 or v_fks <> 90 or v_views <> 3 then
+  if v_tabelas <> 51 or v_enums <> 20 or v_fks <> 91 or v_views <> 3 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '13 OK  50 tabelas, 20 enums, 90 FKs e 3 views — como o de-para registra';
+  raise notice '13 OK  51 tabelas, 20 enums, 91 FKs e 3 views — como o de-para registra';
+end $$;
+
+-- ---------- Semana e minutos têm teto e piso no banco (spec 04, R-GEN-17) ----------
+do $$
+declare v_valor integer; v_minutos integer;
+begin
+  foreach v_valor in array array[0, 521] loop
+    begin
+      insert into public.goals (
+        study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
+        day_position, type, subject, title
+      ) values (
+        'a2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222', v_valor, 1, 'Segunda', 90, 'theory', 'X', 'Fora do intervalo');
+      raise exception 'FALHOU: goals aceitou week_number %', v_valor;
+    exception when check_violation then
+      null;
+    end;
+  end loop;
+  begin
+    insert into public.goals (
+      study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
+      day_position, type, subject, title, planned_minutes
+    ) values (
+      'a2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222', 1, 1, 'Segunda', 91, 'theory', 'X', 'Minutos negativos', -1);
+    raise exception 'FALHOU: goals aceitou planned_minutes negativo';
+  exception when check_violation then
+    null;
+  end;
+  raise notice '14 OK  goals recusa semana fora de 1 a 520 e minutos negativos';
+end $$;
+
+-- ---------- O estudo registrado não cai junto com a meta ----------
+do $$
+declare v_tipo "char";
+begin
+  select confdeltype into v_tipo from pg_constraint where conname = 'goal_entries_goal_fk';
+  if v_tipo is distinct from 'a' then
+    raise exception 'FALHOU: goal_entries_goal_fk tem confdeltype %, esperava a (no action)', v_tipo;
+  end if;
+  raise notice '15 OK  goal_entries_goal_fk e no action';
+end $$;
+
+-- ---------- Apagar a conta continua passando ----------
+-- NO ACTION confere no fim do comando: os cascades que descem de `profiles` ate
+-- `goals` E `goal_entries` no mesmo comando ja apagaram os registros quando a
+-- FK e conferida. Se este teste falhar, o no action nao basta (spec 04).
+do $$
+declare v_registros integer;
+begin
+  insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data) values
+    ('00000000-0000-0000-0000-000000000000','c1000000-0000-4000-8000-000000000001','authenticated','authenticated','prof-conta@x.com','{"name":"Professora Conta"}'),
+    ('00000000-0000-0000-0000-000000000000','c1000000-0000-4000-8000-000000000002','authenticated','authenticated','aluno-conta@x.com','{"name":"Aluno Conta"}');
+  update public.profiles set role = 'teacher', access_status = 'active'
+   where id = 'c1000000-0000-4000-8000-000000000001';
+  update public.profiles set teacher_id = 'c1000000-0000-4000-8000-000000000001',
+         access_status = 'active', access_expires_at = now() + interval '30 days'
+   where id = 'c1000000-0000-4000-8000-000000000002';
+  insert into public.study_plans (id, teacher_id, student_id, name, starts_on)
+  values ('c2000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001',
+          'c1000000-0000-4000-8000-000000000002','Plano da conta', current_date);
+  insert into public.goals (id, study_plan_id, teacher_id, student_id, week_number, weekday,
+                            weekday_name, day_position, type, subject, title)
+  values ('c3000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001',
+          'c1000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000002',
+          1, 1, 'Segunda', 1, 'theory', 'X', 'Meta da conta');
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes)
+  values ('c3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001',
+          'c1000000-0000-4000-8000-000000000002', 30);
+
+  delete from auth.users where id = 'c1000000-0000-4000-8000-000000000001';
+  select count(*) into v_registros from public.goal_entries
+   where goal_id = 'c3000000-0000-4000-8000-000000000001';
+  if v_registros <> 0 then
+    raise exception 'FALHOU: sobraram % registro(s) de uma professora apagada', v_registros;
+  end if;
+  delete from auth.users where id = 'c1000000-0000-4000-8000-000000000002';
+  raise notice '16 OK  apagar a conta continua descendo por metas e registros';
+exception when foreign_key_violation then
+  raise exception 'FALHOU: apagar a conta tropecou em goal_entries_goal_fk (no action nao basta): %', sqlerrm;
 end $$;

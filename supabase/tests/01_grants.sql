@@ -385,3 +385,19 @@ begin
   end loop;
   raise notice '33 OK  flashcard_marks: so posicao, ancora, estilo e cor no grant update';
 end $$;
+
+-- ---------- goal_batches: SELECT e nada mais (spec 04, R-GEN-21) ----------
+do $$
+declare v_privilegio text;
+begin
+  if not has_table_privilege('authenticated', 'public.goal_batches', 'select') then
+    raise exception 'FALHOU: authenticated nao le goal_batches';
+  end if;
+  foreach v_privilegio in array array['insert', 'update', 'delete']
+  loop
+    if has_table_privilege('authenticated', 'public.goal_batches', v_privilegio) then
+      raise exception 'FALHOU: authenticated tem % em goal_batches', v_privilegio;
+    end if;
+  end loop;
+  raise notice '34 OK  goal_batches e so leitura: quem escreve e generate_week';
+end $$;

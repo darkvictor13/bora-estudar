@@ -251,3 +251,37 @@ begin
   end if;
   raise notice '17 OK  turma e do professor que a criou';
 end $$;
+
+-- ---------- goal_batches: só o professor dono enxerga o lote ----------
+-- Davi (a sessão atual) e Bruno contam 0; Ana, dona do plano, conta 1.
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.goal_batches;
+  if v_total <> 0 then
+    raise exception 'FALHOU: Davi enxergou % lote(s) de geracao da Ana', v_total;
+  end if;
+  raise notice '18 OK  goal_batches: professor alheio conta 0';
+end $$;
+
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.goal_batches;
+  if v_total <> 0 then
+    raise exception 'FALHOU: o aluno enxergou % lote(s) de geracao', v_total;
+  end if;
+  raise notice '18 OK  goal_batches: o aluno conta 0';
+end $$;
+
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.goal_batches;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Ana enxergou % lote(s), esperava 1', v_total;
+  end if;
+  raise notice '18 OK  goal_batches: a dona do plano conta 1';
+end $$;
