@@ -202,12 +202,12 @@ diff mostra a omissão.
 |---|---|
 | F-META-01 | os quatro números do cabeçalho saem dos REGISTROS, não das metas |
 | F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona |
-| F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam |
+| F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam; rede caindo mostra "Sem conexão", e a retentativa no mesmo diálogo grava uma vez — QA-06 |
 | F-META-04 | concluir e reabrir devolve o estado que os registros justificam |
 | F-META-05 | meta de bateria não se mexe pela tela |
 | F-META-06 | aluno sem planejamento ativo: as três telas explicam em vez de quebrar |
 | F-META-07 | planejamento em rascunho é o mesmo que nenhum |
-| F-EXTRA-01 | estudo fora das metas: cria meta e registro numa operação só |
+| F-EXTRA-01 | estudo fora das metas: cria meta e registro numa operação só; falha que LANÇA não prende o diálogo — N-01 |
 | F-PLAN-01 | o planejamento como o aluno o vê: identidade, números e ciclo por peso |
 | F-DISC-01 | disciplinas e blocos, só leitura |
 | F-ALU-01 | todas as telas do aluno abrem — `tests/student.spec.ts` |
@@ -311,7 +311,7 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 
 | Id | Cobre |
 |---|---|
-| F-OBS-01 | no ambiente local nada sai para o serviço de relato, nem na navegação normal nem na rota que falha |
+| F-OBS-01 | no ambiente local nada sai para o serviço de relato, nem na navegação normal nem na rota que falha; nem quando uma escrita cai na rede |
 
 **Este id não tem spec, e é a exceção que a regra abaixo tolera.** Relato de
 erro não é comportamento de produto: não há tela a descrever nem regra de
