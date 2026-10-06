@@ -330,6 +330,46 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
   });
 });
 
+/**
+ * QA-02: `/confirmar` repassava qualquer `?next=` que começasse com `/` e não
+ * com `//`. `/\\host` e `/<TAB>/host` passavam, e o navegador os lê como outro
+ * site. O quarto, `/.//host`, é a armadilha da correção ingênua: normalizado,
+ * vira `//host`, e já passa hoje porque o `redirect` recebe o texto cru.
+ */
+test.describe("F-AUTH-14 · /confirmar não manda para fora do site — QA-02", () => {
+  const payloads: Array<[string, string]> = [
+    ["barra invertida", "/\\evil.example/x"],
+    ["TAB entre as barras", "/\t/evil.example/x"],
+    ["duas barras invertidas", "/\\\\evil.example"],
+    ["ponto entre as barras", "/.//evil.example/x"],
+  ];
+
+  for (const [nome, payload] of payloads) {
+    test(`${nome} termina em /redefinir-senha`, async ({ page }) => {
+      const saidas: string[] = [];
+      // Responde em vez de abortar: se a correção regredir, o teste falha em
+      // `toHaveURL` com a URL de fora na mensagem, e não num erro genérico.
+      await page.route(
+        (url) => url.hostname === "evil.example",
+        async (route) => {
+          saidas.push(route.request().url());
+          await route.fulfill({
+            status: 200,
+            contentType: "text/html",
+            body: "<h1>SITE EXTERNO</h1>",
+          });
+        },
+      );
+
+      await page.goto(`/confirmar?next=${encodeURIComponent(payload)}`);
+
+      await expect(page).toHaveURL(/\/redefinir-senha$/);
+      await expect(alert(page, "warning")).toContainText("Este link expirou ou já foi usado");
+      expect(saidas).toEqual([]);
+    });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // §1 — senha visível.
 // Spec docs/specs/29-sidebar-e-senha-visivel.md
