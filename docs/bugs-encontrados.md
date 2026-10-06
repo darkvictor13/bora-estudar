@@ -610,3 +610,144 @@ memória antiga o alerta nunca aparece e o botão não volta.
 e a chave é liberada —, e `settle` faz o mesmo para a escrita fora de `once`: `joinWaitlist`,
 `saveReviewSpacing`, `setClassTheoryCatalog`, `enrollStudent`, `clearPendingGoals`, as quatro de simulado e
 `saveAccount`. O throw que escapa é relatado por `recoverThrown`, com a causa, se for `unknown`.
+
+*(Atualização do PR 5a: `recordExtraStudy` deixou de chamar `requireSession`, então o F-EXTRA-01 passou a derrubar
+a leitura do `starts_on` do plano — o postgrest-js repete o GET que falha por rede, e o teste derruba enquanto a
+rede "cai". O throw de dentro do `once()` já não tem caminho nessa tela, e quem o segura é
+`request-memory.test.ts`.)*
+
+---
+
+### QA-04 · ALTO · Registrar estudo duplica na retentativa (parcial: a teoria é o 5b)
+
+`recordStudy` eram dois pedidos (INSERT em `goal_entries`, UPDATE `pending` → `in_progress`) e `recordExtraStudy`
+três (meta, registro e um DELETE de compensação). A única defesa era `once()`, que esquece a chave quando a
+tentativa falha: o servidor gravava, a resposta se perdia, e a nova tentativa gravava de novo. `goal_entries` não
+tinha `request_id`.
+
+**Reproduzir** deixar o servidor gravar e derrubar a resposta, uma vez, em `rpc/record_goal_entry` e em
+`rpc/record_extra_study` (F-META-03 e F-EXTRA-01; `03_goals` casos 32 a 38).
+
+**Correção** migration `20261006224256_student_study_entries`: `goal_entries.request_id`, índice único
+`goal_entries_request_uidx`, e as RPCs `record_goal_entry` e `record_extra_study`, uma transação cada, que travam
+a meta (ou o plano) ANTES de buscar a chave e comparam as colunas do registro. Mesma chave com outra carga é
+`23505`, e a tela diz "Este estudo já foi registrado com outros valores". Spec 12, R-CONC-21 e R-CONC-22; spec
+19, R-EXTRA-25. **Parcial:** `recordInitialQuestions` e `recordReviewQuestions` (teoria) ainda leem, somam e gravam
+um contador, e o INSERT direto do aluno continua aceito — são os PRs 5b e 5c.
+
+---
+
+### QA-07 · ALTO · Aluno com o acesso vencido conclui, pula e apaga (e N-05)
+
+`goals_update` não chamava `has_active_access()`, então concluir, reabrir e pular — todos UPDATE direto — passavam
+com o acesso vencido. `goals_delete` e `goal_entries_delete` também não chamavam, e o aluno vencido apagava
+registro de estudo e meta extra (N-05).
+
+**Reproduzir** suspender o acesso depois de abrir a semana e clicar na caixa da meta (F-META-08; `03_goals` casos
+29 e 30).
+
+**Correção** `has_active_access()` no `WITH CHECK` de `goals_update` e no `USING` de `goals_delete` e de
+`goal_entries_delete`. O UPDATE barrado levanta `42501`; o DELETE barrado afeta zero linhas, e `removeStudyEntry`
+passou a contar com `count: "exact"` — sem isso a tela fingia sucesso. Spec 12, R-CONC-24.
+
+---
+
+### QA-10 · MÉDIO · O registro de estudo aceita qualquer número
+
+`goal_entries` não tinha CHECK, e a tela convertia com `Number(x) || 0`, que deixa passar -30, 1.5 e 1e3. A
+validação morava no adaptador, com outra frase na fixture. No banco local do QA havia 8 registros fora da regra
+(-30, 1000 e 14400 minutos, questões negativas).
+
+**Reproduzir** gravar -30, 241 e 1.5 minutos (F-META-03; `07_schema` caso 19).
+
+**Correção** `checkStudyEntry` em `validation.ts` (0 a 240 minutos, 0 a 500 questões, acertos até o total, não
+tudo zero), chamada pelas duas implementações, e as CHECKs `goal_entries_minutes_check`, `_questions_check`,
+`_correct_answers_check` e `_not_empty_check`. `parseCount` entrega o texto inválido como `NaN` à validação. A
+migration apagou os registros fora da regra. Spec 12, R-CONC-23.
+
+---
+
+### QA-11 · MÉDIO · A data do estudo extra não tem limite
+
+`weekNumberOf` põe qualquer data anterior ao início na semana 1, e não havia teto: um extra para 2031 criava a
+meta da "semana 222".
+
+**Reproduzir** lançar um extra com a data antes do `starts_on` e com amanhã (F-EXTRA-01).
+
+**Correção** `checkExtraStudyDate` (de `starts_on` até hoje, no fuso do aparelho) e, no banco, `record_extra_study`
+recusa fora de `[starts_on, hoje em UTC+14]` com `23514`. O teto do servidor é "já é hoje em algum lugar do
+planeta": ele não conhece o fuso do aparelho. Spec 19, R-EXTRA-20 e R-EXTRA-22.
+
+---
+
+### QA-14 · BAIXO · "Semana inteira" sugere a segunda-feira, não hoje
+
+Com `?dia=todos` o botão "Estudo extra" sugeria `weekOf.startsOn`, e o caminho do cronômetro
+(`?estudoExtra=cronometro`) fazia o mesmo.
+
+**Reproduzir** abrir `/aluno?dia=todos` no meio da semana e clicar em "Estudo extra" (F-EXTRA-01).
+
+**Correção** `defaultExtraDate`, em `lib/domain/week.ts`: o dia escolhido, se está na semana e não passa de hoje;
+senão hoje; na semana passada, o primeiro dia dela. O `?dia=` do cronômetro só vale se for uma data da semana
+vista. Spec 19, R-EXTRA-26.
+
+---
+
+### QA-27 · BAIXO · O diálogo de estudo extra escreve durante o render
+
+`ExtraStudyDialog` chamava `pauseStudyTimerForRecord()` no inicializador do `useState`: a função grava no
+`localStorage` e dispara o evento da `StudyTimerBar`, e o React acusava "Cannot update a component
+(`StudyTimerBar`) while rendering…" em todo abrir do diálogo. O PR 4 já tinha deixado a asserção do F-EXTRA-01
+frouxa por causa disso.
+
+**Reproduzir** abrir `/aluno?estudoExtra=cronometro` com o cronômetro correndo (F-EXTRA-01).
+
+**Correção** o inicializador só LÊ; pausar vai para um efeito de montagem (`pauseStudyTimer`, idempotente). Junto,
+D-16: Cancelar, o fundo e o Esc retomam o cronômetro (`resumeStudyTimer`), e lançar o consome. `pauseTimer` e
+`resumeTimer` são funções puras em `study-timer.ts`. O F-EXTRA-01 passou a exigir `consoleErrors` vazio.
+Spec 19, R-EXTRA-27.
+
+---
+
+### QA-28 · MÉDIO · O aluno escreve o resultado da meta
+
+O grant de UPDATE de `goals` inclui `spent_minutes`, `questions_answered` e `correct_answers`, e
+`protect_goal_planning_fields` não as congelava: um PATCH pela API gravava `correct_answers = 999` numa meta de
+teoria. Ninguém mais escreve essas colunas — o bundle não as lê nem as escreve, e as RPCs de bateria nunca foram
+portadas.
+
+**Reproduzir** `update goals set correct_answers = 5` como o aluno, numa meta sem bateria (`03_goals` caso 28).
+
+**Correção** o gatilho recusa as três colunas para quem não é o professor, em meta SEM `notebook_block_id` (a de
+bateria continua de `protect_goal_quiz_result`, que dispara depois). A migration zerou as que já estavam
+escritas. O teste 08 de `03_goals`, que gravava `spent_minutes` como aluno, foi corrigido. Spec 12, R-CONC-25.
+
+---
+
+### N-02 · MÉDIO · Não cabe um segundo estudo extra no mesmo dia
+
+Todo extra nascia com `day_position = 99`, e `goals_one_per_slot_idx` é único por (plano, semana, dia, posição): o
+segundo extra do dia batia em `23505`.
+
+**Reproduzir** lançar dois extras com a data sugerida (F-EXTRA-01; `03_goals` caso 37).
+
+**Correção** `record_extra_study` calcula `max(day_position) + 1` do dia, com o plano travado. Spec 19, R-EXTRA-20.
+
+---
+
+### N-07 · MÉDIO · O extra de ontem conta como estudo de hoje
+
+O registro só tinha `created_at = now()`, e série, sequência, calendário e estatísticas agrupam por ele: a meta ia
+para o dia escolhido, e o registro para o dia do lançamento.
+
+**Reproduzir** lançar um extra com a data de ontem e olhar a semana e a série por dia (F-EXTRA-01, F-EST-01;
+`12_student_question_comparison` e as duas seguintes).
+
+**Correção** `goal_entries.studied_on` (nulo = o dia local de `created_at`), escrito só por `record_extra_study`,
+e `entryDay` (`lib/domain/schedule.ts`) como a única função que calcula o dia de um registro: a sequência da
+semana, o calendário, o desempenho do dia, as séries por dia e por mês e o recorte por ano a usam. As três funções
+de comparação por ano leem `coalesce(studied_on, dia UTC de created_at)`. A "última atividade" do professor
+continua sendo `created_at`: é um instante, mostrado com hora. A migration preencheu `studied_on` dos extras já
+lançados por heurística (meta `extra` concluída, título do diálogo, registro até 60 s depois da meta). Spec 19,
+R-EXTRA-28; spec 25, nota do topo.
+

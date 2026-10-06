@@ -7,7 +7,7 @@
 | Bugs | QA-04 (registro e estudo extra; a teoria é o 5b), QA-07, QA-10, QA-11, QA-14, QA-27, QA-28, N-02, N-05, N-07 (o extra conta no dia em que foi lançado, não no dia escolhido; decisão do usuário de 06/10/2026) |
 | Branch | `fix/qa-5a-registro-de-estudo` |
 | Depende de | PR 1, PR 3 e PR 4 mergeados na `main`. 1 e 3 pela fila de migration; o 4 pela tradução de erro (`""` → `offline`, `23514`/`22P02`/`22003`/`23502` → `validation`) e pelo `once()` que limpa a chave quando a tentativa lança |
-| Migration | sim, uma: `supabase migration new student_study_entries` |
+| Migration | sim, uma: `supabase migration new student_study_entries` (gerou `20261006224256_student_study_entries.sql`) |
 
 ## O defeito
 
@@ -430,7 +430,7 @@ grant execute on function public.record_extra_study(…) to authenticated;
 --      student_subject_peer_comparison     20260930110000:57 e :75
 ```
 
-Antes de escrever o comentário de dados, rode o SELECT da condição do passo 1 no banco local. Em 06/10/2026 deu 8 registros e 1 meta. Rode também o `select` de `extra_days`: deu 26 registros, 2 deles no futuro. O comentário registra as duas contagens.
+Antes de escrever o comentário de dados, rode o SELECT da condição do passo 1 no banco local. Em 06/10/2026 deu 8 registros e 1 meta. Rode também o `select` de `extra_days`: deu 26 registros, 2 deles no futuro. O comentário registra as duas contagens. **Na implementação o banco local já tinha sido recriado** (0 e 0), e o comentário atribui os números ao banco do QA; a limpeza e o backfill foram exercitados com dado sujo inserido à mão no schema anterior (`supabase db reset --version 20261006221607`, inserts, `supabase migration up`), e cada execução imprime o que apagou num `raise notice`.
 
 Depois: `npm run db:types` e commite `packages/database/src/schema.gen.ts`.
 
@@ -511,7 +511,7 @@ Ver **Testes**. Rode `npm run db:test` e, depois dele, `npm run db:reset`.
   As aspas em volta do instante são a forma do PostgREST para valor com `.` e `:` dentro de árvore lógica. Confira contra o banco local antes de seguir.
 - **`supabase/teacher-students.ts:133-137`** (última atividade) **não muda**: ver a escolha 9.
 
-**`supabase/errors.ts`:** `case "P0002"` vira `{ code: "not_found", message: "Registro não encontrado." }`, com o caso em `errors.test.ts`.
+**`supabase/error-translation.ts`** (o `translateDbError` mora aí desde o PR 4, e não em `errors.ts`): `case "P0002"` vira `{ code: "not_found", message: "Registro não encontrado." }`, ao lado de `PGRST116`, com o caso em `error-translation.test.ts`.
 
 **`supabase/idempotency.ts`:** o comentário passa a dizer que `once()` é a defesa contra clique duplo e que a de verdade é `goal_entries_request_uidx`.
 
@@ -535,7 +535,7 @@ Ver **Testes**. Rode `npm run db:test` e, depois dele, `npm run db:reset`.
 
 **`Overview.tsx`**
 
-- Monte `<RecordStudyDialog key={recording?.id ?? "closed"} …>`. Cada abertura gera um `requestId` novo, e a retentativa dentro do mesmo diálogo continua com o mesmo.
+- Monte `<RecordStudyDialog key={`record-${recording?.id ?? "closed"}`} …>` (o prefixo é necessário: o `TheoryDialog` irmão já usa a chave `"closed"` na mesma lista, e o React acusa duplicata). Cada abertura gera um `requestId` novo, e a retentativa dentro do mesmo diálogo continua com o mesmo.
 - O botão "Estudo extra" (`:311`) passa a usar `defaultExtraDate(week, interactive ? selectedDate : null, today)`.
 - O inicializador do caminho do cronômetro (`:144-148`) também. O `?dia=` só vale se for data ISO dentro de `[week.startsOn, week.endsOn]`.
 - Passe ao diálogo `minDate={plan.startsOn}` e `maxDate={today}`.
@@ -569,7 +569,7 @@ Ver **Testes**. No mesmo commit:
 
 **`CLAUDE.md`**
 
-- **"Toda RPC mutante…".** As RPCs passam a ser quatro: `record_goal_entry` e `record_extra_study` entram na forma 1, sustentadas por `goal_entries_request_uidx`, com o payload sendo as colunas do registro.
+- **"Toda RPC mutante…".** As RPCs passam a ser sete (eram cinco depois dos PRs 1 e 3): `record_goal_entry` e `record_extra_study` entram na forma 1, sustentadas por `goal_entries_request_uidx`, com o payload sendo as colunas do registro.
 - **Tabela da fronteira.** A linha de `goal_entries`: o aluno escreve por essas RPCs; o INSERT direto ainda é aceito, até o 5c; apagar exige acesso vigente; `request_id`, `studied_on` e `created_at` ficam fora do grant.
 - **Seção "A extensão foi removida".** A frase diz que `start_quiz_session`, `finish_quiz_session`, `record_quiz_session_time` e `void_quiz_session` "ficaram de pé". Está errada: elas nunca foram portadas, como diz `docs/arquitetura.md:128-133`. Corrija.
 
@@ -603,19 +603,19 @@ Primeiro, atualize o cabeçalho com as defesas novas e conserte o que quebra:
 - **Teste 08** (`:100-105`). Bruno grava `spent_minutes = 45`, o que agora levanta exceção. Tire `spent_minutes` da linha: o teste afirma só `status` e `completed_at`.
 - **Teste 10** continua esperando `%motor de baterias%`, e passa porque o bloco novo ignora meta com caderno.
 
-Casos novos, numerados a partir de 15:
+Casos novos. **A numeração é a partir de 28, e não de 15:** o PR 1 já usou 15 a 27 (gerar a semana), e a documentação cita esses casos pelo número (`03_goals` casos 18, 20 e 22). O bloco vem DEPOIS do caso 27, que apaga os estudos extras da semana 1 (`a5…03` e `a5…06` deixam de existir), e por isso usa cenário próprio na semana 8, criado como dono, e limpa o que criou no fim:
 
-1. **Gatilho (QA-28).** Bruno altera `spent_minutes`, `questions_answered` e `correct_answers` em `a5…02` (teoria do professor) e em `a5…03` (o extra dele): exceção `%resultado da meta%`.
+1. **Gatilho (QA-28).** Bruno altera `spent_minutes`, `questions_answered` e `correct_answers` em `a5…02` (teoria do professor) e num extra dele da semana 8 (`a5…0203`): exceção `%resultado da meta%`.
 2. **Acesso vencido no UPDATE (QA-07).** Fabi (vencida) conclui `a5…05`, e depois pula a mesma meta: `insufficient_privilege` nos dois.
 3. **Acesso vencido no DELETE (N-05).**
-   - Como dono (`reset role` e `act_as_owner`), crie um registro de Fabi em `a5…05` e uma meta `extra` dela.
+   - Como dono (`reset role` e `act_as_owner`), crie um registro de Fabi em `a5…05` e uma meta `extra` dela (`a5…0205`, semana 8).
    - Como Fabi, apague os dois: `row_count = 0` e as linhas continuam lá.
 4. **INSERT direto, compatibilidade com o bundle no ar.** Bruno insere em `goal_entries` direto e é aceito. Comentário: "sai no 5c".
-5. **`record_goal_entry`**, com Bruno em `a5…03`, que está `pending`:
+5. **`record_goal_entry`**, com Bruno numa meta de teoria `pending` da semana 8 (`a5…0201`):
    - a primeira chamada devolve um id, deixa uma linha com aquele `request_id` e põe a meta em `in_progress`;
    - a mesma chamada de novo devolve o mesmo id e continua com 1 linha;
    - mesma chave com `p_minutes` diferente: `unique_violation`;
-   - mesma chave com `p_goal_id = a5…02`: `unique_violation`;
+   - mesma chave com outra meta (`a5…0202`): `unique_violation`;
    - Carla usando a chave de Bruno na meta dela: `unique_violation`, sem vazar nada;
    - Bruno na meta de bateria `a5…01`: `raise_exception` `%bateria%`;
    - Bruno na meta de Carla `a5…04`: `no_data_found`;
@@ -634,7 +634,7 @@ Casos novos, numerados a partir de 15:
 
 **`07_schema.sql`**
 
-- Teste 08: acrescente `record_goal_entry` e `record_extra_study` ao array (`:179-181`) e ajuste o texto do `notice`.
+- Teste 08: acrescente `record_goal_entry` e `record_extra_study` ao array e ajuste o texto do `notice` ("as nove RPCs"). Os blocos novos são os casos 19 (CHECKs), 20 (`studied_on`) e 21 (`request_id` único, e nulo repete).
 - Bloco novo das CHECKs. Como dono, insira em `goal_entries` com `minutes` −1 e 241, `questions` 501, `correct_answers` maior que `questions` e tudo zero. Cada um precisa dar `check_violation`; senão, `raise exception 'FALHOU…'`.
 - No mesmo bloco, `goal_entries_studied_on_check`: como dono, `studied_on = current_date + 3` com `created_at` padrão dá `check_violation`.
 - O contador do de-para não muda: nenhuma tabela, enum, FK ou view nova.
@@ -667,7 +667,7 @@ Rodam no runner nativo do Node 24, por `npm run check`.
   - **N-07:** um extra em `"2026-09-10"` (depois de `PLAN.startsOn` e antes de `TODAY`) faz `loadStudyDays(2026)` incluir `"2026-09-10"`.
 - **`schedule.test.ts`:** `entryDay` devolve `studiedOn` quando há, e o mesmo que `localDate(new Date(createdAt))` quando é nulo. `dailyQuestionPerformance` põe o registro com `studiedOn` de ontem no dia de ontem, e não no de hoje.
 - **`question-performance.test.ts`:** `questionsByDay` agrupa pelo `studiedOn`.
-- **`errors.test.ts`:** `P0002` dá `not_found`.
+- **`error-translation.test.ts`:** `P0002` dá `not_found`.
 
 ### E2E
 
@@ -698,6 +698,7 @@ Rodam no runner nativo do Node 24, por `npm run check`.
 
 **F-EXTRA-01**
 
+- **N-01 (ajuste do teste que o PR 4 deixou).** `recordExtraStudy` deixa de chamar `requireSession`, e o teste que derrubava `/auth/v1/user` perde o caminho. Ele passa a derrubar a leitura do `starts_on` (`rest/v1/study_plans`) ENQUANTO a rede "cai": o postgrest-js repete o GET que falha por rede, com espera de 1, 2 e 4 s, e abortar só a primeira tentativa não derrubaria nada. O throw de dentro do `once()` fica coberto só por `request-memory.test.ts`.
 - **N-02, dois extras no mesmo dia.**
   - Lance dois extras seguidos, com matérias diferentes, aceitando a data sugerida.
   - O banco tem 2 metas `extra` no plano, com `day_position` distintos.

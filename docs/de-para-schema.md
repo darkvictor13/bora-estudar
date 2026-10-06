@@ -448,6 +448,8 @@ linha:
 | `fase_teoria` | `theory_stage` | vira o enum `theory_stage` |
 | `observacao` | `note` |  |
 | `created_at` | `created_at` |  |
+| — | `request_id` | nova (QA de 06/10/2026): a chave de retentativa de `record_goal_entry` e `record_extra_study`, com índice único. Nula nos registros anteriores |
+| — | `studied_on` | nova: o dia escolhido no estudo extra; nulo = o dia local de `created_at`. Escrita só pelas RPCs |
 
 ### `teoria_aulas` → `theory_lessons`
 
@@ -924,7 +926,14 @@ de cartão — e quatro policies. A coluna **06/10** acrescenta `20261006214424`
 `goals` e uma em `goal_batches`, a FK `goal_entries_goal_fk` recriada em `no
 action`, e cinco funções — `generate_week`, `clear_pending_goals` e
 `week_replacement_preview` em `public`, `goal_is_preserved` e
-`check_goal_batch_replay` em `app_private`. Nenhum enum novo. É a
+`check_goal_batch_replay` em `app_private`. Nenhum enum novo. A mesma coluna
+conta `20261006221607` (QA-03), o índice `study_plans_one_active_per_student_uidx`
+e `activate_study_plan`, e `20261006224256` (QA-04 e o resto do PR 5a): duas
+colunas em `goal_entries` (`request_id` e `studied_on`), cinco CHECKs, o índice
+único `goal_entries_request_uidx`, quatro funções — `record_goal_entry` e
+`record_extra_study` em `public`, `replay_goal_entry` e `replay_extra_study` em
+`app_private` — e três policies alteradas (`goals_update`, `goals_delete`,
+`goal_entries_delete`), sem policy nova. É a
 última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
@@ -932,15 +941,15 @@ foram conferidas de novo antes de medir a 30/09.
 | | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 | 06/10 |
 |---|---|---|---|---|---|---|---|---|
 | Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 | 51 / 51 |
-| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 520 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 522 |
 | Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 | 120 |
 | Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 | 20 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 132 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 137 |
 | Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 | 91 |
-| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 161 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 163 |
 | Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 | 3 |
 | Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 | 51 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 34 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 39 |
 | Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 

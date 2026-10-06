@@ -79,7 +79,8 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | | Quem escreve | Como |
 |---|---|---|
 | `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan` |
-| `goal_entries`, `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
+| `goal_entries` | o aluno, com acesso vigente | **registrar** por `record_goal_entry` e `record_extra_study` (o INSERT direto ainda é aceito, até o 5c); apagar exige acesso vigente e é direto; `request_id`, `studied_on` e `created_at` ficam fora do grant de INSERT, e quem os escreve são as RPCs |
+| `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
 | `profiles.access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: `link_student` e `set_student_access` |
@@ -137,7 +138,8 @@ em qualquer tabela nova:
 **`DELETE` é concedido, e quem o restringe é a policy.** Mudou em 14/09/2026: o
 schema anterior não concedia DELETE em lugar nenhum e removia por `deleted_at`.
 Hoje o professor apaga o que planejou, o aluno apaga só o que ele mesmo criou
-(`goals_delete` decide pelo `type`), e o que não pode sumir do histórico —
+(`goals_delete` decide pelo `type`) e só com o acesso vigente (desde 06/10/2026,
+em `goals_delete` e `goal_entries_delete`), e o que não pode sumir do histórico —
 `profiles`, `quiz_sessions`, o ledger, `access_grants`, `catalog_blocks`,
 `coupons` — simplesmente não tem DELETE para `authenticated`. Caderno continua
 sendo removido por marca (`study_plan_notebooks.deleted`), porque meta antiga
@@ -158,10 +160,11 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** As cinco que existem —
+**Toda RPC mutante precisa ser segura a retentativa.** As sete que existem —
 `link_student` e `set_student_access`, de `20260918120000`, mais `generate_week`
-e `clear_pending_goals`, de `20261006214424`, e `activate_study_plan`, de
-`20261006221607` — nasceram assim, uma em cada forma:
+e `clear_pending_goals`, de `20261006214424`, `activate_study_plan`, de
+`20261006221607`, e `record_goal_entry` e `record_extra_study`, de
+`20261006224256` — nasceram assim, uma em cada forma:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
@@ -174,6 +177,12 @@ e `clear_pending_goals`, de `20261006214424`, e `activate_study_plan`, de
   diz o que foi gerado.
   `quiz_sessions.finish_request_id` (UNIQUE) e `finish_payload` são as colunas
   que o schema reserva para a próxima.
+  **`record_goal_entry` e `record_extra_study` também**: `goal_entries.request_id`
+  é UNIQUE (`goal_entries_request_uidx`), e o payload são as colunas do próprio
+  registro — mais as da meta, no extra, `studied_on` incluída. A trava vem ANTES
+  da busca pela chave (`for no key update` na meta ou no plano), e a busca vem
+  ANTES da checagem de acesso: se a primeira tentativa gravou e o acesso venceu em
+  seguida, a retentativa responde "gravado".
 - **Naturalmente idempotente** — `link_student` não recebe `request_id`, porque
   não há payload a comparar: o único parâmetro já é a identidade do alvo. Quem
   garante é a COLUNA `profiles.teacher_id`, que cabe um valor só, com a escrita
@@ -282,9 +291,12 @@ catálogo que alimentavam o payload (`getBlockQuestions`, `getQuestionHistory`).
 
 O que **ficou de pé**, e é onde uma execução nova se apoia:
 
-- **o banco inteiro** — `quiz_sessions`, o ledger `quiz_session_questions`,
-  `start_quiz_session`, `finish_quiz_session`, `record_quiz_session_time` e
-  `void_quiz_session`. Nenhuma migration foi escrita para desfazer nada;
+- **o banco da bateria** — `quiz_sessions`, o ledger `quiz_session_questions` e
+  os gatilhos que protegem o resultado da meta de bateria. **As RPCs nunca
+  foram portadas** para o schema de 14/09/2026: `start_quiz_session`,
+  `finish_quiz_session`, `record_quiz_session_time` e `void_quiz_session` não
+  existem em `pg_proc` (`docs/arquitetura.md` diz o mesmo), e o tempo da bateria
+  mora em `quiz_sessions.duration_minutes`, nunca em `goal_entries`;
 - **o fechamento da bateria na tela do aluno** — registrar tempo e cancelar,
   que é o que destrava um planejamento com sessão aberta;
 - **o caderno de erros e o reforço**, que linkam para o TEC como páginas
