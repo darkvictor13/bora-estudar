@@ -357,13 +357,27 @@ de modelo. Já confirmados:
   entrar em lista de dependências de efeito sem provocar laço — e guardá-los em
   ref escrito durante o render é o que o React Compiler recusa.
 
-**O `redirect` do router descarta o fragmento.** Um redirecionamento HTTP
-preserva o `#` por conta do navegador; este monta a URL nova só com o caminho.
-`requireSession` concatena `location.hash` de propósito. O motivo original era
-a volta do TEC com a sessão expirada, em que o fragmento era a única cópia do
-resultado da bateria; esse caminho saiu com a extensão, mas a concatenação fica
-— descartar fragmento num redirecionamento de login é perda de estado em
-qualquer rota que venha a usá-lo.
+**O `redirect` do router descarta o fragmento, e o destino vai em `?next=`.**
+Um redirecionamento HTTP preserva o `#` por conta do navegador; este monta a URL
+nova só com o caminho. `requireSession(request)` põe o destino — `pathname +
+search` de `request.url` — em `/entrar?next=…`, e o fragmento vai DENTRO do
+`next`, **só na primeira carga**: `request.url` nunca traz `#`, e numa navegação
+do cliente `location` ainda é a tela de onde a pessoa saiu, cujo fragmento não é
+deste destino (e ler o caminho dele devolveria o login à tela errada). O motivo
+original do fragmento era a volta do TEC com a sessão expirada; esse caminho
+saiu com a extensão, mas o cuidado fica — descartar estado num redirecionamento
+de login vale para qualquer rota. As três guardas (`requireSession`,
+`requireRole`, `requireStudentAccess`) recebem o `request` OBRIGATÓRIO: o
+redirect do loader MAIS FUNDO vence, então se só o layout montasse o `next`, o
+da página redirecionaria sem ele. O filtro do `next` é `safeInternalPath`, em
+`landAfterAuth` e em `signInLoader`, e NÃO em `useFormActionState`:
+`updatePassword` devolve `/entrar` legitimamente.
+
+**Rota de layout sem caminho não revalida quando só o filho muda.** O layout do
+aluno declara `shouldRevalidate` (`defaultShouldRevalidate || troca de
+pathname`) para a barra acompanhar liberar e bloquear sem F5. Declarar DESLIGA o
+padrão inteiro, e o `||` é o que mantém o `revalidate()` de "Salvar" em Meus
+dados atualizando o nome na barra.
 
 **Vite só injeta variável de ambiente com prefixo `VITE_`,** e só quando o
 acesso é literal: `import.meta.env.VITE_X`. Indexar por variável compila para
@@ -509,6 +523,18 @@ integração seria um segundo reescrever — de telas, não de adaptadores.
   nascer sem tela.
 - **`fixtures.test.ts` é a especificação executável do contrato.** Cada
   asserção é uma promessa que o adaptador do Supabase vai ter de cumprir igual.
+
+**Data se fatia, instante se formata no fuso do aparelho.** `IsoDate`
+(`2026-10-06`) é um dia do calendário; `IsoDateTime` é um instante, e o dia em
+que ele cai depende de onde a pessoa está — fatiar o texto devolve o dia UTC, 3h
+adiantado em Brasília e o dia seguinte depois das 21h. Os dois moram em
+`lib/domain/dates.ts` (`formatDate`, `formatDayMonth`, `formatInstant`,
+`localDateOf`, `todayLocal`, `hasExpired`), e nenhuma tela formata data por
+conta própria. Os dois tipos são `string`: o compilador não separa um do outro, e
+passar instante a `formatDate` imprime a data UTC em silêncio. O vencimento do
+acesso é instante (`access_expires_at` é `timestamptz`) e se compara por
+`hasExpired`, a mesma fronteira de `has_active_access()` — comparar o texto com a
+data de hoje deixava o dia do vencimento "Liberado".
 
 ### Tema
 

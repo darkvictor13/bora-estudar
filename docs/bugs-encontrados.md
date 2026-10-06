@@ -788,3 +788,106 @@ continua sendo `created_at`: é um instante, mostrado com hora. A migration pree
 lançados por heurística (meta `extra` concluída, título do diálogo, registro até 60 s depois da meta). Spec 19,
 R-EXTRA-28; spec 25, nota do topo.
 
+
+---
+
+### QA-08 · ALTO · O aluno vinculado lê "Ainda sem professor"
+
+`loadAccount` lia `select name from profiles where id = <teacherId>` e descartava o `error`. A policy
+`profiles_select` só abre a própria linha e as dos próprios alunos: a consulta voltava `[]`, e a tela caía em
+"Ainda sem professor" para quem tinha um. A leitura certa, `public.my_teacher()`, existia com grant e teste, e o
+adaptador nunca a chamava; a fixture devolvia "Professor de Exemplo" sempre, inclusive sem vínculo, e foi o que
+escondeu o defeito.
+
+**Reproduzir** abrir `/aluno/conta` com um aluno vinculado (F-CONTA-01).
+
+**Correção** `loadAccount` chama `my_teacher()` e lê `data[0]`, a leitura de `plan` passou por `throwDb`, e as duas
+rodam em `Promise.all`. A fixture só devolve o nome com `teacherId`. Spec 10, R-CTA-15.
+
+---
+
+### QA-09 · MÉDIO · A barra do aluno não acompanha liberar e bloquear
+
+O layout do aluno é uma rota sem caminho, e o React Router não reexecuta o loader de uma rota que continua casada
+quando só o filho muda. Liberado, o aluno seguia com os itens inertes até o F5; suspenso, seguia com os itens
+ativos, e cada clique o devolvia à lista de espera sem explicação.
+
+**Reproduzir** liberar pela RPC com o aluno aberto em `/aluno/conta` e navegar pela barra (F-VINC-09).
+
+**Correção** `shouldRevalidate` na rota do layout: `defaultShouldRevalidate || troca de pathname`. Declarar
+desliga o padrão inteiro, e o `||` mantém o `revalidate()` de "Salvar" em Meus dados. **Custo, aceito:**
+`studentLayoutLoader` também chama `loadThemePreference`, que são um `getUser` e um `select` em `profiles` a mais por
+navegação dentro da área do aluno. Spec 02, R-ACC-08; spec 13, R-VINC-32.
+
+---
+
+### QA-20 · MÉDIO · Vigência e datas em formato de máquina
+
+`access_expires_at` é `timestamptz`, mas o contrato o declarava `IsoDate` e a tela o imprimia cru ("Vigência atual
+até 2027-01-06T18:37:06.167505+00:00"). "Liberar soma ao que ainda falta" aparecia também para quem já tinha vencido,
+quando a RPC conta de `greatest(now(), …)`. `effectiveAccess` comparava o TEXTO do instante com a data de hoje:
+no dia do vencimento a tela dizia "Liberado" enquanto `has_active_access()` já recusava a escrita. E a lista e a ficha
+do professor repassavam `access_status` cru, então quem tinha vencido aparecia "Liberado" e `expired` não tinha
+escritor (R-VINC-28).
+
+**Reproduzir** a ficha de um aluno com `access: "expired"` (F-PROF-03) e a de um recém-liberado (F-VINC-06).
+
+**Correção** `lib/domain/dates.ts` separa data (`formatDate`, fatia) de instante (`formatInstant`, fuso do
+aparelho); `accessExpiresAt` é `IsoDateTime`; `effectiveAccess` compara instantes por `hasExpired`, na fronteira do
+banco, e a lista e a ficha passam por ele; a ficha tem três textos de vigência. Spec 13, R-VINC-33; spec 10, R-CTA-16.
+
+---
+
+### N-04 · MÉDIO · Datas no fuso errado
+
+A "Última atividade" e o início de cada bateria, na ficha do professor, saíam 3h adiantados (fatiavam o texto UTC); o
+vencimento em Meus dados do aluno aparecia no dia seguinte quando caía depois das 21h de Brasília; "Novo
+planejamento" sugeria `new Date().toISOString().slice(0, 10)`, o dia seguinte depois das 21h; e `minutesByDay` e
+`minutesByMonth` agrupavam por `created_at.slice(…)`, em UTC — este último o PR 5a (N-07) já tinha corrigido, com
+`entryDay`.
+
+**Reproduzir** `lib/domain/dates.test.ts`, com `TZ=America/Sao_Paulo` fixado no próprio arquivo.
+
+**Correção** todo formatador avulso (`slice(8, 10)`, `split("-").reverse()`, `toLocaleString`) saiu das telas e
+passou por `lib/domain/dates.ts`; `todayLocal` sugere o dia local. Fica só em `dates.ts`.
+
+---
+
+### QA-21 · BAIXO · "Meus dados" do professor com os textos do aluno
+
+`/professor/conta` serve a mesma tela do aluno, que dizia "O que o seu professor vê sobre você", "fale com seu
+professor" e mostrava o cartão Acesso com "Ainda sem professor · — · sem prazo".
+
+**Reproduzir** abrir `/professor/conta` (F-CONTA-01).
+
+**Correção** o loader devolve o papel, e para o professor a tela troca o subtítulo ("Como os seus alunos veem você"),
+o texto do e-mail ("É o seu login. A troca de e-mail ainda não está disponível.") e não renderiza o cartão Acesso.
+Spec 27, R-CONTA-09.
+
+---
+
+### QA-25 · MÉDIO · O login não devolve ao link aberto
+
+`requireSession` mandava para `/entrar` sem destino (e colava `location.hash` em `/entrar#…`, onde ele morria), e
+`landAfterAuth` sempre ia para a casa do papel: quem abria `/professor/alunos/<id>` sem sessão entrava e caía na
+lista.
+
+**Reproduzir** abrir uma rota protegida anônimo, entrar, e conferir onde se termina (F-AUTH-13).
+
+**Correção** as três guardas recebem o `request`, obrigatório, e redirecionam para `/entrar?next=<destino>`, com o
+fragmento dentro do `next` e só na primeira carga; `signIn` repassa o `next` e `landAfterAuth` o filtra por
+`safeInternalPath` (QA-02), com a casa do papel real de fallback. Spec 01, R-AUTH-06 e R-AUTH-17.
+
+---
+
+### QA-29 · BAIXO · O cadastro confirma quem já tem conta (decidido: fica)
+
+A frase "Já existe uma conta com este e-mail." diz a quem digita que o e-mail está cadastrado. Com
+`enable_confirmations = false` o GoTrue responde 422 `user_already_exists` a QUALQUER chamador: esconder a frase na
+tela não tira a informação de quem chama a API direto, e só ligar a confirmação corrige — o que espera staging
+entregar e-mail.
+
+**Decisão (D-14)** a frase fica. A tela ganha os links "Entrar" e "Esqueci minha senha" junto da mensagem
+(`existing-account`), decididos pelo CÓDIGO (`conflict` no campo `email`), e `sign_in_sign_ups = 30` por 5 min por IP
+é a mitigação. Spec 01, R-AUTH-18; GAP-04. O comentário de `signUp` que dizia que o gatilho lê `role` do metadado
+era falso desde `20260914190000`: o `role` saiu do `options.data`.
