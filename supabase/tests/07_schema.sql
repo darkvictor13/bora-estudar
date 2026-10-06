@@ -117,7 +117,9 @@ begin
     'study_plan_theory_catalogs_catalog_fk',
     'theory_progress_study_plan_fk',
     'theory_reviews_study_plan_fk',
-    'goal_batches_study_plan_fk'
+    'goal_batches_study_plan_fk',
+    'goal_entries_theory_lesson_fk',
+    'theory_review_entries_review_fk'
   ] loop
     select array_length(conkey, 1) into v_colunas
       from pg_constraint where conname = v_nome and contype = 'f';
@@ -132,7 +134,7 @@ begin
   if v_simples <> '' then
     raise exception 'FALHOU: FK que precisa ser composta:%', v_simples;
   end if;
-  raise notice '06 OK  as quinze FKs compostas da auditoria continuam compostas';
+  raise notice '06 OK  as dezessete FKs compostas da auditoria continuam compostas';
 end $$;
 
 -- ---------- Nada de `GRANT ALL` por default ----------
@@ -180,7 +182,8 @@ begin
   foreach v_nome in array array[
     'find_student_by_email', 'link_student', 'set_student_access',
     'generate_week', 'clear_pending_goals', 'week_replacement_preview',
-    'activate_study_plan', 'record_goal_entry', 'record_extra_study'
+    'activate_study_plan', 'record_goal_entry', 'record_extra_study',
+    'record_initial_questions', 'record_review_questions'
   ] loop
     select p.oid into v_oid from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
@@ -211,7 +214,7 @@ begin
   if v_erro <> '' then
     raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
   end if;
-  raise notice '08 OK  as nove RPCs sao chamaveis so por authenticated, nominalmente';
+  raise notice '08 OK  as onze RPCs sao chamaveis so por authenticated, nominalmente';
 end $$;
 
 -- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
@@ -292,14 +295,14 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 51 or v_enums <> 20 or v_fks <> 91 or v_views <> 3 then
+  if v_tabelas <> 52 or v_enums <> 20 or v_fks <> 93 or v_views <> 3 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '13 OK  51 tabelas, 20 enums, 91 FKs e 3 views — como o de-para registra';
+  raise notice '13 OK  52 tabelas, 20 enums, 93 FKs e 3 views — como o de-para registra';
 end $$;
 
 -- ---------- Semana e minutos têm teto e piso no banco (spec 04, R-GEN-17) ----------

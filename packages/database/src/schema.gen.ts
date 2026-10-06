@@ -535,6 +535,7 @@ export type Database = {
           student_id: string
           studied_on: string | null
           teacher_id: string
+          theory_lesson_id: string | null
           theory_stage: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers: number | null
         }
@@ -552,6 +553,7 @@ export type Database = {
           student_id: string
           studied_on?: string | null
           teacher_id: string
+          theory_lesson_id?: string | null
           theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers?: number | null
         }
@@ -569,6 +571,7 @@ export type Database = {
           student_id?: string
           studied_on?: string | null
           teacher_id?: string
+          theory_lesson_id?: string | null
           theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers?: number | null
         }
@@ -593,6 +596,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_entries_theory_lesson_fk"
+            columns: ["theory_lesson_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lessons"
+            referencedColumns: ["id", "teacher_id"]
           },
         ]
       }
@@ -2584,6 +2594,44 @@ export type Database = {
           },
         ]
       }
+      theory_review_entries: {
+        Row: {
+          correct_answers: number
+          created_at: string
+          id: string
+          questions: number
+          request_id: string
+          student_id: string
+          theory_review_id: string
+        }
+        Insert: {
+          correct_answers: number
+          created_at?: string
+          id?: string
+          questions: number
+          request_id: string
+          student_id: string
+          theory_review_id: string
+        }
+        Update: {
+          correct_answers?: number
+          created_at?: string
+          id?: string
+          questions?: number
+          request_id?: string
+          student_id?: string
+          theory_review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_review_entries_review_fk"
+            columns: ["theory_review_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "theory_reviews"
+            referencedColumns: ["id", "student_id"]
+          },
+        ]
+      }
       theory_review_rules: {
         Row: {
           active: boolean
@@ -3046,6 +3094,35 @@ export type Database = {
           p_theory_stage?: Database["public"]["Enums"]["theory_stage"]
         }
         Returns: string
+      }
+      record_initial_questions: {
+        Args: {
+          p_correct_answers: number
+          p_goal_id: string
+          p_lesson_id: string
+          p_questions: number
+          p_request_id: string
+        }
+        Returns: {
+          current_page: number
+          initial_questions_done: number
+          initial_questions_required: number
+          lesson_done: boolean
+          theory_done: boolean
+        }[]
+      }
+      record_review_questions: {
+        Args: {
+          p_correct_answers: number
+          p_questions: number
+          p_request_id: string
+          p_review_id: string
+        }
+        Returns: {
+          questions_answered: number
+          status: Database["public"]["Enums"]["theory_review_status"]
+          study_plan_id: string
+        }[]
       }
       set_student_access: {
         Args: {

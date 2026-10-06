@@ -109,7 +109,7 @@ ele ache que a culpa é dele.
 | Adaptador | `lib/api/supabase/theory.ts` |
 | Banco | `theory_lessons`, `theory_progress`, `theory_reviews`, `theory_review_entries`, `theory_catalog_subject_rules`, `theory_review_rules`, `study_plan_theory_catalogs`, `goal_entries` (`theory_lesson_id`) |
 | RPCs | `record_initial_questions` e `record_review_questions`, idempotentes por `request_id`. A página (`saveTheoryProgress`) continua escrita direta: gravar a página leva a coluna a um valor, não acumula |
-| Migration | as sete tabelas vieram no schema de 14/09/2026; `20261007…_record_theory_questions.sql` acrescenta `theory_review_entries`, `goal_entries.theory_lesson_id` e as duas RPCs |
+| Migration | as sete tabelas vieram no schema de 14/09/2026; `20261006231152_record_theory_questions.sql` acrescenta `theory_review_entries`, `goal_entries.theory_lesson_id` e as duas RPCs |
 | Testes | `apps/web/src/lib/domain/theory.test.ts`, `apps/e2e/tests/student-theory.spec.ts`, `supabase/tests/06_theory.sql` |
 
 ---
