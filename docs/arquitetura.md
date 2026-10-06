@@ -158,6 +158,12 @@ arquitetura assume hoje:
 - as FKs que carregam contexto são **compostas** — `(study_plan_id, teacher_id,
   student_id)` e parentes. A FK de coluna única garantia que a linha EXISTE, não
   que ela é de quem está escrevendo;
+- **gerar e limpar a semana passam por RPC** (`generate_week`,
+  `clear_pending_goals`), apesar de `goals` ser escrita direta do professor:
+  apagar e inserir dezenas de linhas precisa acontecer junto ou não acontecer, e
+  um replay depois de sucesso não é inofensivo. Meta concluída ou com estudo
+  registrado não se apaga por caminho nenhum (`goal_entries_goal_fk` é `no
+  action`);
 - o que é administrativo (`role`, `access_status`, `access_expires_at`,
   `teacher_id`) fica fora de todo grant. `teacher_id`, `access_status` e
   `access_expires_at` ganharam RPC em `20260918120000` (`link_student` e

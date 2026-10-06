@@ -115,7 +115,7 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 | Teoria | `theory-dialog`, `theory-tabs`, `theory-subject`, `theory-percent`, `theory-review`, `theory-save-continue`, `theory-save-end`, `initial-questions-form`, `initial-questions-count`, `lesson-row` (+`data-lesson-id`) |
 | Revisões e reforço | `review-row` (+`data-review-id`), `review-rule`, `spacing-form`, `cycle-row`, `reinforcement-row` |
 | Gráficos | `chart-bar`, `chart-point`, `chart-single-value`, `chart-table`, `chart-tooltip`, `ranked-row`, `ranked-target` |
-| Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `goals-confirm`, `quiz-session-row`, `topic-difficulties-empty` |
+| Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
 | Conta | `account-form`, `waitlist-form` |
 | Leitura e grifo | `flashcard-flip` (+`data-flipped`), `flashcard-answer`, `flashcard-mark` e `law-mark` (+`data-style`, `data-color`; o do cartão também `data-side`) |
@@ -241,7 +241,7 @@ diff mostra a omissão.
 | F-PROF-02 | a lista abre pelos atrasados; filtros somam; o recorte fica na URL |
 | F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer |
 | F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
-| F-PROF-05 | a substituição segura preserva a meta concluída; replanejar a semana exige confirmação |
+| F-PROF-05 | gerar a semana preserva o concluído e o estudo registrado; só sai o que está pendente, pulado ou em andamento sem registro; a prévia conta o que fica; não há modo de substituição — QA-01 |
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
 | F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno |
 | F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |
@@ -322,7 +322,15 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
+seção da área, no commit em que o teste passa a existir.
+
+| Id | Cobre |
+|---|---|
+| F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
+| F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
+
+**Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
+`comparativo-fluxos-v2.md` com outro significado.
 
 ---
 

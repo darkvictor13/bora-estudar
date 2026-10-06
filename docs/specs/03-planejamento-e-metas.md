@@ -84,8 +84,8 @@ semana com metas, sem quebrar (R-GOAL-01 não é violada porque nada é escrito)
 | Rotas | `/aluno`, `/aluno/disciplinas`, `/aluno/cadernos`, `/professor`, `/professor/alunos/:studentId`, `/professor/planejamentos`, `/professor/cadernos` |
 | Leitura | `lib/data/student.ts` (`getActiveStudyPlan`, `getWeekGoals`, `getPlanWeeks`, `getStudyPlanBlocks`), `lib/data/teacher.ts` (`getMyStudents`, `getStudentSummary`, `getPlanProgress`, `getAllTeacherPlans`) |
 | Domínio | `lib/domain/goals.ts` — rótulos, `formatMinutes`, `scorePercent`, `weekdayName` |
-| Escrita | Só `apply_study_plan_batch` — ver [04](04-geracao-semanal.md) |
-| Banco | `study_plans`, `study_plan_blocks`, `goals`, `study_plan_batches`, `student_teacher_links` |
+| Escrita | `goals` é escrita direta do professor (planejamento); gerar e limpar a semana passam por `generate_week` e `clear_pending_goals` — ver [04](04-geracao-semanal.md) |
+| Banco | `study_plans`, `study_plan_blocks`, `goals`, `goal_batches`, `student_teacher_links` |
 | RPC | `activate_study_plan` — **existe e não é chamada por nenhuma tela** |
 
 ---
