@@ -4,7 +4,7 @@
 
 > **Atualizada em 06/10/2026 (QA-03, QA-12):** o índice e a RPC citados aqui
 > não existiam no schema de 14/09; voltaram na migration
-> `<timestamp>_one_active_study_plan`. Onde esta spec diz `draft`, leia
+> `20261006221607_one_active_study_plan`. Onde esta spec diz `draft`, leia
 > `paused`, que é como o planejamento nasce.
 
 ---
@@ -141,7 +141,7 @@ aceito, e é melhor que o inverso.
 | Confirmação | Ativar e arquivar devolvem `redirectTo` com `?feito=`, e a página anuncia |
 | Leitura | `getAllTeacherPlans` (já existe), mais os catálogos ativos e os alunos vinculados |
 | RPCs | `activate_study_plan` |
-| Migration | `<timestamp>_one_active_study_plan`: o índice único parcial e a RPC |
+| Migration | `20261006221607_one_active_study_plan`: o índice único parcial e a RPC |
 | Banco | `study_plans` e `study_plan_blocks`, escrita direta já concedida; `catalog_blocks`, leitura |
 | Protocolo | **nada muda** |
 | Testes | `apps/e2e/tests/teacher.spec.ts` |

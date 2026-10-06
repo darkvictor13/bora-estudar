@@ -204,6 +204,12 @@ interface State {
   session: Session | null;
   theme: ThemePreference | null;
   goals: GoalRow[];
+  /**
+   * Os planejamentos são ESTADO: ativar um arquiva o outro do mesmo aluno, e
+   * criar nasce `paused`, como no banco. Uma constante que devolvesse sempre o
+   * mesmo objeto esconderia a lista que não reordena e o botão que não troca.
+   */
+  plans: StudyPlanSummary[];
   entries: StudyEntry[];
   progress: Map<Uuid, TheoryProgress>;
   reviews: TheoryReview[];
@@ -522,6 +528,7 @@ function seedState(): State {
     },
     theme: null,
     goals,
+    plans: [seedPlan()],
     entries: [
       {
         id: nextId("a"),
@@ -1415,12 +1422,18 @@ export const fixturesApi: BoraApi = {
       }),
     ),
 
-  listPlans: () => later<readonly StudyPlanSummary[]>([PLAN]),
+  listPlans: (studentId?: Uuid) =>
+    later<readonly StudyPlanSummary[]>(
+      state.plans
+        .filter((plan) => !studentId || plan.studentId === studentId)
+        .map((plan) => ({ ...plan })),
+    ),
 
   createPlan: (input: StudyPlanInput, requestId: RequestId) =>
     later(
-      once(requestId, () =>
-        done<StudyPlanSummary>({
+      once(requestId, () => {
+        // NASCE PAUSADO, como no Supabase: ativar é gesto separado.
+        const plan: StudyPlanSummary = {
           id: nextId("c"),
           studentId: input.studentId,
           classId: input.classId ?? null,
@@ -1432,19 +1445,50 @@ export const fixturesApi: BoraApi = {
           weeklyGoals: input.weeklyGoals,
           startsOn: input.startsOn,
           examDate: input.examDate ?? null,
-          status: "active",
-        }),
-      ),
+          status: "paused",
+        };
+        state.plans.push(plan);
+        return done<StudyPlanSummary>({ ...plan });
+      }),
     ),
 
-  updatePlan: (_planId: Uuid, input: Partial<StudyPlanInput>, requestId: RequestId) =>
-    later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, ...stripUndefined(input) }))),
+  updatePlan: (planId: Uuid, input: Partial<StudyPlanInput>, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const plan = state.plans.find((candidate) => candidate.id === planId);
+        if (!plan) return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado.");
+        return done<StudyPlanSummary>(patchPlan(plan.id, stripUndefined(input)));
+      }),
+    ),
 
-  activatePlan: (_planId: Uuid, requestId: RequestId) =>
-    later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, status: "active" }))),
+  activatePlan: (planId: Uuid, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const plan = state.plans.find((candidate) => candidate.id === planId);
+        if (!plan) {
+          return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado, ou não é seu.");
+        }
+        // Ativar o que já está ativo é sucesso, como na RPC: é a retentativa
+        // depois de uma resposta perdida.
+        if (plan.status === "active") return done<StudyPlanSummary>({ ...plan });
 
-  archivePlan: (_planId: Uuid, requestId: RequestId) =>
-    later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, status: "archived" }))),
+        for (const other of state.plans) {
+          if (other.studentId === plan.studentId && other.status === "active") {
+            patchPlan(other.id, { status: "archived" });
+          }
+        }
+        return done<StudyPlanSummary>(patchPlan(plan.id, { status: "active" }));
+      }),
+    ),
+
+  archivePlan: (planId: Uuid, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const plan = state.plans.find((candidate) => candidate.id === planId);
+        if (!plan) return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado.");
+        return done<StudyPlanSummary>(patchPlan(plan.id, { status: "archived" }));
+      }),
+    ),
 
   previewWeek: (input: GenerateWeekInput) => {
     const invalid = checkGenerateWeek(input);
@@ -1806,6 +1850,13 @@ export const fixturesApi: BoraApi = {
  * fixture existe para não ter: a tela mostrava "liberado" no aviso e
  * "aguardando" no cartão logo abaixo.
  */
+function patchPlan(planId: Uuid, patch: Partial<StudyPlanSummary>): StudyPlanSummary {
+  const index = state.plans.findIndex((plan) => plan.id === planId);
+  const next = { ...state.plans[index]!, ...patch };
+  state.plans[index] = next;
+  return next;
+}
+
 function patchStudent(studentId: Uuid, patch: Partial<StudentCard>): StudentCard {
   const updated = { ...state.students.find((s) => s.studentId === studentId)!, ...patch };
   state.students = state.students.map((student) =>
@@ -1858,20 +1909,29 @@ function stripUndefined<T extends object>(input: T): Partial<T> {
   ) as Partial<T>;
 }
 
-const PLAN: StudyPlanSummary = {
-  id: PLAN_ID,
-  studentId: STUDENT_ID,
-  classId: CLASS_A_ID,
-  name: "Planejamento demonstrativo PRF 2027",
-  area: "Policial",
-  targetExam: "Policial Rodoviário Federal",
-  stage: "Pré-edital",
-  studyModel: "Avanço progressivo",
-  weeklyGoals: 24,
-  startsOn: addDays(TODAY, -28),
-  examDate: addDays(TODAY, 240),
-  status: "active",
-};
+/**
+ * FUNÇÃO, e não constante: `seedState()` roda na inicialização do módulo, antes
+ * de qualquer `const` declarado abaixo dele (ver `seedStudents`).
+ */
+function seedPlan(): StudyPlanSummary {
+  return {
+    id: PLAN_ID,
+    studentId: STUDENT_ID,
+    classId: CLASS_A_ID,
+    name: "Planejamento demonstrativo PRF 2027",
+    area: "Policial",
+    targetExam: "Policial Rodoviário Federal",
+    stage: "Pré-edital",
+    studyModel: "Avanço progressivo",
+    weeklyGoals: 24,
+    startsOn: addDays(TODAY, -28),
+    examDate: addDays(TODAY, 240),
+    status: "active",
+  };
+}
+
+/** O planejamento que as leituras de aluno e de ficha devolvem. */
+const PLAN: StudyPlanSummary = seedPlan();
 
 const SUBJECTS: readonly Subject[] = [
   {

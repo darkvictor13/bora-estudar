@@ -1002,3 +1002,8 @@ repostas antes deste arquivo existir:
 |---|---|
 | `study_plans_name_per_student_uidx` | um planejamento por aluno com o mesmo nome |
 | `quiz_session_questions_one_reinforcement_per_source_uidx` | uma correlata por questão de origem, na mesma bateria |
+
+Uma **terceira** também sumiu, e só foi reposta em 06/10/2026 (QA-03), na
+migration `20261006221607`: `study_plans_one_active_per_student_uidx`, um
+planejamento ativo por aluno. O `CLAUDE.md` e as specs 03 e 14 a davam como
+existente, e `activate_study_plan` voltou junto.

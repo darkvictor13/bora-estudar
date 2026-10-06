@@ -355,7 +355,7 @@ test.describe("F-PROF-06 · copiar a semana anterior", () => {
   });
 });
 
-test.describe("F-GPLAN-01 · planejamentos", () => {
+test.describe("F-GPLAN-01 · planejamentos (QA-03, QA-12)", () => {
   test("nasce PAUSADO, e ativar arquiva o anterior", async ({ teacherPage, scenario }) => {
     // NOME ÚNICO POR CENÁRIO. Um literal compartilhado faz dois workers
     // criarem linhas com o mesmo nome, e a consulta de conferência lê a do
@@ -400,6 +400,126 @@ test.describe("F-GPLAN-01 · planejamentos", () => {
         [scenario.student.id],
       ),
     ).toBe(1);
+  });
+
+  /*
+   * QA-12 e QA-03. Ativar era DUAS requisições (arquivar os ativos, ativar o
+   * novo): a rede caindo no meio deixava o aluno sem planejamento, e duas abas
+   * intercaladas o deixavam com dois. Hoje é a RPC `activate_study_plan`, numa
+   * transação, e o índice `study_plans_one_active_per_student_uidx` garante o
+   * estado final.
+   *
+   * O plano novo é criado por SQL, com nome único por cenário: o que o teste
+   * ataca é a ativação, não o formulário de criação.
+   */
+  async function insertPausedPlan(
+    scenario: { teacher: { id: string }; student: { id: string }; planId: string },
+    label: string,
+  ): Promise<string> {
+    const id = randomUUID();
+    await query(
+      `insert into public.study_plans (id, student_id, teacher_id, name, status)
+       values ($1, $2, $3, $4, 'paused')`,
+      [id, scenario.student.id, scenario.teacher.id, `${label} ${scenario.planId.slice(0, 8)}`],
+    );
+    return id;
+  }
+
+  const planStatus = async (id: string) =>
+    (await one<{ status: string }>("select status::text from public.study_plans where id = $1", [id]))
+      .status;
+
+  const activeCount = (studentId: string) =>
+    count("select count(*) from public.study_plans where student_id = $1 and status = 'active'", [
+      studentId,
+    ]);
+
+  test("ativar com a rede caindo não deixa o aluno sem planejamento — QA-12", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const novo = await insertPausedPlan(scenario, "Plano da rede");
+    const linha = (id: string) =>
+      teacherPage.locator(`[data-testid="plan-row"][data-plan-id="${id}"]`);
+
+    await teacherPage.goto("/professor/planejamentos");
+    await expect(linha(novo)).toBeVisible();
+
+    await teacherPage.route("**/rest/v1/rpc/activate_study_plan", (route) => route.abort());
+    await linha(novo).getByTestId("plan-activate").click();
+    await expect(alert(teacherPage, "error")).toBeVisible();
+
+    // Nada mudou: o anterior segue ativo, e o aluno não ficou sem planejamento.
+    expect(await planStatus(scenario.planId)).toBe("active");
+    expect(await planStatus(novo)).toBe("paused");
+    expect(await activeCount(scenario.student.id)).toBe(1);
+
+    await teacherPage.unroute("**/rest/v1/rpc/activate_study_plan");
+    await linha(novo).getByTestId("plan-activate").click();
+
+    await expect(linha(novo)).toHaveAttribute("data-status", "active");
+    expect(await planStatus(scenario.planId)).toBe("archived");
+    expect(await activeCount(scenario.student.id)).toBe(1);
+  });
+
+  test("resposta perdida: o servidor ativou, e a retentativa confirma sem erro — QA-12", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const novo = await insertPausedPlan(scenario, "Plano da resposta");
+    const linha = teacherPage.locator(`[data-testid="plan-row"][data-plan-id="${novo}"]`);
+
+    await teacherPage.goto("/professor/planejamentos");
+    await expect(linha).toBeVisible();
+
+    // O pior caso para retentativa: o servidor processa e grava, e o navegador
+    // nunca recebe a resposta.
+    await teacherPage.route(
+      "**/rest/v1/rpc/activate_study_plan",
+      async (route) => {
+        await route.fetch();
+        await route.abort();
+      },
+      { times: 1 },
+    );
+    await linha.getByTestId("plan-activate").click();
+    await expect(alert(teacherPage, "error")).toBeVisible();
+
+    expect(await planStatus(novo)).toBe("active");
+
+    // Requisição nova (request_id novo): ativar o que já está ativo é sucesso.
+    await linha.getByTestId("plan-activate").click();
+    await expect(linha).toHaveAttribute("data-status", "active");
+    await expect(alert(teacherPage, "error")).toHaveCount(0);
+    expect(await activeCount(scenario.student.id)).toBe(1);
+  });
+
+  /*
+   * Pelo banco, e não por duas abas: duas abas não garantem a intercalação. A
+   * primeira ativação segura a trava depois de ativar; a segunda começa quando
+   * a primeira já ativou, e precisa ESPERAR em vez de bater no índice.
+   */
+  test("duas ativações simultâneas terminam com um ativo — QA-03", async ({ scenario }) => {
+    const a = await insertPausedPlan(scenario, "Plano A");
+    const b = await insertPausedPlan(scenario, "Plano B");
+
+    let release!: () => void;
+    const firstHolds = new Promise<void>((resolve) => (release = resolve));
+    const first = asUser(scenario.teacher.id, async (c) => {
+      await c.query("select public.activate_study_plan($1)", [a]);
+      release(); // A já está ativo, e a trava continua até o commit.
+      await c.query("select pg_sleep(0.3)");
+    });
+    const second = firstHolds.then(() =>
+      asUser(scenario.teacher.id, (c) => c.query("select public.activate_study_plan($1)", [b])),
+    );
+
+    await Promise.all([first, second]); // nenhuma das duas lança
+
+    expect(await planStatus(b)).toBe("active");
+    expect(await planStatus(a)).toBe("archived");
+    expect(await planStatus(scenario.planId)).toBe("archived");
+    expect(await activeCount(scenario.student.id)).toBe(1);
   });
 
   test("nome vazio é recusado, com o campo marcado", async ({ teacherPage }) => {

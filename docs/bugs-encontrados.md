@@ -445,7 +445,9 @@ A espec está em [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-
 ### GAP-02 · MÉDIO · RPCs implementadas que nenhuma tela chama
 
 `activate_study_plan`, `void_quiz_session` e `record_reinforcement` estão
-prontas e testadas em `supabase/tests/`, sem ponto de entrada na interface. As
+prontas e testadas em `supabase/tests/`, sem ponto de entrada na interface.
+**Atualização de 06/10/2026:** `activate_study_plan` tinha saído com o schema de
+14/09 e foi recriada (QA-03, QA-12); a tela de planejamentos já a chama. As
 telas de Revisões recomendam o reforço mas não têm como executá-lo, e o content
 script só conduz a fase `main`.
 
@@ -538,3 +540,34 @@ parava em `/evil.example/x`, dentro do site mas num destino que ninguém escolhe
 **Correção** `safeInternalPath` (`lib/routes.ts`) resolve contra uma origem fictícia e recusa outra origem, o
 `pathname` normalizado que começa com duas barras e as telas públicas; recusado, vale o destino padrão de
 quem chama. O login (QA-25, PR 6) usa a mesma função. Spec 01, R-AUTH-16 e CA-16.
+
+---
+
+### QA-03 · ALTO · Um aluno termina com dois planejamentos ativos
+
+Duas abas ativando planos diferentes intercalavam as quatro escritas (arquivar, ativar, arquivar, ativar) e o
+aluno terminava com dois ativos. Pela API, `PATCH /rest/v1/study_plans?id=eq.<outro>` com
+`{"status":"active"}` devolvia 200. O `CLAUDE.md`, as specs 03 e 14 e o cabeçalho de `teacher-plans.ts`
+diziam que havia um índice único parcial; ele não existia (só `study_plans_name_per_student_uidx`), e a RPC
+`activate_study_plan` também tinha saído com o schema de 14/09. O banco local tinha 6 alunos com dois ativos.
+
+**Reproduzir** duas chamadas simultâneas a `activate_study_plan` para o mesmo aluno, com a primeira
+segurando a trava (F-GPLAN-01; `07_schema` casos 17 e 18; `02_rls` caso 19). Sem a trava, o teste falha.
+
+**Correção** migration `20261006221607_one_active_study_plan`: o índice
+`study_plans_one_active_per_student_uidx` (a limpeza deixa ativo o mais recente e **pausa** os outros) e a RPC
+naturalmente idempotente, que trava os planejamentos do aluno e arquiva o anterior. Spec 14, R-GPLAN-02 a
+R-GPLAN-04 e CA-09; spec 03, R-PLAN-01 e R-PLAN-05.
+
+---
+
+### QA-12 · MÉDIO · Ativar com a rede caindo deixa o aluno sem planejamento
+
+`activatePlan` arquivava os ativos do aluno e só então ativava o novo, em duas requisições. Com a rede caindo
+entre as duas, o anterior ficava arquivado e o novo não ficava ativo: o aluno via "Nenhum planejamento ativo".
+
+**Reproduzir** derrubar `rpc/activate_study_plan` com `route.abort()`, e noutro teste deixar o servidor
+gravar e perder a resposta (F-GPLAN-01).
+
+**Correção** ativar é uma chamada só à RPC. Ativar o que já está ativo passou a ser sucesso, porque é a
+retentativa depois de uma resposta perdida. Spec 14, R-GPLAN-02 e CA-08.

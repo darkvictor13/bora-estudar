@@ -904,3 +904,62 @@ test("a marcação do cartão antigo da biblioteca aparece no deck do cartão qu
   assert.ok((await api.saveFlashcardMarks({ deck: { kind: "library", deckId: alias.deckId }, previous: shown, next: [recolored], requestId: requestId() })).ok);
   assert.deepEqual((await api.loadFlashcardMarks({ kind: "library", deckId: alias.deckId })).map((item) => item.color), ["pink"]);
 });
+
+// QA-03 e QA-12: o planejamento ativo é um por aluno, e a troca é uma operação só.
+const newPlanInput = (name: string) =>
+  ({
+    studentId: "22222222-2222-4222-8222-222222222222",
+    name,
+    area: "Policial",
+    stage: "Pré-edital",
+    studyModel: "Avanço progressivo",
+    weeklyGoals: 24,
+    startsOn: "2026-09-14",
+  }) as const;
+
+test("o planejamento criado nasce pausado, e ativá-lo arquiva o outro ativo do mesmo aluno", async () => {
+  const [original] = await api.listPlans();
+  assert.ok(original);
+  assert.equal(original.status, "active");
+
+  const created = await api.createPlan(newPlanInput("Segundo plano"), requestId());
+  assert.ok(created.ok);
+  assert.equal(created.data.status, "paused");
+
+  const activated = await api.activatePlan(created.data.id, requestId());
+  assert.ok(activated.ok);
+  assert.equal(activated.data.status, "active");
+
+  const plans = await api.listPlans();
+  assert.deepEqual(
+    plans.map((plan) => [plan.id, plan.status]).sort(),
+    [[original.id, "archived"], [created.data.id, "active"]].sort(),
+  );
+  assert.equal(plans.filter((plan) => plan.status === "active").length, 1);
+});
+
+test("ativar o planejamento que já está ativo é sucesso e não muda nada", async () => {
+  const created = await api.createPlan(newPlanInput("Segundo plano"), requestId());
+  assert.ok(created.ok);
+  assert.ok((await api.activatePlan(created.data.id, requestId())).ok);
+
+  const again = await api.activatePlan(created.data.id, requestId());
+  assert.ok(again.ok);
+  assert.equal(again.data.status, "active");
+  assert.equal((await api.listPlans()).filter((plan) => plan.status === "active").length, 1);
+});
+
+test("ativar um planejamento desconhecido é recusado com a frase do adaptador", async () => {
+  const result = await api.activatePlan("00000000-0000-4000-8000-00000000dead", requestId());
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
+  assert.equal(result.error.code, "not_found");
+  assert.equal(result.error.message, "Planejamento não encontrado, ou não é seu.");
+});
+
+test("arquivar o planejamento ativo deixa o aluno sem nenhum ativo", async () => {
+  const [original] = await api.listPlans();
+  assert.ok(original);
+  assert.ok((await api.archivePlan(original.id, requestId())).ok);
+  assert.equal((await api.listPlans()).filter((plan) => plan.status === "active").length, 0);
+});

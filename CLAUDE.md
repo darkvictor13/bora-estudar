@@ -78,7 +78,7 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 | | Quem escreve | Como |
 |---|---|---|
-| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals` |
+| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan` |
 | `goal_entries`, `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
@@ -158,10 +158,10 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** As quatro que existem —
+**Toda RPC mutante precisa ser segura a retentativa.** As cinco que existem —
 `link_student` e `set_student_access`, de `20260918120000`, mais `generate_week`
-e `clear_pending_goals`, de `20261006214424` — nasceram assim, uma em cada
-forma:
+e `clear_pending_goals`, de `20261006214424`, e `activate_study_plan`, de
+`20261006221607` — nasceram assim, uma em cada forma:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
@@ -181,6 +181,12 @@ forma:
   "iniciar" da mesma meta, que o índice `quiz_sessions_one_open_per_plan_uidx`
   vai garantir. `clear_pending_goals` também: só apaga, o critério é reavaliado
   sob a trava do plano, e `goal_entries_goal_fk` segura o pior caso.
+  `activate_study_plan` também: o único parâmetro é o plano alvo e "está ativo"
+  é estado, então ativar o que já está ativo devolve a linha sem escrever. Quem
+  sustenta é `study_plans_one_active_per_student_uidx` (o estado final nunca tem
+  dois ativos), e a trava `for no key update` sobre os planejamentos do aluno,
+  em ordem de `id`, faz a segunda chamada enxergar a primeira em vez de bater
+  no índice.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
 ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**
