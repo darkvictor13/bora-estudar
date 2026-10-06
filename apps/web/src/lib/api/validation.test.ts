@@ -13,6 +13,7 @@ import {
   checkCredentials,
   checkExtraStudy,
   checkExtraStudyDate,
+  checkQuestionRecord,
   checkStudyEntry,
   checkGenerateWeek,
   checkName,
@@ -102,6 +103,30 @@ test("um registro de estudo vai de 0 a 240 minutos e de 0 a 500 questões, com a
     message: "Informe o tempo estudado ou as questões feitas.",
     field: "minutes",
   });
+});
+
+test("as questões da teoria vão de 1 a 500, e questão zero não é registro", () => {
+  assert.equal(checkQuestionRecord({ questions: 10, correctAnswers: 8 }), null);
+  assert.equal(checkQuestionRecord({ questions: 1, correctAnswers: 0 }), null);
+  assert.equal(checkQuestionRecord({ questions: 500, correctAnswers: 500 }), null);
+
+  assert.deepEqual(checkQuestionRecord({ questions: 0, correctAnswers: 0 }), {
+    code: "validation",
+    message: "Informe quantas questões você fez.",
+    field: "questions",
+  });
+  for (const questions of [501, 1.5, Number.NaN]) {
+    const error = checkQuestionRecord({ questions, correctAnswers: 0 });
+    assert.equal(error?.field, "questions", String(questions));
+    assert.match(error?.message ?? "", /número inteiro, de 0 a 500/, String(questions));
+  }
+  const negative = checkQuestionRecord({ questions: 5, correctAnswers: -1 });
+  assert.equal(negative?.field, "correctAnswers");
+  assert.match(negative?.message ?? "", /a partir de 0/);
+  assert.equal(
+    checkQuestionRecord({ questions: 5, correctAnswers: 6 })?.message,
+    "Os acertos não podem passar do total de questões.",
+  );
 });
 
 test("a data do estudo extra vai do início do planejamento até hoje", () => {

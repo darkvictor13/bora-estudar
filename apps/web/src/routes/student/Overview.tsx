@@ -227,6 +227,28 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
     await revalidate();
   }
 
+  /**
+   * Registrar questões da teoria: liga o `pending`, chama a API e relê o modal.
+   *
+   * Devolve a falha, e `null` quando gravou. A falha NÃO vai para o `error` da
+   * página, que fica atrás do modal: quem a mostra é o próprio `TheoryDialog`, e
+   * quem decide quando a chave de retentativa muda é ele (só depois do sucesso).
+   */
+  async function recordTheory(
+    write: (goalId: string) => Promise<{ ok: boolean; error?: ApiError }>,
+  ): Promise<ApiError | null> {
+    if (!theory) return null;
+    setTheoryPending(true);
+    try {
+      const result = await write(theory.goalId);
+      if (!result.ok && result.error) return result.error;
+      await afterTheoryWrite(result, theory.goalId);
+      return null;
+    } finally {
+      setTheoryPending(false);
+    }
+  }
+
   const actions = {
     onRecord: (goal: Goal) => setRecording(goal),
     onOpenTheory: (goal: Goal) => void openTheory(goal),
@@ -380,22 +402,10 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
             .then((result) => afterTheoryWrite(result, theory.goalId))
             .finally(() => setTheoryPending(false));
         }}
-        onRecordQuestions={(input) => {
-          if (!theory) return;
-          setTheoryPending(true);
-          void api
-            .recordInitialQuestions({ ...input, goalId: theory.goalId })
-            .then((result) => afterTheoryWrite(result, theory.goalId))
-            .finally(() => setTheoryPending(false));
-        }}
-        onRecordReview={(input) => {
-          if (!theory) return;
-          setTheoryPending(true);
-          void api
-            .recordReviewQuestions(input)
-            .then((result) => afterTheoryWrite(result, theory.goalId))
-            .finally(() => setTheoryPending(false));
-        }}
+        onRecordQuestions={(input) =>
+          recordTheory((goalId) => api.recordInitialQuestions({ ...input, goalId }))
+        }
+        onRecordReview={(input) => recordTheory(() => api.recordReviewQuestions(input))}
       />
 
       {extraDate !== null && <ExtraStudyDialog

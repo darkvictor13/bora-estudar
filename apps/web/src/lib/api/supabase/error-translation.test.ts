@@ -12,6 +12,7 @@ import {
   OFFLINE_MESSAGE,
   SERVER_UNAVAILABLE_MESSAGE,
   apiErrorFromThrown,
+  studyWriteError,
   translateAuthError,
   translateDbError,
 } from "./error-translation.ts";
@@ -92,4 +93,12 @@ test("apiErrorFromThrown preserva o código de ApiThrownError e cai em unknown n
   });
   assert.deepEqual(apiErrorFromThrown(new TypeError("y")), { code: "unknown", message: "y" });
   assert.deepEqual(apiErrorFromThrown("z"), { code: "unknown", message: "z" });
+});
+
+test("studyWriteError: 23505 é a mesma chave com outra carga, e o resto segue a tradução comum", () => {
+  const conflict = studyWriteError({ code: "23505", message: "duplicate key" });
+  assert.equal(conflict.code, "conflict");
+  assert.match(conflict.message, /outros valores/);
+  assert.deepEqual(studyWriteError({ code: "42501", message: "m" }), translateDbError({ code: "42501", message: "m" }));
+  assert.equal(studyWriteError({ code: "P0002", message: "revisao nao encontrada" }).code, "not_found");
 });

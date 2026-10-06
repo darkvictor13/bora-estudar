@@ -29,7 +29,6 @@ import { entryDay } from "@/lib/domain/schedule";
 import { normalizeSubjectKey } from "@/lib/domain/theory";
 
 import type {
-  ApiError,
   ExtraStudyInput,
   Goal,
   GoalStatus,
@@ -43,8 +42,8 @@ import type {
   WeekOption,
   Weekday,
 } from "../contract.ts";
-import { checkExtraStudy, checkStudyEntry, STUDY_REPLAY_CONFLICT } from "../validation.ts";
-import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
+import { checkExtraStudy, checkStudyEntry } from "../validation.ts";
+import { done, fail, failure, studyWriteError, throwDb, translateDbError } from "./errors.ts";
 import { theoryRefsBySubject } from "./theory.ts";
 import { once } from "./idempotency.ts";
 import { requireSession, today } from "./session.ts";
@@ -306,19 +305,6 @@ async function goalContext(goalId: Uuid): Promise<GoalContext | null> {
 const QUIZ_GOAL_REFUSAL =
   "O resultado de uma meta de bateria vem do motor de baterias, que ainda está sendo " +
   "reescrito. Por enquanto ela não pode ser registrada nem concluída pela tela.";
-
-/**
- * O erro de uma das duas RPCs de estudo.
- *
- * `23505` aqui é a mesma chave com outra carga (`goal_entries_request_uidx`), e a
- * frase genérica de `23505` mandaria a pessoa tentar de novo com a mesma chave. A
- * outra fonte, rara, é o professor gerando a semana no mesmo instante: também
- * chega aqui, e a frase de "outros valores" é aceita nesse caso.
- */
-function studyWriteError(error: { code?: string | null; message: string }): ApiError {
-  if (error.code === "23505") return { code: "conflict", message: STUDY_REPLAY_CONFLICT };
-  return translateDbError(error);
-}
 
 export function recordStudy(input: RecordStudyInput): Promise<Result<Goal>> {
   // Fora do `once`: recusa de formulário não ocupa a chave nem gasta uma viagem.

@@ -110,6 +110,7 @@ import {
   checkGenerateWeek,
   checkName,
   checkPassword,
+  checkQuestionRecord,
   checkSignUp,
   checkStudentEmail,
   checkStudyEntry,
@@ -1053,11 +1054,8 @@ export const fixturesApi: BoraApi = {
   recordInitialQuestions: (input: RecordInitialQuestionsInput) =>
     later(
       once(input.requestId, () => {
-        if (!Number.isInteger(input.questions) || input.questions <= 0 ||
-            !Number.isInteger(input.correctAnswers) || input.correctAnswers < 0 ||
-            input.correctAnswers > input.questions) {
-          return fail<TheoryProgress>("validation", "Informe questões e acertos válidos.");
-        }
+        const invalid = checkQuestionRecord(input);
+        if (invalid) return failure<TheoryProgress>(invalid);
         const current = progressOf(input.lessonId);
         const total = current.initialQuestionsDone + input.questions;
         const complete = total >= current.initialQuestionsRequired;
@@ -1082,17 +1080,24 @@ export const fixturesApi: BoraApi = {
           studiedOn: null,
         });
         return done(updated);
-      }),
+      }, studyPayload(input)),
     ),
 
   loadDueReviews: () => later(state.reviews.filter((review) => review.due)),
 
   recordReviewQuestions: (input: RecordReviewQuestionsInput) =>
     later(
+      // O replay (a chave já vista) vem DENTRO do `once`, antes da recusa "já
+      // concluída": a retentativa do envio que fechou a revisão recebe a revisão.
       once(input.requestId, () => {
+        const invalid = checkQuestionRecord(input);
+        if (invalid) return failure<TheoryReview>(invalid);
         const index = state.reviews.findIndex((review) => review.id === input.reviewId);
         if (index < 0) return fail<TheoryReview>("not_found", "Revisão não encontrada.");
         const review = state.reviews[index]!;
+        if (review.status === "completed") {
+          return fail<TheoryReview>("conflict", "Esta revisão já foi concluída.");
+        }
         const answered = review.questionsAnswered + input.questions;
         const updated: TheoryReview = {
           ...review,
@@ -1102,7 +1107,7 @@ export const fixturesApi: BoraApi = {
         };
         state.reviews[index] = updated;
         return done(updated);
-      }),
+      }, studyPayload(input)),
     ),
 
   /* --- Fase 5 --- */

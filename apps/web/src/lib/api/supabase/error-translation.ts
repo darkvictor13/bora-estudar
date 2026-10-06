@@ -9,6 +9,7 @@
 import type { AuthError } from "@supabase/supabase-js";
 
 import { ApiThrownError, type ApiError } from "../contract.ts";
+import { STUDY_REPLAY_CONFLICT } from "../validation.ts";
 
 export const OFFLINE_MESSAGE = "Sem conexão. Verifique a rede e tente de novo.";
 export const INVALID_VALUE_MESSAGE =
@@ -124,4 +125,19 @@ export function translateDbError(error: DbErrorLike): ApiError {
 export function apiErrorFromThrown(thrown: unknown): ApiError {
   if (thrown instanceof ApiThrownError) return { code: thrown.code, message: thrown.message };
   return { code: "unknown", message: thrown instanceof Error ? thrown.message : String(thrown) };
+}
+
+/**
+ * O erro de uma RPC de estudo: `record_goal_entry`, `record_extra_study`,
+ * `record_initial_questions` e `record_review_questions`.
+ *
+ * `23505` aqui é a mesma chave com outra carga (`goal_entries_request_uidx` ou
+ * `theory_review_entries_request_uidx`), e a frase genérica de `23505` mandaria a
+ * pessoa tentar de novo com a mesma chave. A outra fonte, rara, é o professor
+ * gerando a semana no mesmo instante: também chega aqui, e a frase de "outros
+ * valores" é aceita nesse caso.
+ */
+export function studyWriteError(error: DbErrorLike): ApiError {
+  if (error.code === "23505") return { code: "conflict", message: STUDY_REPLAY_CONFLICT };
+  return translateDbError(error);
 }

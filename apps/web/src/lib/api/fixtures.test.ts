@@ -1037,6 +1037,84 @@ test("a mesma chave com outra carga é conflito, e com a mesma carga devolve o q
   assert.equal(diferente.error.code, "conflict");
 });
 
+test("QA-04 · as questões iniciais com a mesma chave somam uma vez, e outro payload é conflito", async () => {
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days[1]!.goals[0]!;
+  assert.ok(goal.theory);
+  const input = { goalId: goal.id, lessonId: goal.theory.lessonId, requestId: requestId(), questions: 10, correctAnswers: 8 };
+
+  const first = await api.recordInitialQuestions(input);
+  const again = await api.recordInitialQuestions(input);
+  assert.ok(first.ok && again.ok);
+  assert.equal(again.data.initialQuestionsDone, first.data.initialQuestionsDone, "a retentativa não soma de novo");
+  assert.equal((await api.loadTheoryGoal(goal.id)).progress?.initialQuestionsDone, 10);
+
+  const outra = await api.recordInitialQuestions({ ...input, questions: 12 });
+  assert.ok(!outra.ok);
+  assert.equal(outra.error.code, "conflict");
+  assert.match(outra.error.message, /outros valores/);
+  assert.equal((await api.loadTheoryGoal(goal.id)).progress?.initialQuestionsDone, 10, "o conflito não gravou");
+
+  // Uma chave nova é outro registro, e soma.
+  const nova = await api.recordInitialQuestions({ ...input, requestId: requestId(), questions: 5, correctAnswers: 5 });
+  assert.ok(nova.ok);
+  assert.equal(nova.data.initialQuestionsDone, 15);
+});
+
+test("QA-04 · a revisão com a mesma chave soma uma vez, e a retentativa do envio que fechou devolve a revisão", async () => {
+  const [review] = await api.loadDueReviews("plano");
+  assert.ok(review);
+  const key = requestId();
+
+  const parcial = await api.recordReviewQuestions({ reviewId: review.id, requestId: key, questions: 10, correctAnswers: 8 });
+  const repetida = await api.recordReviewQuestions({ reviewId: review.id, requestId: key, questions: 10, correctAnswers: 8 });
+  assert.ok(parcial.ok && repetida.ok);
+  assert.equal(repetida.data.questionsAnswered, 10, "a retentativa não soma de novo");
+
+  const outra = await api.recordReviewQuestions({ reviewId: review.id, requestId: key, questions: 9, correctAnswers: 8 });
+  assert.ok(!outra.ok);
+  assert.equal(outra.error.code, "conflict");
+  assert.match(outra.error.message, /outros valores/);
+
+  const fechamento = { reviewId: review.id, requestId: requestId(), questions: review.minimumQuestions - 10, correctAnswers: 5 };
+  const fechou = await api.recordReviewQuestions(fechamento);
+  assert.ok(fechou.ok);
+  assert.equal(fechou.data.status, "completed");
+
+  // O replay vem ANTES de "já concluída".
+  const replay = await api.recordReviewQuestions(fechamento);
+  assert.ok(replay.ok, "a retentativa do envio que concluiu recebe a revisão");
+  assert.equal(replay.data.status, "completed");
+
+  const nova = await api.recordReviewQuestions({ reviewId: review.id, requestId: requestId(), questions: 1, correctAnswers: 1 });
+  assert.ok(!nova.ok);
+  assert.equal(nova.error.code, "conflict");
+  assert.equal(nova.error.message, "Esta revisão já foi concluída.");
+});
+
+test("QA-04 · questões da teoria recusam a faixa com a frase de validation.ts", async () => {
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days[1]!.goals[0]!;
+  assert.ok(goal.theory);
+  const base = { goalId: goal.id, lessonId: goal.theory.lessonId };
+
+  const negativo = await api.recordInitialQuestions({ ...base, requestId: requestId(), questions: 5, correctAnswers: -1 });
+  assert.ok(!negativo.ok);
+  assert.equal(negativo.error.field, "correctAnswers");
+  assert.match(negativo.error.message, /a partir de 0/);
+
+  const zero = await api.recordInitialQuestions({ ...base, requestId: requestId(), questions: 0, correctAnswers: 0 });
+  assert.ok(!zero.ok);
+  assert.equal(zero.error.message, "Informe quantas questões você fez.");
+
+  const [review] = await api.loadDueReviews("plano");
+  assert.ok(review);
+  const acima = await api.recordReviewQuestions({ reviewId: review.id, requestId: requestId(), questions: 5, correctAnswers: 6 });
+  assert.ok(!acima.ok);
+  assert.equal(acima.error.message, "Os acertos não podem passar do total de questões.");
+  assert.equal((await api.loadDueReviews("plano"))[0]?.questionsAnswered, 0, "nada foi gravado");
+});
+
 test("o extra lançado para outro dia conta no dia estudado (N-07)", async () => {
   const lancado = await api.recordExtraStudy({
     studyPlanId: "plano", requestId: requestId(), kind: "anki", subject: "Português",

@@ -124,24 +124,14 @@ export const MAX_ENTRY_MINUTES = 240;
 export const MAX_ENTRY_QUESTIONS = 500;
 
 /**
- * Os números de um registro de estudo, na ordem em que a tela os pede.
+ * As questões e os acertos de um registro, com as frases que o `checkStudyEntry`
+ * fixou. Moram aqui, uma vez, porque a teoria (`checkQuestionRecord`) as repete.
  *
  * `Number.isInteger` recusa `NaN` (o `parseCount` devolve `NaN` para texto que
  * não é número inteiro) e 1.5. A frase de "acertos acima das questões" é a que o
  * e2e confere desde antes de esta regra morar aqui.
  */
-export function checkStudyEntry(input: {
-  readonly minutes: number;
-  readonly questions: number;
-  readonly correctAnswers: number;
-}): ApiError | null {
-  const { minutes, questions, correctAnswers } = input;
-  if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_ENTRY_MINUTES) {
-    return invalid(
-      `Informe o tempo em minutos inteiros, de 0 a ${MAX_ENTRY_MINUTES} por registro.`,
-      "minutes",
-    );
-  }
+function checkQuestionsAndCorrect(questions: number, correctAnswers: number): ApiError | null {
   if (!Number.isInteger(questions) || questions < 0 || questions > MAX_ENTRY_QUESTIONS) {
     return invalid(
       `Informe as questões em número inteiro, de 0 a ${MAX_ENTRY_QUESTIONS} por registro.`,
@@ -154,10 +144,45 @@ export function checkStudyEntry(input: {
   if (correctAnswers > questions) {
     return invalid("Os acertos não podem passar do total de questões.", "correctAnswers");
   }
+  return null;
+}
+
+/** Os números de um registro de estudo, na ordem em que a tela os pede. */
+export function checkStudyEntry(input: {
+  readonly minutes: number;
+  readonly questions: number;
+  readonly correctAnswers: number;
+}): ApiError | null {
+  const { minutes, questions, correctAnswers } = input;
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_ENTRY_MINUTES) {
+    return invalid(
+      `Informe o tempo em minutos inteiros, de 0 a ${MAX_ENTRY_MINUTES} por registro.`,
+      "minutes",
+    );
+  }
+  const numbers = checkQuestionsAndCorrect(questions, correctAnswers);
+  if (numbers) return numbers;
   if (minutes === 0 && questions === 0) {
     return invalid("Informe o tempo estudado ou as questões feitas.", "minutes");
   }
   return null;
+}
+
+/**
+ * As questões da teoria, iniciais ou de revisão (R-TEO-09, R-TEO-21).
+ *
+ * Mesma faixa de `checkStudyEntry`, e uma regra própria: não há campo de minutos,
+ * então "questão zero não é registro" — o `check_violation` das duas RPCs.
+ */
+export function checkQuestionRecord(input: {
+  readonly questions: number;
+  readonly correctAnswers: number;
+}): ApiError | null {
+  const { questions, correctAnswers } = input;
+  if (Number.isInteger(questions) && questions < 1) {
+    return invalid("Informe quantas questões você fez.", "questions");
+  }
+  return checkQuestionsAndCorrect(questions, correctAnswers);
 }
 
 /** `AAAA-MM-DD` que sobrevive à ida e volta por `Date`: `2026-02-30` não passa. */
@@ -191,10 +216,11 @@ export function checkExtraStudy(
 }
 
 /**
- * `23505` de `record_goal_entry` e `record_extra_study`: a mesma chave com outra
- * carga. É raro (a chave nasce uma vez por abertura do diálogo), mas a frase
- * genérica de `23505`, "Este registro já existe.", mandaria a pessoa tentar de
- * novo com a mesma chave e o mesmo erro.
+ * `23505` de `record_goal_entry`, `record_extra_study`, `record_initial_questions`
+ * e `record_review_questions`: a mesma chave com outra carga. É raro (a chave
+ * nasce uma vez por abertura do diálogo), mas a frase genérica de `23505`, "Este
+ * registro já existe.", mandaria a pessoa tentar de novo com a mesma chave e o
+ * mesmo erro.
  */
 export const STUDY_REPLAY_CONFLICT =
   "Este estudo já foi registrado com outros valores. Atualize a página para ver o que foi gravado.";
