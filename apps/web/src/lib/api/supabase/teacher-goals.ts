@@ -32,7 +32,7 @@ import type {
   Week,
   Weekday,
 } from "../contract.ts";
-import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { done, fail, failure, readFailure, throwDb, settle, translateDbError } from "./errors.ts";
 import { checkGenerateWeek } from "../validation.ts";
 import { once } from "./idempotency.ts";
 import { loadWeek } from "./week.ts";
@@ -253,16 +253,18 @@ export function generateWeek(input: GenerateWeekInput): Promise<Result<Week>> {
  * o pior caso (corrida com um registro do aluno) é segurado por
  * `goal_entries_goal_fk`.
  */
-export async function clearPendingGoals(
+export function clearPendingGoals(
   studyPlanId: Uuid,
   weekNumber: number,
   requestId: RequestId,
 ): Promise<Result<Week>> {
-  void requestId;
-  const { error } = await supabase.rpc("clear_pending_goals", {
-    p_study_plan_id: studyPlanId,
-    p_week_number: weekNumber,
+  return settle(async () => {
+    void requestId;
+    const { error } = await supabase.rpc("clear_pending_goals", {
+      p_study_plan_id: studyPlanId,
+      p_week_number: weekNumber,
+    });
+    if (error) return failure<Week>(translateDbError(error));
+    return done(await loadWeek(studyPlanId, weekNumber));
   });
-  if (error) return failure<Week>(translateDbError(error));
-  return done(await loadWeek(studyPlanId, weekNumber));
 }

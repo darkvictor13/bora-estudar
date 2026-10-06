@@ -157,6 +157,46 @@ test.describe("F-META-03 · registrar estudo", () => {
     expect(Number(saved.score)).toBe(80);
   });
 
+  test("rede caindo ao gravar: a frase é 'Sem conexão', e a retentativa grava uma vez — QA-06", async ({
+    studentPage,
+    scenario,
+    consoleErrors,
+  }) => {
+    const goal = theoryGoalOf(scenario);
+
+    // Só o POST em `goal_entries`: derrubar a leitura da meta faria o helper
+    // LANÇAR dentro do `once()`, que é o caso do F-EXTRA-01 (N-01). Aqui o
+    // erro é o do `fetch` que falhou, direto da resposta do PostgREST.
+    // Quando o 5a trocar a escrita por `rpc/record_goal_entry`, intercepte ela.
+    let caindo = true;
+    await studentPage.route(
+      (url) => url.pathname.endsWith("/rest/v1/goal_entries"),
+      (route) =>
+        caindo && route.request().method() === "POST"
+          ? route.abort("internetdisconnected")
+          : route.fallback(),
+    );
+
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await record(studentPage, goal.id, { minutes: "30" });
+
+    const dialog = testId(studentPage, "record-study-dialog");
+    await expect(alert(dialog, "error")).toHaveText("Sem conexão. Verifique a rede e tente de novo.");
+    await expect(dialog).not.toContainText("TypeError");
+
+    // O MESMO diálogo, o mesmo `requestId`: a retentativa grava.
+    caindo = false;
+    await dialog.getByRole("button", { name: "Registrar" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const gravados = await one<{ n: string }>(
+      "select count(*) as n from public.goal_entries where goal_id = $1",
+      [goal.id],
+    );
+    expect(Number(gravados.n)).toBe(1);
+    expect(consoleErrors).toEqual([]);
+  });
+
   test("dois registros na mesma meta somam, em vez de substituir", async ({
     studentPage,
     scenario,
@@ -299,6 +339,53 @@ test.describe("F-EXTRA-01 · estudo fora das metas", () => {
       [created.id],
     );
     expect(entry).toMatchObject({ minutes: 50, questions: 12 });
+  });
+
+  test("falha que LANÇA não prende o diálogo — N-01", async ({
+    studentPage,
+    scenario,
+    consoleErrors,
+  }) => {
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+
+    await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+    const dialog = testId(studentPage, "extra-study-dialog");
+    await expect(dialog).toBeVisible();
+
+    await field(studentPage, "subject").fill("Direito Tributário");
+    await field(studentPage, "minutes").fill("50");
+
+    // Mata só a PRÓXIMA verificação de sessão, como o F-TEMA-09. `recordExtraStudy`
+    // chama `requireSession`, que LANÇA `offline` de dentro do `once()` — era o
+    // que deixava o botão preso em "Salvando…" e a rejeição guardada no mapa.
+    // Se o 5a tirar `requireSession` de `recordExtraStudy` (RPC), troque a
+    // escrita por outra que lance, guardando o `requestId` da abertura do diálogo.
+    let falhas = 1;
+    await studentPage.route(/\/auth\/v1\/user/, (route) =>
+      falhas-- > 0 ? route.abort("internetdisconnected") : route.continue(),
+    );
+
+    const lancar = dialog.getByRole("button", { name: "Lançar estudo" });
+    await lancar.click();
+    await expect(alert(dialog, "error")).toContainText("Sem conexão");
+    await expect(lancar).toBeEnabled();
+
+    await lancar.click();
+    await expect(dialog).toHaveCount(0);
+
+    const extras = await one<{ n: string }>(
+      `select count(*) as n from public.goals
+        where study_plan_id = $1 and type = 'extra' and subject = 'Direito Tributário'`,
+      [scenario.planId],
+    );
+    expect(Number(extras.n)).toBe(1);
+    // Só `pageerror`, que é a promessa rejeitada sem tratamento: antes da
+    // correção sai uma por falha. NÃO se compara `consoleErrors` inteiro porque
+    // o `ExtraStudyDialog` já loga, ao abrir, "Cannot update a component
+    // (`StudyTimerBar`) while rendering…" (`pauseStudyTimerForRecord` dentro do
+    // inicializador de `useState`) — defeito de outro assunto, que este teste
+    // não pode cobrar.
+    expect(consoleErrors.filter((message) => message.startsWith("pageerror"))).toEqual([]);
   });
 
   test("entra no tempo e no desempenho da semana", async ({ studentPage }) => {

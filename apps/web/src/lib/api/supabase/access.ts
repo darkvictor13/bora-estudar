@@ -13,7 +13,7 @@
 import { supabase } from "@/lib/supabase/client";
 
 import type { Result, Session, WaitlistEntry, WaitlistInput } from "../contract.ts";
-import { fail, done, failure, throwDb, translateDbError } from "./errors.ts";
+import { fail, done, failure, throwDb, settle, translateDbError } from "./errors.ts";
 import { requireSession } from "./session.ts";
 
 const WAITLIST_COLUMNS =
@@ -60,51 +60,53 @@ export async function loadWaitlistEntry(): Promise<WaitlistEntry | null> {
   return data ? toEntry(data as WaitlistRow) : null;
 }
 
-export async function joinWaitlist(input: WaitlistInput): Promise<Result<WaitlistEntry>> {
-  const session = await requireSession();
+export function joinWaitlist(input: WaitlistInput): Promise<Result<WaitlistEntry>> {
+  return settle(async () => {
+    const session = await requireSession();
 
-  if (input.name.trim().length < 3) {
-    return fail("validation", "Informe seu nome completo.", "name");
-  }
-  if (!input.whatsapp.trim()) {
-    return fail("validation", "Informe um WhatsApp para o professor falar com você.", "whatsapp");
-  }
-  if (!input.targetExam.trim()) {
-    return fail("validation", "Informe para qual concurso você estuda.", "targetExam");
-  }
+    if (input.name.trim().length < 3) {
+      return fail("validation", "Informe seu nome completo.", "name");
+    }
+    if (!input.whatsapp.trim()) {
+      return fail("validation", "Informe um WhatsApp para o professor falar com você.", "whatsapp");
+    }
+    if (!input.targetExam.trim()) {
+      return fail("validation", "Informe para qual concurso você estuda.", "targetExam");
+    }
 
-  const values = {
-    name: input.name.trim(),
-    email: input.email.trim(),
-    whatsapp: input.whatsapp.trim(),
-    interest_area: input.interestArea.trim(),
-    target_exam: input.targetExam.trim(),
-    timezone: input.timezone,
-    birth_date: input.birthDate ?? null,
-  };
+    const values = {
+      name: input.name.trim(),
+      email: input.email.trim(),
+      whatsapp: input.whatsapp.trim(),
+      interest_area: input.interestArea.trim(),
+      target_exam: input.targetExam.trim(),
+      timezone: input.timezone,
+      birth_date: input.birthDate ?? null,
+    };
 
-  const existing = await loadWaitlistEntry();
+    const existing = await loadWaitlistEntry();
 
-  // Sem `upsert`, e pelo mesmo motivo de `theory_progress`: as colunas de
-  // IDENTIDADE (`student_id`, `teacher_id`) ficam fora do grant de UPDATE, e o
-  // `ON CONFLICT DO UPDATE` do PostgREST as manda junto.
-  const { error } = existing
-    ? await supabase.from("waitlist").update(values).eq("student_id", session.profileId)
-    : await supabase.from("waitlist").insert({
-        ...values,
-        student_id: session.profileId,
-        // NULO É O CASO NORMAL, e não falta de dado: o perfil nasce sem
-        // professor (migration 20260914190000), e esta fila é justamente a de
-        // quem ainda não tem um. A policy `waitlist_insert_student` compara o
-        // par com `is not distinct from`, então nulo casa com nulo.
-        teacher_id: session.teacherId,
-      });
+    // Sem `upsert`, e pelo mesmo motivo de `theory_progress`: as colunas de
+    // IDENTIDADE (`student_id`, `teacher_id`) ficam fora do grant de UPDATE, e o
+    // `ON CONFLICT DO UPDATE` do PostgREST as manda junto.
+    const { error } = existing
+      ? await supabase.from("waitlist").update(values).eq("student_id", session.profileId)
+      : await supabase.from("waitlist").insert({
+          ...values,
+          student_id: session.profileId,
+          // NULO É O CASO NORMAL, e não falta de dado: o perfil nasce sem
+          // professor (migration 20260914190000), e esta fila é justamente a de
+          // quem ainda não tem um. A policy `waitlist_insert_student` compara o
+          // par com `is not distinct from`, então nulo casa com nulo.
+          teacher_id: session.teacherId,
+        });
 
-  if (error) return failure(translateDbError(error));
+    if (error) return failure(translateDbError(error));
 
-  const fresh = await loadWaitlistEntry();
-  if (!fresh) return fail("unknown", "A inscrição não foi gravada.");
-  return done(fresh);
+    const fresh = await loadWaitlistEntry();
+    if (!fresh) return fail("unknown", "A inscrição não foi gravada.");
+    return done(fresh);
+  });
 }
 
 /**

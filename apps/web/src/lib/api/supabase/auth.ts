@@ -21,7 +21,7 @@ import {
   type ThemePreference,
 } from "../contract.ts";
 import { checkCredentials, checkName, checkPassword, checkSignUp } from "../validation.ts";
-import { done, fail, failure, translateAuthError, translateDbError } from "./errors.ts";
+import { done, fail, failure, settle, translateAuthError, translateDbError } from "./errors.ts";
 import { currentSession } from "./session.ts";
 
 /**
@@ -139,21 +139,23 @@ export const authApi = {
     };
   },
 
-  async saveAccount({ name }: AccountInput): Promise<Result<Account>> {
-    const invalid = checkName(name);
-    if (invalid) return failure(invalid);
-    const found = await sessionForWrite();
-    if (!found.ok) return failure(found.error);
-    const session = found.data;
-    if (!session) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
+  saveAccount({ name }: AccountInput): Promise<Result<Account>> {
+    return settle(async () => {
+      const invalid = checkName(name);
+      if (invalid) return failure(invalid);
+      const found = await sessionForWrite();
+      if (!found.ok) return failure(found.error);
+      const session = found.data;
+      if (!session) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ name: name.trim() })
-      .eq("id", session.profileId);
-    if (error) return failure(translateDbError(error));
+      const { error } = await supabase
+        .from("profiles")
+        .update({ name: name.trim() })
+        .eq("id", session.profileId);
+      if (error) return failure(translateDbError(error));
 
-    return done(await authApi.loadAccount());
+      return done(await authApi.loadAccount());
+    });
   },
 
   /**

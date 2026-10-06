@@ -254,7 +254,7 @@ test.describe("F-PROF-10 · QA-05 · gerar a semana é uma transação", () => {
     // LEITURA lançar dentro do `once()` e prender o id (N-01, PR 4).
     await teacherPage.route("**/rest/v1/rpc/generate_week", (route) => route.abort(), { times: 1 });
     await testId(teacherPage, "goals-generate").click();
-    await expect(alert(teacherPage, "error")).toBeVisible();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
     expect(await ids()).toEqual(antes);
 
     // A mesma prévia, o mesmo pedido: agora grava.
@@ -279,7 +279,7 @@ test.describe("F-PROF-10 · QA-05 · gerar a semana é uma transação", () => {
       { times: 1 },
     );
     await testId(teacherPage, "goals-generate").click();
-    await expect(alert(teacherPage, "error")).toBeVisible();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
 
     const semana = "select count(*) from public.goals where study_plan_id = $1 and week_number = 1";
     const gravadas = await count(semana, [scenario.planId]);
@@ -447,7 +447,7 @@ test.describe("F-GPLAN-01 · planejamentos (QA-03, QA-12)", () => {
 
     await teacherPage.route("**/rest/v1/rpc/activate_study_plan", (route) => route.abort());
     await linha(novo).getByTestId("plan-activate").click();
-    await expect(alert(teacherPage, "error")).toBeVisible();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
 
     // Nada mudou: o anterior segue ativo, e o aluno não ficou sem planejamento.
     expect(await planStatus(scenario.planId)).toBe("active");
@@ -483,7 +483,7 @@ test.describe("F-GPLAN-01 · planejamentos (QA-03, QA-12)", () => {
       { times: 1 },
     );
     await linha.getByTestId("plan-activate").click();
-    await expect(alert(teacherPage, "error")).toBeVisible();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
 
     expect(await planStatus(novo)).toBe("active");
 
