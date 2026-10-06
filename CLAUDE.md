@@ -78,7 +78,7 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 | | Quem escreve | Como |
 |---|---|---|
-| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna |
+| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals` |
 | `goal_entries`, `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
@@ -91,6 +91,7 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `legal_norms`, `laws`, `law_articles`, `law_subjects`, `exam_notices` e filhas | ninguém | SELECT e nada mais; o texto do artigo só com acesso vigente ou professor. Carga por `scripts/load-law-library.mjs`, no deploy |
 | `law_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar e alterar exigem acesso vigente |
 | `flashcard_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar, alterar e apagar exigem acesso vigente. O cartão é `card_kind` mais um par de colunas por tipo, e a CHECK `flashcard_marks_card_ref_check` exige o par do tipo e nulos nos outros |
+| `goal_batches` | ninguém | SELECT para o professor dono; escrita é de `generate_week` |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 
@@ -108,6 +109,15 @@ conferindo a turma de destino. Uma RPC ali não acrescentaria garantia nenhuma, 
 acrescentaria superfície. O que mora no banco é o que não cabe numa tela: um
 aluno em uma turma só (`class_students_one_per_student_uidx`) e turma com aluno
 dentro que não se apaga (`protect_class_with_students`).
+
+**Gerar a semana é planejamento, e TEM RPC.** Ela apaga e insere várias linhas
+de uma vez, que precisam acontecer juntas ou não acontecer. E um replay depois
+de sucesso não é inofensivo: a meta nova que ganhou registro seria preservada, e
+a semana inserida de novo. Nenhuma das três defesas da escrita direta dá
+transação nem idempotência com payload. **Gerar não apaga meta concluída nem
+estudo registrado, e não existe modo que apague**: o critério mora em
+`app_private.goal_is_preserved`, e o modo "Replanejar semana inteira" saiu em
+06/10/2026 (spec 04).
 
 Três defesas sustentam a escrita direta, e as três precisam continuar valendo
 em qualquer tabela nova:
@@ -148,16 +158,20 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** As duas que existem —
-`link_student` e `set_student_access`, de `20260918120000` — nasceram assim, uma
-em cada forma:
+**Toda RPC mutante precisa ser segura a retentativa.** As quatro que existem —
+`link_student` e `set_student_access`, de `20260918120000`, mais `generate_week`
+e `clear_pending_goals`, de `20261006214424` — nasceram assim, uma em cada
+forma:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
   reexecutar; payload diferente é rejeitado. É `set_student_access`, e o que a
   sustenta é `access_grants_request_uidx`. O payload guardado são as PRÓPRIAS
   colunas (`student_id`, `action`, `months`): repeti-lo num `jsonb` ao lado
-  seria um segundo caminho afirmando o mesmo fato.
+  seria um segundo caminho afirmando o mesmo fato. **`generate_week` é desta
+  forma também**: a PK `goal_batches.id` É o `request_id`, e o replay compara
+  `(study_plan_id, week_number)`; o `p_goals` não é guardado, porque `goals` já
+  diz o que foi gerado.
   `quiz_sessions.finish_request_id` (UNIQUE) e `finish_payload` são as colunas
   que o schema reserva para a próxima.
 - **Naturalmente idempotente** — `link_student` não recebe `request_id`, porque
@@ -165,7 +179,8 @@ em cada forma:
   garante é a COLUNA `profiles.teacher_id`, que cabe um valor só, com a escrita
   num `update ... where teacher_id is null` único. O mesmo vale para o segundo
   "iniciar" da mesma meta, que o índice `quiz_sessions_one_open_per_plan_uidx`
-  vai garantir.
+  vai garantir. `clear_pending_goals` também: só apaga, o critério é reavaliado
+  sob a trava do plano, e `goal_entries_goal_fk` segura o pior caso.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
 ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**
@@ -177,6 +192,12 @@ uma bateria que perde o vínculo com a meta vira dado órfão que nenhuma tela
 consegue explicar. `quiz_sessions` referencia `profiles` e o caderno assim, e
 `access_grants` referencia `profiles` pelo mesmo motivo — liberação órfã não
 responde "quem liberou este aluno".
+
+`goal_entries_goal_fk` é `NO ACTION`, e não `RESTRICT`, para o apagamento de
+conta continuar passando: os cascades que descem de `profiles` até `goals` e até
+`goal_entries` no mesmo comando já apagaram os registros quando a FK é conferida,
+no fim do comando (`07_schema` confere). **Meta com registro não se apaga por
+caminho nenhum** — nem pelo `DELETE` direto, que dá `23503`.
 
 **Nenhum dado de domínio em texto livre.** Tipo, origem e flag são enum ou FK.
 A versão anterior codificava `TIPO_REFORCO:1` e o resultado inteiro de uma

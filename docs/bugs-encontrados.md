@@ -462,3 +462,59 @@ em desenvolvimento. Em produção, com confirmação ligada, o GoTrue responde
 sucesso genérico para não revelar quais e-mails existem, e a pessoa vai para a
 lista de espera de uma conta que não é dela. Vale decidir o texto dessa tela
 antes de ligar a confirmação.
+
+---
+
+## Varredura de 06/10/2026
+
+Levantamento do QA de 06/10/2026, em [`relatorio-qa-2026-10-06.md`](relatorio-qa-2026-10-06.md). A
+numeração é `QA-NN`, para não colidir com os `BUG-NN` acima; o plano de correção, PR a PR, está em
+[`plano-qa/README.md`](plano-qa/README.md).
+
+### QA-01 · CRÍTICO · Regenerar a semana apaga o estudo registrado
+
+O aluno registra 40 min numa meta de teoria, e ela passa a `in_progress`. O professor abre
+`/professor/metas`, escolhe a substituição "Segura", vê a prévia ("Preservadas 0") e gera: a meta some, e
+o `goal_entries` do aluno vai de 1 linha para 0.
+
+`isPreserved` só olhava `completed`, e `goal_entries_goal_fk` era `on delete cascade`: o registro ia junto, sem erro.
+
+**Reproduzir** registrar estudo numa meta pendente e gerar a semana pelo professor
+(F-PROF-05, `03_goals` caso 20).
+
+**Correção** `generate_week` apaga só o que `app_private.goal_is_preserved` não segura — a concluída e a com
+registro ou bateria —, a FK passou a `no action` e a prévia conta pelo mesmo critério
+(`week_replacement_preview`). **O modo "Replanejar semana inteira" foi removido:** com a meta concluída
+preservada ele apagaria exatamente o mesmo que o padrão, e uma tela com dois caminhos iguais promete uma
+diferença que não existe. Spec 04, R-GEN-12 a R-GEN-14.
+
+---
+
+### QA-05 · ALTO · Uma falha no meio de gerar a semana apaga a semana
+
+Com o `POST /rest/v1/goals` caindo, gerar levava a semana de 5 metas para 0: o `DELETE` e o `INSERT`
+eram duas requisições, sem transação. A retentativa também não era segura — o `request_id` nascia a cada
+clique, e repetir o pedido depois de a resposta se perder chegava como operação nova, duplicando a
+semana quando o aluno tinha registrado numa meta recém-criada. E a posição das metas novas somava a
+QUANTIDADE de preservadas, e não a maior posição, e batia em `goals_one_per_slot_idx`.
+
+**Reproduzir** derrubar `rpc/generate_week` com `route.abort()` e, noutro teste, deixar o servidor gravar e
+perder a resposta (F-PROF-10, `03_goals` casos 18 e 22).
+
+**Correção** `generate_week` é uma transação, idempotente pela PK `goal_batches.id`, e a tela gera o
+`request_id` uma vez por prévia. As posições novas entram depois da maior que sobrou no dia.
+Spec 04, R-GEN-15, R-GEN-16 e R-GEN-19.
+
+---
+
+### QA-17 · BAIXO · Semana fora de intervalo é aceita ou vira erro cru
+
+`Number(...) || 1` trocava 0 por 1 em silêncio; -3 e 99999 montavam a prévia e gravavam; 1,5 chegava ao
+banco e voltava `22P02`. `goals.week_number` e `goals.planned_minutes` não tinham CHECK.
+
+**Reproduzir** abrir `/professor/metas?semana=0`, `-3`, `1.5` ou `99999` e pedir a prévia (F-PROF-11,
+`07_schema` caso 14).
+
+**Correção** `checkWeekNumber` no contrato, chamado pelas duas implementações, recusa fora de 1 a 520 com a
+frase "1 a 520"; o banco tem `goals_week_number_check` e `goals_planned_minutes_check`.
+Spec 04, R-GEN-17.
