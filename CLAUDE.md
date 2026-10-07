@@ -232,6 +232,21 @@ A versão anterior codificava `TIPO_REFORCO:1` e o resultado inteiro de uma
 bateria em base64 dentro do campo de observações, e o round-trip destruía texto
 a cada gravação.
 
+**Texto que o cliente grava tem teto no banco.** É uma CHECK de
+`char_length(<coluna>) <= N`, que mede o valor GRAVADO, e não o aparado:
+`char_length(btrim(x)) <= N` deixava passar `'abc'` mais um milhão de espaços.
+O piso, ao contrário, mede sem as pontas (`char_length(btrim(x)) >= 3`).
+`07_schema.sql` varre o catálogo e falha com a coluna `text` que `authenticated`
+grava sem isso — coluna nova de texto gravável nasce com o teto, ou a suíte
+reprova. Os números moram em `lib/api/validation.ts` (`MAX_NAME_LENGTH` e
+irmãs), as telas leem de lá pelo `lib/api`, e o gatilho de cadastro corta o
+nome em 120 em vez de derrubar a conta. Nome único é índice sobre
+`lower(btrim(nome))`, e o `23505` é identificado pelo NOME do índice
+(`isUniqueViolation`), nunca pela frase: o deck pessoal tem PK escolhida pelo
+cliente, e um replay com o mesmo `id` também dá `23505`. Link é `''` ou
+`https://` sem espaço, também no banco: `javascript:` já foi gravado pela API e
+renderizado como `href`.
+
 **Invariante que dá para expressar em constraint vai para o banco.** Um
 planejamento ativo por aluno é índice único parcial, não uma sequência de
 `UPDATE` no cliente.

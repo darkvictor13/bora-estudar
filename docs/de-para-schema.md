@@ -1029,7 +1029,9 @@ repostas antes deste arquivo existir:
 
 | índice | invariante |
 |---|---|
-| `study_plans_name_per_student_uidx` | um planejamento por aluno com o mesmo nome |
+| `study_plans_name_per_student_uidx` | um planejamento por aluno com o mesmo nome. Desde 07/10/2026 (QA-16, `20261007001002`) sobre `(teacher_id, student_id, lower(btrim(name)))`: ignora maiúsculas e espaço nas pontas |
+| `classes_name_per_teacher_uidx` | uma turma por professor com o mesmo nome, ignorando maiúsculas e pontas (QA-16, 07/10/2026) |
+| `personal_flashcard_decks_name_per_student_uidx` | um deck pessoal por aluno com a mesma disciplina e o mesmo assunto, ignorando maiúsculas e pontas (QA-16, 07/10/2026) |
 | `quiz_session_questions_one_reinforcement_per_source_uidx` | uma correlata por questão de origem, na mesma bateria |
 
 Uma **terceira** também sumiu, e só foi reposta em 06/10/2026 (QA-03), na

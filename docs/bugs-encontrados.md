@@ -891,3 +891,93 @@ entregar e-mail.
 (`existing-account`), decididos pelo CÓDIGO (`conflict` no campo `email`), e `sign_in_sign_ups = 30` por 5 min por IP
 é a mitigação. Spec 01, R-AUTH-18; GAP-04. O comentário de `signUp` que dizia que o gatilho lê `role` do metadado
 era falso desde `20260914190000`: o `role` saiu do `options.data`.
+
+---
+
+### QA-15 · MÉDIO · O teto de texto só existia no navegador
+
+Só o cadastro tinha `maxLength` (120). Meus dados, planejamento e turma não tinham teto nem no navegador, e o banco
+aceitava 400 caracteres no nome, 487 no planejamento e 502 na turma. A varredura do catálogo achou **65 colunas**
+`text` que `authenticated` gravava sem teto algum — de `profiles.name` a `theory_lessons.pdf_url` — e outras 14 cujo
+teto media `char_length(btrim(x))`: `'abc' || repeat(' ', 1000000)` passava num teto de 160. O gatilho de cadastro
+copiava o nome do metadado sem cortar, e com a CHECK nova um nome longo mandado pela API derrubaria a conta inteira
+("Database error saving new user").
+
+**Reproduzir** a consulta de `07_schema` (a varredura) contra o banco anterior, e `04_profiles` casos 21 e 22
+(F-AUTH-08/09, F-CONTA-01, F-GPLAN-06, F-MATR-06).
+
+**Correção** migration `20261007001002`: CHECK de `char_length(<coluna>) <= N` em toda coluna da varredura, as 14 que
+mediam `btrim` recriadas com o mesmo nome, e o gatilho corta o nome em 120 (nulo abaixo de 3). O dado existente foi
+cortado no teto (a `quote` de marcação, apagada: cortar viola `length(quote) = end - start`). `checkName`,
+`checkClass`, `checkPlan` e as irmãs recusam com a frase, e as telas leem `MAX_*` de `lib/api`. Spec 01, R-AUTH-07;
+spec 10, R-CTA-03; spec 13, R-MATR-09.
+
+---
+
+### QA-16 · MÉDIO · Turma, deck e planejamento aceitavam nome repetido
+
+`classes` e `personal_flashcard_decks` não tinham índice de nome, e o de `study_plans` diferenciava maiúscula e
+espaço ("Área Fiscal" e "área fiscal" conviviam). O `23505` do planejamento chegava como "Este registro já existe.".
+
+**Reproduzir** criar a mesma turma, o mesmo deck e o mesmo planejamento com outra caixa e espaço nas pontas
+(F-MATR-06, F-FLASH-06, F-GPLAN-06; `07_schema` casos 32 e 33; `16_personal_flashcards` casos 6 e 7).
+
+**Correção** os três índices ignoram maiúsculas e pontas (`lower(btrim(...))`), e o adaptador troca o `23505` pela
+frase própria olhando o NOME do índice (`isUniqueViolation`) — a PK do deck é escolhida pelo cliente, e um replay com o
+mesmo `id` não é deck repetido. A migration renomeou as duplicatas existentes com " (2)", " (3)"…, sem fundir. A
+fixture passou a recusar com a mesma frase. Spec 13, R-MATR-09; spec 14, R-GPLAN-09; spec 34.
+
+---
+
+### QA-18 · BAIXO · Senha só de espaços
+
+`checkPassword` só media comprimento, e a mesma função serve ao cadastro e à troca de senha: oito espaços eram
+aceitos pelo GoTrue local (`password_requirements = ""`).
+
+**Reproduzir** cadastrar com oito espaços e ler "nenhuma conta nasce" (F-AUTH-09, F-AUTH-12).
+
+**Correção** `checkPassword` recusa "A senha não pode ser formada só por espaços."; o login NÃO recusa
+(`checkCredentials` não muda), para a conta antiga continuar entrando. A política do GoTrue não muda (D-10): quem chama
+a API direto ainda cria a conta, e o contrato é a única barreira. Spec 01, R-AUTH-19.
+
+---
+
+### QA-19 · MÉDIO · WhatsApp sem formato, nascimento no futuro, três regras para um campo
+
+`waitlist_whatsapp_check` pedia 8 a 30 caracteres (`'abcdefgh'` passava), `birth_date` não tinha CHECK, o adaptador só
+pedia "não vazio" e a fixture, 10 dígitos com outra frase ("WhatsApp incompleto."). "Área de interesse" vazia chegava
+ao banco e voltava `23514` cru.
+
+**Reproduzir** `abcdefgh` e `2031-01-01` na lista de espera (F-ESP-01; `05_waitlist` casos 19 a 21).
+
+**Correção** uma faixa só (D-08), em `checkWaitlist` e nas CHECKs: só dígitos, espaço, `()`, `+` e `-`, com 10 a 13
+dígitos; nascimento entre 1900-01-01 e hoje (CHECK com `current_date`, monotônica: vale hoje, vale amanhã). A migration
+apagou as inscrições com WhatsApp fora do formato e zerou o nascimento fora da faixa. A tela marca a área como
+obrigatória. Spec 10, R-CTA-07.
+
+---
+
+### QA-24 · MÉDIO · `javascript:` no link do caderno
+
+`study_plan_notebooks.notebook_link` era `text` sem CHECK, o professor gravava `javascript:window.__pwn=1;alert(1)`, e
+`routes/student/Notebooks.tsx` o renderizava como `href`. A meta de acerto de 150% também chegava ao banco e voltava
+`23514` cru.
+
+**Reproduzir** editar o link do caderno com `javascript:` ou `http://` (F-CAD-01 do professor; `09_lesson_resource_links`
+casos 6 a 10).
+
+**Correção** CHECK `https://` sem espaço, até 2048 (`study_plan_notebooks_notebook_link_check`); `checkNotebook` recusa
+com "Informe um link HTTPS válido…" e confere a meta de 0 a 100. Qualquer `https://` vale, não só o TEC (D-09). A
+migration limpou os links fora da regra para `''`. Spec 15, R-CAD-16.
+
+---
+
+### N-06 · BAIXO · O mesmo, em `subject_blocks.link` e `subject_lessons.link`
+
+As duas colunas eram `text` nulável sem CHECK, renderizadas em `routes/student/Subjects.tsx`. Nenhuma tela as escreve, mas
+o professor as grava pela API: a CHECK é a única defesa.
+
+**Reproduzir** `09_lesson_resource_links` casos 8 e 9.
+
+**Correção** a mesma CHECK, com `null` no lugar de `''`; a migration limpou os links fora da regra para `null`.
+Spec 15, R-CAD-16.
