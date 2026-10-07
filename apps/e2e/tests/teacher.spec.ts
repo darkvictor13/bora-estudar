@@ -415,6 +415,39 @@ test.describe("F-PROF-06 · copiar a semana anterior", () => {
   });
 });
 
+test.describe("F-GPLAN-06 · nome de planejamento repetido — QA-16", () => {
+  test("outra caixa e espaço nas pontas é o mesmo nome, e o campo tem teto de 120 — QA-15", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto("/professor/planejamentos");
+    await teacherPage.getByRole("button", { name: "Novo planejamento" }).click();
+
+    const dialogo = testId(teacherPage, "plan-dialog");
+    await expect(field(teacherPage, "name")).toHaveAttribute("maxlength", "120");
+    await expect(field(teacherPage, "targetExam")).toHaveAttribute("maxlength", "200");
+
+    await field(teacherPage, "name").fill(`  ${scenario.planName.toUpperCase()}  `);
+    await dialogo.getByRole("button", { name: "Criar" }).click();
+
+    // A frase é a do contrato, e fica DENTRO do diálogo: "Este registro já
+    // existe." não diria o que fazer.
+    await expect(alert(dialogo, "error")).toHaveText("Este aluno já tem um planejamento com esse nome.");
+    expect(
+      await count(
+        `select count(*) from public.study_plans
+          where student_id = $1 and lower(btrim(name)) = lower(btrim($2))`,
+        [scenario.student.id, scenario.planName],
+      ),
+    ).toBe(1);
+
+    // Com um nome novo o mesmo formulário grava.
+    await field(teacherPage, "name").fill(`Outro ${scenario.planId.slice(0, 8)}`);
+    await dialogo.getByRole("button", { name: "Criar" }).click();
+    await expect(testId(teacherPage, "plan-dialog")).toHaveCount(0);
+  });
+});
+
 test.describe("F-GPLAN-01 · planejamentos (QA-03, QA-12)", () => {
   test("nasce PAUSADO, e ativar arquiva o anterior", async ({ teacherPage, scenario }) => {
     // NOME ÚNICO POR CENÁRIO. Um literal compartilhado faz dois workers
@@ -673,6 +706,60 @@ test.describe("F-CAD-01 · cadernos TEC", () => {
     await expect(
       teacherPage.locator(`[data-testid="notebook-row"][data-block-id="${blockId}"]`),
     ).toHaveAttribute("data-deleted", "false");
+  });
+
+  test("link javascript: é recusado, e o banco fica com o anterior — QA-24", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const blockId = scenario.blocks[0]!.id;
+    await teacherPage.goto("/professor/cadernos");
+
+    const linha = teacherPage.locator(`[data-testid="notebook-row"][data-block-id="${blockId}"]`);
+    await linha.getByRole("button", { name: "Editar" }).click();
+    await field(teacherPage, "notebookLink").fill("javascript:window.__pwn=1;alert(1)");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(alert(teacherPage, "error")).toContainText("Informe um link HTTPS válido");
+    expect(
+      (await one<{ notebook_link: string }>(
+        "select notebook_link from public.study_plan_notebooks where block_id = $1",
+        [blockId],
+      )).notebook_link,
+    ).toBe("https://www.tecconcursos.com.br/");
+
+    // `http://` também não: a regra é `https://` e nada mais.
+    await field(teacherPage, "notebookLink").fill("http://www.tecconcursos.com.br/");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+    await expect(alert(teacherPage, "error")).toContainText("Informe um link HTTPS válido");
+
+    // Qualquer https passa, não só o do TEC (D-09).
+    await field(teacherPage, "notebookLink").fill("https://outro.example/caderno");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+    await expect(alert(teacherPage, "error")).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        (await one<{ notebook_link: string }>(
+          "select notebook_link from public.study_plan_notebooks where block_id = $1",
+          [blockId],
+        )).notebook_link,
+      )
+      .toBe("https://outro.example/caderno");
+  });
+
+  test("meta de acerto fora de 0 a 100 é recusada com a frase, e não como valor cru — QA-24", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const blockId = scenario.blocks[0]!.id;
+    await teacherPage.goto("/professor/cadernos");
+
+    const linha = teacherPage.locator(`[data-testid="notebook-row"][data-block-id="${blockId}"]`);
+    await linha.getByRole("button", { name: "Editar" }).click();
+    await field(teacherPage, "subjectTarget").fill("150");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(alert(teacherPage, "error")).toHaveText("A meta de acerto vai de 0 a 100%.");
   });
 
   test("editar o nome vale para este planejamento", async ({ teacherPage, scenario }) => {
@@ -1212,6 +1299,29 @@ test.describe("F-MATR · turmas", () => {
     await expect(
       teacherPage.locator(`[data-testid="student-card"][data-student-id="${scenario.student.id}"]`),
     ).toContainText(`${nome} (manhã)`);
+  });
+
+  test("F-MATR-06 · turma com nome repetido é recusada — QA-16", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const [turma] = await criarTurmas(teacherPage, scenario.planId, 1);
+
+    await teacherPage.getByRole("button", { name: "Nova turma" }).click();
+    const dialogo = testId(teacherPage, "class-dialog");
+    await expect(field(teacherPage, "name")).toHaveAttribute("maxlength", "120");
+    await expect(field(teacherPage, "description")).toHaveAttribute("maxlength", "2000");
+
+    await field(teacherPage, "name").fill(`  ${turma!.nome.toUpperCase()} `);
+    await dialogo.getByRole("button", { name: "Criar" }).click();
+
+    await expect(alert(dialogo, "error")).toHaveText("Você já tem uma turma com esse nome.");
+    expect(
+      await count(
+        "select count(*) from public.classes where teacher_id = $1 and lower(btrim(name)) = lower(btrim($2))",
+        [scenario.teacher.id, turma!.nome],
+      ),
+    ).toBe(1);
   });
 
   test("F-MATR-02 · matricular quem já está em outra turma MOVE", async ({

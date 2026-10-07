@@ -251,12 +251,14 @@ diff mostra a omissão.
 | F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
 | F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
 | F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno; ativar é uma transação: rede caindo não deixa o aluno sem planejamento, e duas ativações simultâneas terminam com um ativo — QA-03, QA-12 |
+| F-GPLAN-06 | nome de planejamento repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
 | F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta; link `javascript:` é recusado e o banco fica com o anterior (QA-24) |
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
 | F-TREV-01 | é na tela do professor que o espaçamento se configura |
 | F-TEST-01 | estatísticas do professor: as mesmas do aluno, apontadas para o planejamento dele |
 | F-VINC-01 a F-VINC-09 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data, e a barra do aluno acompanhar liberar e bloquear sem F5 (F-VINC-09, QA-09) — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-MATR-01 a F-MATR-05 | turmas: criar, renomear, matricular, mover, recusar apagar turma com aluno, filtrar por `?turma=` — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
+| F-MATR-06 | nome de turma repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
 | F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
 
 ### Simulados — `tests/mock-exams.spec.ts`
@@ -275,6 +277,7 @@ diff mostra a omissão.
 | F-FLASH-03 | biblioteca editorial: revisar o mesmo cartão duas vezes (INSERT e depois UPDATE) |
 | F-FLASH-04 | spec [39](specs/39-biblioteca-de-flashcards-lida-do-banco.md): a lista de decks e a busca por tópico chegam sem o texto dos cartões |
 | F-FLASH-05 | spec 39: cartão corrigido no banco aparece corrigido no deck, sem build novo |
+| F-FLASH-06 | deck pessoal repetido, com outra caixa e espaço, é recusado com a frase própria — QA-16 |
 | F-GRIFO-01 | spec [42](specs/42-grifo-nos-flashcards.md): o grifo do verso de um cartão da biblioteca e o da frente de um cartão pessoal aparecem numa sessão nova, na revisão seguinte de cada cartão |
 | F-GRIFO-02 | spec 42: reescrito o cartão da aula antes do trecho grifado, o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar |
 | F-GRIFO-03 | spec 42: clique simples vira o cartão; terminar uma seleção não vira; desfazer remove o último grifo, e ele continua removido depois de recarregar |
@@ -329,13 +332,7 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir.
-
-| Id | Cobre |
-|---|---|
-| F-GPLAN-06 | nome de planejamento repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
-| F-MATR-06 | nome de turma repetido é recusado com a frase própria — QA-16 |
-| F-FLASH-06 | deck pessoal repetido é recusado com a frase própria — QA-16 |
+seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.
@@ -406,7 +403,7 @@ id antigo num comentário de código ou numa mensagem de commit:
 | F-TEMP-\* (tempo e série) | F-EST-01 |
 | F-PREV-\* (prévia e distribuição) | F-PROF-04 e F-PROF-05 |
 | F-TURMA-\* (ficha da turma) | F-PROF-02, e F-MATR-04 para o recorte por turma |
-| F-GPLAN-02 a 07 | F-GPLAN-01 |
+| F-GPLAN-02 a 05 e 07 | F-GPLAN-01. O F-GPLAN-06 foi REUSADO em 07/10/2026 (nome de planejamento repetido, QA-16): a spec 14 já o citava na CA-06 |
 | F-CAD-02 a 06 | F-CAD-01 |
 | F-RCIC-\*, F-RESU-\*, F-DIFI-\* | sem cobertura: dependem do motor de baterias |
 | F-CUP-02 a 04 | sem cobertura enquanto F-CUP-01 estiver `fixme` |

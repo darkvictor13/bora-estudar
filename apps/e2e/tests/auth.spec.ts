@@ -249,6 +249,25 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
   });
 
+  test("senha só de espaços é recusada, e nenhuma conta nasce — QA-18", async ({ page }) => {
+    const email = `espacos-${Date.now().toString(36)}@e2e.local`;
+
+    await page.goto("/cadastro");
+    await field(page, "name").fill("Candidata Teste");
+    await field(page, "email").fill(email);
+    await field(page, "password").fill("        ");
+    await page.getByRole("button", { name: "Criar minha conta" }).click();
+
+    await expect(alert(page, "error")).toHaveText("A senha não pode ser formada só por espaços.");
+    // A recusa é do contrato, antes do GoTrue: a conta nem chegou a ser pedida.
+    expect(await count("select count(*) from auth.users where email = $1", [email])).toBe(0);
+  });
+
+  test("o campo do nome tem teto de 120 caracteres — QA-15", async ({ page }) => {
+    await page.goto("/cadastro");
+    await expect(field(page, "name")).toHaveAttribute("maxlength", "120");
+  });
+
   test("e-mail já cadastrado é recusado", async ({ page, scenario }) => {
     await page.goto("/cadastro");
     await field(page, "name").fill("Outra Pessoa");
@@ -340,7 +359,7 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     await expect(field(page, "password")).toHaveCount(0);
   });
 
-  test("senhas diferentes e senha curta são recusadas", async ({ page, baseURL }) => {
+  test("senhas diferentes, senha curta e senha só de espaços são recusadas — QA-18", async ({ page, baseURL }) => {
     const person = await createUser("student", "Aluna Confusa", "confusa");
     await setAccess(person.id, "active");
     await clearMailbox();
@@ -359,6 +378,13 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     await field(page, "passwordConfirmation").fill("123");
     await page.getByRole("button", { name: "Salvar nova senha" }).click();
     await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
+
+    // QA-18: oito espaços nos dois campos conferem e passam do mínimo, e não
+    // são senha.
+    await field(page, "password").fill("        ");
+    await field(page, "passwordConfirmation").fill("        ");
+    await page.getByRole("button", { name: "Salvar nova senha" }).click();
+    await expect(alert(page, "error")).toHaveText("A senha não pode ser formada só por espaços.");
   });
 });
 
