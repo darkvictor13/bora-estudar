@@ -108,7 +108,7 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 
 | Área | Testids |
 |---|---|
-| Casca | `content`, `sidebar`, `sidebar-toggle`, `sidebar-foot`, `nav-item`, `user-chip`, `user-name`, `sign-out`, `theme-toggle`, `theme-unsaved` |
+| Casca | `content`, `sidebar`, `sidebar-toggle`, `sidebar-foot`, `nav-item`, `user-chip`, `user-name`, `sign-out`, `theme-toggle`, `theme-unsaved`, `app-loading` (a tela de primeira carga, de `RootLoading` e de `index.html`) |
 | Primitivas | `alert` (+`data-status`), `badge`, `card`, `metric`, `metric-value`, `page-header`, `empty`, `day-chip` |
 | Autenticação | `auth-card`, `auth-overlay`, `existing-account` |
 | Semana do aluno | `week-hero`, `week-stat`, `week-stat-value`, `day-group`, `day-count`, `goal-row` (+`data-goal-id`, `data-status`), `goal-check`, `goal-actions`, `goal-blocked`, `goal-theory`, `record-study-dialog`, `extra-study-dialog` |
@@ -196,13 +196,15 @@ diff mostra a omissão.
 | F-UI-08 | o item ativo é o da rota mais específica, e só ele |
 | F-UI-09 | o rodapé identifica quem está logado, nos dois papéis |
 | F-UI-10 | sem acesso liberado, os itens de estudo ficam inertes e os da conta não |
+| F-UI-11 | nenhuma tela do aluno nem do professor passa de 375px, com o cronômetro parado e rodando; o botão de modo diz o texto que mostra — QA-23 |
+| F-UI-12 | a primeira carga mostra "Carregando" sem `h1`, e sem o bundle a tela estática diz o que fazer, legível nos dois temas — QA-26 |
 
 ### Aluno — semana e execução — `tests/student-week.spec.ts`
 
 | Id | Cobre |
 |---|---|
 | F-META-01 | os quatro números do cabeçalho saem dos REGISTROS, não das metas |
-| F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona |
+| F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona; semana fora do seletor (`?semana=40`, `1e9`) cai na CORRENTE — QA-13 |
 | F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam; rede caindo mostra "Sem conexão", e a retentativa no mesmo diálogo grava uma vez — QA-06; a resposta que se perde grava um registro só — QA-04; minutos negativos, acima de 240 e fracionados são recusados e nada é gravado — QA-10 |
 | F-META-04 | concluir e reabrir devolve o estado que os registros justificam |
 | F-META-05 | meta de bateria não se mexe pela tela |
@@ -242,9 +244,9 @@ diff mostra a omissão.
 
 | Id | Cobre |
 |---|---|
-| F-PROF-01 | todas as telas do professor abrem |
+| F-PROF-01 | todas as telas do professor abrem, sem `id` repetido (QA-22); sem planejamento ativo, "Gerar metas" diz "Nenhum planejamento ativo" (N-03) |
 | F-PROF-02 | a lista abre pelos atrasados; filtros somam; o recorte fica na URL |
-| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer; vigência vencida aparece "Venceu em" (QA-20) |
+| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a ficha de aluno alheio ou malformado diz "Não encontrado", sem "Atualize a página" (QA-13); a tela diz o que ainda não dá para fazer; vigência vencida aparece "Venceu em" (QA-20) |
 | F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
 | F-PROF-05 | gerar a semana preserva o concluído e o estudo registrado; só sai o que está pendente, pulado ou em andamento sem registro; a prévia conta o que fica; não há modo de substituição — QA-01 |
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
@@ -295,7 +297,7 @@ diff mostra a omissão.
 | Id | Cobre |
 |---|---|
 | F-ISO-01 | o aluno 2 não vê nada do aluno 1; o professor 2 não vê o aluno 1 em tela nenhuma |
-| F-ISO-02 | a query string não é uma porta: `?plano=`, `?catalogo=` e semana alheia são ignorados |
+| F-ISO-02 | a query string não é uma porta: `?plano=`, `?catalogo=` e semana alheia são ignorados; malformado (`nao-e-uuid`, `?ano=1e9`, `?ritmo=xyz`) cai no padrão da tela, sem erro e sem ruído no console — QA-13 |
 
 O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela —
 é assunto de `supabase/tests/`, e não daqui.

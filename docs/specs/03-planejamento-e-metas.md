@@ -1,7 +1,7 @@
 # 03 — Planejamento e metas
 
 **Situação:** implementada (leitura completa; escrita só pela geração semanal)
-**Fluxos e2e:** F-ALU-01, F-ALU-02, F-ALU-06, F-PROF-01, F-PROF-02, F-PROF-03, F-PROF-08
+**Fluxos e2e:** F-ALU-01, F-META-02, F-ALU-06, F-PROF-01, F-PROF-02, F-PROF-03, F-ISO-02
 
 ---
 
@@ -71,9 +71,29 @@ um campo de observação (`TIPO_REFORCO:1`, `REFORCO_ORIGEM_ID:<uuid>`,
 | Planejamentos | `/professor/planejamentos` | Todos os planejamentos dos alunos vinculados |
 | Cadernos | `/professor/cadernos` | Blocos de um planejamento; `?plano=<uuid>` |
 
-Semana inexistente, texto ou número negativo em `?semana=` caem na primeira
-semana com metas, sem quebrar (R-GOAL-01 não é violada porque nada é escrito).
-`?plano=` com id inválido cai no planejamento ativo, ou no primeiro.
+**A URL não é uma porta (D-13, QA-13).** Parâmetro malformado ou alheio cai no
+padrão da tela, em silêncio, sem erro e sem aviso. O padrão é a primeira opção
+que a própria tela oferece, e só vale o que estiver na lista que o loader
+carregou:
+
+| Parâmetro | Telas | Vale se estiver em | Padrão |
+|---|---|---|---|
+| `?semana=<n>` | `/aluno` | as semanas do seletor (`listWeeks`) | a semana CORRENTE, a que `loadWeek` abre sem número |
+| `?plano=<uuid>` | metas, cadernos e revisões do professor, estatísticas | os planejamentos que a tela lista (ativos, em metas e revisões; todos, em cadernos) | o primeiro da lista |
+| `?catalogo=<uuid>` | `/professor/teoria` | os catálogos do professor | o primeiro |
+| `?ano=<aaaa>` | estatísticas do aluno e do professor | os anos que a tela oferece | o ano corrente |
+| `?ritmo=<ritmo>` | `/professor` | `on_track`, `attention` ou `behind` | sem filtro |
+
+`?semana=40` sem metas na semana 40, portanto, deixa de abrir "Semana 40": cai
+na corrente, que é o que o seletor mostra. O texto anterior dizia "primeira
+semana com metas", o que nunca foi o comportamento.
+
+Professor SEM planejamento ativo abre "Gerar metas" e lê "Nenhum planejamento
+ativo" (N-03); a tela não quebra.
+
+Ficha de aluno de outro professor, inexistente ou com id malformado mostra
+"Não encontrado" (`ApiThrownError` com código `not_found`). É estado, não
+defeito, e a tela não pede para atualizar a página.
 
 ---
 
@@ -94,10 +114,10 @@ semana com metas, sem quebrar (R-GOAL-01 não é violada porque nada é escrito)
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | As sete telas do aluno e as seis do professor renderizam sem erro de runtime nem de console | F-ALU-01, F-PROF-01 |
-| CA-02 | `?semana=` com valor inexistente, texto ou negativo cai na primeira semana com metas | F-ALU-02 |
-| CA-03 | `?plano=` com id inválido cai no planejamento ativo, sem quebrar | F-PROF-08 |
-| CA-04 | Ficha de aluno inexistente, de aluno de outro professor ou com id malformado dá 404 | F-PROF-03 |
+| CA-01 | As sete telas do aluno e as seis do professor renderizam sem erro de runtime nem de console, inclusive o professor sem planejamento ativo (N-03) | F-ALU-01, F-PROF-01 |
+| CA-02 | `?semana=` com valor inexistente, texto, negativo ou fora do alcance (`1e9`) cai na semana corrente | F-META-02 |
+| CA-03 | `?plano=`, `?catalogo=`, `?ano=` e `?ritmo=`, alheios ou malformados, caem no padrão da tela, sem erro e sem dado alheio (QA-13) | F-ISO-02 |
+| CA-04 | Ficha de aluno inexistente, de aluno de outro professor ou com id malformado mostra "Não encontrado", sem "Atualize a página" | F-PROF-03 |
 | CA-05 | A lista do professor mostra uma linha por vínculo vigente, com badge de acesso correto | F-PROF-02 |
 | CA-06 | Aluno sem planejamento ativo vê "Nenhum planejamento ativo." e nenhum dado alheio | F-ALU-06 |
 | CA-07 | Aluno inserindo meta em planejamento alheio recebe `42501` | F-ISO-02 |
