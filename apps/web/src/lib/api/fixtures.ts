@@ -105,16 +105,23 @@ import type {
 import { ApiThrownError } from "./contract.ts";
 import {
   checkAccessMonths,
-  checkClassName,
+  checkClass,
   checkCredentials,
   checkExtraStudy,
   checkGenerateWeek,
   checkName,
+  checkNotebook,
   checkPassword,
+  checkPersonalDeck,
+  checkPlan,
   checkQuestionRecord,
   checkSignUp,
   checkStudentEmail,
   checkStudyEntry,
+  checkWaitlist,
+  CLASS_NAME_TAKEN,
+  DECK_TAKEN,
+  PLAN_NAME_TAKEN,
   STUDY_REPLAY_CONFLICT,
 } from "./validation.ts";
 
@@ -1271,10 +1278,15 @@ export const fixturesApi: BoraApi = {
 
   listPersonalFlashcardDecks: () => later(personalFlashcardDecks.map((deck) => ({ ...deck, cards: [...deck.cards] }))),
   createPersonalFlashcardDeck: (input: CreatePersonalFlashcardDeckInput) => later(once(input.requestId, () => {
+    const invalid = checkPersonalDeck(input);
+    if (invalid) return { ok: false, error: invalid } as Result<PersonalFlashcardDeck>;
     const subject = input.subject.trim();
     const title = input.title.trim();
-    if (subject.length < 2) return fail<PersonalFlashcardDeck>("validation", "Informe a disciplina.", "subject");
-    if (title.length < 2) return fail<PersonalFlashcardDeck>("validation", "Informe o assunto do deck.", "title");
+    // O índice de nome do banco: o par disciplina + assunto, sem caixa nem pontas.
+    const key = (value: string) => value.trim().toLowerCase();
+    if (personalFlashcardDecks.some((item) => key(item.subject) === key(subject) && key(item.title) === key(title))) {
+      return { ok: false, error: DECK_TAKEN } as Result<PersonalFlashcardDeck>;
+    }
     const deck: PersonalFlashcardDeck = { id: input.id, subject, title, cards: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     personalFlashcardDecks = [deck, ...personalFlashcardDecks];
     return done(deck);
@@ -1308,9 +1320,8 @@ export const fixturesApi: BoraApi = {
   loadWaitlistEntry: () => later(state.waitlist),
 
   joinWaitlist: (input: WaitlistInput) => {
-    if (input.whatsapp.replace(/\D/g, "").length < 10) {
-      return later(fail<WaitlistEntry>("validation", "WhatsApp incompleto.", "whatsapp"));
-    }
+    const invalid = checkWaitlist(input, TODAY);
+    if (invalid) return later({ ok: false, error: invalid } as Result<WaitlistEntry>);
     state.waitlist = { ...input, studentId: STUDENT_ID, status: "waiting", createdAt: `${TODAY}T09:00:00.000Z` };
     return later(done(state.waitlist));
   },
@@ -1484,16 +1495,21 @@ export const fixturesApi: BoraApi = {
   createPlan: (input: StudyPlanInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
+        const invalid = checkPlan(input);
+        if (invalid) return { ok: false, error: invalid } as Result<StudyPlanSummary>;
+        if (planNameTaken(input.studentId, input.name)) {
+          return { ok: false, error: PLAN_NAME_TAKEN } as Result<StudyPlanSummary>;
+        }
         // NASCE PAUSADO, como no Supabase: ativar é gesto separado.
         const plan: StudyPlanSummary = {
           id: nextId("c"),
           studentId: input.studentId,
           classId: input.classId ?? null,
-          name: input.name,
-          area: input.area,
-          targetExam: input.targetExam ?? null,
-          stage: input.stage,
-          studyModel: input.studyModel,
+          name: input.name.trim(),
+          area: input.area.trim(),
+          targetExam: input.targetExam?.trim() || null,
+          stage: input.stage.trim(),
+          studyModel: input.studyModel.trim(),
           weeklyGoals: input.weeklyGoals,
           startsOn: input.startsOn,
           examDate: input.examDate ?? null,
@@ -1507,9 +1523,19 @@ export const fixturesApi: BoraApi = {
   updatePlan: (planId: Uuid, input: Partial<StudyPlanInput>, requestId: RequestId) =>
     later(
       once(requestId, () => {
+        const invalid = checkPlan(input);
+        if (invalid) return { ok: false, error: invalid } as Result<StudyPlanSummary>;
         const plan = state.plans.find((candidate) => candidate.id === planId);
         if (!plan) return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado.");
-        return done<StudyPlanSummary>(patchPlan(plan.id, stripUndefined(input)));
+        if (input.name !== undefined && planNameTaken(plan.studentId, input.name, plan.id)) {
+          return { ok: false, error: PLAN_NAME_TAKEN } as Result<StudyPlanSummary>;
+        }
+        return done<StudyPlanSummary>(
+          patchPlan(plan.id, {
+            ...stripUndefined(input),
+            ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          }),
+        );
       }),
     ),
 
@@ -1753,7 +1779,13 @@ export const fixturesApi: BoraApi = {
   listNotebooks: () => later(NOTEBOOKS),
 
   saveNotebook: (_studyPlanId: Uuid, notebook: Notebook, requestId: RequestId) =>
-    later(once(requestId, () => done(notebook))),
+    later(
+      once(requestId, () => {
+        const invalid = checkNotebook(notebook);
+        if (invalid) return { ok: false, error: invalid } as Result<Notebook>;
+        return done(notebook);
+      }),
+    ),
 
   setNotebookActive: (blockId: Uuid, active: boolean, requestId: RequestId) =>
     later(
@@ -1805,8 +1837,9 @@ export const fixturesApi: BoraApi = {
   createClass: (input: ClassInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
-        const invalid = checkClassName(input.name);
+        const invalid = checkClass(input);
         if (invalid) return { ok: false, error: invalid } as Result<TeacherClass>;
+        if (classNameTaken(input.name)) return { ok: false, error: CLASS_NAME_TAKEN } as Result<TeacherClass>;
 
         const created: TeacherClass = {
           id: nextId("7"),
@@ -1823,11 +1856,14 @@ export const fixturesApi: BoraApi = {
   renameClass: (classId: Uuid, input: ClassInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
-        const invalid = checkClassName(input.name);
+        const invalid = checkClass(input);
         if (invalid) return { ok: false, error: invalid } as Result<TeacherClass>;
 
         const turma = state.classes.find((candidate) => candidate.id === classId);
         if (!turma) return fail<TeacherClass>("not_found", "Turma não encontrada.");
+        if (classNameTaken(input.name, classId)) {
+          return { ok: false, error: CLASS_NAME_TAKEN } as Result<TeacherClass>;
+        }
 
         const renamed: TeacherClass = {
           ...turma,
@@ -1902,6 +1938,25 @@ export const fixturesApi: BoraApi = {
  * fixture existe para não ter: a tela mostrava "liberado" no aviso e
  * "aguardando" no cartão logo abaixo.
  */
+/**
+ * O índice de nome do banco, sem caixa e sem espaço nas pontas
+ * (`study_plans_name_per_student_uidx`, `classes_name_per_teacher_uidx`). A
+ * fixture tem um professor só, então o recorte do planejamento é o aluno.
+ */
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function planNameTaken(studentId: Uuid, name: string, exceptPlanId?: Uuid): boolean {
+  return state.plans.some(
+    (plan) => plan.studentId === studentId && plan.id !== exceptPlanId && sameName(plan.name, name),
+  );
+}
+
+function classNameTaken(name: string, exceptClassId?: Uuid): boolean {
+  return state.classes.some((turma) => turma.id !== exceptClassId && sameName(turma.name, name));
+}
+
 function patchPlan(planId: Uuid, patch: Partial<StudyPlanSummary>): StudyPlanSummary {
   const index = state.plans.findIndex((plan) => plan.id === planId);
   const next = { ...state.plans[index]!, ...patch };

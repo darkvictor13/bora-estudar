@@ -9,17 +9,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type { Notebook, WaitlistInput } from "./contract.ts";
 import {
+  checkClass,
+  checkClassName,
   checkCredentials,
   checkExtraStudy,
   checkExtraStudyDate,
+  checkLink,
+  checkNotebook,
+  checkPersonalDeck,
+  checkPlan,
   checkQuestionRecord,
   checkStudyEntry,
   checkGenerateWeek,
   checkName,
   checkPassword,
   checkSignUp,
+  checkWaitlist,
   checkWeekNumber,
+  CLASS_NAME_TAKEN,
+  DECK_TAKEN,
+  PLAN_NAME_TAKEN,
 } from "./validation.ts";
 
 test("entrar sem e-mail ou sem senha pede os dois, sem culpar um campo", () => {
@@ -153,4 +164,187 @@ test("o estudo extra valida na ordem dos campos: matéria, data, números", () =
   );
   assert.equal(checkExtraStudy({ ...base, date: "2026-08-01", minutes: -1 }, "2026-09-01", "2026-09-14")?.field, "date");
   assert.equal(checkExtraStudy({ ...base, minutes: -1 }, "2026-09-01", "2026-09-14")?.field, "minutes");
+});
+
+test("QA-18 · senha só de espaços é recusada no cadastro e na redefinição, e o login não a recusa", () => {
+  const erro = checkPassword("        ");
+  assert.equal(erro?.field, "password");
+  assert.equal(erro?.message, "A senha não pode ser formada só por espaços.");
+  assert.equal(checkSignUp({ name: "Maria Silva", email: "a@b.com", password: "        " })?.field, "password");
+  // A conta criada antes da regra continua entrando.
+  assert.equal(checkCredentials({ email: "a@b.com", password: "        " }), null);
+  // Espaço no meio é senha; o comprimento vem antes da regra do espaço.
+  assert.equal(checkPassword("ab cd ef"), null);
+  assert.match(checkPassword("     ")!.message, /pelo menos 6 caracteres/);
+});
+
+test("QA-15 · o nome tem teto de 120, medido sem as pontas", () => {
+  assert.equal(checkName("a".repeat(120)), null);
+  assert.equal(checkName(` ${"a".repeat(120)} `), null);
+  const erro = checkName("a".repeat(121));
+  assert.equal(erro?.field, "name");
+  assert.equal(erro?.message, "O nome pode ter até 120 caracteres.");
+  assert.equal(checkSignUp({ name: "a".repeat(121), email: "a@b.com", password: "123456" })?.field, "name");
+});
+
+test("QA-15 · turma: nome de 3 a 120 e descrição até 2000", () => {
+  assert.equal(checkClassName("a".repeat(121))?.message, "O nome da turma pode ter até 120 caracteres.");
+  assert.equal(checkClass({ name: "Turma A", description: "d".repeat(2000) }), null);
+  const descricao = checkClass({ name: "Turma A", description: "d".repeat(2001) });
+  assert.equal(descricao?.field, "description");
+  assert.equal(descricao?.message, "A descrição pode ter até 2000 caracteres.");
+  assert.equal(checkClass({ name: "ab" })?.field, "name");
+});
+
+test("QA-15 · planejamento: nome, área, fase e modelo até 120, concurso até 200", () => {
+  assert.equal(checkPlan({ name: "a".repeat(120), area: "b".repeat(120), targetExam: "c".repeat(200) }), null);
+  assert.equal(checkPlan({ name: "ab" })?.message, "Dê um nome ao planejamento.");
+  assert.equal(checkPlan({ name: "a".repeat(121) })?.field, "name");
+  assert.equal(checkPlan({ area: "a".repeat(121) })?.field, "area");
+  assert.equal(checkPlan({ stage: "a".repeat(121) })?.field, "stage");
+  assert.equal(checkPlan({ studyModel: "a".repeat(121) })?.field, "studyModel");
+  assert.equal(checkPlan({ targetExam: "a".repeat(201) })?.field, "targetExam");
+  // As regras que vieram do adaptador continuam as mesmas.
+  assert.equal(checkPlan({ weeklyGoals: 61 })?.field, "weeklyGoals");
+  assert.equal(checkPlan({ startsOn: "2026-09-14", examDate: "2026-09-01" })?.field, "examDate");
+});
+
+test("QA-19 · WhatsApp: só dígitos, espaço, ()+-, com 10 a 13 dígitos", () => {
+  const base: WaitlistInput = {
+    name: "Maria Silva",
+    email: "a@b.com",
+    whatsapp: "(41) 99999-0000",
+    interestArea: "Fiscal",
+    targetExam: "Receita Federal",
+    timezone: "America/Sao_Paulo",
+  };
+  const hoje = "2026-09-14";
+  assert.equal(checkWaitlist(base, hoje), null);
+  for (const aceito of ["+55 41 99999-0000", "41999990000", "4133334444"]) {
+    assert.equal(checkWaitlist({ ...base, whatsapp: aceito }, hoje), null, aceito);
+  }
+  for (const recusado of ["abcdefgh", "419999999", "41999990000123", "(41) 9999-ab00"]) {
+    const erro = checkWaitlist({ ...base, whatsapp: recusado }, hoje);
+    assert.equal(erro?.field, "whatsapp", recusado);
+    assert.equal(erro?.message, "Informe o WhatsApp com DDD, como (11) 90000-0000.", recusado);
+  }
+  assert.equal(
+    checkWaitlist({ ...base, whatsapp: "  " }, hoje)?.message,
+    "Informe um WhatsApp para o professor falar com você.",
+  );
+});
+
+test("QA-19 · área e concurso de 2 a 120 e de 2 a 200; nascimento de 1900 até hoje", () => {
+  const base: WaitlistInput = {
+    name: "Maria Silva",
+    email: "a@b.com",
+    whatsapp: "41999990000",
+    interestArea: "Fiscal",
+    targetExam: "Receita Federal",
+    timezone: "America/Sao_Paulo",
+  };
+  const hoje = "2026-09-14";
+  assert.equal(checkWaitlist({ ...base, interestArea: " " }, hoje)?.message, "Informe sua área de interesse.");
+  assert.equal(checkWaitlist({ ...base, interestArea: "a".repeat(121) }, hoje)?.field, "interestArea");
+  assert.equal(checkWaitlist({ ...base, targetExam: "x" }, hoje)?.message, "Informe para qual concurso você estuda.");
+  assert.equal(checkWaitlist({ ...base, targetExam: "a".repeat(201) }, hoje)?.field, "targetExam");
+
+  assert.equal(checkWaitlist({ ...base, birthDate: hoje }, hoje), null);
+  assert.equal(checkWaitlist({ ...base, birthDate: "1900-01-01" }, hoje), null);
+  for (const recusado of ["2026-09-15", "1899-12-31", "2026-02-30", "x"]) {
+    const erro = checkWaitlist({ ...base, birthDate: recusado }, hoje);
+    assert.equal(erro?.field, "birthDate", recusado);
+    assert.equal(erro?.message, "A data de nascimento precisa ser entre 01/01/1900 e hoje.", recusado);
+  }
+});
+
+test("QA-24 · o link é vazio ou https sem espaço", () => {
+  assert.equal(checkLink("", "notebookLink"), null);
+  assert.equal(checkLink("https://www.tecconcursos.com.br/", "notebookLink"), null);
+  assert.equal(checkLink("https://outro.example/caderno?id=1", "notebookLink"), null);
+  for (const recusado of [
+    "javascript:alert(1)",
+    "http://x.com",
+    "ftp://x.com/y",
+    "https://x.com/a b",
+    "https://user:senha@x.com",
+    "x.com",
+    `https://x.com/${"a".repeat(2048)}`,
+  ]) {
+    const erro = checkLink(recusado, "notebookLink");
+    assert.equal(erro?.field, "notebookLink", recusado);
+    assert.match(erro!.message, /^Informe um link HTTPS válido/, recusado);
+  }
+});
+
+test("o caderno: nome até 200, link, questões e a meta de 0 a 100", () => {
+  const caderno: Notebook = {
+    blockId: "b",
+    subjectKey: "k",
+    subjectName: "Matéria",
+    subjectColor: "#5B6B85",
+    subjectTarget: 80,
+    notebookKey: "n",
+    notebookName: "Caderno 1",
+    notebookLink: "https://www.tecconcursos.com.br/",
+    totalQuestions: 10,
+    subjectPosition: 0,
+    notebookPosition: 0,
+    active: true,
+    deleted: false,
+  };
+  assert.equal(checkNotebook(caderno), null);
+  assert.equal(checkNotebook({ ...caderno, notebookLink: "" }), null);
+  assert.equal(checkNotebook({ ...caderno, notebookName: "  " })?.message, "Dê um nome ao caderno.");
+  assert.equal(checkNotebook({ ...caderno, notebookName: "a".repeat(201) })?.field, "notebookName");
+  assert.equal(checkNotebook({ ...caderno, notebookLink: "javascript:alert(1)" })?.field, "notebookLink");
+  assert.equal(checkNotebook({ ...caderno, totalQuestions: -1 })?.field, "totalQuestions");
+  for (const meta of [150, -1, 80.5]) {
+    const erro = checkNotebook({ ...caderno, subjectTarget: meta });
+    assert.equal(erro?.field, "subjectTarget", String(meta));
+    assert.equal(erro?.message, "A meta de acerto vai de 0 a 100%.");
+  }
+  assert.equal(checkNotebook({ ...caderno, subjectTarget: 0 }), null);
+  assert.equal(checkNotebook({ ...caderno, subjectTarget: 100 }), null);
+});
+
+test("o deck pessoal: disciplina de 2 a 120 e assunto de 2 a 160", () => {
+  assert.equal(checkPersonalDeck({ subject: "a".repeat(120), title: "b".repeat(160) }), null);
+  assert.equal(checkPersonalDeck({ subject: "a", title: "Assunto" })?.message, "Informe a disciplina.");
+  assert.equal(checkPersonalDeck({ subject: "a".repeat(121), title: "Assunto" })?.field, "subject");
+  assert.equal(checkPersonalDeck({ subject: "Direito", title: "a" })?.message, "Informe o assunto do deck.");
+  assert.equal(checkPersonalDeck({ subject: "Direito", title: "a".repeat(161) })?.field, "title");
+});
+
+test("o registro de estudo recusa observação acima de 2000 e a matéria acima de 120", () => {
+  const numeros = { minutes: 10, questions: 0, correctAnswers: 0 };
+  assert.equal(checkStudyEntry({ ...numeros, note: "n".repeat(2000) }), null);
+  const nota = checkStudyEntry({ ...numeros, note: "n".repeat(2001) });
+  assert.equal(nota?.field, "note");
+  assert.equal(nota?.message, "A observação pode ter até 2000 caracteres.");
+  assert.equal(checkStudyEntry({ ...numeros, manualLesson: "a".repeat(201) })?.field, "manualLesson");
+
+  const extra = { subject: "a".repeat(121), date: "2026-09-10", ...numeros };
+  const materia = checkExtraStudy(extra, "2026-09-01", "2026-09-14");
+  assert.equal(materia?.field, "subject");
+  assert.equal(materia?.message, "A matéria pode ter até 120 caracteres.");
+  assert.equal(checkExtraStudy({ ...extra, subject: "Direito", note: "n".repeat(2001) }, "2026-09-01", "2026-09-14")?.field, "note");
+});
+
+test("as três recusas de nome repetido são conflito, com a frase e o campo", () => {
+  assert.deepEqual(PLAN_NAME_TAKEN, {
+    code: "conflict",
+    message: "Este aluno já tem um planejamento com esse nome.",
+    field: "name",
+  });
+  assert.deepEqual(CLASS_NAME_TAKEN, {
+    code: "conflict",
+    message: "Você já tem uma turma com esse nome.",
+    field: "name",
+  });
+  assert.deepEqual(DECK_TAKEN, {
+    code: "conflict",
+    message: "Você já tem um deck com essa disciplina e esse assunto.",
+    field: "title",
+  });
 });

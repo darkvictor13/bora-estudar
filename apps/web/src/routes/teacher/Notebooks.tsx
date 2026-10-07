@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, newRequestId, type ApiError, type Notebook } from "@/lib/api";
+import { api, MAX_LINK_LENGTH, MAX_TITLE_LENGTH, newRequestId, type ApiError, type Notebook } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
 
 /**
@@ -216,8 +216,20 @@ export function TeacherNotebooks() {
                         );
                       }}
                     >
-                      <Field label="Nome" name="notebookName" defaultValue={notebook.notebookName} />
-                      <Field label="Link" name="notebookLink" defaultValue={notebook.notebookLink} />
+                      <Field
+                        label="Nome"
+                        name="notebookName"
+                        defaultValue={notebook.notebookName}
+                        maxLength={MAX_TITLE_LENGTH}
+                        invalid={error?.field === "notebookName"}
+                      />
+                      <Field
+                        label="Link"
+                        name="notebookLink"
+                        defaultValue={notebook.notebookLink}
+                        maxLength={MAX_LINK_LENGTH}
+                        invalid={error?.field === "notebookLink"}
+                      />
                       <Field
                         label="Questões"
                         name="totalQuestions"

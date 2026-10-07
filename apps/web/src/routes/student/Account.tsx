@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, type Account as AccountData, type ApiError } from "@/lib/api";
+import { api, MAX_NAME_LENGTH, type Account as AccountData, type ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth/session";
 import { formatInstant } from "@/lib/domain/dates";
 
@@ -82,6 +82,7 @@ export function Account() {
               name="name"
               defaultValue={account.name ?? ""}
               required
+              maxLength={MAX_NAME_LENGTH}
               invalid={error?.field === "name"}
             />
 

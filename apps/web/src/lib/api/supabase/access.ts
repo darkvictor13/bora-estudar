@@ -13,8 +13,9 @@
 import { supabase } from "@/lib/supabase/client";
 
 import type { Result, Session, WaitlistEntry, WaitlistInput } from "../contract.ts";
+import { checkWaitlist } from "../validation.ts";
 import { fail, done, failure, throwDb, settle, translateDbError } from "./errors.ts";
-import { requireSession } from "./session.ts";
+import { requireSession, today } from "./session.ts";
 
 const WAITLIST_COLUMNS =
   "student_id,name,email,whatsapp,interest_area,target_exam,timezone,birth_date,status,created_at";
@@ -64,15 +65,10 @@ export function joinWaitlist(input: WaitlistInput): Promise<Result<WaitlistEntry
   return settle(async () => {
     const session = await requireSession();
 
-    if (input.name.trim().length < 3) {
-      return fail("validation", "Informe seu nome completo.", "name");
-    }
-    if (!input.whatsapp.trim()) {
-      return fail("validation", "Informe um WhatsApp para o professor falar com você.", "whatsapp");
-    }
-    if (!input.targetExam.trim()) {
-      return fail("validation", "Informe para qual concurso você estuda.", "targetExam");
-    }
+    // A mesma faixa do banco (R-CTA-07): WhatsApp com 10 a 13 dígitos, área e
+    // concurso preenchidos, nascimento entre 1900 e hoje (do aparelho, D-11).
+    const invalid = checkWaitlist(input, today());
+    if (invalid) return failure<WaitlistEntry>(invalid);
 
     const values = {
       name: input.name.trim(),

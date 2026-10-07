@@ -10,7 +10,7 @@ import { Alert, Field } from "@bora/ui";
 import { useState } from "react";
 
 import type { ApiError, Goal, RecordStudyInput } from "@/lib/api";
-import { MAX_ENTRY_MINUTES, MAX_ENTRY_QUESTIONS, newRequestId } from "@/lib/api";
+import { MAX_ENTRY_MINUTES, MAX_ENTRY_QUESTIONS, MAX_NOTE_LENGTH, newRequestId } from "@/lib/api";
 import { formatMinutes, parseCount } from "@/lib/domain/week";
 
 /**
@@ -143,6 +143,8 @@ export function RecordStudyDialog({
             minRows={2}
             fullWidth
             size="small"
+            error={error?.field === "note"}
+            slotProps={{ htmlInput: { maxLength: MAX_NOTE_LENGTH } }}
           />
         </DialogContent>
         <DialogActions>

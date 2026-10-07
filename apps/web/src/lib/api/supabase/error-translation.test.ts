@@ -12,6 +12,7 @@ import {
   OFFLINE_MESSAGE,
   SERVER_UNAVAILABLE_MESSAGE,
   apiErrorFromThrown,
+  isUniqueViolation,
   studyWriteError,
   translateAuthError,
   translateDbError,
@@ -101,4 +102,34 @@ test("studyWriteError: 23505 é a mesma chave com outra carga, e o resto segue a
   assert.match(conflict.message, /outros valores/);
   assert.deepEqual(studyWriteError({ code: "42501", message: "m" }), translateDbError({ code: "42501", message: "m" }));
   assert.equal(studyWriteError({ code: "P0002", message: "revisao nao encontrada" }).code, "not_found");
+});
+
+test("QA-16 · isUniqueViolation casa o NOME do índice, e não casa a chave primária nem outro código", () => {
+  const nome = {
+    code: "23505",
+    message:
+      'duplicate key value violates unique constraint "personal_flashcard_decks_name_per_student_uidx"',
+  };
+  const pk = {
+    code: "23505",
+    message: 'duplicate key value violates unique constraint "personal_flashcard_decks_pkey"',
+  };
+  assert.equal(isUniqueViolation(nome, "personal_flashcard_decks_name_per_student_uidx"), true);
+  assert.equal(isUniqueViolation(pk, "personal_flashcard_decks_name_per_student_uidx"), false);
+  assert.equal(isUniqueViolation(pk, "personal_flashcard_decks_pkey"), true);
+  // O nome inteiro, entre aspas: um índice cujo nome contém o outro não o confunde.
+  assert.equal(isUniqueViolation(nome, "personal_flashcard_decks_name"), false);
+  // O código manda: a frase de um 23514 que cite o índice não é conflito.
+  assert.equal(
+    isUniqueViolation({ code: "23514", message: nome.message }, "personal_flashcard_decks_name_per_student_uidx"),
+    false,
+  );
+  assert.equal(isUniqueViolation({ message: nome.message }, "personal_flashcard_decks_name_per_student_uidx"), false);
+});
+
+test("QA-15 · 23514 chega como validation, para o teto que o contrato não cobriu", () => {
+  assert.deepEqual(translateDbError({ code: "23514", message: 'new row violates check constraint "goals_title_check"' }), {
+    code: "validation",
+    message: INVALID_VALUE_MESSAGE,
+  });
 });

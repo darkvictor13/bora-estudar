@@ -121,6 +121,18 @@ export function translateDbError(error: DbErrorLike): ApiError {
   }
 }
 
+/**
+ * O `23505` é do índice `index`? Casa o NOME do índice, que o Postgres põe na
+ * mensagem ("duplicate key value violates unique constraint \"<nome>\""), e
+ * nunca uma frase de interface. Serve onde uma tabela tem mais de um índice
+ * único e cada um quer a própria frase: `study_plans` tem o de um ativo por
+ * aluno e o de nome; `personal_flashcard_decks`, a PK escolhida pelo cliente
+ * e o de nome.
+ */
+export function isUniqueViolation(error: DbErrorLike, index: string): boolean {
+  return error.code === "23505" && error.message.includes(`"${index}"`);
+}
+
 /** O que uma escrita LANÇOU, no vocabulário do contrato. */
 export function apiErrorFromThrown(thrown: unknown): ApiError {
   if (thrown instanceof ApiThrownError) return { code: thrown.code, message: thrown.message };

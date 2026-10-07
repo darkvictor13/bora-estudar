@@ -6,6 +6,7 @@ import { Link as RouterLink, redirect } from "react-router";
 
 import { AuthForm } from "@/components/auth/AuthForm";
 import { AuthView } from "@/components/auth/AuthView";
+import { MAX_NAME_LENGTH } from "@/lib/api";
 import { signUp } from "@/lib/auth/actions";
 import { getSessionContext } from "@/lib/auth/session";
 import { ROUTES, homeForRole } from "@/lib/routes";
@@ -40,7 +41,7 @@ export function SignUp() {
               autoComplete="name"
               placeholder="Seu nome completo"
               required
-              maxLength={120}
+              maxLength={MAX_NAME_LENGTH}
               invalid={state.field === "name" && Boolean(state.error)}
             />
             <Field

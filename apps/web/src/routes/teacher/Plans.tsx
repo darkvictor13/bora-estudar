@@ -15,6 +15,8 @@ import { ContentBody } from "@/components/AppShell";
 import { PmprPilot } from "@/components/teacher/PmprPilot";
 import {
   api,
+  MAX_NAME_LENGTH,
+  MAX_TITLE_LENGTH,
   newRequestId,
   type ApiError,
   type StudentCard,
@@ -107,16 +109,38 @@ function PlanDialog({
             name="name"
             defaultValue={plan?.name ?? ""}
             required
+            maxLength={MAX_NAME_LENGTH}
             invalid={error?.field === "name"}
           />
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-            <Field label="Área" name="area" defaultValue={plan?.area ?? "Policial"} required />
-            <Field label="Concurso" name="targetExam" defaultValue={plan?.targetExam ?? "Soldado PMPR"} />
-            <Field label="Fase" name="stage" defaultValue={plan?.stage ?? "Pré-edital"} />
+            <Field
+              label="Área"
+              name="area"
+              defaultValue={plan?.area ?? "Policial"}
+              required
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "area"}
+            />
+            <Field
+              label="Concurso"
+              name="targetExam"
+              defaultValue={plan?.targetExam ?? "Soldado PMPR"}
+              maxLength={MAX_TITLE_LENGTH}
+              invalid={error?.field === "targetExam"}
+            />
+            <Field
+              label="Fase"
+              name="stage"
+              defaultValue={plan?.stage ?? "Pré-edital"}
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "stage"}
+            />
             <Field
               label="Modelo de estudo"
               name="studyModel"
               defaultValue={plan?.studyModel ?? "Avanço progressivo"}
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "studyModel"}
             />
             {/* Compatibilidade temporária com o motor semanal. A quantidade
                 deixa de ser decisão pedagógica: a rotina nasce das aulas. */}

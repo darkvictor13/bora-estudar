@@ -25,10 +25,13 @@
 import { supabase } from "@/lib/supabase/client";
 
 import type { ClassInput, RequestId, Result, TeacherClass, Uuid } from "../contract.ts";
-import { checkClassName } from "../validation.ts";
-import { done, fail, failure, throwDb, settle, translateDbError } from "./errors.ts";
+import { CLASS_NAME_TAKEN, checkClass } from "../validation.ts";
+import { done, fail, failure, isUniqueViolation, throwDb, settle, translateDbError } from "./errors.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
+
+/** O `23505` do nome da turma: único por professor, ignorando caixa e pontas (R-MATR-09). */
+const NAME_INDEX = "classes_name_per_teacher_uidx";
 
 interface ClassRow {
   id: string;
@@ -79,7 +82,7 @@ function toClass(row: ClassRow, studentCount: number): TeacherClass {
 
 export function createClass(input: ClassInput, requestId: RequestId): Promise<Result<TeacherClass>> {
   return once(requestId, async () => {
-    const invalid = checkClassName(input.name);
+    const invalid = checkClass(input);
     if (invalid) return failure<TeacherClass>(invalid);
 
     const session = await requireSession();
@@ -94,7 +97,10 @@ export function createClass(input: ClassInput, requestId: RequestId): Promise<Re
       .select("id,name,description,theory_catalog_id")
       .single();
 
-    if (error) return failure(translateDbError(error));
+    if (error) {
+      if (isUniqueViolation(error, NAME_INDEX)) return failure<TeacherClass>(CLASS_NAME_TAKEN);
+      return failure(translateDbError(error));
+    }
     return done(toClass(data as ClassRow, 0));
   });
 }
@@ -111,7 +117,7 @@ export function renameClass(
   requestId: RequestId,
 ): Promise<Result<TeacherClass>> {
   return once(requestId, async () => {
-    const invalid = checkClassName(input.name);
+    const invalid = checkClass(input);
     if (invalid) return failure<TeacherClass>(invalid);
 
     const { data, error } = await supabase
@@ -121,7 +127,10 @@ export function renameClass(
       .select("id,name,description,theory_catalog_id")
       .maybeSingle();
 
-    if (error) return failure(translateDbError(error));
+    if (error) {
+      if (isUniqueViolation(error, NAME_INDEX)) return failure<TeacherClass>(CLASS_NAME_TAKEN);
+      return failure(translateDbError(error));
+    }
     // A RLS FILTRA EM SILÊNCIO: um UPDATE recusado por policy afeta zero linhas
     // e não levanta erro nenhum. Sem esta conferência a tela diria "salvo".
     if (!data) return fail<TeacherClass>("not_found", "Turma não encontrada, ou não é sua.");

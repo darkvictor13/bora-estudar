@@ -12,6 +12,8 @@ import { Link as RouterLink, useLoaderData, useRevalidator } from "react-router"
 import { ContentBody } from "@/components/AppShell";
 import {
   api,
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
   newRequestId,
   type ApiError,
   type StudentCard,
@@ -78,6 +80,7 @@ function ClassDialog({
             name="name"
             defaultValue={turma?.name ?? ""}
             required
+            maxLength={MAX_NAME_LENGTH}
             invalid={error?.field === "name"}
             hint="Exemplo: PRF 2027 · Turma A."
           />
@@ -85,6 +88,8 @@ function ClassDialog({
             label="Descrição"
             name="description"
             defaultValue={turma?.description ?? ""}
+            maxLength={MAX_NOTE_LENGTH}
+            invalid={error?.field === "description"}
             hint="Horário, sala, o que ajudar a reconhecer."
           />
         </DialogContent>

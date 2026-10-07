@@ -9,6 +9,7 @@
 import { supabase } from "@/lib/supabase/client";
 
 import type { Notebook, RequestId, Result, Uuid } from "../contract.ts";
+import { checkNotebook } from "../validation.ts";
 import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
 import { once } from "./idempotency.ts";
 
@@ -119,12 +120,8 @@ export function saveNotebook(
   requestId: RequestId,
 ): Promise<Result<Notebook>> {
   return once(requestId, async () => {
-    if (!notebook.notebookName.trim()) {
-      return fail<Notebook>("validation", "Dê um nome ao caderno.", "notebookName");
-    }
-    if (notebook.totalQuestions < 0) {
-      return fail<Notebook>("validation", "O total de questões não pode ser negativo.", "totalQuestions");
-    }
+    const invalid = checkNotebook(notebook);
+    if (invalid) return failure<Notebook>(invalid);
 
     const values: NotebookWrite = {
       subject_key: notebook.subjectKey,
@@ -133,7 +130,7 @@ export function saveNotebook(
       subject_target: notebook.subjectTarget,
       notebook_key: notebook.notebookKey,
       notebook_name: notebook.notebookName.trim(),
-      notebook_link: notebook.notebookLink,
+      notebook_link: notebook.notebookLink.trim(),
       total_questions: notebook.totalQuestions,
       subject_position: notebook.subjectPosition,
       notebook_position: notebook.notebookPosition,

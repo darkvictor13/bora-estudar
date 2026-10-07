@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readLessonMaterialBlocks, validateLessonMaterialBlocks, validateLessonResources } from "./lesson-resources.ts";
+import {
+  MAX_LINK_LENGTH,
+  readLessonMaterialBlocks,
+  validateHttpsLink,
+  validateLessonMaterialBlocks,
+  validateLessonResources,
+} from "./lesson-resources.ts";
 
 const empty = {
   pdf: null,
@@ -52,4 +58,29 @@ test("descarta links inseguros recebidos do banco antes de exibi-los", () => {
   ]), [
     { title: "Aula 1", pdf: null, tecQuestions: "https://www.tecconcursos.com.br/s/Q5FFjM", qcQuestions: null },
   ]);
+});
+
+test("QA-24 · validateHttpsLink aceita qualquer https com host e recusa o resto, com a mesma frase de sempre", () => {
+  assert.equal(validateHttpsLink("https://www.tecconcursos.com.br/"), null);
+  assert.equal(validateHttpsLink("https://outro.example/a?b=1#c"), null);
+  assert.equal(validateHttpsLink("https://x.com/" + "a".repeat(MAX_LINK_LENGTH - 14)), null);
+
+  // Não é URL: a frase curta.
+  assert.equal(validateHttpsLink("x.com"), "Informe um link HTTPS válido.");
+  // É URL, e não é https, ou tem credencial, ou passa do teto: a frase longa.
+  for (const recusado of [
+    "javascript:alert(1)",
+    "http://x.com",
+    "ftp://x.com/y",
+    "https://user:senha@x.com",
+    "https://x.com/" + "a".repeat(MAX_LINK_LENGTH),
+  ]) {
+    assert.equal(
+      validateHttpsLink(recusado),
+      "Informe um link HTTPS válido, sem usuário ou senha na URL.",
+      recusado,
+    );
+  }
+  // Token de sessão não é assunto dela: quem cobra é `validateLessonResources`.
+  assert.equal(validateHttpsLink("https://m.example/a.pdf?token=x"), null);
 });

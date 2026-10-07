@@ -6,8 +6,17 @@ import { useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, type ApiError, type WaitlistEntry } from "@/lib/api";
+import {
+  api,
+  MAX_NAME_LENGTH,
+  MAX_TITLE_LENGTH,
+  MAX_WHATSAPP_LENGTH,
+  MIN_BIRTH_DATE,
+  type ApiError,
+  type WaitlistEntry,
+} from "@/lib/api";
 import { requireSession } from "@/lib/auth/session";
+import { todayLocal } from "@/lib/domain/dates";
 
 /**
  * Lista de espera — o `p-listaEspera` e o `p-bloqueio` da v2, numa tela só.
@@ -109,6 +118,7 @@ export function Waitlist() {
               name="name"
               defaultValue={entry?.name ?? ""}
               required
+              maxLength={MAX_NAME_LENGTH}
               invalid={error?.field === "name"}
             />
             <Field
@@ -126,6 +136,7 @@ export function Waitlist() {
               defaultValue={entry?.whatsapp ?? ""}
               placeholder="(11) 90000-0000"
               required
+              maxLength={MAX_WHATSAPP_LENGTH}
               invalid={error?.field === "whatsapp"}
             />
             <Field
@@ -133,6 +144,9 @@ export function Waitlist() {
               name="interestArea"
               defaultValue={entry?.interestArea ?? ""}
               placeholder="Carreira policial"
+              required
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "interestArea"}
             />
             <Field
               label="Concurso alvo"
@@ -140,6 +154,7 @@ export function Waitlist() {
               defaultValue={entry?.targetExam ?? ""}
               placeholder="Receita Federal — Auditor"
               required
+              maxLength={MAX_TITLE_LENGTH}
               invalid={error?.field === "targetExam"}
             />
             <Field
@@ -147,6 +162,9 @@ export function Waitlist() {
               name="birthDate"
               type="date"
               defaultValue={entry?.birthDate ?? ""}
+              min={MIN_BIRTH_DATE}
+              max={todayLocal()}
+              invalid={error?.field === "birthDate"}
             />
 
             <Button type="submit" variant="contained" disabled={pending}>
