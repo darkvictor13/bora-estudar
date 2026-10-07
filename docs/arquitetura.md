@@ -158,6 +158,12 @@ arquitetura assume hoje:
 - as FKs que carregam contexto são **compostas** — `(study_plan_id, teacher_id,
   student_id)` e parentes. A FK de coluna única garantia que a linha EXISTE, não
   que ela é de quem está escrevendo;
+- **gerar e limpar a semana passam por RPC** (`generate_week`,
+  `clear_pending_goals`), apesar de `goals` ser escrita direta do professor:
+  apagar e inserir dezenas de linhas precisa acontecer junto ou não acontecer, e
+  um replay depois de sucesso não é inofensivo. Meta concluída ou com estudo
+  registrado não se apaga por caminho nenhum (`goal_entries_goal_fk` é `no
+  action`);
 - o que é administrativo (`role`, `access_status`, `access_expires_at`,
   `teacher_id`) fica fora de todo grant. `teacher_id`, `access_status` e
   `access_expires_at` ganharam RPC em `20260918120000` (`link_student` e
@@ -347,6 +353,33 @@ ninguém vai corrigir. Sobra o que ninguém previu.
 Sem o código no erro, o único discriminador seria casar a mensagem em português,
 que é texto de interface: o filtro se desligaria sozinho no dia em que alguém
 melhorasse a copy, em silêncio, e só seria notado quando o painel virasse ruído.
+
+**Da resposta do banco ao código, para a escrita.** `translateDbError`
+(`error-translation.ts`, puro) decide pelo `code` do erro do PostgREST, nunca pelo
+texto:
+
+| O que chega | Código | Frase |
+|---|---|---|
+| `code: ""` (o `fetch` falhou: sem rede, DNS, CORS, `AbortError`) | `offline` | "Sem conexão. Verifique a rede e tente de novo." |
+| sem `code` (corpo que não é JSON: 502/503 de gateway, página de proxy) | `unknown` | "O servidor não respondeu como esperado. Tente de novo em instantes." |
+| `23514`, `22P02`, `22003`, `23502` | `validation` | "Algum campo tem um valor que não pode ser gravado. Confira e tente de novo." |
+| `42501`, `P0001`, `23505`, `23503`, `PGRST116` | `forbidden`, `conflict`, `conflict`, `conflict`, `not_found` | as de sempre |
+| qualquer outro | `unknown` | a mensagem original, que é o título do relato |
+
+O texto da falha de rede muda por navegador ("Failed to fetch", "NetworkError
+when attempting to fetch resource.", "Load failed"); o `code: ""` é o mesmo nos
+três. Corpo sem `code` continua `unknown` e relatado: um 502 em série é o que
+alguém precisa ver no painel, e HTML de gateway nunca vai para a tela. O preço
+do `validation` para as quatro CHECK é que uma regra que faltou em
+`validation.ts` deixa de ser relatada; quem a pega é o teste do PR que escreve
+a regra.
+
+**Escrita que chama helper que lança roda em `once` ou `settle`.** `requireSession`,
+`throwDb` e `readFailure` lançam, e escrita devolve `Result`. `once`
+(`request-memory.ts`) e `settle` (`errors.ts`) convertem o throw em `failure` —
+relatado se for `unknown`, com a causa. Sem isso o `await` rejeita, o botão fica
+preso em "Registrando…", e o `once` de antes guardava a promessa REJEITADA: a
+retentativa com o mesmo `requestId` devolvia a mesma rejeição até recarregar.
 
 Quando um evento é criado, `RouteError` mostra o id na tela (`error-code`). É
 para a pessoa poder dizer qual erro foi — e ele só aparece quando houve relato,

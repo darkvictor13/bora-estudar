@@ -483,11 +483,14 @@ export function linkCatalogToPlan(
     if (error) return failure<void>(translateDbError(error));
     if (!plan) return fail<void>("not_found", "Planejamento não encontrado.");
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("study_plan_theory_catalogs")
       .select("id")
       .eq("study_plan_id", studyPlanId)
       .maybeSingle();
+
+    // Ignorar o erro mandaria o código para o INSERT de uma linha que existe.
+    if (existingError) return failure<void>(translateDbError(existingError));
 
     // UM CATÁLOGO POR PLANEJAMENTO — `study_plan_id` é único na tabela. Trocar
     // é UPDATE; o `upsert` mandaria as colunas de contexto, que ficam fora do

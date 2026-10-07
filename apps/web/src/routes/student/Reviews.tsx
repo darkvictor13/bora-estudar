@@ -8,12 +8,14 @@ import { useLoaderData, useRevalidator } from "react-router";
 import { ContentBody } from "@/components/AppShell";
 import {
   api,
+  MAX_ENTRY_QUESTIONS,
   newRequestId,
   type ApiError,
   type Reinforcement,
   type ReviewGridRow,
 } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { parseCount } from "@/lib/domain/week";
 
 /**
  * Controle de revisões — o `p-controleRevisoes` da v2.
@@ -55,25 +57,41 @@ export function StudentReviews() {
   const { revalidate } = useRevalidator();
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  const [saving, setSaving] = useState(false);
+  // A chave de retentativa NASCE NO CLIQUE EM "Registrar" e fica até o sucesso:
+  // gerada no envio, a resposta que se perde seguida de um novo clique somaria
+  // duas vezes (QA-04). Uma por revisão, porque duas revisões abertas em
+  // sequência não podem repartir a mesma.
+  const [requestIds, setRequestIds] = useState<Readonly<Record<string, string>>>({});
 
   const due = grid.flatMap((row) => row.reviews.filter((review) => review.due));
   const pending = grid.flatMap((row) =>
     row.reviews.filter((review) => review.status !== "completed"),
   );
 
+  function toggle(reviewId: string) {
+    if (open !== reviewId) {
+      const fresh = newRequestId();
+      setRequestIds((known) => (known[reviewId] ? known : { ...known, [reviewId]: fresh }));
+    }
+    setOpen(open === reviewId ? null : reviewId);
+  }
+
   async function record(reviewId: string, questions: number, correctAnswers: number) {
-    const result = await api.recordReviewQuestions({
-      reviewId,
-      requestId: newRequestId(),
-      questions,
-      correctAnswers,
-    });
+    const requestId = requestIds[reviewId];
+    if (!requestId) return;
+
+    setSaving(true);
+    const result = await api.recordReviewQuestions({ reviewId, requestId, questions, correctAnswers });
+    setSaving(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
     setError(null);
     setOpen(null);
+    // A chave desta revisão foi gasta: o próximo "Registrar" cria outra.
+    setRequestIds(({ [reviewId]: _spent, ...rest }) => rest);
     await revalidate();
   }
 
@@ -182,7 +200,7 @@ export function StudentReviews() {
                         <Button
                           size="small"
                           variant="text"
-                          onClick={() => setOpen(open === review.id ? null : review.id)}
+                          onClick={() => toggle(review.id)}
                         >
                           Registrar
                         </Button>
@@ -199,8 +217,8 @@ export function StudentReviews() {
                           const data = new FormData(event.currentTarget);
                           void record(
                             review.id,
-                            Number(data.get("questions") ?? 0),
-                            Number(data.get("correctAnswers") ?? 0),
+                            parseCount(String(data.get("questions") ?? "")),
+                            parseCount(String(data.get("correctAnswers") ?? "")),
                           );
                         }}
                       >
@@ -208,11 +226,17 @@ export function StudentReviews() {
                           label="Questões"
                           name="questions"
                           type="number"
-                          min={0}
-                          defaultValue={review.minimumQuestions - review.questionsAnswered}
+                          inputMode="numeric"
+                          min={1}
+                          max={MAX_ENTRY_QUESTIONS}
+                          step={1}
+                          defaultValue={Math.min(
+                            Math.max(review.minimumQuestions - review.questionsAnswered, 1),
+                            MAX_ENTRY_QUESTIONS,
+                          )}
                         />
-                        <Field label="Acertos" name="correctAnswers" type="number" min={0} defaultValue={0} />
-                        <Button type="submit" size="small" variant="contained" sx={{ mb: 1.75 }}>
+                        <Field label="Acertos" name="correctAnswers" type="number" inputMode="numeric" min={0} max={MAX_ENTRY_QUESTIONS} step={1} defaultValue={0} />
+                        <Button type="submit" size="small" variant="contained" disabled={saving} sx={{ mb: 1.75 }}>
                           Salvar
                         </Button>
                       </Box>

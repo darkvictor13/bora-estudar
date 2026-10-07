@@ -10,8 +10,10 @@
  * propósito — o resgate precisa nascer como RPC) e executar reforço (o motor de
  * baterias saiu com a extensão).
  */
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "../fixtures/index.ts";
-import { one, query } from "../fixtures/db.ts";
+import { asUser, one, query } from "../fixtures/db.ts";
 import { addTheoryCatalog, addTheoryGoal, setAccess } from "../fixtures/scenario.ts";
 import { alert, content, field, testId } from "../support/ui.ts";
 
@@ -50,6 +52,47 @@ test.describe("F-EST-01 · os números vêm do ledger", () => {
     // Dois dias com registro: a linha do tempo por dia tem dois pontos.
     await openSeries(studentPage);
     await expect(testId(studentPage, "chart-minutes-day").locator('[data-testid="chart-point"]')).toHaveCount(2);
+  });
+
+  test("o extra lançado para ontem cai em ontem na série por dia — N-07", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const goal = scenario.goals.find((candidate) => candidate.type === "theory")!;
+    // Hoje no fuso do navegador: é o `timezoneId` do projeto, e o banco está em UTC.
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+    const yesterday = new Date(`${today}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const ontem = yesterday.toISOString().slice(0, 10);
+
+    // Hoje no meio da semana 1, e ontem depois do início do planejamento.
+    await query("update public.study_plans set starts_on = $2::date - 3 where id = $1", [
+      scenario.planId,
+      today,
+    ]);
+    // A pré-condição vai pela RPC REAL: se a regra regredir, ela falha aqui em vez
+    // de fabricar um registro que nenhuma tela consegue explicar.
+    await asUser(scenario.student.id, (client) =>
+      client.query(
+        "select public.record_extra_study($1, $2, 'anki', 'Português', $3::date, 40, 0, 0)",
+        [randomUUID(), scenario.planId, ontem],
+      ),
+    );
+    // Mais um registro, de hoje, para a série ter dois pontos.
+    await query(
+      `insert into public.goal_entries
+         (goal_id, student_id, teacher_id, minutes, questions, correct_answers)
+       values ($1, $2, $3, 30, 10, 9)`,
+      [goal.id, scenario.student.id, scenario.teacher.id],
+    );
+
+    await studentPage.goto("/aluno/estatisticas");
+    await openSeries(studentPage);
+    const tabela = testId(studentPage, "chart-minutes-day").locator('[data-testid="chart-table"]');
+    await expect(tabela).toBeAttached();
+
+    const ddmm = `${ontem.slice(8, 10)}/${ontem.slice(5, 7)}`;
+    await expect(tabela.locator("tr", { hasText: ddmm })).toContainText("40min");
   });
 
   test("toda figura traz a tabela dos números", async ({ studentPage, scenario }) => {

@@ -445,7 +445,9 @@ A espec está em [`specs/13-vinculo-e-liberacao-de-acesso.md`](specs/13-vinculo-
 ### GAP-02 · MÉDIO · RPCs implementadas que nenhuma tela chama
 
 `activate_study_plan`, `void_quiz_session` e `record_reinforcement` estão
-prontas e testadas em `supabase/tests/`, sem ponto de entrada na interface. As
+prontas e testadas em `supabase/tests/`, sem ponto de entrada na interface.
+**Atualização de 06/10/2026:** `activate_study_plan` tinha saído com o schema de
+14/09 e foi recriada (QA-03, QA-12); a tela de planejamentos já a chama. As
 telas de Revisões recomendam o reforço mas não têm como executá-lo, e o content
 script só conduz a fase `main`.
 
@@ -462,3 +464,311 @@ em desenvolvimento. Em produção, com confirmação ligada, o GoTrue responde
 sucesso genérico para não revelar quais e-mails existem, e a pessoa vai para a
 lista de espera de uma conta que não é dela. Vale decidir o texto dessa tela
 antes de ligar a confirmação.
+
+---
+
+## Varredura de 06/10/2026
+
+Levantamento do QA de 06/10/2026, em [`relatorio-qa-2026-10-06.md`](relatorio-qa-2026-10-06.md). A
+numeração é `QA-NN`, para não colidir com os `BUG-NN` acima; o plano de correção, PR a PR, está em
+[`plano-qa/README.md`](plano-qa/README.md).
+
+### QA-01 · CRÍTICO · Regenerar a semana apaga o estudo registrado
+
+O aluno registra 40 min numa meta de teoria, e ela passa a `in_progress`. O professor abre
+`/professor/metas`, escolhe a substituição "Segura", vê a prévia ("Preservadas 0") e gera: a meta some, e
+o `goal_entries` do aluno vai de 1 linha para 0.
+
+`isPreserved` só olhava `completed`, e `goal_entries_goal_fk` era `on delete cascade`: o registro ia junto, sem erro.
+
+**Reproduzir** registrar estudo numa meta pendente e gerar a semana pelo professor
+(F-PROF-05, `03_goals` caso 20).
+
+**Correção** `generate_week` apaga só o que `app_private.goal_is_preserved` não segura — a concluída e a com
+registro ou bateria —, a FK passou a `no action` e a prévia conta pelo mesmo critério
+(`week_replacement_preview`). **O modo "Replanejar semana inteira" foi removido:** com a meta concluída
+preservada ele apagaria exatamente o mesmo que o padrão, e uma tela com dois caminhos iguais promete uma
+diferença que não existe. Spec 04, R-GEN-12 a R-GEN-14.
+
+---
+
+### QA-05 · ALTO · Uma falha no meio de gerar a semana apaga a semana
+
+Com o `POST /rest/v1/goals` caindo, gerar levava a semana de 5 metas para 0: o `DELETE` e o `INSERT`
+eram duas requisições, sem transação. A retentativa também não era segura — o `request_id` nascia a cada
+clique, e repetir o pedido depois de a resposta se perder chegava como operação nova, duplicando a
+semana quando o aluno tinha registrado numa meta recém-criada. E a posição das metas novas somava a
+QUANTIDADE de preservadas, e não a maior posição, e batia em `goals_one_per_slot_idx`.
+
+**Reproduzir** derrubar `rpc/generate_week` com `route.abort()` e, noutro teste, deixar o servidor gravar e
+perder a resposta (F-PROF-10, `03_goals` casos 18 e 22).
+
+**Correção** `generate_week` é uma transação, idempotente pela PK `goal_batches.id`, e a tela gera o
+`request_id` uma vez por prévia. As posições novas entram depois da maior que sobrou no dia.
+Spec 04, R-GEN-15, R-GEN-16 e R-GEN-19.
+
+---
+
+### QA-17 · BAIXO · Semana fora de intervalo é aceita ou vira erro cru
+
+`Number(...) || 1` trocava 0 por 1 em silêncio; -3 e 99999 montavam a prévia e gravavam; 1,5 chegava ao
+banco e voltava `22P02`. `goals.week_number` e `goals.planned_minutes` não tinham CHECK.
+
+**Reproduzir** abrir `/professor/metas?semana=0`, `-3`, `1.5` ou `99999` e pedir a prévia (F-PROF-11,
+`07_schema` caso 14).
+
+**Correção** `checkWeekNumber` no contrato, chamado pelas duas implementações, recusa fora de 1 a 520 com a
+frase "1 a 520"; o banco tem `goals_week_number_check` e `goals_planned_minutes_check`.
+Spec 04, R-GEN-17.
+
+---
+
+### QA-02 · ALTO · `/confirmar?next=` redireciona para fora do site
+
+`AuthCallback` aceitava qualquer `next` que começasse com `/` e não com `//`, e o destino é o mesmo com
+código válido ou sem: bastava um link, sem login. `/\evil.example/x` e `/\\evil.example` o React Router
+lê como URL absoluta (`^[\\/]{2}`) e abre com `location.assign`; `/<TAB>/evil.example/x` o navegador
+resolve como `//evil.example/x`, o `pushState` lança e o router cai no mesmo `location.assign`.
+
+Há uma quarta forma, que é a correção ingênua: `new URL("/.//evil.example/x", base).pathname` é
+`//evil.example/x`, mesma origem para o `URL` e URL absoluta para o router.
+
+**Reproduzir** abrir `/confirmar?next=` com `encodeURIComponent` de cada payload (F-AUTH-14). Antes da
+correção os quatro ficavam fora de `/redefinir-senha`: três saíam para `evil.example`, e `/.//evil.example/x`
+parava em `/evil.example/x`, dentro do site mas num destino que ninguém escolheu.
+
+**Correção** `safeInternalPath` (`lib/routes.ts`) resolve contra uma origem fictícia e recusa outra origem, o
+`pathname` normalizado que começa com duas barras e as telas públicas; recusado, vale o destino padrão de
+quem chama. O login (QA-25, PR 6) usa a mesma função. Spec 01, R-AUTH-16 e CA-16.
+
+---
+
+### QA-03 · ALTO · Um aluno termina com dois planejamentos ativos
+
+Duas abas ativando planos diferentes intercalavam as quatro escritas (arquivar, ativar, arquivar, ativar) e o
+aluno terminava com dois ativos. Pela API, `PATCH /rest/v1/study_plans?id=eq.<outro>` com
+`{"status":"active"}` devolvia 200. O `CLAUDE.md`, as specs 03 e 14 e o cabeçalho de `teacher-plans.ts`
+diziam que havia um índice único parcial; ele não existia (só `study_plans_name_per_student_uidx`), e a RPC
+`activate_study_plan` também tinha saído com o schema de 14/09. O banco local tinha 6 alunos com dois ativos.
+
+**Reproduzir** duas chamadas simultâneas a `activate_study_plan` para o mesmo aluno, com a primeira
+segurando a trava (F-GPLAN-01; `07_schema` casos 17 e 18; `02_rls` caso 19). Sem a trava, o teste falha.
+
+**Correção** migration `20261006221607_one_active_study_plan`: o índice
+`study_plans_one_active_per_student_uidx` (a limpeza deixa ativo o mais recente e **pausa** os outros) e a RPC
+naturalmente idempotente, que trava os planejamentos do aluno e arquiva o anterior. Spec 14, R-GPLAN-02 a
+R-GPLAN-04 e CA-09; spec 03, R-PLAN-01 e R-PLAN-05.
+
+---
+
+### QA-12 · MÉDIO · Ativar com a rede caindo deixa o aluno sem planejamento
+
+`activatePlan` arquivava os ativos do aluno e só então ativava o novo, em duas requisições. Com a rede caindo
+entre as duas, o anterior ficava arquivado e o novo não ficava ativo: o aluno via "Nenhum planejamento ativo".
+
+**Reproduzir** derrubar `rpc/activate_study_plan` com `route.abort()`, e noutro teste deixar o servidor
+gravar e perder a resposta (F-GPLAN-01).
+
+**Correção** ativar é uma chamada só à RPC. Ativar o que já está ativo passou a ser sucesso, porque é a
+retentativa depois de uma resposta perdida. Spec 14, R-GPLAN-02 e CA-08.
+
+---
+
+### QA-06 · MÉDIO · O erro de escrita chega cru, e cada queda de rede vira relato
+
+`translateDbError` só conhecia `42501`, `P0001`, `23505`, `23503` e `PGRST116`. O resto caía no `default`
+com `error.message` e código `unknown`: a queda de rede lia "TypeError: Failed to fetch" na tela (o texto muda
+por navegador), o corpo de gateway que não era JSON ia inteiro para o diálogo, as violações de CHECK saíam em
+inglês, e todas elas viravam um evento no Sentry. É da mesma classe do BUG-09, dado como corrigido, e a
+correção dele cobria só as baterias.
+
+**Reproduzir** `route.abort("internetdisconnected")` no `POST /rest/v1/goal_entries` e gravar um registro de
+estudo (F-META-03), ou na criação de turma (F-OBS-01).
+
+**Correção** `error-translation.ts` (puro): `code === ""` é `offline`, com a frase do login — a rede se
+reconhece pelo código, nunca pelo texto; corpo sem `code` é `unknown` com frase fixa e continua relatado;
+`23514`, `22P02`, `22003` e `23502` viram `validation` genérico. O preço, dito em voz alta: `validation` não é
+relatado, então uma CHECK que chega ao banco por falta de regra em `validation.ts` só é pega pelo teste do PR
+que escreve a regra. `session.ts` passou a lançar `unauthenticated` (e não `not_found`) para sessão vencida.
+`notebooks.ts` e `teacher-theory.ts` deixaram de ignorar o `error` do select que decide entre UPDATE e INSERT.
+
+---
+
+### N-01 · ALTO · `once()` guardava para sempre a promessa REJEITADA
+
+Quando a operação LANÇAVA (`requireSession`, `throwDb`, `currentSession` com a rede caída), o `.then` que
+limpava a chave só rodava no sucesso: a rejeição ficava no mapa, toda retentativa com o mesmo `requestId`
+devolvia a mesma rejeição sem reexecutar, saía uma `unhandledrejection` por falha, e `RecordStudyDialog` e
+`ExtraStudyDialog` ficavam presos em "Registrando…"/"Salvando…" porque o `await onSubmit` rejeitava antes do
+`setPending(false)`. As escritas fora de `once` que chamam helper que lança tinham o mesmo defeito, sem a
+memória.
+
+**Reproduzir** derrubar só `/auth/v1/user` uma vez e lançar um estudo extra (F-EXTRA-01). Medido: com a
+memória antiga o alerta nunca aparece e o botão não volta.
+
+**Correção** `createOnce` (`request-memory.ts`, puro) converte o throw em `failure` — a promessa nunca rejeita
+e a chave é liberada —, e `settle` faz o mesmo para a escrita fora de `once`: `joinWaitlist`,
+`saveReviewSpacing`, `setClassTheoryCatalog`, `enrollStudent`, `clearPendingGoals`, as quatro de simulado e
+`saveAccount`. O throw que escapa é relatado por `recoverThrown`, com a causa, se for `unknown`.
+
+*(Atualização do PR 5a: `recordExtraStudy` deixou de chamar `requireSession`, então o F-EXTRA-01 passou a derrubar
+a leitura do `starts_on` do plano — o postgrest-js repete o GET que falha por rede, e o teste derruba enquanto a
+rede "cai". O throw de dentro do `once()` já não tem caminho nessa tela, e quem o segura é
+`request-memory.test.ts`.)*
+
+---
+
+### QA-04 · ALTO · Registrar estudo duplica na retentativa (parcial: o caminho direto só fecha no 5c)
+
+`recordStudy` eram dois pedidos (INSERT em `goal_entries`, UPDATE `pending` → `in_progress`) e `recordExtraStudy`
+três (meta, registro e um DELETE de compensação). A única defesa era `once()`, que esquece a chave quando a
+tentativa falha: o servidor gravava, a resposta se perdia, e a nova tentativa gravava de novo. `goal_entries` não
+tinha `request_id`.
+
+Na teoria era pior: `recordInitialQuestions` e `recordReviewQuestions` LIAM um contador, somavam e gravavam. A
+retentativa somava duas vezes e duplicava o registro; duas abas perdiam uma das somas; a queda entre a soma e o
+INSERT deixava progresso sem ledger; e concluir a aula e criar as revisões eram duas escritas com o erro
+ignorado. A questão de revisão não ia para ledger nenhum (era só `questions_answered`, mantido à mão), e a
+retentativa do envio que FECHOU a revisão voltava "Esta revisão já foi concluída". A chave ainda nascia no clique
+(`newRequestId()` dentro do envio), e o formulário de revisão do modal fechava antes do resultado.
+
+**Reproduzir** deixar o servidor gravar e derrubar a resposta, uma vez, em `rpc/record_goal_entry` e em
+`rpc/record_extra_study` (F-META-03 e F-EXTRA-01; `03_goals` casos 32 a 38) e, na teoria, em
+`rpc/record_initial_questions` e `rpc/record_review_questions` (F-TEO-08 e F-TEO-09; `06_theory` casos 16 a 26).
+
+**Correção** migration `20261006224256_student_study_entries`: `goal_entries.request_id`, índice único
+`goal_entries_request_uidx`, e as RPCs `record_goal_entry` e `record_extra_study`, uma transação cada, que travam
+a meta (ou o plano) ANTES de buscar a chave e comparam as colunas do registro. Mesma chave com outra carga é
+`23505`, e a tela diz "Este estudo já foi registrado com outros valores". Spec 12, R-CONC-21 e R-CONC-22; spec
+19, R-EXTRA-25.
+
+**Teoria (PR 5b)** migration `20261006231152_record_theory_questions`: `record_initial_questions` insere em
+`goal_entries` com `request_id` e a aula (`goal_entries.theory_lesson_id`, FK composta), e SÓ SE inseriu agora soma
+o progresso (`x = x + n`, um upsert que serializa duas abas), fecha a aula e cria as revisões, numa transação.
+`record_review_questions` grava no ledger novo `theory_review_entries` (`request_id` UNIQUE) e soma; o replay vem
+antes de "já concluída". O mínimo é o da regra da AULA (`initial_questions_required`), e o TypeScript passou a ler
+pela aula também. `checkQuestionRecord` (1 a 500 questões, acertos de 0 ao total) vale para as duas implementações,
+e a chave de retentativa nasce quando o formulário abre (`TheoryDialog`, `Reviews`) e só muda depois do sucesso.
+Spec 32, R-TEO-21 a R-TEO-24. A spec 32, R-TEO-06, exigia "teoria lida E mínimo", e o código (e a spec 36) fechavam
+só pelas questões: o texto foi corrigido.
+
+**Parcial:** o INSERT direto do aluno em `goal_entries`, a escrita das colunas de contagem de `theory_progress` e
+`theory_reviews` continuam aceitos, porque o bundle no ar os usa — o PR 5c os revoga, depois de este bundle estar
+publicado em staging.
+
+---
+
+### QA-07 · ALTO · Aluno com o acesso vencido conclui, pula e apaga (e N-05)
+
+`goals_update` não chamava `has_active_access()`, então concluir, reabrir e pular — todos UPDATE direto — passavam
+com o acesso vencido. `goals_delete` e `goal_entries_delete` também não chamavam, e o aluno vencido apagava
+registro de estudo e meta extra (N-05).
+
+**Reproduzir** suspender o acesso depois de abrir a semana e clicar na caixa da meta (F-META-08; `03_goals` casos
+29 e 30).
+
+**Correção** `has_active_access()` no `WITH CHECK` de `goals_update` e no `USING` de `goals_delete` e de
+`goal_entries_delete`. O UPDATE barrado levanta `42501`; o DELETE barrado afeta zero linhas, e `removeStudyEntry`
+passou a contar com `count: "exact"` — sem isso a tela fingia sucesso. Spec 12, R-CONC-24.
+
+---
+
+### QA-10 · MÉDIO · O registro de estudo aceita qualquer número
+
+`goal_entries` não tinha CHECK, e a tela convertia com `Number(x) || 0`, que deixa passar -30, 1.5 e 1e3. A
+validação morava no adaptador, com outra frase na fixture. No banco local do QA havia 8 registros fora da regra
+(-30, 1000 e 14400 minutos, questões negativas).
+
+**Reproduzir** gravar -30, 241 e 1.5 minutos (F-META-03; `07_schema` caso 19).
+
+**Correção** `checkStudyEntry` em `validation.ts` (0 a 240 minutos, 0 a 500 questões, acertos até o total, não
+tudo zero), chamada pelas duas implementações, e as CHECKs `goal_entries_minutes_check`, `_questions_check`,
+`_correct_answers_check` e `_not_empty_check`. `parseCount` entrega o texto inválido como `NaN` à validação. A
+migration apagou os registros fora da regra. Spec 12, R-CONC-23.
+
+---
+
+### QA-11 · MÉDIO · A data do estudo extra não tem limite
+
+`weekNumberOf` põe qualquer data anterior ao início na semana 1, e não havia teto: um extra para 2031 criava a
+meta da "semana 222".
+
+**Reproduzir** lançar um extra com a data antes do `starts_on` e com amanhã (F-EXTRA-01).
+
+**Correção** `checkExtraStudyDate` (de `starts_on` até hoje, no fuso do aparelho) e, no banco, `record_extra_study`
+recusa fora de `[starts_on, hoje em UTC+14]` com `23514`. O teto do servidor é "já é hoje em algum lugar do
+planeta": ele não conhece o fuso do aparelho. Spec 19, R-EXTRA-20 e R-EXTRA-22.
+
+---
+
+### QA-14 · BAIXO · "Semana inteira" sugere a segunda-feira, não hoje
+
+Com `?dia=todos` o botão "Estudo extra" sugeria `weekOf.startsOn`, e o caminho do cronômetro
+(`?estudoExtra=cronometro`) fazia o mesmo.
+
+**Reproduzir** abrir `/aluno?dia=todos` no meio da semana e clicar em "Estudo extra" (F-EXTRA-01).
+
+**Correção** `defaultExtraDate`, em `lib/domain/week.ts`: o dia escolhido, se está na semana e não passa de hoje;
+senão hoje; na semana passada, o primeiro dia dela. O `?dia=` do cronômetro só vale se for uma data da semana
+vista. Spec 19, R-EXTRA-26.
+
+---
+
+### QA-27 · BAIXO · O diálogo de estudo extra escreve durante o render
+
+`ExtraStudyDialog` chamava `pauseStudyTimerForRecord()` no inicializador do `useState`: a função grava no
+`localStorage` e dispara o evento da `StudyTimerBar`, e o React acusava "Cannot update a component
+(`StudyTimerBar`) while rendering…" em todo abrir do diálogo. O PR 4 já tinha deixado a asserção do F-EXTRA-01
+frouxa por causa disso.
+
+**Reproduzir** abrir `/aluno?estudoExtra=cronometro` com o cronômetro correndo (F-EXTRA-01).
+
+**Correção** o inicializador só LÊ; pausar vai para um efeito de montagem (`pauseStudyTimer`, idempotente). Junto,
+D-16: Cancelar, o fundo e o Esc retomam o cronômetro (`resumeStudyTimer`), e lançar o consome. `pauseTimer` e
+`resumeTimer` são funções puras em `study-timer.ts`. O F-EXTRA-01 passou a exigir `consoleErrors` vazio.
+Spec 19, R-EXTRA-27.
+
+---
+
+### QA-28 · MÉDIO · O aluno escreve o resultado da meta
+
+O grant de UPDATE de `goals` inclui `spent_minutes`, `questions_answered` e `correct_answers`, e
+`protect_goal_planning_fields` não as congelava: um PATCH pela API gravava `correct_answers = 999` numa meta de
+teoria. Ninguém mais escreve essas colunas — o bundle não as lê nem as escreve, e as RPCs de bateria nunca foram
+portadas.
+
+**Reproduzir** `update goals set correct_answers = 5` como o aluno, numa meta sem bateria (`03_goals` caso 28).
+
+**Correção** o gatilho recusa as três colunas para quem não é o professor, em meta SEM `notebook_block_id` (a de
+bateria continua de `protect_goal_quiz_result`, que dispara depois). A migration zerou as que já estavam
+escritas. O teste 08 de `03_goals`, que gravava `spent_minutes` como aluno, foi corrigido. Spec 12, R-CONC-25.
+
+---
+
+### N-02 · MÉDIO · Não cabe um segundo estudo extra no mesmo dia
+
+Todo extra nascia com `day_position = 99`, e `goals_one_per_slot_idx` é único por (plano, semana, dia, posição): o
+segundo extra do dia batia em `23505`.
+
+**Reproduzir** lançar dois extras com a data sugerida (F-EXTRA-01; `03_goals` caso 37).
+
+**Correção** `record_extra_study` calcula `max(day_position) + 1` do dia, com o plano travado. Spec 19, R-EXTRA-20.
+
+---
+
+### N-07 · MÉDIO · O extra de ontem conta como estudo de hoje
+
+O registro só tinha `created_at = now()`, e série, sequência, calendário e estatísticas agrupam por ele: a meta ia
+para o dia escolhido, e o registro para o dia do lançamento.
+
+**Reproduzir** lançar um extra com a data de ontem e olhar a semana e a série por dia (F-EXTRA-01, F-EST-01;
+`12_student_question_comparison` e as duas seguintes).
+
+**Correção** `goal_entries.studied_on` (nulo = o dia local de `created_at`), escrito só por `record_extra_study`,
+e `entryDay` (`lib/domain/schedule.ts`) como a única função que calcula o dia de um registro: a sequência da
+semana, o calendário, o desempenho do dia, as séries por dia e por mês e o recorte por ano a usam. As três funções
+de comparação por ano leem `coalesce(studied_on, dia UTC de created_at)`. A "última atividade" do professor
+continua sendo `created_at`: é um instante, mostrado com hora. A migration preencheu `studied_on` dos extras já
+lançados por heurística (meta `extra` concluída, título do diálogo, registro até 60 s depois da meta). Spec 19,
+R-EXTRA-28; spec 25, nota do topo.
+

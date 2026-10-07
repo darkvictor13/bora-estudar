@@ -251,3 +251,54 @@ begin
   end if;
   raise notice '17 OK  turma e do professor que a criou';
 end $$;
+
+-- ---------- goal_batches: só o professor dono enxerga o lote ----------
+-- Davi (a sessão atual) e Bruno contam 0; Ana, dona do plano, conta 1.
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.goal_batches;
+  if v_total <> 0 then
+    raise exception 'FALHOU: Davi enxergou % lote(s) de geracao da Ana', v_total;
+  end if;
+  raise notice '18 OK  goal_batches: professor alheio conta 0';
+end $$;
+
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.goal_batches;
+  if v_total <> 0 then
+    raise exception 'FALHOU: o aluno enxergou % lote(s) de geracao', v_total;
+  end if;
+  raise notice '18 OK  goal_batches: o aluno conta 0';
+end $$;
+
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$
+declare v_total integer;
+begin
+  select count(*) into v_total from public.goal_batches;
+  if v_total <> 1 then
+    raise exception 'FALHOU: Ana enxergou % lote(s), esperava 1', v_total;
+  end if;
+  raise notice '18 OK  goal_batches: a dona do plano conta 1';
+end $$;
+
+-- ---------- activate_study_plan: professor alheio e aluno não ativam ----------
+select app_test.act_as('44444444-4444-4444-8444-444444444444');  -- Davi
+do $$ begin
+  perform public.activate_study_plan('a2000000-0000-4000-8000-000000000001');
+  raise exception 'FALHOU: Davi ativou o planejamento do aluno da Ana';
+exception when insufficient_privilege then
+  raise notice '19 OK  activate_study_plan recusa professor alheio';
+end $$;
+
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$ begin
+  perform public.activate_study_plan('a2000000-0000-4000-8000-000000000001');
+  raise exception 'FALHOU: o aluno ativou o proprio planejamento';
+exception when insufficient_privilege then
+  raise notice '19 OK  activate_study_plan recusa o aluno';
+end $$;

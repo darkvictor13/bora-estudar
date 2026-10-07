@@ -58,7 +58,7 @@ isso "reproduz exatamente a estratégia da planilha".
 
 | Id | Regra |
 |---|---|
-| R-PREV-11 | A prévia é **calculada no navegador**, pela mesma função pura que a action usa. Não há ida ao servidor: `buildWeek` é determinística, então a prévia e o que se grava não têm como divergir por causa do transporte. |
+| R-PREV-11 | A **distribuição** da prévia é calculada no navegador, por `planWeek`. As **contagens do que fica e do que sai** vêm do banco, por `week_replacement_preview` (spec [04](04-geracao-semanal.md), R-GEN-18): o critério de preservação mora num lugar só, e o navegador não o conhece. *Reescrita em 06/10/2026.* |
 | R-PREV-12 | A prévia mostra as metas **agrupadas por dia**, com tipo, disciplina e bloco, e o total. É o que a v96 mostrava, e é o que responde "o que vai ser criado". |
 | R-PREV-13 | A prévia é **opcional**. A v96 a tornava obrigatória — não dava para salvar sem gerar antes. Aqui salvar direto continua valendo: quem já sabe o que quer não precisa de dois cliques. **Suposição registrada.** |
 | R-PREV-14 | O ponto de partida do rodízio na prévia vem do **carregamento da tela**; o que a action grava é recalculado do banco no momento de gravar. Se uma meta nascer entre uma coisa e outra, a prévia fica desatualizada em qual bloco cai — nunca em quantas metas. A prévia é conferência, o banco é a verdade. |
@@ -68,7 +68,7 @@ isso "reproduz exatamente a estratégia da planilha".
 
 | Id | Regra |
 |---|---|
-| R-PREV-16 | O `batch_id` continua **derivado do conteúdo** por `batchIdFor`, e passa a incluir o total e os pesos. Sem isso, mudar um peso e reenviar produziria o mesmo id, e `apply_study_plan_batch` devolveria a semana antiga como replay — a promessa "reenviar o mesmo lote não duplica" viraria "mudar o peso não faz nada". |
+| R-PREV-16 | **Removida em 06/10/2026**, substituída por R-GEN-19 da spec [04](04-geracao-semanal.md): o `request_id` nasce com a prévia e é o mesmo em toda tentativa de gravá-la. Mudar peso, plano ou semana descarta a prévia e o id juntos. |
 | R-PREV-17 | Total e pesos são validados na action: total entre 1 e **80** (o teto da v96), peso entre 0 e 20. Fora disso, mensagem em português e nada é gravado. |
 
 ---
@@ -78,10 +78,10 @@ isso "reproduz exatamente a estratégia da planilha".
 ```
 professor abre /professor/metas
       │
-      ├─ dias · tempo · modo · blocos marcados   (como hoje)
+      ├─ dias · tempo · blocos marcados   (como hoje)
       ├─ NOVO: total de metas + peso por disciplina
       │
-      ├─ [Gerar prévia]  ── type="button", sem ida ao servidor
+      ├─ [Gerar prévia]  ── type="button"; só as contagens vão ao banco (R-PREV-11)
       │       │
       │       ├─ distributeByWeight(disciplinas, total)
       │       │     ideal → piso → mínimo 1 se couber → maior resto
@@ -93,10 +93,8 @@ professor abre /professor/metas
       └─ [Gerar metas da semana]  ── submit
               │
               ├─ a MESMA função pura, com o ponto de partida relido do banco
-              ├─ batchIdFor(plano, semana, modo, minutos, teoria, dias,
-              │              blocos, total, pesos)
               ▼
-        apply_study_plan_batch — replay pelo próprio id do lote
+        generate_week(p_request_id = id da prévia) — replay pelo próprio id do lote
 ```
 
 ---
@@ -110,8 +108,8 @@ professor abre /professor/metas
 | Actions | `generateWeek`, que passa a ler total e pesos |
 | Domínio | `distributeByWeight` e `buildWeek`, em `lib/domain/week-planner.ts`, com testes de unidade |
 | Leitura | o loader passa a trazer, por bloco, quantas metas de bateria já existem |
-| RPCs | **nenhuma nova** |
-| Migration | **nenhuma** |
+| RPCs | `week_replacement_preview` e `generate_week`, da spec [04](04-geracao-semanal.md) |
+| Migration | `generate_week` (06/10/2026), da spec [04](04-geracao-semanal.md) |
 | Testes | `apps/web/src/lib/domain/teacher.test.ts` (`shareByWeight`, `planWeek`), `apps/e2e/tests/teacher.spec.ts` |
 
 **O formulário ganhou `noValidate`**, pela mesma razão do de login (F-AUTH-03):

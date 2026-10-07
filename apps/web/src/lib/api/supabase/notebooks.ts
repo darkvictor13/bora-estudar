@@ -140,12 +140,14 @@ export function saveNotebook(
       active: notebook.active,
     };
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("study_plan_notebooks")
       .select("block_id")
       .eq("block_id", notebook.blockId)
       .maybeSingle();
 
+    // Ignorar o erro mandaria o código para o INSERT de uma linha que existe.
+    if (existingError) return failure<Notebook>(translateDbError(existingError));
     if (existing) return writeNotebook(notebook.blockId, values);
 
     const { data: plan, error: planError } = await supabase

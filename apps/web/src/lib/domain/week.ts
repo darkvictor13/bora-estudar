@@ -171,3 +171,37 @@ export function formatMinutes(minutes: number): string {
   if (rest === 0) return `${hours}h`;
   return `${hours}h${String(rest).padStart(2, "0")}`;
 }
+
+/**
+ * A data que o estudo extra sugere (QA-14, R-EXTRA-26).
+ *
+ * O dia escolhido no calendário, se está na semana vista e não passa de hoje.
+ * Senão, hoje, quando hoje está na semana ou a semana é futura. Senão (semana
+ * passada), o primeiro dia dela. Antes, "Semana inteira" sugeria a segunda-feira,
+ * e o caminho do cronômetro caía no mesmo erro.
+ */
+export function defaultExtraDate(
+  week: { readonly startsOn: IsoDate; readonly endsOn: IsoDate },
+  selected: IsoDate | null,
+  today: IsoDate,
+): IsoDate {
+  if (selected !== null && selected >= week.startsOn && selected <= week.endsOn && selected <= today) {
+    return selected;
+  }
+  if (today <= week.endsOn) return today;
+  return week.startsOn;
+}
+
+/**
+ * O número de um `<input type="number">`, como a validação o quer.
+ *
+ * O navegador devolve `""` para texto inválido, e vazio é zero (a pessoa que
+ * só informa o tempo deixa as questões em branco). Qualquer coisa que não seja
+ * uma sequência de dígitos vira `NaN`, e é a validação que recusa: `-30`, `1.5`
+ * e `1e3` passavam por `Number(x) || 0`.
+ */
+export function parseCount(raw: string): number {
+  const value = raw.trim();
+  if (value === "") return 0;
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
+}

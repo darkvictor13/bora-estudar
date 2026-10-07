@@ -10,8 +10,8 @@ import { Alert, Field } from "@bora/ui";
 import { useState } from "react";
 
 import type { ApiError, Goal, RecordStudyInput } from "@/lib/api";
-import { newRequestId } from "@/lib/api";
-import { formatMinutes } from "@/lib/domain/week";
+import { MAX_ENTRY_MINUTES, MAX_ENTRY_QUESTIONS, newRequestId } from "@/lib/api";
+import { formatMinutes, parseCount } from "@/lib/domain/week";
 
 /**
  * O `registro-modal` da v2: tempo, questões, acertos e observação.
@@ -25,6 +25,13 @@ import { formatMinutes } from "@/lib/domain/week";
  * como operação nova, e um duplo clique gravaria duas vezes o mesmo estudo.
  * Aqui a tentativa inteira — inclusive a retentativa depois de um erro de rede
  * — carrega a mesma chave.
+ *
+ * Este componente NUNCA DESMONTA: devolve `null` quando não há meta. O estado
+ * dele, o `requestId` inclusive, atravessaria aberturas — cancelar depois de uma
+ * falha e abrir OUTRA meta reaproveitaria a chave, e o servidor leria "mesma
+ * chave, outro payload". Quem o monta (`Overview`) passa `key` com o id da meta:
+ * cada abertura é uma instância, e a retentativa dentro dela segue com a mesma
+ * chave.
  */
 export function RecordStudyDialog({
   goal,
@@ -46,7 +53,9 @@ export function RecordStudyDialog({
     if (!goal) return;
 
     const data = new FormData(event.currentTarget);
-    const number = (name: string) => Number(data.get(name) ?? 0) || 0;
+    // `parseCount`, e não `Number(x) || 0`: -30, 1.5 e 1e3 passavam por ali, e a
+    // validação do contrato os recusa com a frase do campo.
+    const number = (name: string) => parseCount(String(data.get(name) ?? ""));
 
     setPending(true);
     const failure = await onSubmit({
@@ -96,7 +105,9 @@ export function RecordStudyDialog({
             type="number"
             inputMode="numeric"
             min={0}
-            defaultValue={goal.plannedMinutes}
+            max={MAX_ENTRY_MINUTES}
+            step={1}
+            defaultValue={Math.min(goal.plannedMinutes, MAX_ENTRY_MINUTES)}
             autoFocus
             invalid={error?.field === "minutes"}
           />
@@ -107,6 +118,8 @@ export function RecordStudyDialog({
               type="number"
               inputMode="numeric"
               min={0}
+              max={MAX_ENTRY_QUESTIONS}
+              step={1}
               defaultValue={0}
               invalid={error?.field === "questions"}
             />
@@ -116,6 +129,8 @@ export function RecordStudyDialog({
               type="number"
               inputMode="numeric"
               min={0}
+              max={MAX_ENTRY_QUESTIONS}
+              step={1}
               defaultValue={0}
               invalid={error?.field === "correctAnswers"}
             />

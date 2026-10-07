@@ -6,6 +6,11 @@
 > saem hoje de `goal_entries`, agregados em `lib/domain` com teste de unidade, e
 > conferidos na tela por `F-EST-01`.
 
+> **Nota de 06/10/2026 (N-07).** O dia de um registro segue a R-EXTRA-28 da spec
+> [19](19-estudo-extra-avulso.md): `goal_entries.studied_on` quando houver, senão o dia LOCAL de
+> `created_at`, pela função `entryDay`. Esta spec descreve `vw_study_time`, que não existe neste schema, e
+> não é reescrita aqui.
+
 ---
 
 ## Problema

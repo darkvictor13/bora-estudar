@@ -235,6 +235,12 @@ insert into public.goal_entries (id, goal_id, teacher_id, student_id, minutes, q
   ('a6000000-0000-4000-8000-000000000001','a5000000-0000-4000-8000-000000000002',
    '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',45,10,8);
 
+-- Um lote de geração, para a 02 ler: `goal_batches` é SELECT para o professor
+-- dono, e quem escreve é `generate_week`.
+insert into public.goal_batches (id, study_plan_id, teacher_id, student_id, week_number) values
+  ('ac000000-0000-4000-8000-000000000001','a2000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',1);
+
 -- ---------------------------------------------------------------------------
 -- Uma bateria concluída
 --
@@ -292,6 +298,12 @@ insert into public.theory_progress (id, student_id, study_plan_id, theory_lesson
 insert into public.theory_reviews (id, student_id, study_plan_id, theory_lesson_id, review_number) values
   ('b4000000-0000-4000-8000-000000000001','22222222-2222-4222-8222-222222222222',
    'a2000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000001',1);
+
+-- A revisão de Fabi, que tem o acesso vencido: é o que a suíte 06 usa para provar
+-- que `record_review_questions` recusa o vencido (QA-04).
+insert into public.theory_reviews (id, student_id, study_plan_id, theory_lesson_id, review_number) values
+  ('b4000000-0000-4000-8000-000000000002','66666666-6666-4666-8666-666666666666',
+   'a2000000-0000-4000-8000-000000000004','b2000000-0000-4000-8000-000000000001',1);
 
 -- ---------------------------------------------------------------------------
 -- Cupom

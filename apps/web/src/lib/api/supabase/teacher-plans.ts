@@ -1,10 +1,16 @@
 /**
  * Planejamentos — criar, editar, ativar e arquivar.
  *
- * UM PLANEJAMENTO ATIVO POR ALUNO é invariante de banco: um índice único
- * parcial garante que não existam dois. Por isso `activatePlan` arquiva o
- * anterior ANTES de ativar o novo — a ordem inversa bate no índice, e o erro
- * que chega à tela é "duplicate key", que não diz nada a ninguém.
+ * UM PLANEJAMENTO ATIVO POR ALUNO é invariante de banco: o índice único
+ * parcial `study_plans_one_active_per_student_uidx` (migration
+ * `20261006221607_one_active_study_plan`) garante que não existam dois.
+ *
+ * Ativar é a RPC `activate_study_plan`, que trava os planejamentos do aluno,
+ * ARQUIVA o ativo anterior e ativa o novo numa transação. Eram duas requisições,
+ * e a rede caindo entre elas deixava o aluno sem planejamento (QA-12); duas
+ * abas intercaladas o deixavam com dois (QA-03). A RPC é naturalmente
+ * idempotente: o índice garante o estado final e a trava serializa as chamadas.
+ * Arquivar continua escrita direta.
  */
 import { supabase } from "@/lib/supabase/client";
 
@@ -143,38 +149,30 @@ export function activatePlan(
   planId: Uuid,
   requestId: RequestId,
 ): Promise<Result<StudyPlanSummary>> {
+  // O `once` só junta o clique duplo. A garantia é da RPC: ativar o que já está
+  // ativo devolve a linha sem escrever, e por isso a retentativa depois de uma
+  // resposta perdida é sucesso, e não "já está ativo".
   return once(requestId, async () => {
-    const { data: plan, error } = await supabase
-      .from("study_plans")
-      .select("id,student_id,status")
-      .eq("id", planId)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("activate_study_plan", {
+      p_study_plan_id: planId,
+    });
 
-    if (error) return failure(translateDbError(error));
-    if (!plan) return fail("not_found", "Planejamento não encontrado.");
-    if (plan.status === "active") return fail("conflict", "Este planejamento já está ativo.");
-
-    // ARQUIVA O ANTERIOR PRIMEIRO. O índice único parcial de "um ativo por
-    // aluno" é o guardião; tentar ativar antes bate nele, e "duplicate key"
-    // não diz nada a quem está na tela.
-    const { error: archiveError } = await supabase
-      .from("study_plans")
-      .update({ status: "archived" })
-      .eq("student_id", plan.student_id)
-      .eq("status", "active");
-
-    if (archiveError) return failure(translateDbError(archiveError));
-
-    const { data, error: activateError } = await supabase
-      .from("study_plans")
-      .update({ status: "active" })
-      .eq("id", planId)
-      .select(PLAN_COLUMNS)
-      .maybeSingle();
-
-    if (activateError) return failure(translateDbError(activateError));
-    if (!data) return fail("unknown", "O planejamento não foi ativado.");
-    return done(toPlan(data as PlanRow));
+    if (error) {
+      // As duas recusas desta chamada têm origem única. `42501` é a RPC dizendo
+      // "não existe ou não é seu". `23505` só vem do índice de um ativo por
+      // aluno: a única coluna que ela escreve é `status`.
+      if (error.code === "42501") {
+        return fail("not_found", "Planejamento não encontrado, ou não é seu.");
+      }
+      if (error.code === "23505") {
+        return fail(
+          "conflict",
+          "Este aluno já tem outro planejamento ativo. Atualize a página e tente de novo.",
+        );
+      }
+      return failure(translateDbError(error));
+    }
+    return done(toPlan(data as unknown as PlanRow));
   });
 }
 

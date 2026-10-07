@@ -24,7 +24,13 @@ export * from "./contract.ts";
  * precisa delas para montar o seletor. Uma lista que existisse só no `<select>`
  * divergiria do banco na primeira tela nova.
  */
-export { ACCESS_MONTHS, DEFAULT_ACCESS_MONTHS } from "./validation.ts";
+export {
+  ACCESS_MONTHS,
+  DEFAULT_ACCESS_MONTHS,
+  MAX_ENTRY_MINUTES,
+  MAX_ENTRY_QUESTIONS,
+  MAX_WEEK_NUMBER,
+} from "./validation.ts";
 
 /**
  * O PADRÃO É O BANCO, desde que a frente do banco entregou.

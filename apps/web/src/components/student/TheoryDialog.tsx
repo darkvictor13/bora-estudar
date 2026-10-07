@@ -31,9 +31,10 @@ import type {
   TheoryProgress,
   TheoryReview,
 } from "@/lib/api";
-import { newRequestId } from "@/lib/api";
+import { MAX_ENTRY_QUESTIONS, newRequestId } from "@/lib/api";
 import { ROUTES } from "@/lib/routes";
 import { lessonProgressPercent, nextPage } from "@/lib/domain/theory";
+import { parseCount } from "@/lib/domain/week";
 import type { dailyQuestionPerformance } from "@/lib/domain/schedule";
 
 type DayPerformance = ReturnType<typeof dailyQuestionPerformance>;
@@ -316,7 +317,12 @@ function QuestionsTab({
         onSubmit={(event) => {
           event.preventDefault();
           const data = new FormData(event.currentTarget);
-          onSubmit(Number(data.get("questions") ?? 0), Number(data.get("correctAnswers") ?? 0));
+          // `parseCount`, e não `Number(x ?? 0)`: -3, 1.5 e 1e3 passavam por ali, e a
+          // validação do contrato os recusa com a frase do campo.
+          onSubmit(
+            parseCount(String(data.get("questions") ?? "")),
+            parseCount(String(data.get("correctAnswers") ?? "")),
+          );
         }}
       >
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
@@ -325,8 +331,10 @@ function QuestionsTab({
             name="questions"
             type="number"
             inputMode="numeric"
-            min={0}
-            defaultValue={remaining || 10}
+            min={1}
+            max={MAX_ENTRY_QUESTIONS}
+            step={1}
+            defaultValue={Math.min(remaining || 10, MAX_ENTRY_QUESTIONS)}
           />
           <Field
             label="Acertos"
@@ -334,6 +342,8 @@ function QuestionsTab({
             type="number"
             inputMode="numeric"
             min={0}
+            max={MAX_ENTRY_QUESTIONS}
+            step={1}
             defaultValue={0}
           />
         </Box>
@@ -416,11 +426,15 @@ function PerformanceTab({
 
 function ReviewsTab({
   reviews,
+  onOpen,
   onSubmit,
   pending,
 }: {
   reviews: readonly TheoryReview[];
-  onSubmit: (reviewId: string, questions: number, correct: number) => void;
+  /** A chave da revisão nasce aqui, quando o formulário dela abre. */
+  onOpen: (reviewId: string) => void;
+  /** Devolve a falha, ou `null` quando gravou: o formulário só fecha no sucesso. */
+  onSubmit: (reviewId: string, questions: number, correct: number) => Promise<ApiError | null>;
   pending: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -464,7 +478,10 @@ function ReviewsTab({
               <Button
                 size="small"
                 variant="text"
-                onClick={() => setOpen(open === review.id ? null : review.id)}
+                onClick={() => {
+                  if (open !== review.id) onOpen(review.id);
+                  setOpen(open === review.id ? null : review.id);
+                }}
               >
                 Registrar
               </Button>
@@ -482,16 +499,19 @@ function ReviewsTab({
               onSubmit={(event) => {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
-                onSubmit(
+                // Fecha só no sucesso: com a resposta perdida o formulário continua
+                // aberto, e repetir o envio leva a mesma chave.
+                void onSubmit(
                   review.id,
-                  Number(data.get("questions") ?? 0),
-                  Number(data.get("correctAnswers") ?? 0),
-                );
-                setOpen(null);
+                  parseCount(String(data.get("questions") ?? "")),
+                  parseCount(String(data.get("correctAnswers") ?? "")),
+                ).then((failure) => {
+                  if (!failure) setOpen(null);
+                });
               }}
             >
-              <Field label="Questões" name="questions" type="number" min={0} defaultValue={review.minimumQuestions} />
-              <Field label="Acertos" name="correctAnswers" type="number" min={0} defaultValue={0} />
+              <Field label="Questões" name="questions" type="number" inputMode="numeric" min={1} max={MAX_ENTRY_QUESTIONS} step={1} defaultValue={Math.min(review.minimumQuestions, MAX_ENTRY_QUESTIONS)} />
+              <Field label="Acertos" name="correctAnswers" type="number" inputMode="numeric" min={0} max={MAX_ENTRY_QUESTIONS} step={1} defaultValue={0} />
               <Button type="submit" size="small" variant="contained" disabled={pending} sx={{ mb: 1.75 }}>
                 Salvar
               </Button>
@@ -534,26 +554,71 @@ export function TheoryDialog({
     currentPage: number;
     endSession: boolean;
   }) => void;
+  /** Devolve a falha, ou `null` quando gravou: a chave só muda depois de um sucesso. */
   onRecordQuestions: (input: {
     lessonId: string;
     requestId: string;
     questions: number;
     correctAnswers: number;
-  }) => void;
+  }) => Promise<ApiError | null>;
   onRecordReview: (input: {
     reviewId: string;
     requestId: string;
     questions: number;
     correctAnswers: number;
-  }) => void;
+  }) => Promise<ApiError | null>;
 }) {
   const [tab, setTab] = useState(0);
+  // A CHAVE DE RETENTATIVA NASCE NA ORIGEM, e só muda depois de um sucesso. Gerada
+  // no envio, cada clique chegaria ao banco como operação nova, e a resposta que se
+  // perde seguida de um novo clique somaria duas vezes. Ficam AQUI, e não nas abas:
+  // trocar de aba desmonta a aba e levaria a chave junto. Fechar o modal as
+  // descarta, e o `Overview` o remonta relendo o progresso.
+  const [questionsRequestId, setQuestionsRequestId] = useState(newRequestId);
+  const [reviewRequestIds, setReviewRequestIds] = useState<Readonly<Record<string, string>>>({});
+  const [writeError, setWriteError] = useState<ApiError | null>(null);
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down("md"));
 
   if (!theory) return null;
 
   const blocked = theory.diagnosis.kind !== "ok";
+  const shownError = writeError ?? error;
+
+  /** A chave da revisão nasce quando o formulário dela abre pela primeira vez. */
+  function openReview(reviewId: string) {
+    const fresh = newRequestId();
+    setReviewRequestIds((known) => (known[reviewId] ? known : { ...known, [reviewId]: fresh }));
+  }
+
+  async function recordQuestions(lessonId: string, questions: number, correctAnswers: number) {
+    setWriteError(null);
+    const failure = await onRecordQuestions({
+      lessonId,
+      requestId: questionsRequestId,
+      questions,
+      correctAnswers,
+    });
+    if (failure) {
+      setWriteError(failure);
+      return;
+    }
+    setQuestionsRequestId(newRequestId());
+  }
+
+  async function recordReview(reviewId: string, questions: number, correctAnswers: number) {
+    const requestId = reviewRequestIds[reviewId];
+    if (!requestId) return null;
+    setWriteError(null);
+    const failure = await onRecordReview({ reviewId, requestId, questions, correctAnswers });
+    if (failure) {
+      setWriteError(failure);
+      return failure;
+    }
+    // Chave nova no próximo "Registrar": a desta já foi gasta.
+    setReviewRequestIds(({ [reviewId]: _spent, ...rest }) => rest);
+    return null;
+  }
 
   return (
     <Dialog
@@ -597,9 +662,9 @@ export function TheoryDialog({
         </Box>
       </DialogTitle>
       <DialogContent sx={{ p: 0 }}>
-        {(error || notice) && (
+        {(shownError || notice) && (
           <Box sx={{ px: { xs: 2, md: 2.75 }, pt: 1.5 }}>
-            {error && <Alert status="error">{error.message}</Alert>}
+            {shownError && <Alert status="error">{shownError.message}</Alert>}
             {notice && <Alert status="success">{notice}</Alert>}
           </Box>
         )}
@@ -618,7 +683,10 @@ export function TheoryDialog({
                 orientation={compact ? "horizontal" : "vertical"}
                 variant="scrollable"
                 value={tab}
-                onChange={(_event, value: number) => setTab(value)}
+                onChange={(_event, value: number) => {
+                  setWriteError(null);
+                  setTab(value);
+                }}
                 data-testid="theory-tabs"
                 sx={(muiTheme) => ({
                   minHeight: 0,
@@ -653,7 +721,7 @@ export function TheoryDialog({
                   questionStats={questionStats}
                   pending={pending}
                   onSubmit={(questions, correctAnswers) =>
-                    onRecordQuestions({ lessonId: theory.lesson!.id, requestId: newRequestId(), questions, correctAnswers })
+                    void recordQuestions(theory.lesson!.id, questions, correctAnswers)
                   }
                 />
               )}
@@ -664,9 +732,8 @@ export function TheoryDialog({
                 <ReviewsTab
                   reviews={theory.reviews}
                   pending={pending}
-                  onSubmit={(reviewId, questions, correctAnswers) =>
-                    onRecordReview({ reviewId, requestId: newRequestId(), questions, correctAnswers })
-                  }
+                  onOpen={openReview}
+                  onSubmit={recordReview}
                 />
               )}
             </Box>

@@ -116,7 +116,10 @@ begin
     'study_plan_theory_catalogs_study_plan_fk',
     'study_plan_theory_catalogs_catalog_fk',
     'theory_progress_study_plan_fk',
-    'theory_reviews_study_plan_fk'
+    'theory_reviews_study_plan_fk',
+    'goal_batches_study_plan_fk',
+    'goal_entries_theory_lesson_fk',
+    'theory_review_entries_review_fk'
   ] loop
     select array_length(conkey, 1) into v_colunas
       from pg_constraint where conname = v_nome and contype = 'f';
@@ -131,7 +134,7 @@ begin
   if v_simples <> '' then
     raise exception 'FALHOU: FK que precisa ser composta:%', v_simples;
   end if;
-  raise notice '06 OK  as catorze FKs compostas da auditoria continuam compostas';
+  raise notice '06 OK  as dezessete FKs compostas da auditoria continuam compostas';
 end $$;
 
 -- ---------- Nada de `GRANT ALL` por default ----------
@@ -177,7 +180,10 @@ declare
   v_erro text := '';
 begin
   foreach v_nome in array array[
-    'find_student_by_email', 'link_student', 'set_student_access'
+    'find_student_by_email', 'link_student', 'set_student_access',
+    'generate_week', 'clear_pending_goals', 'week_replacement_preview',
+    'activate_study_plan', 'record_goal_entry', 'record_extra_study',
+    'record_initial_questions', 'record_review_questions'
   ] loop
     select p.oid into v_oid from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
@@ -208,7 +214,7 @@ begin
   if v_erro <> '' then
     raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
   end if;
-  raise notice '08 OK  as tres RPCs sao chamaveis so por authenticated, nominalmente';
+  raise notice '08 OK  as onze RPCs sao chamaveis so por authenticated, nominalmente';
 end $$;
 
 -- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
@@ -289,12 +295,230 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 50 or v_enums <> 20 or v_fks <> 90 or v_views <> 3 then
+  if v_tabelas <> 52 or v_enums <> 20 or v_fks <> 93 or v_views <> 3 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '13 OK  50 tabelas, 20 enums, 90 FKs e 3 views — como o de-para registra';
+  raise notice '13 OK  52 tabelas, 20 enums, 93 FKs e 3 views — como o de-para registra';
+end $$;
+
+-- ---------- Semana e minutos têm teto e piso no banco (spec 04, R-GEN-17) ----------
+do $$
+declare v_valor integer; v_minutos integer;
+begin
+  foreach v_valor in array array[0, 521] loop
+    begin
+      insert into public.goals (
+        study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
+        day_position, type, subject, title
+      ) values (
+        'a2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222', v_valor, 1, 'Segunda', 90, 'theory', 'X', 'Fora do intervalo');
+      raise exception 'FALHOU: goals aceitou week_number %', v_valor;
+    exception when check_violation then
+      null;
+    end;
+  end loop;
+  begin
+    insert into public.goals (
+      study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
+      day_position, type, subject, title, planned_minutes
+    ) values (
+      'a2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222', 1, 1, 'Segunda', 91, 'theory', 'X', 'Minutos negativos', -1);
+    raise exception 'FALHOU: goals aceitou planned_minutes negativo';
+  exception when check_violation then
+    null;
+  end;
+  raise notice '14 OK  goals recusa semana fora de 1 a 520 e minutos negativos';
+end $$;
+
+-- ---------- O estudo registrado não cai junto com a meta ----------
+do $$
+declare v_tipo "char";
+begin
+  select confdeltype into v_tipo from pg_constraint where conname = 'goal_entries_goal_fk';
+  if v_tipo is distinct from 'a' then
+    raise exception 'FALHOU: goal_entries_goal_fk tem confdeltype %, esperava a (no action)', v_tipo;
+  end if;
+  raise notice '15 OK  goal_entries_goal_fk e no action';
+end $$;
+
+-- ---------- Apagar a conta continua passando ----------
+-- NO ACTION confere no fim do comando: os cascades que descem de `profiles` ate
+-- `goals` E `goal_entries` no mesmo comando ja apagaram os registros quando a
+-- FK e conferida. Se este teste falhar, o no action nao basta (spec 04).
+do $$
+declare v_registros integer;
+begin
+  insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data) values
+    ('00000000-0000-0000-0000-000000000000','c1000000-0000-4000-8000-000000000001','authenticated','authenticated','prof-conta@x.com','{"name":"Professora Conta"}'),
+    ('00000000-0000-0000-0000-000000000000','c1000000-0000-4000-8000-000000000002','authenticated','authenticated','aluno-conta@x.com','{"name":"Aluno Conta"}');
+  update public.profiles set role = 'teacher', access_status = 'active'
+   where id = 'c1000000-0000-4000-8000-000000000001';
+  update public.profiles set teacher_id = 'c1000000-0000-4000-8000-000000000001',
+         access_status = 'active', access_expires_at = now() + interval '30 days'
+   where id = 'c1000000-0000-4000-8000-000000000002';
+  insert into public.study_plans (id, teacher_id, student_id, name, starts_on)
+  values ('c2000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001',
+          'c1000000-0000-4000-8000-000000000002','Plano da conta', current_date);
+  insert into public.goals (id, study_plan_id, teacher_id, student_id, week_number, weekday,
+                            weekday_name, day_position, type, subject, title)
+  values ('c3000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001',
+          'c1000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000002',
+          1, 1, 'Segunda', 1, 'theory', 'X', 'Meta da conta');
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes)
+  values ('c3000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001',
+          'c1000000-0000-4000-8000-000000000002', 30);
+
+  delete from auth.users where id = 'c1000000-0000-4000-8000-000000000001';
+  select count(*) into v_registros from public.goal_entries
+   where goal_id = 'c3000000-0000-4000-8000-000000000001';
+  if v_registros <> 0 then
+    raise exception 'FALHOU: sobraram % registro(s) de uma professora apagada', v_registros;
+  end if;
+  delete from auth.users where id = 'c1000000-0000-4000-8000-000000000002';
+  raise notice '16 OK  apagar a conta continua descendo por metas e registros';
+exception when foreign_key_violation then
+  raise exception 'FALHOU: apagar a conta tropecou em goal_entries_goal_fk (no action nao basta): %', sqlerrm;
+end $$;
+
+-- ---------- Um planejamento ativo por aluno (QA-03, QA-12) ----------
+--
+-- O índice que o CLAUDE.md e as specs 03 e 14 davam como existente e não
+-- existia. Dono da sessão (sem JWT), como o teste de `class_students`.
+do $$
+declare v_unico boolean;
+begin
+  select indisunique into v_unico
+    from pg_index i join pg_class c on c.oid = i.indexrelid
+   where c.relname = 'study_plans_one_active_per_student_uidx';
+
+  if v_unico is null then
+    raise exception 'FALHOU: sumiu study_plans_one_active_per_student_uidx';
+  end if;
+  if not v_unico then
+    raise exception 'FALHOU: study_plans_one_active_per_student_uidx deixou de ser unico';
+  end if;
+
+  -- O Bruno ja tem `a2000000-...-0001` ativo.
+  insert into public.study_plans (teacher_id, student_id, name, starts_on, status)
+  values ('11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',
+          'Segundo ativo do Bruno', current_date, 'active');
+  raise exception 'FALHOU: o aluno ficou com dois planejamentos ativos';
+exception when unique_violation then
+  raise notice '17 OK  um aluno, um planejamento ativo';
+end $$;
+
+-- ---------- activate_study_plan: arquiva o anterior, e é idempotente ----------
+--
+-- Num bloco com rollback: arquivar o plano do Bruno quebraria as suítes
+-- seguintes, que dependem de ele estar ativo.
+begin;
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+insert into public.study_plans (id, teacher_id, student_id, name, starts_on, status)
+values ('a2000000-0000-4000-8000-0000000000f1','11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222','Plano novo do Bruno', current_date, 'paused');
+
+do $$
+declare v_plano public.study_plans; v_ativos integer; v_status text;
+begin
+  v_plano := public.activate_study_plan('a2000000-0000-4000-8000-0000000000f1');
+  if v_plano.status <> 'active' then
+    raise exception 'FALHOU: a RPC devolveu o plano com status %', v_plano.status;
+  end if;
+
+  select status::text into v_status from public.study_plans
+   where id = 'a2000000-0000-4000-8000-000000000001';
+  if v_status <> 'archived' then
+    raise exception 'FALHOU: o ativo anterior ficou % em vez de archived', v_status;
+  end if;
+
+  select count(*) into v_ativos from public.study_plans
+   where student_id = '22222222-2222-4222-8222-222222222222' and status = 'active';
+  if v_ativos <> 1 then
+    raise exception 'FALHOU: o Bruno ficou com % planejamentos ativos', v_ativos;
+  end if;
+
+  -- Naturalmente idempotente: a retentativa devolve o mesmo estado, sem erro.
+  v_plano := public.activate_study_plan('a2000000-0000-4000-8000-0000000000f1');
+  select count(*) into v_ativos from public.study_plans
+   where student_id = '22222222-2222-4222-8222-222222222222' and status = 'active';
+  if v_plano.status <> 'active' or v_ativos <> 1 then
+    raise exception 'FALHOU: ativar de novo mudou o estado (status %, % ativos)', v_plano.status, v_ativos;
+  end if;
+  raise notice '18 OK  activate_study_plan arquiva o anterior e ativar de novo nao muda nada';
+end $$;
+rollback;
+select app_test.act_as_owner();
+
+-- ---------- Um registro de estudo tem teto e piso no banco (QA-10, D-04) ----------
+--
+-- Como dono, para exercitar a CHECK e não a RLS nem o grant. Cada estado
+-- proibido aceito derruba a suíte, e não só quebra o código.
+do $$
+declare
+  v_caso record;
+begin
+  for v_caso in
+    select * from (values
+      ('minutos negativos',            -1,   0,  0),
+      ('minutos acima de 240',         241,  0,  0),
+      ('questoes acima de 500',        10,   501, 0),
+      ('questoes negativas',           10,   -1, 0),
+      ('acertos acima das questoes',   10,   5,  6),
+      ('acertos negativos',            10,   5,  -1),
+      ('registro todo zerado',         0,    0,  0)
+    ) as t(descricao, minutos, questoes, acertos)
+  loop
+    begin
+      insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
+      values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+              '22222222-2222-4222-8222-222222222222', v_caso.minutos, v_caso.questoes, v_caso.acertos);
+      raise exception 'FALHOU: goal_entries aceitou %', v_caso.descricao;
+    exception when check_violation then
+      null;
+    end;
+  end loop;
+  raise notice '19 OK  goal_entries recusa minutos, questoes e acertos fora da regra, e o registro vazio';
+end $$;
+
+-- ---------- O dia estudado não é futuro em lugar nenhum (N-07) ----------
+do $$ begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, studied_on)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 10, current_date + 3);
+  raise exception 'FALHOU: goal_entries aceitou studied_on tres dias no futuro';
+exception when check_violation then
+  raise notice '20 OK  goal_entries_studied_on_check recusa o dia futuro';
+end $$;
+
+-- ---------- request_id é único: é a idempotência das duas RPCs ----------
+do $$
+declare v_chave uuid := gen_random_uuid();
+begin
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note, request_id)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21', v_chave);
+  begin
+    insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note, request_id)
+    values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+            '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21', v_chave);
+    raise exception 'FALHOU: goal_entries aceitou dois registros com o mesmo request_id';
+  exception when unique_violation then
+    null;
+  end;
+  -- Nulo repete: o bundle no ar insere sem a chave.
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21');
+  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note)
+  values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
+          '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21');
+  delete from public.goal_entries
+   where note = 'teste-07-21';
+  raise notice '21 OK  goal_entries_request_uidx: chave unica, e nulo repete';
 end $$;

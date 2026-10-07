@@ -78,8 +78,10 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 | | Quem escreve | Como |
 |---|---|---|
-| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna |
-| `goal_entries`, `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna |
+| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan` |
+| `goal_entries` | o aluno, com acesso vigente | **registrar** por `record_goal_entry` e `record_extra_study` (o INSERT direto ainda é aceito, até o 5c); apagar exige acesso vigente e é direto; `request_id`, `studied_on` e `created_at` ficam fora do grant de INSERT, e quem os escreve são as RPCs |
+| `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna; **a página** é escrita direta, mas as **questões** (`initial_questions_done`, a conclusão da aula, `questions_answered`) são de `record_initial_questions` e `record_review_questions` (o direto ainda é aceito, até o 5c) |
+| `theory_review_entries` | ninguém | SELECT e nada mais: escrita é de `record_review_questions` |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
 | `profiles.access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: `link_student` e `set_student_access` |
@@ -91,6 +93,7 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `legal_norms`, `laws`, `law_articles`, `law_subjects`, `exam_notices` e filhas | ninguém | SELECT e nada mais; o texto do artigo só com acesso vigente ou professor. Carga por `scripts/load-law-library.mjs`, no deploy |
 | `law_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar e alterar exigem acesso vigente |
 | `flashcard_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar, alterar e apagar exigem acesso vigente. O cartão é `card_kind` mais um par de colunas por tipo, e a CHECK `flashcard_marks_card_ref_check` exige o par do tipo e nulos nos outros |
+| `goal_batches` | ninguém | SELECT para o professor dono; escrita é de `generate_week` |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 
@@ -108,6 +111,15 @@ conferindo a turma de destino. Uma RPC ali não acrescentaria garantia nenhuma, 
 acrescentaria superfície. O que mora no banco é o que não cabe numa tela: um
 aluno em uma turma só (`class_students_one_per_student_uidx`) e turma com aluno
 dentro que não se apaga (`protect_class_with_students`).
+
+**Gerar a semana é planejamento, e TEM RPC.** Ela apaga e insere várias linhas
+de uma vez, que precisam acontecer juntas ou não acontecer. E um replay depois
+de sucesso não é inofensivo: a meta nova que ganhou registro seria preservada, e
+a semana inserida de novo. Nenhuma das três defesas da escrita direta dá
+transação nem idempotência com payload. **Gerar não apaga meta concluída nem
+estudo registrado, e não existe modo que apague**: o critério mora em
+`app_private.goal_is_preserved`, e o modo "Replanejar semana inteira" saiu em
+06/10/2026 (spec 04).
 
 Três defesas sustentam a escrita direta, e as três precisam continuar valendo
 em qualquer tabela nova:
@@ -127,7 +139,8 @@ em qualquer tabela nova:
 **`DELETE` é concedido, e quem o restringe é a policy.** Mudou em 14/09/2026: o
 schema anterior não concedia DELETE em lugar nenhum e removia por `deleted_at`.
 Hoje o professor apaga o que planejou, o aluno apaga só o que ele mesmo criou
-(`goals_delete` decide pelo `type`), e o que não pode sumir do histórico —
+(`goals_delete` decide pelo `type`) e só com o acesso vigente (desde 06/10/2026,
+em `goals_delete` e `goal_entries_delete`), e o que não pode sumir do histórico —
 `profiles`, `quiz_sessions`, o ledger, `access_grants`, `catalog_blocks`,
 `coupons` — simplesmente não tem DELETE para `authenticated`. Caderno continua
 sendo removido por marca (`study_plan_notebooks.deleted`), porque meta antiga
@@ -148,24 +161,50 @@ coluna de contador mantida à mão: o problema da versão anterior não era ter
 agregados, era ter três caminhos independentes escrevendo o mesmo número — os
 nove contadores de `baterias` deram lugar a `vw_quiz_session_performance`.
 
-**Toda RPC mutante precisa ser segura a retentativa.** As duas que existem —
-`link_student` e `set_student_access`, de `20260918120000` — nasceram assim, uma
-em cada forma:
+**Toda RPC mutante precisa ser segura a retentativa.** As nove que existem —
+`link_student` e `set_student_access`, de `20260918120000`, mais `generate_week`
+e `clear_pending_goals`, de `20261006214424`, `activate_study_plan`, de
+`20261006221607`, `record_goal_entry` e `record_extra_study`, de
+`20261006224256`, e `record_initial_questions` e `record_review_questions`, de
+`20261006231152` — nasceram assim, uma em cada forma:
 
 - **Com payload** — recebe `request_id`, grava-o numa coluna única e compara o
   payload guardado: mesmo id e mesmo payload devolve o resultado anterior sem
   reexecutar; payload diferente é rejeitado. É `set_student_access`, e o que a
   sustenta é `access_grants_request_uidx`. O payload guardado são as PRÓPRIAS
   colunas (`student_id`, `action`, `months`): repeti-lo num `jsonb` ao lado
-  seria um segundo caminho afirmando o mesmo fato.
+  seria um segundo caminho afirmando o mesmo fato. **`generate_week` é desta
+  forma também**: a PK `goal_batches.id` É o `request_id`, e o replay compara
+  `(study_plan_id, week_number)`; o `p_goals` não é guardado, porque `goals` já
+  diz o que foi gerado.
   `quiz_sessions.finish_request_id` (UNIQUE) e `finish_payload` são as colunas
   que o schema reserva para a próxima.
+  **`record_goal_entry` e `record_extra_study` também**: `goal_entries.request_id`
+  é UNIQUE (`goal_entries_request_uidx`), e o payload são as colunas do próprio
+  registro — mais as da meta, no extra, `studied_on` incluída. A trava vem ANTES
+  da busca pela chave (`for no key update` na meta ou no plano), e a busca vem
+  ANTES da checagem de acesso: se a primeira tentativa gravou e o acesso venceu em
+  seguida, a retentativa responde "gravado".
+  **`record_initial_questions` e `record_review_questions` também**: a primeira
+  usa o mesmo `goal_entries_request_uidx` (com `theory_lesson_id` no payload), e a
+  segunda um ledger próprio, `theory_review_entries.request_id` UNIQUE, porque
+  `goal_entries.goal_id` é obrigatório e a revisão não tem meta. Os contadores
+  (`initial_questions_done`, `questions_answered`) continuam colunas, com UM
+  escritor: a RPC, numa instrução que soma (`x = x + n`) depois de o ledger aceitar
+  a linha. Na revisão, o replay vem ANTES da recusa "já concluída".
 - **Naturalmente idempotente** — `link_student` não recebe `request_id`, porque
   não há payload a comparar: o único parâmetro já é a identidade do alvo. Quem
   garante é a COLUNA `profiles.teacher_id`, que cabe um valor só, com a escrita
   num `update ... where teacher_id is null` único. O mesmo vale para o segundo
   "iniciar" da mesma meta, que o índice `quiz_sessions_one_open_per_plan_uidx`
-  vai garantir.
+  vai garantir. `clear_pending_goals` também: só apaga, o critério é reavaliado
+  sob a trava do plano, e `goal_entries_goal_fk` segura o pior caso.
+  `activate_study_plan` também: o único parâmetro é o plano alvo e "está ativo"
+  é estado, então ativar o que já está ativo devolve a linha sem escrever. Quem
+  sustenta é `study_plans_one_active_per_student_uidx` (o estado final nunca tem
+  dois ativos), e a trava `for no key update` sobre os planejamentos do aluno,
+  em ordem de `id`, faz a segunda chamada enxergar a primeira em vez de bater
+  no índice.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
 ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**
@@ -177,6 +216,12 @@ uma bateria que perde o vínculo com a meta vira dado órfão que nenhuma tela
 consegue explicar. `quiz_sessions` referencia `profiles` e o caderno assim, e
 `access_grants` referencia `profiles` pelo mesmo motivo — liberação órfã não
 responde "quem liberou este aluno".
+
+`goal_entries_goal_fk` é `NO ACTION`, e não `RESTRICT`, para o apagamento de
+conta continuar passando: os cascades que descem de `profiles` até `goals` e até
+`goal_entries` no mesmo comando já apagaram os registros quando a FK é conferida,
+no fim do comando (`07_schema` confere). **Meta com registro não se apaga por
+caminho nenhum** — nem pelo `DELETE` direto, que dá `23503`.
 
 **Nenhum dado de domínio em texto livre.** Tipo, origem e flag são enum ou FK.
 A versão anterior codificava `TIPO_REFORCO:1` e o resultado inteiro de uma
@@ -255,9 +300,12 @@ catálogo que alimentavam o payload (`getBlockQuestions`, `getQuestionHistory`).
 
 O que **ficou de pé**, e é onde uma execução nova se apoia:
 
-- **o banco inteiro** — `quiz_sessions`, o ledger `quiz_session_questions`,
-  `start_quiz_session`, `finish_quiz_session`, `record_quiz_session_time` e
-  `void_quiz_session`. Nenhuma migration foi escrita para desfazer nada;
+- **o banco da bateria** — `quiz_sessions`, o ledger `quiz_session_questions` e
+  os gatilhos que protegem o resultado da meta de bateria. **As RPCs nunca
+  foram portadas** para o schema de 14/09/2026: `start_quiz_session`,
+  `finish_quiz_session`, `record_quiz_session_time` e `void_quiz_session` não
+  existem em `pg_proc` (`docs/arquitetura.md` diz o mesmo), e o tempo da bateria
+  mora em `quiz_sessions.duration_minutes`, nunca em `goal_entries`;
 - **o fechamento da bateria na tela do aluno** — registrar tempo e cancelar,
   que é o que destrava um planejamento com sessão aberta;
 - **o caderno de erros e o reforço**, que linkam para o TEC como páginas
@@ -631,7 +679,12 @@ declare o próprio `ErrorBoundary` sem passar por lá nasce sem relato.
 **Erro de escrita NÃO é lançado** — o contrato devolve `Result`. Quem relata é
 `fail`/`failure` em `lib/api/supabase/errors.ts`, quando o código é `unknown`.
 Adaptador novo que monte o `Result` na mão, sem passar por essas duas funções,
-grava um erro que ninguém vai ver.
+grava um erro que ninguém vai ver. **Escrita que chama helper que LANÇA**
+(`requireSession`, `throwDb`, `readFailure`) roda dentro de `once` ou `settle`,
+que convertem o throw em `failure` — o `await` que rejeitava deixava o botão
+preso em "Registrando…", e o `once` de antes guardava a promessa rejeitada, de
+modo que a retentativa devolvia o mesmo erro até recarregar. Nada de try/catch em
+componente.
 
 **Filtre por `ApiErrorCode`, nunca pela mensagem.** `throwDb` e `readFailure`
 lançam `ApiThrownError` justamente para o código sobreviver ao `throw`. Casar a

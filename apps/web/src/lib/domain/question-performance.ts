@@ -1,8 +1,9 @@
 import type { DailyQuestionPerformance } from "../api/contract.ts";
-import { localDate } from "./schedule.ts";
+import { entryDay } from "./schedule.ts";
 
 interface QuestionEntry {
   readonly createdAt: string;
+  readonly studiedOn?: string | null;
   readonly questions: number;
   readonly correctAnswers: number;
 }
@@ -29,7 +30,7 @@ export function questionsByDay(
   const totals = new Map<string, { questions: number; correct: number }>();
   for (const entry of entries) {
     if (entry.questions <= 0) continue;
-    const date = localDate(new Date(entry.createdAt));
+    const date = entryDay(entry);
     if (fromDate && date < fromDate) continue;
     const current = totals.get(date) ?? { questions: 0, correct: 0 };
     totals.set(date, {

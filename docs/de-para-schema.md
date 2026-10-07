@@ -448,6 +448,9 @@ linha:
 | `fase_teoria` | `theory_stage` | vira o enum `theory_stage` |
 | `observacao` | `note` |  |
 | `created_at` | `created_at` |  |
+| — | `request_id` | nova (QA de 06/10/2026): a chave de retentativa de `record_goal_entry` e `record_extra_study`, com índice único. Nula nos registros anteriores |
+| — | `studied_on` | nova: o dia escolhido no estudo extra; nulo = o dia local de `created_at`. Escrita só pelas RPCs |
+| — | `theory_lesson_id` | nova (QA de 06/10/2026): a aula das questões iniciais, com FK composta `(theory_lesson_id, teacher_id)` para `theory_lessons`. Só `record_initial_questions` a escreve; nula nos registros anteriores |
 
 ### `teoria_aulas` → `theory_lessons`
 
@@ -576,6 +579,11 @@ linha:
 | `iniciada_em` | `started_at` |  |
 | `concluida_em` | `completed_at` |  |
 | `updated_at` | `updated_at` |  |
+
+Sem origem: `theory_review_entries` (QA de 06/10/2026), o ledger das questões
+registradas numa revisão. O banco de origem só tinha o contador `questoes_feitas`,
+mantido à mão; aqui o contador continua, e quem o escreve é `record_review_questions`,
+que antes grava a linha do ledger com a chave de retentativa.
 
 ### `turmas` → `classes`
 
@@ -918,25 +926,48 @@ artigos, matérias, os três níveis do mapa de edital e `law_marks` —, quatro
 enums e `vw_law_library`. A coluna **03/10** acrescenta `20261003120000`
 (spec 42), o grifo nos flashcards: `flashcard_marks`, os enums
 `flashcard_card_kind` e `flashcard_side`, quatro FKs — o aluno e uma por tipo
-de cartão — e quatro policies. É a
+de cartão — e quatro policies. A coluna **06/10** acrescenta `20261006214424`
+(spec 04), a semana numa transação: `goal_batches` com a FK composta
+`goal_batches_study_plan_fk` e a policy `goal_batches_select`, duas CHECKs em
+`goals` e uma em `goal_batches`, a FK `goal_entries_goal_fk` recriada em `no
+action`, e cinco funções — `generate_week`, `clear_pending_goals` e
+`week_replacement_preview` em `public`, `goal_is_preserved` e
+`check_goal_batch_replay` em `app_private`. Nenhum enum novo. A mesma coluna
+conta `20261006221607` (QA-03), o índice `study_plans_one_active_per_student_uidx`
+e `activate_study_plan`, e `20261006224256` (QA-04 e o resto do PR 5a): duas
+colunas em `goal_entries` (`request_id` e `studied_on`), cinco CHECKs, o índice
+único `goal_entries_request_uidx`, quatro funções — `record_goal_entry` e
+`record_extra_study` em `public`, `replay_goal_entry` e `replay_extra_study` em
+`app_private` — e três policies alteradas (`goals_update`, `goals_delete`,
+`goal_entries_delete`), sem policy nova. A coluna **06/10 · 5b** acrescenta
+`20261006231152` (QA-04, as questões da teoria): `theory_review_entries`, uma
+tabela de sete colunas (e `goal_entries.theory_lesson_id` é a oitava a mais), a
+policy `theory_review_entries_select`, duas CHECKs, as FKs compostas
+`goal_entries_theory_lesson_fk` e `theory_review_entries_review_fk`, cinco
+índices — a PK do ledger, `theory_review_entries_request_uidx`,
+`theory_review_entries_review_idx`, o UNIQUE `theory_reviews_id_student_key` (alvo
+da FK composta) e `goal_entries_theory_lesson_idx` — e cinco funções:
+`record_initial_questions` e `record_review_questions` em `public`,
+`initial_questions_required`, `replay_initial_questions` e `replay_review_entry`
+em `app_private`. É a
 última que `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
 
-| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 |
-|---|---|---|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 |
-| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 |
-| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 |
-| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 |
-| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 |
-| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 |
-| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 | 06/10 | 06/10 · 5b |
+|---|---|---|---|---|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 | 51 / 51 | 52 / 52 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 522 | 530 |
+| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 | 120 | 121 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 | 20 | 20 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 137 | 139 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 | 91 | 93 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 163 | 168 |
+| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 | 3 | 3 |
+| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 | 51 | 51 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 39 | 44 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.
@@ -996,3 +1027,8 @@ repostas antes deste arquivo existir:
 |---|---|
 | `study_plans_name_per_student_uidx` | um planejamento por aluno com o mesmo nome |
 | `quiz_session_questions_one_reinforcement_per_source_uidx` | uma correlata por questão de origem, na mesma bateria |
+
+Uma **terceira** também sumiu, e só foi reposta em 06/10/2026 (QA-03), na
+migration `20261006221607`: `study_plans_one_active_per_student_uidx`, um
+planejamento ativo por aluno. O `CLAUDE.md` e as specs 03 e 14 a davam como
+existente, e `activate_study_plan` voltou junto.

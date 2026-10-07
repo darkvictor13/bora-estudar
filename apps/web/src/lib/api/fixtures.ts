@@ -26,7 +26,7 @@ import { fixtureLibrary } from "./fixtures-library.ts";
 import { createLawFixtures, resetFixtureLawMarks } from "./fixtures-laws.ts";
 import { createFlashcardMarkFixtures, resetFixtureFlashcardMarks } from "./fixtures-flashcard-marks.ts";
 import { questionsByDay } from "../domain/question-performance.ts";
-import { localDate } from "../domain/schedule.ts";
+import { entryDay, localDate } from "../domain/schedule.ts";
 import { streakDays as countStreakDays } from "../domain/week.ts";
 import { MINIMUM_BOX_PLOT_QUESTIONS } from "../domain/class-question-distribution.ts";
 import { PMPR_SOLDADO_2025 } from "../domain/pmpr-soldado.ts";
@@ -101,14 +101,20 @@ import type {
   WeekSummary,
   Weekday,
 } from "./contract.ts";
+import { ApiThrownError } from "./contract.ts";
 import {
   checkAccessMonths,
   checkClassName,
   checkCredentials,
+  checkExtraStudy,
+  checkGenerateWeek,
   checkName,
   checkPassword,
+  checkQuestionRecord,
   checkSignUp,
   checkStudentEmail,
+  checkStudyEntry,
+  STUDY_REPLAY_CONFLICT,
 } from "./validation.ts";
 
 /* ------------------------------------------------------------------ *
@@ -148,6 +154,10 @@ function done<T>(data: T): Result<T> {
   return { ok: true, data };
 }
 
+function failure<T>(error: ApiError): Result<T> {
+  return { ok: false, error };
+}
+
 /**
  * A latência não é enfeite.
  *
@@ -167,13 +177,29 @@ function later<T>(value: T): Promise<T> {
  * só no adaptador do Supabase, porque é a UI que precisa ser exercitada contra
  * ela: clicar duas vezes em "Concluir" tem de continuar concluindo uma vez.
  */
-const replayed = new Map<RequestId, unknown>();
-function once<T>(requestId: RequestId, run: () => Result<T>): Result<T> {
+const replayed = new Map<RequestId, { readonly outcome: unknown; readonly payload: string | undefined }>();
+/**
+ * `payload` é a carga que a chave guardou: mesma chave com OUTRA carga é
+ * `conflict`, como `goal_entries_request_uidx` faz no banco. Sem ele (as demais
+ * operações), a chave repetida devolve o resultado anterior, como sempre.
+ */
+function once<T>(requestId: RequestId, run: () => Result<T>, payload?: string): Result<T> {
   const seen = replayed.get(requestId);
-  if (seen !== undefined) return seen as Result<T>;
+  if (seen !== undefined) {
+    if (payload !== undefined && seen.payload !== undefined && seen.payload !== payload) {
+      return fail<T>("conflict", STUDY_REPLAY_CONFLICT);
+    }
+    return seen.outcome as Result<T>;
+  }
   const outcome = run();
-  if (outcome.ok) replayed.set(requestId, outcome);
+  if (outcome.ok) replayed.set(requestId, { outcome, payload });
   return outcome;
+}
+
+/** A carga de um estudo, sem a chave: é o que `once` compara. */
+function studyPayload(input: object): string {
+  const { requestId: _requestId, ...rest } = input as { requestId?: string };
+  return JSON.stringify(rest);
 }
 
 /* ------------------------------------------------------------------ *
@@ -202,6 +228,12 @@ interface State {
   session: Session | null;
   theme: ThemePreference | null;
   goals: GoalRow[];
+  /**
+   * Os planejamentos são ESTADO: ativar um arquiva o outro do mesmo aluno, e
+   * criar nasce `paused`, como no banco. Uma constante que devolvesse sempre o
+   * mesmo objeto esconderia a lista que não reordena e o botão que não troca.
+   */
+  plans: StudyPlanSummary[];
   entries: StudyEntry[];
   progress: Map<Uuid, TheoryProgress>;
   reviews: TheoryReview[];
@@ -520,6 +552,7 @@ function seedState(): State {
     },
     theme: null,
     goals,
+    plans: [seedPlan()],
     entries: [
       {
         id: nextId("a"),
@@ -532,6 +565,7 @@ function seedState(): State {
         theoryStage: "questions_done",
         manualLesson: null,
         createdAt: `${TODAY}T11:02:00.000Z`,
+        studiedOn: null,
       },
     ],
     progress: new Map([
@@ -650,7 +684,7 @@ function toGoal(row: GoalRow): Goal {
 function summarize(goals: readonly Goal[]): WeekSummary {
   const questions = goals.reduce((total, goal) => total + goal.questionsAnswered, 0);
   const correct = goals.reduce((total, goal) => total + goal.correctAnswers, 0);
-  const streak = countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)), localDate(new Date()));
+  const streak = countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map(entryDay), localDate(new Date()));
 
   return {
     score: questions > 0 ? Math.round((correct / questions) * 1000) / 10 : null,
@@ -684,6 +718,15 @@ function buildWeek(weekNumber: number): Week {
     summary: summarize(goals),
     days,
   };
+}
+
+/**
+ * O critério de `app_private.goal_is_preserved`: concluída, ou com estudo
+ * registrado. Nenhuma bateria da fixture aponta para uma meta, então o terceiro
+ * motivo do banco (`quiz_sessions`) não tem o que conferir aqui.
+ */
+function isPreserved(row: GoalRow): boolean {
+  return row.status === "completed" || entriesOf(row.id).length > 0;
 }
 
 function findGoal(goalId: Uuid): GoalRow | undefined {
@@ -795,15 +838,10 @@ export const fixturesApi: BoraApi = {
   recordStudy: (input: RecordStudyInput) =>
     later(
       once(input.requestId, () => {
+        const invalid = checkStudyEntry(input);
+        if (invalid) return failure<Goal>(invalid);
         const row = findGoal(input.goalId);
         if (!row) return fail<Goal>("not_found", "Meta não encontrada.");
-        if (input.correctAnswers > input.questions) {
-          return fail<Goal>(
-            "validation",
-            "Acertos não podem passar do total de questões.",
-            "correctAnswers",
-          );
-        }
 
         state.entries.push({
           id: nextId("a"),
@@ -819,11 +857,13 @@ export const fixturesApi: BoraApi = {
           theoryStage: input.theoryStage ?? null,
           manualLesson: input.manualLesson ?? null,
           createdAt: `${TODAY}T12:00:00.000Z`,
+          // Registrar numa meta é "estudei agora": o dia é o do lançamento.
+          studiedOn: null,
         });
         // Registrar não conclui: move para "em andamento" e para por aí.
         if (row.status === "pending") row.status = "in_progress";
         return done(toGoal(row));
-      }),
+      }, studyPayload(input)),
     ),
 
   removeStudyEntry: (entryId: Uuid, requestId: RequestId) =>
@@ -879,15 +919,22 @@ export const fixturesApi: BoraApi = {
   recordExtraStudy: (input: ExtraStudyInput) =>
     later(
       once(input.requestId, () => {
+        const invalid = checkExtraStudy(input, PLAN.startsOn, TODAY);
+        if (invalid) return failure<Goal>(invalid);
         const weekday = (((new Date(`${input.date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1) as Weekday;
+        // Depois de tudo que já existe no dia (N-02): o segundo extra do dia cabe.
+        const dayPosition =
+          state.goals
+            .filter((goal) => goal.weekNumber === 1 && goal.weekday === weekday)
+            .reduce((max, goal) => Math.max(max, goal.dayPosition), 0) + 1;
         const row: GoalRow = {
           id: nextId("9"),
           type: "extra",
           status: "completed",
           weekday,
-          dayPosition: 99,
+          dayPosition,
           weekNumber: 1,
-          subject: input.subject,
+          subject: input.subject.trim(),
           title: EXTRA_TITLES[input.kind],
           description: input.note ?? null,
           lesson: null,
@@ -912,9 +959,11 @@ export const fixturesApi: BoraApi = {
           theoryStage: null,
           manualLesson: null,
           createdAt: `${TODAY}T12:00:00.000Z`,
+          // N-07: o extra conta no dia escolhido, não no do lançamento.
+          studiedOn: input.date,
         });
         return done(toGoal(row));
-      }),
+      }, studyPayload(input)),
     ),
 
   loadActivePlan: () => later(PLAN),
@@ -1005,11 +1054,8 @@ export const fixturesApi: BoraApi = {
   recordInitialQuestions: (input: RecordInitialQuestionsInput) =>
     later(
       once(input.requestId, () => {
-        if (!Number.isInteger(input.questions) || input.questions <= 0 ||
-            !Number.isInteger(input.correctAnswers) || input.correctAnswers < 0 ||
-            input.correctAnswers > input.questions) {
-          return fail<TheoryProgress>("validation", "Informe questões e acertos válidos.");
-        }
+        const invalid = checkQuestionRecord(input);
+        if (invalid) return failure<TheoryProgress>(invalid);
         const current = progressOf(input.lessonId);
         const total = current.initialQuestionsDone + input.questions;
         const complete = total >= current.initialQuestionsRequired;
@@ -1031,19 +1077,27 @@ export const fixturesApi: BoraApi = {
           theoryStage: "questions_in_progress",
           manualLesson: studentLessons().find((lesson) => lesson.id === input.lessonId)?.title ?? null,
           createdAt: new Date().toISOString(),
+          studiedOn: null,
         });
         return done(updated);
-      }),
+      }, studyPayload(input)),
     ),
 
   loadDueReviews: () => later(state.reviews.filter((review) => review.due)),
 
   recordReviewQuestions: (input: RecordReviewQuestionsInput) =>
     later(
+      // O replay (a chave já vista) vem DENTRO do `once`, antes da recusa "já
+      // concluída": a retentativa do envio que fechou a revisão recebe a revisão.
       once(input.requestId, () => {
+        const invalid = checkQuestionRecord(input);
+        if (invalid) return failure<TheoryReview>(invalid);
         const index = state.reviews.findIndex((review) => review.id === input.reviewId);
         if (index < 0) return fail<TheoryReview>("not_found", "Revisão não encontrada.");
         const review = state.reviews[index]!;
+        if (review.status === "completed") {
+          return fail<TheoryReview>("conflict", "Esta revisão já foi concluída.");
+        }
         const answered = review.questionsAnswered + input.questions;
         const updated: TheoryReview = {
           ...review,
@@ -1053,7 +1107,7 @@ export const fixturesApi: BoraApi = {
         };
         state.reviews[index] = updated;
         return done(updated);
-      }),
+      }, studyPayload(input)),
     ),
 
   /* --- Fase 5 --- */
@@ -1104,7 +1158,7 @@ export const fixturesApi: BoraApi = {
       correctAnswers,
       score: Math.round((correctAnswers / questionsAnswered) * 1000) / 10,
       studiedMinutes: STATISTICS.studiedMinutes + extra.reduce((sum, entry) => sum + entry.minutes, 0),
-      streakDays: countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)), localDate(new Date())),
+      streakDays: countStreakDays(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map(entryDay), localDate(new Date())),
       dailyQuestions: questionsByDay(state.entries),
     });
   },
@@ -1164,7 +1218,7 @@ export const fixturesApi: BoraApi = {
     minimumQuestions: 5,
   }))),
 
-  loadStudyDays: (year: number) => later([...new Set(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map((entry) => entry.createdAt.slice(0, 10)))]
+  loadStudyDays: (year: number) => later([...new Set(state.entries.filter((entry) => entry.minutes > 0 || entry.questions > 0).map(entryDay))]
     .filter((date) => date.startsWith(`${year}-`)).sort()),
 
   loadFlashcardReviews: (lessonId: Uuid) => later([...flashcardReviews.values()].filter((review) => review.lessonId === lessonId)),
@@ -1404,12 +1458,18 @@ export const fixturesApi: BoraApi = {
       }),
     ),
 
-  listPlans: () => later<readonly StudyPlanSummary[]>([PLAN]),
+  listPlans: (studentId?: Uuid) =>
+    later<readonly StudyPlanSummary[]>(
+      state.plans
+        .filter((plan) => !studentId || plan.studentId === studentId)
+        .map((plan) => ({ ...plan })),
+    ),
 
   createPlan: (input: StudyPlanInput, requestId: RequestId) =>
     later(
-      once(requestId, () =>
-        done<StudyPlanSummary>({
+      once(requestId, () => {
+        // NASCE PAUSADO, como no Supabase: ativar é gesto separado.
+        const plan: StudyPlanSummary = {
           id: nextId("c"),
           studentId: input.studentId,
           classId: input.classId ?? null,
@@ -1421,55 +1481,101 @@ export const fixturesApi: BoraApi = {
           weeklyGoals: input.weeklyGoals,
           startsOn: input.startsOn,
           examDate: input.examDate ?? null,
-          status: "active",
-        }),
-      ),
+          status: "paused",
+        };
+        state.plans.push(plan);
+        return done<StudyPlanSummary>({ ...plan });
+      }),
     ),
 
-  updatePlan: (_planId: Uuid, input: Partial<StudyPlanInput>, requestId: RequestId) =>
-    later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, ...stripUndefined(input) }))),
+  updatePlan: (planId: Uuid, input: Partial<StudyPlanInput>, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const plan = state.plans.find((candidate) => candidate.id === planId);
+        if (!plan) return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado.");
+        return done<StudyPlanSummary>(patchPlan(plan.id, stripUndefined(input)));
+      }),
+    ),
 
-  activatePlan: (_planId: Uuid, requestId: RequestId) =>
-    later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, status: "active" }))),
+  activatePlan: (planId: Uuid, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const plan = state.plans.find((candidate) => candidate.id === planId);
+        if (!plan) {
+          return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado, ou não é seu.");
+        }
+        // Ativar o que já está ativo é sucesso, como na RPC: é a retentativa
+        // depois de uma resposta perdida.
+        if (plan.status === "active") return done<StudyPlanSummary>({ ...plan });
 
-  archivePlan: (_planId: Uuid, requestId: RequestId) =>
-    later(once(requestId, () => done<StudyPlanSummary>({ ...PLAN, status: "archived" }))),
+        for (const other of state.plans) {
+          if (other.studentId === plan.studentId && other.status === "active") {
+            patchPlan(other.id, { status: "archived" });
+          }
+        }
+        return done<StudyPlanSummary>(patchPlan(plan.id, { status: "active" }));
+      }),
+    ),
+
+  archivePlan: (planId: Uuid, requestId: RequestId) =>
+    later(
+      once(requestId, () => {
+        const plan = state.plans.find((candidate) => candidate.id === planId);
+        if (!plan) return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado.");
+        return done<StudyPlanSummary>(patchPlan(plan.id, { status: "archived" }));
+      }),
+    ),
 
   previewWeek: (input: GenerateWeekInput) => {
+    const invalid = checkGenerateWeek(input);
+    if (invalid) return Promise.reject(new ApiThrownError("validation", invalid.message));
+
     const existing = state.goals.filter((row) => row.weekNumber === input.weekNumber);
-    const preserved = existing.filter((row) => row.status === "completed");
+    const preserved = existing.filter(isPreserved);
     return later<GenerateWeekPreview>({
       weekNumber: input.weekNumber,
       days: buildWeek(input.weekNumber).days,
       goalsToCreate: 7,
-      // No modo seguro, meta concluída não é substituída — é preservada.
-      goalsToReplace:
-        input.mode === "full" ? existing.length : existing.length - preserved.length,
-      goalsPreserved: input.mode === "full" ? 0 : preserved.length,
+      goalsToReplace: existing.length - preserved.length,
+      goalsPreserved: preserved.length,
     });
   },
 
-  generateWeek: (input: GenerateWeekInput) =>
-    later(
+  generateWeek: (input: GenerateWeekInput) => {
+    const invalid = checkGenerateWeek(input);
+    if (invalid) return later<Result<Week>>({ ok: false, error: invalid });
+
+    return later(
       once(input.requestId, () => {
-        if (input.mode === "safe") {
-          // Só sai o que ainda não foi concluído.
-          state.goals = state.goals.filter(
-            (row) => row.weekNumber !== input.weekNumber || row.status === "completed",
-          );
-        } else {
-          state.goals = state.goals.filter((row) => row.weekNumber !== input.weekNumber);
+        // Só sai o que não foi feito: a concluída e a com estudo registrado ficam.
+        state.goals = state.goals.filter(
+          (row) => row.weekNumber !== input.weekNumber || isPreserved(row),
+        );
+
+        // As novas entram DEPOIS da maior posição que sobrou em cada dia, como
+        // `generate_week` — duas metas na mesma casa do dia não existem.
+        const incoming = seedGoals()
+          .map((row) => ({ ...row, weekNumber: input.weekNumber }))
+          .sort((a, b) => a.weekday - b.weekday || a.dayPosition - b.dayPosition);
+        const placed = new Map<number, number>();
+        for (const row of incoming) {
+          const kept = state.goals
+            .filter((goal) => goal.weekNumber === input.weekNumber && goal.weekday === row.weekday)
+            .reduce((max, goal) => Math.max(max, goal.dayPosition), 0);
+          const position = Math.max(kept, placed.get(row.weekday) ?? 0) + 1;
+          placed.set(row.weekday, position);
+          state.goals.push({ ...row, dayPosition: position });
         }
-        state.goals.push(...seedGoals().map((row) => ({ ...row, weekNumber: input.weekNumber })));
         return done(buildWeek(input.weekNumber));
       }),
-    ),
+    );
+  },
 
   clearPendingGoals: (_studyPlanId: Uuid, weekNumber: number, requestId: RequestId) =>
     later(
       once(requestId, () => {
         state.goals = state.goals.filter(
-          (row) => row.weekNumber !== weekNumber || row.status === "completed",
+          (row) => row.weekNumber !== weekNumber || isPreserved(row),
         );
         return done(buildWeek(weekNumber));
       }),
@@ -1780,6 +1886,13 @@ export const fixturesApi: BoraApi = {
  * fixture existe para não ter: a tela mostrava "liberado" no aviso e
  * "aguardando" no cartão logo abaixo.
  */
+function patchPlan(planId: Uuid, patch: Partial<StudyPlanSummary>): StudyPlanSummary {
+  const index = state.plans.findIndex((plan) => plan.id === planId);
+  const next = { ...state.plans[index]!, ...patch };
+  state.plans[index] = next;
+  return next;
+}
+
 function patchStudent(studentId: Uuid, patch: Partial<StudentCard>): StudentCard {
   const updated = { ...state.students.find((s) => s.studentId === studentId)!, ...patch };
   state.students = state.students.map((student) =>
@@ -1832,20 +1945,29 @@ function stripUndefined<T extends object>(input: T): Partial<T> {
   ) as Partial<T>;
 }
 
-const PLAN: StudyPlanSummary = {
-  id: PLAN_ID,
-  studentId: STUDENT_ID,
-  classId: CLASS_A_ID,
-  name: "Planejamento demonstrativo PRF 2027",
-  area: "Policial",
-  targetExam: "Policial Rodoviário Federal",
-  stage: "Pré-edital",
-  studyModel: "Avanço progressivo",
-  weeklyGoals: 24,
-  startsOn: addDays(TODAY, -28),
-  examDate: addDays(TODAY, 240),
-  status: "active",
-};
+/**
+ * FUNÇÃO, e não constante: `seedState()` roda na inicialização do módulo, antes
+ * de qualquer `const` declarado abaixo dele (ver `seedStudents`).
+ */
+function seedPlan(): StudyPlanSummary {
+  return {
+    id: PLAN_ID,
+    studentId: STUDENT_ID,
+    classId: CLASS_A_ID,
+    name: "Planejamento demonstrativo PRF 2027",
+    area: "Policial",
+    targetExam: "Policial Rodoviário Federal",
+    stage: "Pré-edital",
+    studyModel: "Avanço progressivo",
+    weeklyGoals: 24,
+    startsOn: addDays(TODAY, -28),
+    examDate: addDays(TODAY, 240),
+    status: "active",
+  };
+}
+
+/** O planejamento que as leituras de aluno e de ficha devolvem. */
+const PLAN: StudyPlanSummary = seedPlan();
 
 const SUBJECTS: readonly Subject[] = [
   {

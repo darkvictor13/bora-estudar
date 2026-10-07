@@ -7,11 +7,18 @@ import DialogTitle from "@mui/material/DialogTitle";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import { Alert, Field } from "@bora/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { clearRecordedStudyTimer, pauseStudyTimerForRecord } from "@/components/StudyTimer";
+import {
+  clearRecordedStudyTimer,
+  pauseStudyTimer,
+  readStudyTimer,
+  resumeStudyTimer,
+} from "@/components/StudyTimer";
 import type { ApiError, ExtraStudyInput, ExtraStudyKind } from "@/lib/api";
-import { newRequestId } from "@/lib/api";
+import { MAX_ENTRY_MINUTES, MAX_ENTRY_QUESTIONS, newRequestId } from "@/lib/api";
+import { recordedStudyTimerMinutes } from "@/lib/domain/study-timer";
+import { parseCount } from "@/lib/domain/week";
 
 /**
  * Os cinco estudos que a v2 aceita fora das metas.
@@ -38,14 +45,20 @@ const KINDS: readonly { value: ExtraStudyKind; label: string }[] = [
 export function ExtraStudyDialog({
   studyPlanId,
   date,
+  minDate,
+  maxDate,
   subjects,
   open,
   onClose,
   onSubmit,
 }: {
   studyPlanId: string;
-  /** O dia em que o botão foi clicado. A v2 abre o modal já no dia do grupo. */
+  /** A data sugerida (`defaultExtraDate`): o dia escolhido, ou hoje. */
   date: string;
+  /** O início do planejamento: nenhum estudo extra é anterior a ele. */
+  minDate: string;
+  /** Hoje, no fuso do aparelho. */
+  maxDate: string;
   /** As matérias da semana, para não obrigar a digitar o que já existe. */
   subjects: readonly string[];
   open: boolean;
@@ -55,13 +68,32 @@ export function ExtraStudyDialog({
   const [requestId, setRequestId] = useState(newRequestId);
   const [error, setError] = useState<ApiError | null>(null);
   const [pending, setPending] = useState(false);
-  const [linkedTimerMinutes] = useState(() => open ? pauseStudyTimerForRecord() : 0);
-  const [minutes, setMinutes] = useState(() => String(linkedTimerMinutes || 30));
+  // O inicializador SÓ LÊ. Escrever aqui — pausar o cronômetro — grava no
+  // `localStorage` e dispara o evento da `StudyTimerBar` DURANTE o render, e o
+  // React acusa "Cannot update a component while rendering" (QA-27).
+  const [linked] = useState(() => {
+    const timer = readStudyTimer();
+    return { minutes: recordedStudyTimerMinutes(timer, Date.now()), wasRunning: timer.running };
+  });
+  const [minutes, setMinutes] = useState(() => String(linked.minutes || 30));
+
+  // A escrita vai para um efeito de montagem, que não chama setState. Pausar é
+  // idempotente, então o efeito em dobro do modo estrito não faz mal.
+  useEffect(() => {
+    if (linked.wasRunning) pauseStudyTimer();
+  }, [linked.wasRunning]);
+
+  /** Fundo, Esc e o botão: sair sem lançar devolve o cronômetro a quem o tinha correndo (D-16). */
+  function cancel() {
+    if (linked.wasRunning) resumeStudyTimer();
+    onClose();
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const number = (name: string) => Number(data.get(name) ?? 0) || 0;
+    // `parseCount`: -30, 1.5 e 1e3 chegam inválidos à validação do contrato.
+    const number = (name: string) => parseCount(String(data.get(name) ?? ""));
 
     setPending(true);
     const failure = await onSubmit({
@@ -85,12 +117,13 @@ export function ExtraStudyDialog({
     }
     setRequestId(newRequestId());
     setError(null);
-    if (linkedTimerMinutes > 0) clearRecordedStudyTimer();
+    // Lançar CONSOME o cronômetro, e por isso não o retoma: `onClose`, e não `cancel`.
+    if (linked.minutes > 0) clearRecordedStudyTimer();
     onClose();
   }
 
   return (
-    <Dialog open={open} fullWidth maxWidth="xs" onClose={onClose} data-testid="extra-study-dialog">
+    <Dialog open={open} fullWidth maxWidth="xs" onClose={cancel} data-testid="extra-study-dialog">
       <DialogTitle>Estudo extra</DialogTitle>
       {/*
         `noValidate`: quem valida é o contrato, não o navegador. Com a validação
@@ -102,7 +135,7 @@ export function ExtraStudyDialog({
       <Box component="form" noValidate onSubmit={handleSubmit}>
         <DialogContent>
           {error && <Alert status="error">{error.message}</Alert>}
-          {linkedTimerMinutes > 0 && <Alert status="info">Cronômetro pausado e vinculado: {linkedTimerMinutes} min. Ao lançar, esse tempo será zerado no cronômetro.</Alert>}
+          {linked.minutes > 0 && <Alert status="info">Cronômetro pausado e vinculado: {linked.minutes} min. Ao lançar, esse tempo será zerado no cronômetro.</Alert>}
 
           <TextField
             select
@@ -139,7 +172,15 @@ export function ExtraStudyDialog({
             ))}
           </datalist>
 
-          <Field label="Data" name="date" type="date" defaultValue={date} />
+          <Field
+            label="Data"
+            name="date"
+            type="date"
+            defaultValue={date}
+            min={minDate}
+            max={maxDate}
+            invalid={error?.field === "date"}
+          />
 
           <Field
             label="Tempo estudado (minutos)"
@@ -147,6 +188,8 @@ export function ExtraStudyDialog({
             type="number"
             inputMode="numeric"
             min={0}
+            max={MAX_ENTRY_MINUTES}
+            step={1}
             value={minutes}
             onChange={(event) => setMinutes(event.target.value)}
             invalid={error?.field === "minutes"}
@@ -158,7 +201,10 @@ export function ExtraStudyDialog({
               type="number"
               inputMode="numeric"
               min={0}
+              max={MAX_ENTRY_QUESTIONS}
+              step={1}
               defaultValue={0}
+              invalid={error?.field === "questions"}
             />
             <Field
               label="Acertos"
@@ -166,6 +212,8 @@ export function ExtraStudyDialog({
               type="number"
               inputMode="numeric"
               min={0}
+              max={MAX_ENTRY_QUESTIONS}
+              step={1}
               defaultValue={0}
               invalid={error?.field === "correctAnswers"}
             />
@@ -180,7 +228,7 @@ export function ExtraStudyDialog({
           />
         </DialogContent>
         <DialogActions>
-          <Button type="button" variant="text" onClick={onClose}>
+          <Button type="button" variant="text" onClick={cancel}>
             Cancelar
           </Button>
           <Button type="submit" variant="contained" disabled={pending}>

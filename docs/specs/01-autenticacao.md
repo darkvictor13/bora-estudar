@@ -1,6 +1,6 @@
 # 01 — Autenticação
 
-**Situação:** implementada · **Fluxos e2e:** F-AUTH-01 a F-AUTH-12
+**Situação:** implementada · **Fluxos e2e:** F-AUTH-01 a F-AUTH-12 e F-AUTH-14
 
 ---
 
@@ -41,6 +41,7 @@ Além disso, dois pontos custavam sessão de estudo:
 | R-AUTH-13 | O link do e-mail cai em `/confirmar`, que troca o código por sessão e só então navega para o destino em `?next=`. A troca é rota própria para que convite e confirmação de e-mail possam reusá-la. |
 | R-AUTH-14 | **O link do e-mail precisa abrir no mesmo navegador que o pediu.** `exchangeCodeForSession` é fluxo PKCE: o verifier fica num cookie do domínio, gravado quando o pedido foi feito. Abrir o link em outro navegador — ou numa janela anônima — falha, e a tela lê a falha como "Este link expirou ou já foi usado.". |
 | R-AUTH-15 | A hospedagem precisa de fallback de SPA: rewrite de `/*` para `/index.html` com status 200. Sem isso `/confirmar?next=/redefinir-senha`, que chega do e-mail como acesso direto, devolve 404 — e a recuperação de senha morre exatamente como morria pelo `site_url` errado. |
+| R-AUTH-16 | `?next=` só aceita caminho interno de tela que exige sessão. Ele passa por `safeInternalPath` (`lib/routes.ts`), que resolve contra uma origem fictícia e recusa outra origem, caminho que depois de normalizado começa com duas barras, e as telas públicas. Recusado, vale o destino padrão de quem chama. Conferir só `startsWith("/")` e `!startsWith("//")` deixava passar `/\host` e `/<TAB>/host`, que o navegador lê como outro site: QA-02. |
 
 ---
 
@@ -81,7 +82,7 @@ e-mail → /confirmar → troca o código por sessão → /redefinir-senha → u
 | Rotas (arquivos) | `routes/public/{SignIn,SignUp,ForgotPassword,ResetPassword}.tsx`, `routes/{Home,AuthCallback}.tsx` |
 | Componente | `components/auth/AuthForm.tsx` |
 | Banco | `profiles`, gatilho `tg_create_profile_for_new_user`, enum `user_role` |
-| Constantes | `ROUTES`, `homeForRole` — `lib/routes.ts` |
+| Constantes | `ROUTES`, `homeForRole`, `safeInternalPath` — `lib/routes.ts` |
 
 ---
 
@@ -104,6 +105,7 @@ e-mail → /confirmar → troca o código por sessão → /redefinir-senha → u
 | CA-13 | Redirecionamento para `/entrar` a partir de `/aluno#boraQuizResult=…` **preserva o fragmento** | **sem cobertura** — o efeito é testado só de forma indireta em F-BAT-09 |
 | CA-14 | Abrir o link de recuperação num navegador diferente do que o pediu mostra "Este link expirou ou já foi usado.", e não uma tela quebrada | **sem cobertura** — exige dois contextos de navegador |
 | CA-15 | Acesso direto a `/confirmar?next=/redefinir-senha` numa hospedagem estática devolve 200 com a casca da SPA, não 404 | coberto pelo smoke de HTTP do deploy, não pela suíte |
+| CA-16 | `/confirmar?next=` com `/\host`, `/<TAB>/host`, `/\\host` ou `/.//host` termina em `/redefinir-senha`, e nenhuma requisição sai para o host | F-AUTH-14 |
 
 ---
 

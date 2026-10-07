@@ -385,3 +385,48 @@ begin
   end loop;
   raise notice '33 OK  flashcard_marks: so posicao, ancora, estilo e cor no grant update';
 end $$;
+
+-- ---------- goal_batches: SELECT e nada mais (spec 04, R-GEN-21) ----------
+do $$
+declare v_privilegio text;
+begin
+  if not has_table_privilege('authenticated', 'public.goal_batches', 'select') then
+    raise exception 'FALHOU: authenticated nao le goal_batches';
+  end if;
+  foreach v_privilegio in array array['insert', 'update', 'delete']
+  loop
+    if has_table_privilege('authenticated', 'public.goal_batches', v_privilegio) then
+      raise exception 'FALHOU: authenticated tem % em goal_batches', v_privilegio;
+    end if;
+  end loop;
+  raise notice '34 OK  goal_batches e so leitura: quem escreve e generate_week';
+end $$;
+
+-- ---------- goal_entries: a chave, o dia estudado e o carimbo são das RPCs ----------
+--
+-- `request_id` sustenta a idempotência de `record_goal_entry` e `record_extra_study`;
+-- `studied_on` e `created_at` definem o DIA do registro. Com qualquer um deles no
+-- grant de INSERT, o aluno datava o próprio estudo ou fabricava a chave. Privilégio
+-- de COLUNA levanta 42501 sempre, mesmo sem linha nenhuma casando.
+set role authenticated;
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+do $$
+declare v_coluna text;
+begin
+  foreach v_coluna in array array['request_id', 'studied_on', 'created_at'] loop
+    begin
+      execute format(
+        'insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, %I) '
+        'values (%L, %L, %L, 10, %s)', v_coluna,
+        'a5000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+        case v_coluna when 'request_id' then quote_literal(gen_random_uuid())
+                      when 'studied_on' then quote_literal(current_date)
+                      else quote_literal(now() - interval '2 days') end);
+      raise exception 'FALHOU: o aluno escreveu % no INSERT de goal_entries', v_coluna;
+    exception when insufficient_privilege then
+      null;
+    end;
+  end loop;
+  raise notice '35 OK  goal_entries: request_id, studied_on e created_at fora do grant insert';
+end $$;

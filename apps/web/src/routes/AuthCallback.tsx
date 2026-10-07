@@ -2,7 +2,7 @@ import { redirect } from "react-router";
 
 import { supabase } from "@/lib/supabase/client";
 import { invalidateSession } from "@/lib/auth/session";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, safeInternalPath } from "@/lib/routes";
 
 /**
  * Fecha o ciclo do link enviado por e-mail.
@@ -22,11 +22,8 @@ export async function authCallbackLoader({ request }: { request: Request }) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
 
-  // Só caminho interno: `next` vem da URL e não pode virar redirecionamento
-  // aberto para outro host.
-  const requested = url.searchParams.get("next") ?? ROUTES.resetPassword;
-  const next =
-    requested.startsWith("/") && !requested.startsWith("//") ? requested : ROUTES.resetPassword;
+  // `next` vem da URL: `safeInternalPath` recusa o que sai do site.
+  const next = safeInternalPath(url.searchParams.get("next"), ROUTES.resetPassword);
 
   const { error } = code
     ? await supabase.auth.exchangeCodeForSession(code)

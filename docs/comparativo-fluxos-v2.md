@@ -159,13 +159,13 @@ navegador.
 
 | Fluxo v2 | Onde estava | Situação | Observação |
 |---|---|---|---|
-| Gerar metas da semana para o aluno | `salvarMetasAlunoSupabase` | ✅ | `/professor/metas`, F-PROF-04 a 07. A v3 é melhor: lote idempotente por `study_plan_batches`, modos `append`/`replace`/`replan`, `day_order` calculado no banco |
+| Gerar metas da semana para o aluno | `salvarMetasAlunoSupabase` | ✅ | `/professor/metas`, F-PROF-04/05/10. A v3 é melhor: `generate_week`, um comportamento só, lote idempotente por `goal_batches`, posição calculada no banco |
 | Distribuição por matéria com prévia antes de salvar | `gerarPreviaMetasTeoriaAluno`, `linhasDistribuicaoMetaHtml` | 🟡 | A v3 gera direto a partir dos blocos marcados; não há passo de prévia nem peso por matéria |
 | Copiar semana anterior | `copiarSemanaAnterior` (professor.js:5234) | ❌ | — |
 | **Criar planejamento** e cadastrar blocos | `salvarNovoPlanejamentoAluno` | ❌ | `study_plans` e `study_plan_blocks` só nascem no seed |
 | **Substituir / ativar planejamento** | `abrirNovoPlanejamentoAluno` | ❌ | `activate_study_plan` existe e ninguém chama |
 | Editar, arquivar e excluir planejamento | `abrirAlterarPlanejamentoAluno` | ❌ | `/professor/planejamentos` só lista |
-| Limpar metas pendentes do planejamento / de todos | `zerarMetasPlanejamentoSelecionadoAluno`, `zerarTodasMetasAluno` | ❌ | Parcialmente coberto pelos modos `replace`/`replan` |
+| Limpar metas pendentes do planejamento / de todos | `zerarMetasPlanejamentoSelecionadoAluno`, `zerarTodasMetasAluno` | ❌ | Parcialmente coberto por `generate_week`, que substitui o que não foi feito; `clear_pending_goals` existe no banco, sem botão |
 | Gerenciar cadernos: ativar, desativar, editar, incluir, excluir, restaurar | `p-cadernos` inteiro | ❌ | `/professor/cadernos` só lista blocos, F-PROF-08 |
 | Cadastrar disciplina teórica e PDFs | `p-disciplinas` do professor | ❌ | — |
 

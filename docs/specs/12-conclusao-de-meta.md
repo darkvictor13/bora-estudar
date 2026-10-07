@@ -1,11 +1,17 @@
 # 12 — Conclusão de meta sem bateria
 
-**Situação:** implementada · **Comparativo:** §12 item 1 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-META-03 e F-META-04
+**Situação:** implementada · **Comparativo:** §12 item 1 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §2 · **Fluxos e2e:** F-META-03, F-META-04 e F-META-08
 
 > **Atualizada em 14/09/2026.** `complete_goal` e `reopen_goal` não foram portadas para o schema de
 > 14/09/2026. A conclusão passou a ser escrita direta em `goals`, sustentada
 > pelo grant por coluna e pelos gatilhos de `app_private` — o COMPORTAMENTO
 > descrito aqui continua valendo; a superfície é que mudou.
+
+> **Atualizada em 06/10/2026 (QA-04, QA-07, QA-10, QA-28, N-05).** Registrar estudo passou a ser a RPC
+> `record_goal_entry` (R-CONC-21 a R-CONC-26): idempotente por `goal_entries.request_id`, com os limites
+> de D-04 em CHECK, e o aluno com o acesso vencido deixa de concluir, reabrir, pular e apagar. As regras
+> de 01 a 20 acima descrevem as RPCs `complete_goal` e `reopen_goal`, que não existem neste schema;
+> concluir, reabrir e pular continuam escrita direta em `goals` (R-CONC-01 segue como dívida).
 
 ---
 
@@ -78,7 +84,7 @@ sentidos. Nenhuma das duas RPCs pode produzir um estado que a viole.
 |---|---|
 | R-CONC-08 | `complete_goal` grava `status='completed'`, `completed_at=now()`, `spent_minutes` e `student_note`. Não grava questões nem acertos: **desempenho vem do ledger, e meta sem bateria não tem ledger**. É a regra que a v96 quebrava ao deixar o aluno digitar `questoes_feitas` e `acertos` à mão. |
 | R-CONC-09 | `goals.spent_minutes` é **coluna nova, `integer`, nullable**, com `check (spent_minutes is null or spent_minutes between 1 and 240)`. Nasce nullable e sem default, então é compatível com o bundle que já está no ar. |
-| R-CONC-10 | O limite de **240 minutos** é o da v96 (`interpretarTempoRegistro`, aluno.js:2748). `record_quiz_session_time` continua aceitando até 1440 para bateria — os dois números divergem de propósito nesta entrega: mexer no limite da bateria é mudança na spec [05](05-bateria-inteligente.md), já implantada, e não cabe aqui. **Suposição registrada para revisão humana.** |
+| R-CONC-10 | O limite de **240 minutos** é o da v96 (`interpretarTempoRegistro`, aluno.js:2748). `record_quiz_session_time` continua aceitando até 1440 para bateria — os dois números divergem de propósito nesta entrega: mexer no limite da bateria é mudança na spec [05](05-bateria-inteligente.md), já implantada, e não cabe aqui. **Suposição registrada para revisão humana.** *(06/10/2026: `record_quiz_session_time` não existe neste schema. O tempo da bateria é `quiz_sessions.duration_minutes`, e o teto de `goal_entries` não o alcança.)* |
 | R-CONC-11 | O tempo é obrigatório em `complete_goal`. Uma meta concluída sem tempo não alimenta nenhum dos números que o professor lê, e a v96 também o exigia. |
 | R-CONC-12 | `student_note` é **o único campo de texto livre desta feature** — texto que humano escreve para humano ler. Vazio vira `null` (`nullif(btrim(...),'')`) e o tamanho é limitado por `check (length(student_note) <= 2000)`. Nenhum metadado é codificado nele: era ali que a v96 escrevia `TIPO_REFORCO:1` e o resultado da bateria em base64. |
 | R-CONC-13 | `reopen_goal` volta a meta a `pending`, zera `completed_at` e `spent_minutes`, e **preserva `student_note`**. O que o aluno escreveu sobre o estudo continua valendo; o que se desfaz é a afirmação de que terminou. |
@@ -99,6 +105,20 @@ sentidos. Nenhuma das duas RPCs pode produzir um estado que a viole.
 | R-CONC-18 | `vw_goal_performance.minutes_spent` passa a ser `coalesce(sum(s.duration_minutes), g.spent_minutes)`: o tempo da bateria quando há bateria, o tempo declarado quando não há. Nome, tipo e posição da coluna não mudam, então `create or replace view` basta — inserir coluna no meio exigiria `drop` e `create`. O `with (security_invoker = true)` é **repetido** no `create or replace`: sem ele a view volta a rodar com privilégio do dono e vaza dado entre alunos. |
 | R-CONC-19 | `questions_answered` e `correct_answers` da mesma view continuam vindo **só do ledger** e continuam `0` para meta sem bateria. Meta de teoria não tem desempenho, tem tempo. |
 | R-CONC-20 | Nenhum contador é mantido à mão. "X de Y metas concluídas", o `progress.completed` da ficha do professor e a classificação de ritmo continuam derivando de `goals.status`, que é o que estas RPCs movem. |
+
+### O registro de estudo (QA-04, QA-07, QA-10, QA-28)
+
+Acrescentado em 06/10/2026. Vale para o schema de 14/09/2026, em que o estudo do aluno é uma linha em
+`goal_entries`.
+
+| Id | Regra |
+|---|---|
+| R-CONC-21 | Registrar estudo é **`record_goal_entry`**: insere em `goal_entries` e passa a meta de `pending` para `in_progress` na mesma transação. Recusa meta com `notebook_block_id` (a de bateria se registra pela bateria), meta de outro aluno (`P0002`, sem revelar que ela existe) e aluno sem acesso vigente (`42501`). |
+| R-CONC-22 | Idempotência **com payload**, sustentada por `goal_entries_request_uidx`. O payload são as colunas do próprio registro (`goal_id`, `minutes`, `questions`, `correct_answers`, `note`, `manual_lesson`, `theory_stage`): mesma chave e mesmo payload devolve o registro anterior sem gravar de novo, e mesma chave com outro payload é recusada com `23505`. |
+| R-CONC-23 | Os limites de D-04, nas CHECKs `goal_entries_minutes_check` (0 a 240), `goal_entries_questions_check` (0 a 500), `goal_entries_correct_answers_check` (0 a `questions`) e `goal_entries_not_empty_check` (tempo ou questões). As frases moram em `checkStudyEntry`, que as duas implementações do contrato chamam. |
+| R-CONC-24 | **Concluir, reabrir, pular e apagar exigem acesso vigente:** `has_active_access()` no `WITH CHECK` de `goals_update` e no `USING` de `goals_delete` e de `goal_entries_delete`. O UPDATE barrado levanta `42501`; o DELETE barrado afeta zero linhas, e o adaptador conta. |
+| R-CONC-25 | O aluno não escreve `spent_minutes`, `questions_answered` nem `correct_answers` de meta sem bateria: o resultado sai dos registros. Quem impede é `protect_goal_planning_fields`; a meta de bateria é de `protect_goal_quiz_result`. |
+| R-CONC-26 | `record_goal_entry` grava `studied_on` **nulo**: registrar numa meta é "estudei agora", e o dia do registro é o dia local de `created_at`. A data escolhida existe só no estudo extra (spec [19](19-estudo-extra-avulso.md), R-EXTRA-28). |
 
 ---
 
@@ -184,6 +204,11 @@ bateria existem para tornar inexprimível.
 | CA-12 | O aluno continua **sem** `insert`, `update` e `delete` em `goals`: a escrita direta é recusada, e `delete` não é concedido | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
 | CA-13 | As duas funções não têm `execute` para `public`; `authenticated` tem, nominalmente | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
 | CA-14 | `spent_minutes` recusa `0`, negativo e `241` no próprio banco, mesmo por fora da RPC | **sem cobertura**: `complete_goal` e `reopen_goal` não foram portadas |
+| CA-15 | Registrar estudo grava uma linha só mesmo quando a resposta se perde e a pessoa tenta de novo; mesma chave com outro payload é recusada | F-META-03 e `03_goals.sql` |
+| CA-16 | Minutos fora de 0 a 240, questões fora de 0 a 500, acertos acima das questões e registro todo zerado são recusados com a frase da regra, e nada é gravado | F-META-03, `07_schema.sql` e `validation.test.ts` |
+| CA-17 | Aluno com acesso vencido não conclui, reabre, pula nem apaga, e a tela diz que o acesso venceu | F-META-08 e `03_goals.sql` |
+| CA-18 | O aluno não escreve o resultado de meta sem bateria | `03_goals.sql` |
+| CA-19 | `record_goal_entry` recusa meta de bateria, meta alheia e acesso vencido, cada uma com o seu SQLSTATE | `03_goals.sql` |
 
 ---
 

@@ -485,6 +485,41 @@ export type Database = {
           },
         ]
       }
+      goal_batches: {
+        Row: {
+          created_at: string
+          id: string
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          week_number: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          student_id: string
+          study_plan_id: string
+          teacher_id: string
+          week_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          student_id?: string
+          study_plan_id?: string
+          teacher_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_batches_study_plan_fk"
+            columns: ["study_plan_id", "teacher_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id", "teacher_id", "student_id"]
+          },
+        ]
+      }
       goal_entries: {
         Row: {
           correct_answers: number
@@ -495,9 +530,12 @@ export type Database = {
           minutes: number
           note: string | null
           questions: number
+          request_id: string | null
           score: number | null
           student_id: string
+          studied_on: string | null
           teacher_id: string
+          theory_lesson_id: string | null
           theory_stage: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers: number | null
         }
@@ -510,9 +548,12 @@ export type Database = {
           minutes?: number
           note?: string | null
           questions?: number
+          request_id?: string | null
           score?: number | null
           student_id: string
+          studied_on?: string | null
           teacher_id: string
+          theory_lesson_id?: string | null
           theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers?: number | null
         }
@@ -525,9 +566,12 @@ export type Database = {
           minutes?: number
           note?: string | null
           questions?: number
+          request_id?: string | null
           score?: number | null
           student_id?: string
+          studied_on?: string | null
           teacher_id?: string
+          theory_lesson_id?: string | null
           theory_stage?: Database["public"]["Enums"]["theory_stage"] | null
           wrong_answers?: number | null
         }
@@ -552,6 +596,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_entries_theory_lesson_fk"
+            columns: ["theory_lesson_id", "teacher_id"]
+            isOneToOne: false
+            referencedRelation: "theory_lessons"
+            referencedColumns: ["id", "teacher_id"]
           },
         ]
       }
@@ -2543,6 +2594,44 @@ export type Database = {
           },
         ]
       }
+      theory_review_entries: {
+        Row: {
+          correct_answers: number
+          created_at: string
+          id: string
+          questions: number
+          request_id: string
+          student_id: string
+          theory_review_id: string
+        }
+        Insert: {
+          correct_answers: number
+          created_at?: string
+          id?: string
+          questions: number
+          request_id: string
+          student_id: string
+          theory_review_id: string
+        }
+        Update: {
+          correct_answers?: number
+          created_at?: string
+          id?: string
+          questions?: number
+          request_id?: string
+          student_id?: string
+          theory_review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "theory_review_entries_review_fk"
+            columns: ["theory_review_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "theory_reviews"
+            referencedColumns: ["id", "student_id"]
+          },
+        ]
+      }
       theory_review_rules: {
         Row: {
           active: boolean
@@ -2910,7 +2999,37 @@ export type Database = {
       }
     }
     Functions: {
+      activate_study_plan: {
+        Args: { p_study_plan_id: string }
+        Returns: {
+          area: string
+          class_id: string | null
+          created_at: string
+          exam_date: string | null
+          id: string
+          name: string
+          stage: string
+          starts_on: string
+          status: Database["public"]["Enums"]["study_plan_status"]
+          student_id: string
+          study_model: string
+          target_exam: string | null
+          teacher_id: string
+          updated_at: string
+          weekly_goals: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "study_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_access_teacher: { Args: { p_teacher: string }; Returns: boolean }
+      clear_pending_goals: {
+        Args: { p_study_plan_id: string; p_week_number: number }
+        Returns: number
+      }
       find_student_by_email: {
         Args: { p_email: string }
         Returns: {
@@ -2919,6 +3038,15 @@ export type Database = {
           name: string
           student_id: string
         }[]
+      }
+      generate_week: {
+        Args: {
+          p_goals: Json
+          p_request_id: string
+          p_study_plan_id: string
+          p_week_number: number
+        }
+        Returns: boolean
       }
       has_active_access: { Args: never; Returns: boolean }
       is_teacher: { Args: never; Returns: boolean }
@@ -2938,6 +3066,62 @@ export type Database = {
         Returns: {
           id: string
           name: string
+        }[]
+      }
+      record_extra_study: {
+        Args: {
+          p_correct_answers: number
+          p_date: string
+          p_kind: string
+          p_minutes: number
+          p_note?: string
+          p_questions: number
+          p_request_id: string
+          p_study_plan_id: string
+          p_subject: string
+        }
+        Returns: string
+      }
+      record_goal_entry: {
+        Args: {
+          p_correct_answers: number
+          p_goal_id: string
+          p_manual_lesson?: string
+          p_minutes: number
+          p_note?: string
+          p_questions: number
+          p_request_id: string
+          p_theory_stage?: Database["public"]["Enums"]["theory_stage"]
+        }
+        Returns: string
+      }
+      record_initial_questions: {
+        Args: {
+          p_correct_answers: number
+          p_goal_id: string
+          p_lesson_id: string
+          p_questions: number
+          p_request_id: string
+        }
+        Returns: {
+          current_page: number
+          initial_questions_done: number
+          initial_questions_required: number
+          lesson_done: boolean
+          theory_done: boolean
+        }[]
+      }
+      record_review_questions: {
+        Args: {
+          p_correct_answers: number
+          p_questions: number
+          p_request_id: string
+          p_review_id: string
+        }
+        Returns: {
+          questions_answered: number
+          status: Database["public"]["Enums"]["theory_review_status"]
+          study_plan_id: string
         }[]
       }
       set_student_access: {
@@ -2995,6 +3179,13 @@ export type Database = {
           student_score: number
           upper_whisker: number
           week_number: number
+        }[]
+      }
+      week_replacement_preview: {
+        Args: { p_study_plan_id: string; p_week_number: number }
+        Returns: {
+          goals_preserved: number
+          goals_total: number
         }[]
       }
     }

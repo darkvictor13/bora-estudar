@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
+import { ApiThrownError } from "./contract.ts";
 import { fixturesApi as api, resetFixtures, setFixtureRole } from "./fixtures.ts";
 import { FIXTURE_STATUS_NOTICES } from "./fixtures-library.ts";
 
@@ -328,7 +329,7 @@ test("estudo extra cria a meta e o registro numa operação só", async () => {
     requestId: requestId(),
     kind: "anki",
     subject: "Português",
-    date: "2026-09-16",
+    date: "2026-09-14",
     minutes: 25,
     questions: 40,
     correctAnswers: 33,
@@ -458,7 +459,7 @@ test("professor controla a publicação sem depender das questões do aluno", as
   assert.equal((await api.loadTheoryGoal(goal.id)).lesson?.id, second.id);
 });
 
-test("gerar semana no modo seguro preserva o que já foi concluído", async () => {
+test("gerar a semana preserva o que já foi concluído", async () => {
   const antes = await api.loadWeek("plano", 1);
   const concluidas = antes.days
     .flatMap((day) => day.goals)
@@ -469,7 +470,6 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
     studyPlanId: "plano",
     requestId: requestId(),
     weekNumber: 1,
-    mode: "safe",
   });
   assert.equal(previa.goalsPreserved, 1);
 
@@ -477,7 +477,6 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
     studyPlanId: "plano",
     requestId: requestId(),
     weekNumber: 1,
-    mode: "safe",
   });
   assert.ok(gerada.ok);
 
@@ -488,29 +487,75 @@ test("gerar semana no modo seguro preserva o que já foi concluído", async () =
   assert.equal(sobreviveu.spentMinutes, 95, "e com os registros dela");
 });
 
-test("replanejar a semana inteira é o caminho que apaga a concluída", async () => {
-  const antes = await api.loadWeek("plano", 1);
-  const concluida = antes.days.flatMap((day) => day.goals).find((g) => g.status === "completed")!;
+test("gerar preserva a concluída SEM registro, e tira a pulada e a pendente", async () => {
+  const semana = (await api.loadWeek("plano", 1)).days.flatMap((day) => day.goals);
+  const pendente = semana.find((goal) => goal.status === "pending")!;
+  const outraPendente = semana.filter((goal) => goal.status === "pending")[1]!;
+  const pulada = semana.find((goal) => goal.status === "skipped")!;
 
-  const previa = await api.previewWeek({
-    studyPlanId: "plano",
-    requestId: requestId(),
-    weekNumber: 1,
-    mode: "full",
-  });
-  assert.equal(previa.goalsPreserved, 0, "a prévia avisa antes de qualquer escrita");
+  // Concluir é afirmação do aluno: a meta fica de pé mesmo sem registro.
+  assert.ok((await api.completeGoal(pendente.id, requestId())).ok);
+  assert.ok((await api.skipGoal(outraPendente.id, requestId())).ok);
 
-  const gerada = await api.generateWeek({
-    studyPlanId: "plano",
-    requestId: requestId(),
-    weekNumber: 1,
-    mode: "full",
-  });
+  const previa = await api.previewWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.equal(previa.goalsPreserved, 2, "a que tinha registro e a concluída sem registro");
+
+  const gerada = await api.generateWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
   assert.ok(gerada.ok);
-  assert.equal(
-    gerada.data.days.flatMap((day) => day.goals).find((goal) => goal.id === concluida.id),
-    undefined,
-  );
+  const ids = gerada.data.days.flatMap((day) => day.goals).map((goal) => goal.id);
+  assert.ok(ids.includes(pendente.id), "a concluída sem registro continua");
+  assert.ok(!ids.includes(pulada.id), "a pulada saiu");
+  assert.ok(!ids.includes(outraPendente.id), "a que acabou de ser pulada saiu");
+});
+
+test("meta EM ANDAMENTO com estudo registrado sobrevive a gerar, e a prévia a conta", async () => {
+  const pendente = (await api.loadWeek("plano", 1)).days
+    .flatMap((day) => day.goals)
+    .find((goal) => goal.status === "pending")!;
+  const registrada = await api.recordStudy({
+    goalId: pendente.id,
+    requestId: requestId(),
+    minutes: 40,
+    questions: 0,
+    correctAnswers: 0,
+  });
+  assert.ok(registrada.ok);
+  assert.equal(registrada.data.status, "in_progress");
+
+  const previa = await api.previewWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.equal(previa.goalsPreserved, 2);
+
+  const gerada = await api.generateWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.ok(gerada.ok);
+  const sobreviveu = gerada.data.days.flatMap((day) => day.goals).find((goal) => goal.id === pendente.id);
+  assert.ok(sobreviveu, "a meta com registro continua lá");
+  assert.equal(sobreviveu.status, "in_progress");
+  assert.equal(sobreviveu.entries.length, 1, "com o registro");
+});
+
+test("semana fora de 1 a 520 é recusada nas duas operações", async () => {
+  const antes = await api.loadWeek("plano", 1);
+  for (const weekNumber of [0, -3, 1.5, 521]) {
+    const input = { studyPlanId: "plano", requestId: requestId(), weekNumber };
+    await assert.rejects(api.previewWeek(input), (error: unknown) => {
+      assert.ok(error instanceof ApiThrownError);
+      assert.equal(error.code, "validation");
+      assert.match(error.message, /1 a 520/);
+      return true;
+    });
+    const gerada = await api.generateWeek(input);
+    assert.equal(gerada.ok, false);
+  }
+  assert.deepEqual(await api.loadWeek("plano", 1), antes);
+});
+
+test("as metas novas entram depois das preservadas, sem repetir a casa do dia", async () => {
+  const gerada = await api.generateWeek({ studyPlanId: "plano", requestId: requestId(), weekNumber: 1 });
+  assert.ok(gerada.ok);
+  const casas = gerada.data.days
+    .flatMap((day) => day.goals)
+    .map((goal) => `${goal.weekday}:${goal.dayPosition}`);
+  assert.equal(new Set(casas).size, casas.length);
 });
 
 test("o tema começa sem escolha, e a ausência não é o mesmo que claro", async () => {
@@ -858,4 +903,224 @@ test("a marcação do cartão antigo da biblioteca aparece no deck do cartão qu
   const recolored = { ...shown[0]!, color: "pink" } as const;
   assert.ok((await api.saveFlashcardMarks({ deck: { kind: "library", deckId: alias.deckId }, previous: shown, next: [recolored], requestId: requestId() })).ok);
   assert.deepEqual((await api.loadFlashcardMarks({ kind: "library", deckId: alias.deckId })).map((item) => item.color), ["pink"]);
+});
+
+// QA-03 e QA-12: o planejamento ativo é um por aluno, e a troca é uma operação só.
+const newPlanInput = (name: string) =>
+  ({
+    studentId: "22222222-2222-4222-8222-222222222222",
+    name,
+    area: "Policial",
+    stage: "Pré-edital",
+    studyModel: "Avanço progressivo",
+    weeklyGoals: 24,
+    startsOn: "2026-09-14",
+  }) as const;
+
+test("o planejamento criado nasce pausado, e ativá-lo arquiva o outro ativo do mesmo aluno", async () => {
+  const [original] = await api.listPlans();
+  assert.ok(original);
+  assert.equal(original.status, "active");
+
+  const created = await api.createPlan(newPlanInput("Segundo plano"), requestId());
+  assert.ok(created.ok);
+  assert.equal(created.data.status, "paused");
+
+  const activated = await api.activatePlan(created.data.id, requestId());
+  assert.ok(activated.ok);
+  assert.equal(activated.data.status, "active");
+
+  const plans = await api.listPlans();
+  assert.deepEqual(
+    plans.map((plan) => [plan.id, plan.status]).sort(),
+    [[original.id, "archived"], [created.data.id, "active"]].sort(),
+  );
+  assert.equal(plans.filter((plan) => plan.status === "active").length, 1);
+});
+
+test("ativar o planejamento que já está ativo é sucesso e não muda nada", async () => {
+  const created = await api.createPlan(newPlanInput("Segundo plano"), requestId());
+  assert.ok(created.ok);
+  assert.ok((await api.activatePlan(created.data.id, requestId())).ok);
+
+  const again = await api.activatePlan(created.data.id, requestId());
+  assert.ok(again.ok);
+  assert.equal(again.data.status, "active");
+  assert.equal((await api.listPlans()).filter((plan) => plan.status === "active").length, 1);
+});
+
+test("ativar um planejamento desconhecido é recusado com a frase do adaptador", async () => {
+  const result = await api.activatePlan("00000000-0000-4000-8000-00000000dead", requestId());
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
+  assert.equal(result.error.code, "not_found");
+  assert.equal(result.error.message, "Planejamento não encontrado, ou não é seu.");
+});
+
+test("arquivar o planejamento ativo deixa o aluno sem nenhum ativo", async () => {
+  const [original] = await api.listPlans();
+  assert.ok(original);
+  assert.ok((await api.archivePlan(original.id, requestId())).ok);
+  assert.equal((await api.listPlans()).filter((plan) => plan.status === "active").length, 0);
+});
+
+/* ---- QA-10, QA-11, N-02, N-07: os limites e a data do estudo ---- */
+
+async function firstPendingGoalId() {
+  const week = await api.loadWeek("plano", 1);
+  return week.days.flatMap((day) => day.goals).find((goal) => goal.status === "pending")!.id;
+}
+
+test("registrar estudo recusa número fora dos limites, com a frase e o campo, e nada é gravado", async () => {
+  const goalId = await firstPendingGoalId();
+  const casos: ReadonlyArray<[string, { minutes: number; questions: number; correctAnswers: number }, string]> = [
+    ["minutos negativos", { minutes: -30, questions: 0, correctAnswers: 0 }, "minutes"],
+    ["minutos acima de 240", { minutes: 241, questions: 0, correctAnswers: 0 }, "minutes"],
+    ["minutos fracionados", { minutes: 1.5, questions: 0, correctAnswers: 0 }, "minutes"],
+    ["questões acima de 500", { minutes: 0, questions: 501, correctAnswers: 0 }, "questions"],
+    ["acertos negativos", { minutes: 10, questions: 5, correctAnswers: -1 }, "correctAnswers"],
+    ["acertos acima das questões", { minutes: 10, questions: 5, correctAnswers: 6 }, "correctAnswers"],
+    ["tudo zero", { minutes: 0, questions: 0, correctAnswers: 0 }, "minutes"],
+  ];
+  for (const [nome, numeros, campo] of casos) {
+    const refused = await api.recordStudy({ goalId, requestId: requestId(), ...numeros });
+    assert.ok(!refused.ok, nome);
+    assert.equal(refused.error.code, "validation", nome);
+    assert.equal(refused.error.field, campo, nome);
+  }
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days.flatMap((day) => day.goals).find((candidate) => candidate.id === goalId)!;
+  assert.equal(goal.entries.length, 0, "nenhuma tentativa gravou");
+});
+
+test("estudo extra recusa data fora de [início do planejamento, hoje], com o campo", async () => {
+  const base = { studyPlanId: "plano", kind: "anki" as const, subject: "Português", minutes: 20, questions: 0, correctAnswers: 0 };
+  const antes = await api.loadWeek("plano", 1);
+  for (const date of ["2026-08-16", "2026-09-15", ""]) {
+    const refused = await api.recordExtraStudy({ ...base, requestId: requestId(), date });
+    assert.ok(!refused.ok, date);
+    assert.equal(refused.error.field, "date", date);
+  }
+  const depois = await api.loadWeek("plano", 1);
+  assert.equal(depois.summary.goalsTotal, antes.summary.goalsTotal, "nenhuma meta extra nasceu");
+  const semMateria = await api.recordExtraStudy({ ...base, requestId: requestId(), subject: " ", date: "2026-09-14" });
+  assert.ok(!semMateria.ok);
+  assert.equal(semMateria.error.field, "subject");
+});
+
+test("dois estudos extras no mesmo dia cabem, em posições diferentes (N-02)", async () => {
+  const base = { studyPlanId: "plano", kind: "anki" as const, minutes: 20, questions: 0, correctAnswers: 0, date: "2026-09-14" };
+  const first = await api.recordExtraStudy({ ...base, requestId: requestId(), subject: "Português" });
+  const second = await api.recordExtraStudy({ ...base, requestId: requestId(), subject: "Direito" });
+  assert.ok(first.ok && second.ok);
+  assert.notEqual(first.data.id, second.data.id);
+  assert.equal(second.data.dayPosition, first.data.dayPosition + 1);
+});
+
+test("a mesma chave com outra carga é conflito, e com a mesma carga devolve o que gravou", async () => {
+  const goalId = await firstPendingGoalId();
+  const key = requestId();
+  const input = { goalId, requestId: key, minutes: 30, questions: 6, correctAnswers: 6 };
+  const first = await api.recordStudy(input);
+  const outra = await api.recordStudy({ ...input, minutes: 31 });
+  assert.ok(first.ok);
+  assert.ok(!outra.ok);
+  assert.equal(outra.error.code, "conflict");
+
+  const extra = { studyPlanId: "plano", requestId: requestId(), kind: "anki" as const, subject: "Português", date: "2026-09-14", minutes: 20, questions: 0, correctAnswers: 0 };
+  const created = await api.recordExtraStudy(extra);
+  const repeated = await api.recordExtraStudy(extra);
+  const diferente = await api.recordExtraStudy({ ...extra, date: "2026-09-13" });
+  assert.ok(created.ok && repeated.ok);
+  assert.equal(repeated.data.id, created.data.id, "a retentativa devolve a mesma meta");
+  assert.ok(!diferente.ok);
+  assert.equal(diferente.error.code, "conflict");
+});
+
+test("QA-04 · as questões iniciais com a mesma chave somam uma vez, e outro payload é conflito", async () => {
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days[1]!.goals[0]!;
+  assert.ok(goal.theory);
+  const input = { goalId: goal.id, lessonId: goal.theory.lessonId, requestId: requestId(), questions: 10, correctAnswers: 8 };
+
+  const first = await api.recordInitialQuestions(input);
+  const again = await api.recordInitialQuestions(input);
+  assert.ok(first.ok && again.ok);
+  assert.equal(again.data.initialQuestionsDone, first.data.initialQuestionsDone, "a retentativa não soma de novo");
+  assert.equal((await api.loadTheoryGoal(goal.id)).progress?.initialQuestionsDone, 10);
+
+  const outra = await api.recordInitialQuestions({ ...input, questions: 12 });
+  assert.ok(!outra.ok);
+  assert.equal(outra.error.code, "conflict");
+  assert.match(outra.error.message, /outros valores/);
+  assert.equal((await api.loadTheoryGoal(goal.id)).progress?.initialQuestionsDone, 10, "o conflito não gravou");
+
+  // Uma chave nova é outro registro, e soma.
+  const nova = await api.recordInitialQuestions({ ...input, requestId: requestId(), questions: 5, correctAnswers: 5 });
+  assert.ok(nova.ok);
+  assert.equal(nova.data.initialQuestionsDone, 15);
+});
+
+test("QA-04 · a revisão com a mesma chave soma uma vez, e a retentativa do envio que fechou devolve a revisão", async () => {
+  const [review] = await api.loadDueReviews("plano");
+  assert.ok(review);
+  const key = requestId();
+
+  const parcial = await api.recordReviewQuestions({ reviewId: review.id, requestId: key, questions: 10, correctAnswers: 8 });
+  const repetida = await api.recordReviewQuestions({ reviewId: review.id, requestId: key, questions: 10, correctAnswers: 8 });
+  assert.ok(parcial.ok && repetida.ok);
+  assert.equal(repetida.data.questionsAnswered, 10, "a retentativa não soma de novo");
+
+  const outra = await api.recordReviewQuestions({ reviewId: review.id, requestId: key, questions: 9, correctAnswers: 8 });
+  assert.ok(!outra.ok);
+  assert.equal(outra.error.code, "conflict");
+  assert.match(outra.error.message, /outros valores/);
+
+  const fechamento = { reviewId: review.id, requestId: requestId(), questions: review.minimumQuestions - 10, correctAnswers: 5 };
+  const fechou = await api.recordReviewQuestions(fechamento);
+  assert.ok(fechou.ok);
+  assert.equal(fechou.data.status, "completed");
+
+  // O replay vem ANTES de "já concluída".
+  const replay = await api.recordReviewQuestions(fechamento);
+  assert.ok(replay.ok, "a retentativa do envio que concluiu recebe a revisão");
+  assert.equal(replay.data.status, "completed");
+
+  const nova = await api.recordReviewQuestions({ reviewId: review.id, requestId: requestId(), questions: 1, correctAnswers: 1 });
+  assert.ok(!nova.ok);
+  assert.equal(nova.error.code, "conflict");
+  assert.equal(nova.error.message, "Esta revisão já foi concluída.");
+});
+
+test("QA-04 · questões da teoria recusam a faixa com a frase de validation.ts", async () => {
+  const week = await api.loadWeek("plano", 1);
+  const goal = week.days[1]!.goals[0]!;
+  assert.ok(goal.theory);
+  const base = { goalId: goal.id, lessonId: goal.theory.lessonId };
+
+  const negativo = await api.recordInitialQuestions({ ...base, requestId: requestId(), questions: 5, correctAnswers: -1 });
+  assert.ok(!negativo.ok);
+  assert.equal(negativo.error.field, "correctAnswers");
+  assert.match(negativo.error.message, /a partir de 0/);
+
+  const zero = await api.recordInitialQuestions({ ...base, requestId: requestId(), questions: 0, correctAnswers: 0 });
+  assert.ok(!zero.ok);
+  assert.equal(zero.error.message, "Informe quantas questões você fez.");
+
+  const [review] = await api.loadDueReviews("plano");
+  assert.ok(review);
+  const acima = await api.recordReviewQuestions({ reviewId: review.id, requestId: requestId(), questions: 5, correctAnswers: 6 });
+  assert.ok(!acima.ok);
+  assert.equal(acima.error.message, "Os acertos não podem passar do total de questões.");
+  assert.equal((await api.loadDueReviews("plano"))[0]?.questionsAnswered, 0, "nada foi gravado");
+});
+
+test("o extra lançado para outro dia conta no dia estudado (N-07)", async () => {
+  const lancado = await api.recordExtraStudy({
+    studyPlanId: "plano", requestId: requestId(), kind: "anki", subject: "Português",
+    date: "2026-09-10", minutes: 30, questions: 0, correctAnswers: 0,
+  });
+  assert.ok(lancado.ok);
+  assert.equal(lancado.data.entries[0]!.studiedOn, "2026-09-10");
+  assert.ok((await api.loadStudyDays(2026)).includes("2026-09-10"));
 });

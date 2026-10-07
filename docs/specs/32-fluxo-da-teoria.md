@@ -1,12 +1,19 @@
 # 32 — O fluxo da teoria
 
-**Situação:** implementada · **Origem:** v108.2 e v108.5 da v2 (`theory-engine.js`, `aluno-theory.js`) · **Fluxos e2e:** F-TEO-01 a F-TEO-07
+**Situação:** implementada · **Origem:** v108.2 e v108.5 da v2 (`theory-engine.js`, `aluno-theory.js`) · **Fluxos e2e:** F-TEO-01 a F-TEO-09
 
 > **Spec escrita depois do código, e a ordem inverteu por um motivo.** A regra
 > do repositório é spec antes de código; esta feature veio na Fase 4 da
 > reconstrução da v2, junto com dezenas de telas, e a spec ficou para trás. Está
 > aqui agora porque a regra que ela guarda — em que ordem a aula fecha — não
 > cabe num comentário e não se lê no SQL.
+
+> **Atualizada em 06/10/2026 (QA-04, PR 5b).** Registrar questões, iniciais ou de
+> revisão, deixou de ser escrita direta e passou a ser RPC: `record_initial_questions`
+> e `record_review_questions`, idempotentes por `request_id` no banco (R-TEO-21 a
+> R-TEO-24). Antes, as duas liam um contador, somavam no cliente e gravavam: a
+> resposta perdida seguida de nova tentativa somava duas vezes, e duas abas perdiam
+> uma das somas.
 
 ---
 
@@ -42,21 +49,25 @@ ele ache que a culpa é dele.
 | R-TEO-03 | A página gravada é presa ao intervalo auditado: nunca antes de `primeira − 1`, nunca depois de `theory_end_page`. Imposto por `clampPage` na escrita, e pelo `CHECK (current_page >= 0)`. |
 | R-TEO-04 | **A teoria está lida quando a última página lida é a última da teoria.** Aula sem teoria (`has_theory = false`) tem a teoria por lida desde o início. |
 | R-TEO-05 | **Encerrar a sessão não conclui a aula.** "Salvar e encerrar" grava a página e fecha o modal; a aula continua aberta. |
-| R-TEO-06 | **A aula fecha com as duas coisas**: teoria lida E `initial_questions_done >= mínimo` da disciplina. Fechar libera a aula seguinte. |
-| R-TEO-07 | O mínimo de questões iniciais é do professor, por disciplina (`theory_catalog_subject_rules.initial_questions`). Sem regra configurada, o mínimo é **15**. |
-| R-TEO-08 | As questões iniciais **somam** entre sessões, nunca substituem: elas podem ser feitas em duas sentadas. |
+| R-TEO-06 | **A meta de prática da aula fecha com `initial_questions_done >= mínimo` da disciplina.** Ler a teoria não é condição, e fechar não libera aula: quem publica a próxima é o professor (spec [36](36-aulas-prf-e-desempenho-diario.md)). *(Antes de 06/10/2026 este texto exigia "teoria lida E mínimo"; o código e a spec 36 já fechavam só pelas questões.)* |
+| R-TEO-07 | O mínimo de questões iniciais é do professor, por disciplina (`theory_catalog_subject_rules.initial_questions`): vale a regra com o `subject_key` **da aula**, no catálogo da aula. Sem regra configurada, o mínimo é **15**. |
+| R-TEO-08 | As questões iniciais **somam** entre sessões, nunca substituem: elas podem ser feitas em duas sentadas. A soma e o registro acontecem em `record_initial_questions`, numa transação. |
 | R-TEO-09 | Acertos acima do total de questões são recusados, e questão zero não é registro. |
-| R-TEO-10 | Toda questão inicial entra também no **ledger da meta** (`goal_entries`, com `theory_stage`), para contar no tempo e no desempenho da semana como qualquer outro estudo. |
+| R-TEO-10 | Toda questão inicial entra também no **ledger da meta** (`goal_entries`, com `theory_stage` e `theory_lesson_id`), para contar no tempo e no desempenho da semana como qualquer outro estudo. Quem insere é `record_initial_questions`. |
 | R-TEO-11 | A aula em que o aluno está é a **primeira que ele ainda não concluiu**, na ordem `position` com desempate por `lesson_code`. Quando não sobra nenhuma, é a última, marcada como disciplina concluída — devolver "sem aula" para quem terminou diz o oposto do que aconteceu. |
 | R-TEO-12 | **A revisão é espaçada em AULAS CONCLUÍDAS, não em dias.** A revisão `n` de uma aula vence quando o aluno conclui a `lesson_spacing`-ésima aula depois dela. Ritmo irregular quebraria a conta de calendário. |
 | R-TEO-13 | Quando a disciplina inteira termina, as revisões restantes **vencem juntas** — senão a matéria nunca fecharia, por não haver aula nova para empurrá-las. |
 | R-TEO-14 | **Revisão vencida não bloqueia o avanço.** Ela entra numa fila própria. Bloquear transformaria um lembrete em muro exatamente para quem está atrasado. |
-| R-TEO-15 | A revisão fecha quando `questions_answered >= minimum_questions`; revisão concluída não aceita novo registro (`conflict`). |
+| R-TEO-15 | A revisão fecha quando `questions_answered >= minimum_questions`; revisão concluída não aceita novo registro (`conflict`). O registro vai em `theory_review_entries`, por `record_review_questions`. Esse ledger é próprio: `goal_entries.goal_id` é obrigatório e a revisão não tem meta, e contar questão de revisão no desempenho da semana mudaria um número que a spec 36 fixa. |
 | R-TEO-16 | O professor configura de **zero a cinco** revisões por disciplina (`theory_review_rules`, `review_number` de 1 a 10 no banco, 5 na tela). Espaçamento zero desliga a revisão. |
 | R-TEO-17 | **Disciplina não auditada recebe diagnóstico, não controle de página.** É descoberto pelo DADO — disciplina cujas aulas vêm todas sem intervalo de teoria —, e nunca por uma lista de exceções escrita à mão, que envelheceria na próxima auditoria. |
 | R-TEO-18 | Planejamento sem catálogo de teoria vinculado recebe o diagnóstico `no_catalog_linked`, e a tela explica em vez de ficar vazia. |
 | R-TEO-19 | A meta guarda o **nome** da disciplina, em texto livre; o catálogo guarda `subject_key`. O casamento é por chave canônica e **exato depois de normalizar** — nunca por `includes`: "ti" está dentro de "adminisTIativo". |
 | R-TEO-20 | O progresso é do aluno: `theory_progress` e `theory_reviews` só aceitam escrita de quem é dono da linha E tem acesso vigente (`has_active_access()` no `WITH CHECK`). Quem venceu continua lendo e apagando o que já era dele. |
+| R-TEO-21 | **Registrar questões, iniciais ou de revisão, é seguro a retentativa.** A mesma chave com os mesmos números devolve o estado sem somar; com outros números é recusada (`23505`, "outros valores"). A chave nasce quando o formulário abre e só muda depois de um sucesso. Sustentam: `goal_entries_request_uidx` e `theory_review_entries_request_uidx`. Os limites são os de D-04: de 1 a 500 questões, e acertos de 0 ao total. |
+| R-TEO-22 | **Duas abas somam as duas.** A soma é uma instrução só no banco (`x = x + n`), e a linha travada serializa as chamadas. |
+| R-TEO-23 | **A aula fecha, e as revisões nascem, na mesma transação do registro que atingiu o mínimo.** Antes o adaptador concluía a aula e criava as revisões em escritas soltas, com o erro ignorado: uma queda no meio deixava a aula sem revisão. |
+| R-TEO-24 | **A retentativa do envio que concluiu a revisão devolve a revisão**, e não "Esta revisão já foi concluída": o replay vem antes dessa recusa. |
 
 ---
 
@@ -96,9 +107,9 @@ ele ache que a culpa é dele.
 | Regras puras | `lib/domain/theory.ts` — `lessonProgressPercent`, `clampPage`, `isTheoryDone`, `currentLesson`, `isLessonComplete`, `dueReviews`, `diagnose`, `normalizeSubjectKey` |
 | Contrato | `loadTheoryGoal`, `loadTheoryControl`, `saveTheoryProgress`, `recordInitialQuestions`, `recordReviewQuestions`, `loadDueReviews` |
 | Adaptador | `lib/api/supabase/theory.ts` |
-| Banco | `theory_lessons`, `theory_progress`, `theory_reviews`, `theory_catalog_subject_rules`, `theory_review_rules`, `study_plan_theory_catalogs`, `goal_entries` |
-| RPCs | **nenhuma** — escrita direta, com RLS, grant por coluna e FK composta |
-| Migration | nenhuma: as sete tabelas vieram no schema de 14/09/2026 |
+| Banco | `theory_lessons`, `theory_progress`, `theory_reviews`, `theory_review_entries`, `theory_catalog_subject_rules`, `theory_review_rules`, `study_plan_theory_catalogs`, `goal_entries` (`theory_lesson_id`) |
+| RPCs | `record_initial_questions` e `record_review_questions`, idempotentes por `request_id`. A página (`saveTheoryProgress`) continua escrita direta: gravar a página leva a coluna a um valor, não acumula |
+| Migration | as sete tabelas vieram no schema de 14/09/2026; `20261006231152_record_theory_questions.sql` acrescenta `theory_review_entries`, `goal_entries.theory_lesson_id` e as duas RPCs |
 | Testes | `apps/web/src/lib/domain/theory.test.ts`, `apps/e2e/tests/student-theory.spec.ts`, `supabase/tests/06_theory.sql` |
 
 ---
@@ -121,6 +132,10 @@ ele ache que a culpa é dele.
 | CA-12 | Sem catálogo vinculado, a tela explica em vez de ficar vazia | `F-TEO-07` |
 | CA-13 | O aluno não grava progresso dentro do planejamento de outro | `supabase/tests/06_theory.sql` |
 | CA-14 | Acesso vencido recebe `42501` ao gravar, e continua lendo o que era dele | `supabase/tests/06_theory.sql` |
+| CA-15 | Questões iniciais com a resposta perdida somam uma vez; trocar os números na retentativa é recusado | `F-TEO-08` |
+| CA-16 | A revisão com a resposta perdida soma uma vez, no modal e em `/aluno/revisoes` | `F-TEO-09` |
+| CA-17 | `record_initial_questions`: replay devolve o estado sem somar, payload diferente dá `23505`, acesso vencido `42501`, meta alheia e aula não publicada `P0002`, faixa fora de 1 a 500 `23514`, e a conclusão cria as revisões | `supabase/tests/06_theory.sql` |
+| CA-18 | `record_review_questions`: replay, payload diferente, replay do envio que fechou, "já concluída" com chave nova, acesso vencido e `theory_review_entries` sem INSERT direto | `supabase/tests/06_theory.sql` |
 
 ---
 

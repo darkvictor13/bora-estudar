@@ -10,10 +10,11 @@ import { useLoaderData, useSearchParams } from "react-router";
 import { ContentBody } from "@/components/AppShell";
 import {
   api,
+  MAX_WEEK_NUMBER,
   newRequestId,
   type ApiError,
+  type GenerateWeekInput,
   type GenerateWeekPreview,
-  type ReplaceMode,
   type StudyPlanSummary,
 } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
@@ -25,9 +26,14 @@ import { requireRole } from "@/lib/auth/session";
  * desfazer do produto: ela apaga metas. O professor vê o que vai acontecer —
  * quantas criar, quantas substituir, quantas ficam de pé — e só então grava.
  *
- * A SUBSTITUIÇÃO SEGURA É O PADRÃO (LEIA-ME v108.3). "Replanejar semana
- * inteira" é caminho separado, com confirmação, porque é o único que apaga meta
- * concluída — e com ela os registros do aluno.
+ * GERAR TEM UMA REGRA SÓ: substitui o que não foi feito. Meta concluída e meta
+ * com estudo registrado não se apagam, e por isso não há seletor de modo nem
+ * confirmação extra — o modo que substituía a semana inteira saiu em 06/10/2026
+ * (spec 04, R-GEN-12).
+ *
+ * O `request_id` nasce com a PRÉVIA e é o mesmo em toda tentativa de gravá-la.
+ * Gerá-lo a cada clique faria cada tentativa chegar ao banco como operação nova,
+ * e `goal_batches` viraria decoração.
  */
 export async function teacherGoalsLoader({ request }: { request: Request }) {
   await requireRole("teacher");
@@ -35,9 +41,11 @@ export async function teacherGoalsLoader({ request }: { request: Request }) {
   const plans = (await api.listPlans()).filter((plan) => plan.status === "active");
   const params = new URL(request.url).searchParams;
   const planId = params.get("plano") ?? plans[0]?.id ?? null;
-  const week = Number(params.get("semana") ?? 1) || 1;
+  // Sem `|| 1`: a recusa de 0, -3 ou 1.5 vem do contrato, com a frase, e não de
+  // uma troca silenciosa (QA-17). `weekParam` é o que o campo mostra.
+  const weekParam = params.get("semana") ?? "1";
 
-  return { plans, planId, week };
+  return { plans, planId, week: Number(weekParam), weekParam };
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherGoalsLoader>>;
@@ -59,7 +67,7 @@ function PreviewPanel({ preview }: { preview: GenerateWeekPreview }) {
         <Metric
           label="Preservadas"
           value={preview.goalsPreserved}
-          note="concluídas, com os registros"
+          note="concluídas ou com estudo registrado"
         />
       </Box>
 
@@ -92,35 +100,36 @@ function PreviewPanel({ preview }: { preview: GenerateWeekPreview }) {
 }
 
 export function TeacherGoals() {
-  const { plans, planId, week } = useLoaderData() as LoaderData;
+  const { plans, planId, week, weekParam } = useLoaderData() as LoaderData;
   const [params, setParams] = useSearchParams();
 
-  const [preview, setPreview] = useState<GenerateWeekPreview | null>(null);
-  const [mode, setMode] = useState<ReplaceMode>("safe");
+  // A prévia e a entrada que a produziu, juntas: o `requestId` da entrada é o
+  // mesmo em toda tentativa de gravá-la. Mudar plano, semana ou cópia descarta
+  // as duas.
+  const [pending, setPending] = useState<{
+    input: GenerateWeekInput;
+    preview: GenerateWeekPreview;
+  } | null>(null);
   const [copyFrom, setCopyFrom] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
 
   const plan = plans.find((candidate) => candidate.id === planId) ?? null;
-
-  function input() {
-    return {
-      studyPlanId: plan!.id,
-      requestId: newRequestId(),
-      weekNumber: week,
-      mode,
-      ...(copyFrom ? { copyFromWeek: Number(copyFrom) } : {}),
-    };
-  }
 
   async function buildPreview() {
     if (!plan) return;
     setSaved(null);
+    const input: GenerateWeekInput = {
+      studyPlanId: plan.id,
+      requestId: newRequestId(),
+      weekNumber: week,
+      ...(copyFrom ? { copyFromWeek: Number(copyFrom) } : {}),
+    };
     try {
-      setPreview(await api.previewWeek(input()));
+      setPending({ input, preview: await api.previewWeek(input) });
       setError(null);
     } catch (failure) {
+      setPending(null);
       setError({
         code: "unknown",
         message: failure instanceof Error ? failure.message : "Não foi possível montar a prévia.",
@@ -129,15 +138,15 @@ export function TeacherGoals() {
   }
 
   async function generate() {
-    if (!plan) return;
-    const result = await api.generateWeek(input());
+    if (!pending) return;
+    // Em caso de falha `pending` FICA: um novo clique repete o mesmo id.
+    const result = await api.generateWeek(pending.input);
     if (!result.ok) {
       setError(result.error);
       return;
     }
     setError(null);
-    setConfirming(false);
-    setPreview(null);
+    setPending(null);
     setSaved(`Semana ${week} gerada com ${result.data.summary.goalsTotal} metas.`);
   }
 
@@ -145,7 +154,7 @@ export function TeacherGoals() {
     if (value) params.set(key, value);
     else params.delete(key);
     setParams(params);
-    setPreview(null);
+    setPending(null);
     setSaved(null);
   }
 
@@ -175,8 +184,10 @@ export function TeacherGoals() {
               size="small"
               type="number"
               label="Semana"
-              value={String(week)}
-              slotProps={{ htmlInput: { min: 1, "data-testid": "goals-week" } }}
+              value={weekParam}
+              slotProps={{
+                htmlInput: { min: 1, max: MAX_WEEK_NUMBER, step: 1, "data-testid": "goals-week" },
+              }}
               onChange={(event) => setParam("semana", event.target.value)}
               sx={{ width: 120 }}
             />
@@ -197,31 +208,17 @@ export function TeacherGoals() {
             <Card title="Como gerar" sub={plan.name}>
               <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "flex-end" }}>
                 <TextField
-                  select
-                  size="small"
-                  label="Substituição"
-                  value={mode}
-                  slotProps={{ select: { inputProps: { "data-testid": "goals-mode" } } }}
-                  onChange={(event) => {
-                    setMode(event.target.value as ReplaceMode);
-                    setPreview(null);
-                  }}
-                  sx={{ minWidth: 260 }}
-                >
-                  <MenuItem value="safe">Segura — preserva o que foi concluído</MenuItem>
-                  <MenuItem value="full">Replanejar semana inteira — apaga tudo</MenuItem>
-                </TextField>
-
-                <TextField
                   size="small"
                   type="number"
                   label="Copiar da semana"
                   placeholder="opcional"
                   value={copyFrom}
-                  slotProps={{ htmlInput: { min: 1, "data-testid": "goals-copy-from" } }}
+                  slotProps={{
+                    htmlInput: { min: 1, max: MAX_WEEK_NUMBER, step: 1, "data-testid": "goals-copy-from" },
+                  }}
                   onChange={(event) => {
                     setCopyFrom(event.target.value);
-                    setPreview(null);
+                    setPending(null);
                   }}
                   sx={{ width: 180 }}
                 />
@@ -231,44 +228,17 @@ export function TeacherGoals() {
                 </Button>
               </Box>
 
-              {mode === "full" && (
-                <Box sx={{ mt: 1.5 }}>
-                  <Alert status="warning">
-                    Replanejar a semana inteira apaga também as metas concluídas — e os registros
-                    de estudo que dependem delas. Só use quando a semana precisa ser refeita do
-                    zero.
-                  </Alert>
-                </Box>
-              )}
             </Card>
 
-            {preview && (
+            {pending && (
               <Box sx={{ mt: 1.75 }}>
-                <PreviewPanel preview={preview} />
+                <PreviewPanel preview={pending.preview} />
 
                 <Box sx={{ display: "flex", gap: 1, mt: 1.5, flexWrap: "wrap" }}>
-                  {/*
-                    O modo `full` EXIGE CONFIRMAÇÃO antes de gravar. É o caminho
-                    que apaga meta concluída, e um clique único nele é a forma
-                    mais rápida de o aluno perder uma semana de estudo.
-                  */}
-                  {mode === "full" && !confirming ? (
-                    <Button
-                      variant="contained"
-                      color="error"
-                      data-testid="goals-confirm"
-                      onClick={() => setConfirming(true)}
-                    >
-                      Replanejar semana inteira…
-                    </Button>
-                  ) : (
-                    <Button variant="contained" data-testid="goals-generate" onClick={() => void generate()}>
-                      {mode === "full"
-                        ? `Confirmo: apagar ${preview.goalsToReplace} metas e gerar ${preview.goalsToCreate}`
-                        : `Gerar ${preview.goalsToCreate} metas`}
-                    </Button>
-                  )}
-                  <Button variant="text" onClick={() => { setPreview(null); setConfirming(false); }}>
+                  <Button variant="contained" data-testid="goals-generate" onClick={() => void generate()}>
+                    {`Gerar ${pending.preview.goalsToCreate} metas`}
+                  </Button>
+                  <Button variant="text" onClick={() => setPending(null)}>
                     Descartar prévia
                   </Button>
                 </Box>

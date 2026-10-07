@@ -153,11 +153,8 @@ test.describe("F-PROF-04 · gerar metas: a prévia vem antes da escrita", () => 
   });
 });
 
-test.describe("F-PROF-05 · a substituição segura", () => {
-  test("o modo seguro preserva a meta CONCLUÍDA e os registros dela", async ({
-    teacherPage,
-    scenario,
-  }) => {
+test.describe("F-PROF-05 · QA-01 · gerar a semana preserva o concluído e o estudo registrado", () => {
+  test("preserva a meta CONCLUÍDA e os registros dela", async ({ teacherPage, scenario }) => {
     const concluida = scenario.goals[0]!;
     await query("update public.goals set status = 'completed', completed_at = now() where id = $1", [
       concluida.id,
@@ -175,8 +172,8 @@ test.describe("F-PROF-05 · a substituição segura", () => {
     await testId(teacherPage, "goals-generate").click();
     await expect(alert(teacherPage, "success")).toBeVisible();
 
-    // A meta concluída continua de pé, com o registro. É a regra do LEIA-ME
-    // v108.3, e o banco NÃO a garante — o adaptador é o único guardião.
+    // A meta concluída continua de pé, com o registro. O banco a garante: o
+    // critério mora em `app_private.goal_is_preserved` e a FK é `no action`.
     const sobreviveu = await one<{ status: string }>(
       "select status::text from public.goals where id = $1",
       [concluida.id],
@@ -187,36 +184,149 @@ test.describe("F-PROF-05 · a substituição segura", () => {
     ).toBe(1);
   });
 
-  test("replanejar a semana inteira EXIGE confirmação, e aí apaga", async ({
+  test("meta EM ANDAMENTO com registro e meta CONCLUÍDA sem registro ficam; a prévia as conta; não há seletor de substituição", async ({
     teacherPage,
     scenario,
   }) => {
-    const concluida = scenario.goals[0]!;
+    const emAndamento = scenario.goals[0]!;
+    const concluidaSemRegistro = scenario.goals[2]!;
+    await query("update public.goals set status = 'in_progress' where id = $1", [emAndamento.id]);
+    await query(
+      `insert into public.goal_entries (goal_id, student_id, teacher_id, minutes, questions, correct_answers)
+       values ($1, $2, $3, 40, 0, 0)`,
+      [emAndamento.id, scenario.student.id, scenario.teacher.id],
+    );
     await query("update public.goals set status = 'completed', completed_at = now() where id = $1", [
-      concluida.id,
+      concluidaSemRegistro.id,
     ]);
 
     await teacherPage.goto("/professor/metas");
-    await teacherPage.getByRole("combobox", { name: "Substituição" }).click();
-    await teacherPage.getByRole("option", { name: /Replanejar semana inteira/ }).click();
 
-    // O aviso aparece ANTES da prévia: o professor precisa saber o que este
-    // caminho destrói antes de montar a prévia dele.
-    await expect(alert(teacherPage, "warning")).toContainText("apaga também as metas concluídas");
+    // CA-23: o modo "Replanejar semana inteira" e a confirmação extra saíram.
+    await expect(testId(teacherPage, "goals-preview")).toBeVisible();
+    await expect(teacherPage.getByRole("combobox", { name: "Substituição" })).toHaveCount(0);
+    await expect(testId(teacherPage, "goals-mode")).toHaveCount(0);
 
     await testId(teacherPage, "goals-preview").click();
     await expect(testId(teacherPage, "week-preview")).toBeVisible();
 
-    // Um clique único aqui seria a forma mais rápida de o aluno perder uma
-    // semana de estudo: o botão pede confirmação primeiro.
-    await testId(teacherPage, "goals-confirm").click();
+    const preservadas = testId(teacherPage, "metric").filter({ hasText: "Preservadas" });
+    await expect(testId(preservadas, "metric-value")).toHaveText("2");
+    await expect(preservadas).toContainText("com estudo registrado");
+    await expect(testId(teacherPage, "goals-confirm")).toHaveCount(0);
+
     await testId(teacherPage, "goals-generate").click();
     await expect(alert(teacherPage, "success")).toBeVisible();
 
+    const depois = await query<{ id: string; status: string }>(
+      "select id, status::text from public.goals where study_plan_id = $1 and week_number = 1",
+      [scenario.planId],
+    );
+    expect(depois.find((goal) => goal.id === emAndamento.id)?.status).toBe("in_progress");
+    expect(depois.find((goal) => goal.id === concluidaSemRegistro.id)?.status).toBe("completed");
+    // As outras três do cenário estavam pendentes e sem registro: saíram.
+    for (const saiu of [scenario.goals[1]!, scenario.goals[3]!, scenario.goals[4]!]) {
+      expect(depois.find((goal) => goal.id === saiu.id)).toBeUndefined();
+    }
     expect(
-      await count("select count(*) from public.goals where id = $1", [concluida.id]),
-    ).toBe(0);
+      await count("select count(*) from public.goal_entries where goal_id = $1", [emAndamento.id]),
+    ).toBe(1);
   });
+});
+
+test.describe("F-PROF-10 · QA-05 · gerar a semana é uma transação", () => {
+  test("a gravação que não chega ao banco deixa a semana como estava", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const ids = () =>
+      query<{ id: string }>(
+        "select id from public.goals where study_plan_id = $1 and week_number = 1 order by id",
+        [scenario.planId],
+      );
+    const antes = await ids();
+
+    await teacherPage.goto("/professor/metas");
+    await testId(teacherPage, "goals-preview").click();
+    await expect(testId(teacherPage, "week-preview")).toBeVisible();
+
+    // Só `rpc/generate_week` cai: derrubar `study_plans` ou `goals` faria uma
+    // LEITURA lançar dentro do `once()` e prender o id (N-01, PR 4).
+    await teacherPage.route("**/rest/v1/rpc/generate_week", (route) => route.abort(), { times: 1 });
+    await testId(teacherPage, "goals-generate").click();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
+    expect(await ids()).toEqual(antes);
+
+    // A mesma prévia, o mesmo pedido: agora grava.
+    await testId(teacherPage, "goals-generate").click();
+    await expect(alert(teacherPage, "success")).toContainText("Semana 1 gerada");
+  });
+
+  test("resposta perdida: repetir o mesmo pedido não grava a semana duas vezes", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto("/professor/metas");
+    await testId(teacherPage, "goals-preview").click();
+    await expect(testId(teacherPage, "week-preview")).toBeVisible();
+
+    await teacherPage.route(
+      "**/rest/v1/rpc/generate_week",
+      async (route) => {
+        await route.fetch(); // o servidor grava
+        await route.abort(); // a resposta não chega
+      },
+      { times: 1 },
+    );
+    await testId(teacherPage, "goals-generate").click();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
+
+    const semana = "select count(*) from public.goals where study_plan_id = $1 and week_number = 1";
+    const gravadas = await count(semana, [scenario.planId]);
+
+    // O aluno registra numa meta NOVA antes da retentativa: é o que faria uma
+    // reexecução duplicar a semana, porque a meta com registro seria preservada.
+    const nova = await one<{ id: string }>(
+      `select id from public.goals where study_plan_id = $1 and week_number = 1
+        order by weekday, day_position limit 1`,
+      [scenario.planId],
+    );
+    await query(
+      "insert into public.goal_entries (goal_id, student_id, teacher_id, minutes) values ($1, $2, $3, 30)",
+      [nova.id, scenario.student.id, scenario.teacher.id],
+    );
+
+    await testId(teacherPage, "goals-generate").click();
+    await expect(alert(teacherPage, "success")).toBeVisible();
+    expect(await count(semana, [scenario.planId])).toBe(gravadas);
+    expect(
+      await count("select count(*) from public.goal_batches where study_plan_id = $1", [
+        scenario.planId,
+      ]),
+    ).toBe(1);
+  });
+});
+
+test.describe("F-PROF-11 · QA-17 · a semana vai de 1 a 520", () => {
+  for (const valor of ["0", "-3", "1.5", "99999"]) {
+    test(`?semana=${valor} é recusada na prévia, e nada chega ao banco`, async ({
+      teacherPage,
+      scenario,
+    }) => {
+      await teacherPage.goto(`/professor/metas?semana=${valor}`);
+      await testId(teacherPage, "goals-preview").click();
+
+      await expect(alert(teacherPage, "error")).toContainText("1 a 520");
+      await expect(testId(teacherPage, "week-preview")).toHaveCount(0);
+      expect(
+        await count(
+          `select count(*) from public.goals
+            where study_plan_id = $1 and week_number not between 1 and 520`,
+          [scenario.planId],
+        ),
+      ).toBe(0);
+    });
+  }
 });
 
 test.describe("F-PROF-06 · copiar a semana anterior", () => {
@@ -245,7 +355,7 @@ test.describe("F-PROF-06 · copiar a semana anterior", () => {
   });
 });
 
-test.describe("F-GPLAN-01 · planejamentos", () => {
+test.describe("F-GPLAN-01 · planejamentos (QA-03, QA-12)", () => {
   test("nasce PAUSADO, e ativar arquiva o anterior", async ({ teacherPage, scenario }) => {
     // NOME ÚNICO POR CENÁRIO. Um literal compartilhado faz dois workers
     // criarem linhas com o mesmo nome, e a consulta de conferência lê a do
@@ -290,6 +400,126 @@ test.describe("F-GPLAN-01 · planejamentos", () => {
         [scenario.student.id],
       ),
     ).toBe(1);
+  });
+
+  /*
+   * QA-12 e QA-03. Ativar era DUAS requisições (arquivar os ativos, ativar o
+   * novo): a rede caindo no meio deixava o aluno sem planejamento, e duas abas
+   * intercaladas o deixavam com dois. Hoje é a RPC `activate_study_plan`, numa
+   * transação, e o índice `study_plans_one_active_per_student_uidx` garante o
+   * estado final.
+   *
+   * O plano novo é criado por SQL, com nome único por cenário: o que o teste
+   * ataca é a ativação, não o formulário de criação.
+   */
+  async function insertPausedPlan(
+    scenario: { teacher: { id: string }; student: { id: string }; planId: string },
+    label: string,
+  ): Promise<string> {
+    const id = randomUUID();
+    await query(
+      `insert into public.study_plans (id, student_id, teacher_id, name, status)
+       values ($1, $2, $3, $4, 'paused')`,
+      [id, scenario.student.id, scenario.teacher.id, `${label} ${scenario.planId.slice(0, 8)}`],
+    );
+    return id;
+  }
+
+  const planStatus = async (id: string) =>
+    (await one<{ status: string }>("select status::text from public.study_plans where id = $1", [id]))
+      .status;
+
+  const activeCount = (studentId: string) =>
+    count("select count(*) from public.study_plans where student_id = $1 and status = 'active'", [
+      studentId,
+    ]);
+
+  test("ativar com a rede caindo não deixa o aluno sem planejamento — QA-12", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const novo = await insertPausedPlan(scenario, "Plano da rede");
+    const linha = (id: string) =>
+      teacherPage.locator(`[data-testid="plan-row"][data-plan-id="${id}"]`);
+
+    await teacherPage.goto("/professor/planejamentos");
+    await expect(linha(novo)).toBeVisible();
+
+    await teacherPage.route("**/rest/v1/rpc/activate_study_plan", (route) => route.abort());
+    await linha(novo).getByTestId("plan-activate").click();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
+
+    // Nada mudou: o anterior segue ativo, e o aluno não ficou sem planejamento.
+    expect(await planStatus(scenario.planId)).toBe("active");
+    expect(await planStatus(novo)).toBe("paused");
+    expect(await activeCount(scenario.student.id)).toBe(1);
+
+    await teacherPage.unroute("**/rest/v1/rpc/activate_study_plan");
+    await linha(novo).getByTestId("plan-activate").click();
+
+    await expect(linha(novo)).toHaveAttribute("data-status", "active");
+    expect(await planStatus(scenario.planId)).toBe("archived");
+    expect(await activeCount(scenario.student.id)).toBe(1);
+  });
+
+  test("resposta perdida: o servidor ativou, e a retentativa confirma sem erro — QA-12", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const novo = await insertPausedPlan(scenario, "Plano da resposta");
+    const linha = teacherPage.locator(`[data-testid="plan-row"][data-plan-id="${novo}"]`);
+
+    await teacherPage.goto("/professor/planejamentos");
+    await expect(linha).toBeVisible();
+
+    // O pior caso para retentativa: o servidor processa e grava, e o navegador
+    // nunca recebe a resposta.
+    await teacherPage.route(
+      "**/rest/v1/rpc/activate_study_plan",
+      async (route) => {
+        await route.fetch();
+        await route.abort();
+      },
+      { times: 1 },
+    );
+    await linha.getByTestId("plan-activate").click();
+    await expect(alert(teacherPage, "error")).toContainText("Sem conexão. Verifique a rede e tente de novo.");
+
+    expect(await planStatus(novo)).toBe("active");
+
+    // Requisição nova (request_id novo): ativar o que já está ativo é sucesso.
+    await linha.getByTestId("plan-activate").click();
+    await expect(linha).toHaveAttribute("data-status", "active");
+    await expect(alert(teacherPage, "error")).toHaveCount(0);
+    expect(await activeCount(scenario.student.id)).toBe(1);
+  });
+
+  /*
+   * Pelo banco, e não por duas abas: duas abas não garantem a intercalação. A
+   * primeira ativação segura a trava depois de ativar; a segunda começa quando
+   * a primeira já ativou, e precisa ESPERAR em vez de bater no índice.
+   */
+  test("duas ativações simultâneas terminam com um ativo — QA-03", async ({ scenario }) => {
+    const a = await insertPausedPlan(scenario, "Plano A");
+    const b = await insertPausedPlan(scenario, "Plano B");
+
+    let release!: () => void;
+    const firstHolds = new Promise<void>((resolve) => (release = resolve));
+    const first = asUser(scenario.teacher.id, async (c) => {
+      await c.query("select public.activate_study_plan($1)", [a]);
+      release(); // A já está ativo, e a trava continua até o commit.
+      await c.query("select pg_sleep(0.3)");
+    });
+    const second = firstHolds.then(() =>
+      asUser(scenario.teacher.id, (c) => c.query("select public.activate_study_plan($1)", [b])),
+    );
+
+    await Promise.all([first, second]); // nenhuma das duas lança
+
+    expect(await planStatus(b)).toBe("active");
+    expect(await planStatus(a)).toBe("archived");
+    expect(await planStatus(scenario.planId)).toBe("archived");
+    expect(await activeCount(scenario.student.id)).toBe(1);
   });
 
   test("nome vazio é recusado, com o campo marcado", async ({ teacherPage }) => {

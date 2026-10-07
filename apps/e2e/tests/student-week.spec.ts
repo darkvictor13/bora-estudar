@@ -13,10 +13,35 @@
  * registro obrigaria a reabrir para lançar o segundo.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { one, maybeOne } from "../fixtures/db.ts";
-import { addWeek, type Scenario, type ScenarioGoal } from "../fixtures/scenario.ts";
+import { count, maybeOne, one, query } from "../fixtures/db.ts";
+import { addWeek, setAccess, type Scenario, type ScenarioGoal } from "../fixtures/scenario.ts";
 import { STUDENT_WEEK_ALL_DAYS } from "../support/routes.ts";
 import { alert, content, field, goalRow, testId } from "../support/ui.ts";
+
+/** `AAAA-MM-DD` de hoje no fuso do navegador do projeto: é o `timezoneId` do Playwright. */
+function todayInSaoPaulo(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
+function addDays(date: string, days: number): string {
+  const base = new Date(`${date}T00:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+/**
+ * Faz de hoje o quarto dia da semana 1. Com o `starts_on` do cenário (a segunda
+ * do banco, em UTC) a sugestão "hoje" e a sugestão "primeiro dia" coincidem em
+ * metade dos dias; três dias de folga as distingue em qualquer um.
+ */
+async function startPlanThreeDaysAgo(planId: string): Promise<string> {
+  const today = todayInSaoPaulo();
+  await query("update public.study_plans set starts_on = $2::date where id = $1", [
+    planId,
+    addDays(today, -3),
+  ]);
+  return today;
+}
 
 function theoryGoalOf(scenario: Scenario): ScenarioGoal {
   const goal = scenario.goals.find((candidate) => candidate.type === "theory");
@@ -157,6 +182,93 @@ test.describe("F-META-03 · registrar estudo", () => {
     expect(Number(saved.score)).toBe(80);
   });
 
+  test("rede caindo ao gravar: a frase é 'Sem conexão', e a retentativa grava uma vez — QA-06", async ({
+    studentPage,
+    scenario,
+    consoleErrors,
+  }) => {
+    const goal = theoryGoalOf(scenario);
+
+    // Só a RPC de gravar: derrubar a leitura da meta mataria o `reloadGoal`, que é
+    // outro caminho. Aqui o erro é o do `fetch` que falhou, direto do PostgREST.
+    let caindo = true;
+    await studentPage.route("**/rest/v1/rpc/record_goal_entry", (route) =>
+      caindo ? route.abort("internetdisconnected") : route.fallback(),
+    );
+
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await record(studentPage, goal.id, { minutes: "30" });
+
+    const dialog = testId(studentPage, "record-study-dialog");
+    await expect(alert(dialog, "error")).toHaveText("Sem conexão. Verifique a rede e tente de novo.");
+    await expect(dialog).not.toContainText("TypeError");
+
+    // O MESMO diálogo, o mesmo `requestId`: a retentativa grava.
+    caindo = false;
+    await dialog.getByRole("button", { name: "Registrar" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const gravados = await one<{ n: string }>(
+      "select count(*) as n from public.goal_entries where goal_id = $1",
+      [goal.id],
+    );
+    expect(Number(gravados.n)).toBe(1);
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test("a resposta que se perde grava um registro só — QA-04", async ({ studentPage, scenario }) => {
+    const goal = theoryGoalOf(scenario);
+
+    // O PIOR CASO da retentativa: o servidor grava e o navegador nunca recebe a
+    // resposta. Antes, eram dois INSERTs soltos e a nova tentativa gravava de novo.
+    await studentPage.route(
+      "**/rest/v1/rpc/record_goal_entry",
+      async (route) => {
+        await route.fetch();
+        await route.abort();
+      },
+      { times: 1 },
+    );
+
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await record(studentPage, goal.id, { minutes: "25" });
+
+    const dialog = testId(studentPage, "record-study-dialog");
+    await expect(alert(dialog, "error")).toBeVisible();
+
+    // O MESMO diálogo, a mesma chave: o banco devolve o que já gravou.
+    await dialog.getByRole("button", { name: "Registrar" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    expect(
+      await count("select count(*) from public.goal_entries where goal_id = $1", [goal.id]),
+    ).toBe(1);
+    await expect(goalRow(studentPage, goal.id)).toContainText("25min");
+  });
+
+  test("número inválido é recusado, e nada é gravado — QA-10", async ({ studentPage, scenario }) => {
+    const goal = theoryGoalOf(scenario);
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+
+    for (const minutes of ["-30", "241", "1.5"]) {
+      // Espera o diálogo anterior fechar antes de abrir o seguinte: o botão
+      // "Registrar" da linha só existe com o diálogo fechado.
+      await goalRow(studentPage, goal.id).getByRole("button", { name: "Registrar" }).click();
+      const dialog = testId(studentPage, "record-study-dialog");
+      await expect(dialog).toBeVisible();
+      await field(studentPage, "minutes").fill(minutes);
+      await dialog.getByRole("button", { name: "Registrar" }).click();
+
+      await expect(alert(dialog, "error")).toContainText("minutos inteiros, de 0 a 240");
+      expect(
+        await maybeOne("select id from public.goal_entries where goal_id = $1", [goal.id]),
+        minutes,
+      ).toBeNull();
+      await dialog.getByRole("button", { name: "Cancelar" }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+  });
+
   test("dois registros na mesma meta somam, em vez de substituir", async ({
     studentPage,
     scenario,
@@ -265,6 +377,38 @@ test.describe("F-META-05 · meta de bateria não se mexe pela tela", () => {
   });
 });
 
+test.describe("F-META-08 · sem acesso vigente, a semana não muda — QA-07", () => {
+  test("concluir e registrar recusam, e o banco continua como estava", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const goal = theoryGoalOf(scenario);
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await expect(goalRow(studentPage, goal.id)).toHaveAttribute("data-status", "pending");
+
+    // Depois de carregar: a tela foi aberta com acesso, e o acesso acabou
+    // enquanto ela estava aberta. É o que a policy precisa segurar.
+    await setAccess(scenario.student.id, "suspended");
+
+    await goalRow(studentPage, goal.id).locator('[data-testid="goal-check"]').click();
+    await expect(alert(content(studentPage), "error")).toContainText("acesso venceu");
+    const saved = await one<{ status: string }>(
+      "select status::text from public.goals where id = $1",
+      [goal.id],
+    );
+    expect(saved.status).toBe("pending");
+
+    await goalRow(studentPage, goal.id).getByRole("button", { name: "Registrar" }).click();
+    const dialog = testId(studentPage, "record-study-dialog");
+    await field(studentPage, "minutes").fill("30");
+    await dialog.getByRole("button", { name: "Registrar" }).click();
+    await expect(alert(dialog, "error")).toContainText("acesso venceu");
+    expect(
+      await maybeOne("select id from public.goal_entries where goal_id = $1", [goal.id]),
+    ).toBeNull();
+  });
+});
+
 test.describe("F-EXTRA-01 · estudo fora das metas", () => {
   test("cria a meta e o registro numa operação só", async ({ studentPage, scenario }) => {
     await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
@@ -299,6 +443,265 @@ test.describe("F-EXTRA-01 · estudo fora das metas", () => {
       [created.id],
     );
     expect(entry).toMatchObject({ minutes: 50, questions: 12 });
+  });
+
+  test("falha na leitura do plano não prende o diálogo — N-01", async ({
+    studentPage,
+    scenario,
+    consoleErrors,
+  }) => {
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+
+    await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+    const dialog = testId(studentPage, "extra-study-dialog");
+    await expect(dialog).toBeVisible();
+
+    await field(studentPage, "subject").fill("Direito Tributário");
+    await field(studentPage, "minutes").fill("50");
+
+    // O adaptador LÊ o `starts_on` do plano antes de gravar (a regra da data é do
+    // contrato, e quem a alimenta é ele). Derrubar essa leitura é o que sobrou de
+    // "o passo anterior à gravação falha": desde o PR 5a a escrita não chama mais
+    // `requireSession`, então o THROW de dentro do `once()` que o N-01 consertou
+    // deixou de ter caminho nesta tela — quem o segura, agora, é
+    // `request-memory.test.ts`. Aqui fica o que a tela promete: erro legível, botão
+    // de volta, e a retentativa grava uma vez.
+    //
+    // Derruba ENQUANTO `caindo`, e não "uma vez": o postgrest-js repete o GET que
+    // falha por rede (três vezes, com espera de 1, 2 e 4 s), e abortar só a
+    // primeira tentativa não derrubaria nada.
+    let caindo = true;
+    await studentPage.route(
+      (url) => url.pathname.endsWith("/rest/v1/study_plans"),
+      (route) => (caindo ? route.abort("internetdisconnected") : route.fallback()),
+    );
+
+    const lancar = dialog.getByRole("button", { name: "Lançar estudo" });
+    await lancar.click();
+    await expect(alert(dialog, "error")).toContainText("Sem conexão", { timeout: 20_000 });
+    await expect(lancar).toBeEnabled();
+
+    caindo = false;
+    await lancar.click();
+    await expect(dialog).toHaveCount(0);
+
+    const extras = await one<{ n: string }>(
+      `select count(*) as n from public.goals
+        where study_plan_id = $1 and type = 'extra' and subject = 'Direito Tributário'`,
+      [scenario.planId],
+    );
+    expect(Number(extras.n)).toBe(1);
+    // O `ExtraStudyDialog` já não escreve durante o render (QA-27): o console
+    // inteiro precisa estar limpo, e não só os `pageerror`.
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test("a resposta que se perde cria uma meta só, com um registro — QA-04", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.route(
+      "**/rest/v1/rpc/record_extra_study",
+      async (route) => {
+        await route.fetch();
+        await route.abort();
+      },
+      { times: 1 },
+    );
+
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+    const dialog = testId(studentPage, "extra-study-dialog");
+    await field(studentPage, "subject").fill("Direito Tributário");
+    await field(studentPage, "minutes").fill("50");
+
+    const lancar = dialog.getByRole("button", { name: "Lançar estudo" });
+    await lancar.click();
+    await expect(alert(dialog, "error")).toBeVisible();
+
+    await lancar.click();
+    await expect(dialog).toHaveCount(0);
+
+    expect(
+      await count(
+        `select count(*) from public.goals
+          where study_plan_id = $1 and type = 'extra' and subject = 'Direito Tributário'`,
+        [scenario.planId],
+      ),
+    ).toBe(1);
+    expect(
+      await count(
+        `select count(*) from public.goal_entries e join public.goals g on g.id = e.goal_id
+          where g.study_plan_id = $1 and g.type = 'extra'`,
+        [scenario.planId],
+      ),
+    ).toBe(1);
+  });
+
+  test("dois extras no mesmo dia cabem, em posições diferentes — N-02", async ({
+    studentPage,
+    scenario,
+  }) => {
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+
+    for (const subject of ["Matéria N02 A", "Matéria N02 B"]) {
+      await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+      const dialog = testId(studentPage, "extra-study-dialog");
+      await field(studentPage, "subject").fill(subject);
+      await field(studentPage, "minutes").fill("20");
+      await dialog.getByRole("button", { name: "Lançar estudo" }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+
+    const extras = await query<{ id: string; day_position: number }>(
+      `select id, day_position from public.goals
+        where study_plan_id = $1 and type = 'extra'
+          and subject in ('Matéria N02 A', 'Matéria N02 B')
+        order by day_position`,
+      [scenario.planId],
+    );
+    expect(extras).toHaveLength(2);
+    expect(extras[0]!.day_position).not.toBe(extras[1]!.day_position);
+    for (const extra of extras) {
+      await expect(goalRow(studentPage, extra.id)).toBeVisible();
+    }
+  });
+
+  test("a data fora do intervalo é recusada, e nenhuma meta nasce — QA-11", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const { starts_on: startsOn } = await one<{ starts_on: string }>(
+      "select starts_on::text from public.study_plans where id = $1",
+      [scenario.planId],
+    );
+    const today = todayInSaoPaulo();
+
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+    const dialog = testId(studentPage, "extra-study-dialog");
+    await field(studentPage, "subject").fill("Direito Tributário");
+    await field(studentPage, "minutes").fill("20");
+
+    for (const date of [addDays(startsOn, -1), addDays(today, 1)]) {
+      await field(studentPage, "date").fill(date);
+      await dialog.getByRole("button", { name: "Lançar estudo" }).click();
+      await expect(alert(dialog, "error")).toContainText("entre o início do planejamento e hoje");
+    }
+
+    expect(
+      await count(
+        `select count(*) from public.goals
+          where study_plan_id = $1 and type = 'extra' and subject = 'Direito Tributário'`,
+        [scenario.planId],
+      ),
+    ).toBe(0);
+  });
+
+  test("com 'Semana inteira' a data sugerida é hoje, e não a segunda — QA-14", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const today = await startPlanThreeDaysAgo(scenario.planId);
+
+    // Sem `page.clock`: adiantar o relógio do navegador além do real faz o
+    // supabase-js tratar o token como vencido. Mover o `starts_on` basta.
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+    await expect(testId(studentPage, "extra-study-dialog")).toBeVisible();
+    await expect(field(studentPage, "date")).toHaveValue(today);
+  });
+
+  test("o extra lançado para ontem conta ontem, na semana — N-07", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const today = await startPlanThreeDaysAgo(scenario.planId);
+    const yesterday = addDays(today, -1);
+
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+    const dialog = testId(studentPage, "extra-study-dialog");
+    await field(studentPage, "subject").fill("Direito Tributário");
+    await field(studentPage, "date").fill(yesterday);
+    await field(studentPage, "minutes").fill("20");
+    await field(studentPage, "questions").fill("10");
+    await field(studentPage, "correctAnswers").fill("8");
+    await dialog.getByRole("button", { name: "Lançar estudo" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const ontem = studentPage.locator(`[data-testid="day-group"][data-date="${yesterday}"]`);
+    await expect(testId(ontem, "day-question-performance")).toContainText("10 questões");
+    const hoje = studentPage.locator(`[data-testid="day-group"][data-date="${today}"]`);
+    await expect(hoje).toBeVisible();
+    await expect(testId(hoje, "day-question-performance")).toHaveCount(0);
+
+    const entry = await one<{ studied_on: string }>(
+      `select e.studied_on::text from public.goal_entries e join public.goals g on g.id = e.goal_id
+        where g.study_plan_id = $1 and g.type = 'extra' and g.subject = 'Direito Tributário'`,
+      [scenario.planId],
+    );
+    expect(entry.studied_on).toBe(yesterday);
+  });
+
+  test.describe("o cronômetro corrido — QA-27 e D-16", () => {
+    test.beforeEach(async ({ studentPage }) => {
+      // Um cronômetro `running` iniciado há 12 minutos, só se a chave estiver
+      // vazia: o script roda a cada navegação, e sem a guarda recriaria o
+      // cronômetro depois do Cancelar.
+      await studentPage.addInitScript(() => {
+        try {
+          const key = "fronteira.study-timer.v1";
+          if (window.localStorage.getItem(key) !== null) return;
+          window.localStorage.setItem(
+            key,
+            JSON.stringify({
+              elapsedMs: 0,
+              startedAt: Date.now() - 12 * 60_000,
+              running: true,
+              mode: "stopwatch",
+              phase: "focus",
+              focusMinutes: 25,
+              targetMs: 25 * 60_000,
+              pomodorosCompleted: 0,
+            }),
+          );
+        } catch {
+          // Sem localStorage o teste não tem cronômetro: a asserção seguinte acusa.
+        }
+      });
+    });
+
+    test("abrir pausa sem escrever no render, e Cancelar retoma", async ({
+      studentPage,
+      consoleErrors,
+    }) => {
+      await studentPage.goto("/aluno?dia=todos");
+      const pausar = studentPage.locator('[aria-label="Pausar cronômetro"]');
+      await expect(pausar).toHaveCount(1);
+
+      await content(studentPage).getByRole("button", { name: "Estudo extra" }).first().click();
+      const dialog = testId(studentPage, "extra-study-dialog");
+      await expect(alert(dialog, "info")).toContainText("Cronômetro pausado");
+      // A barra fica atrás do diálogo (aria-hidden): casa pelo atributo, e não pelo papel.
+      await expect(studentPage.locator('[aria-label="Iniciar cronômetro"]')).toHaveCount(1);
+
+      await dialog.getByRole("button", { name: "Cancelar" }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(studentPage.locator('[aria-label="Pausar cronômetro"]')).toHaveCount(1);
+      expect(consoleErrors).toEqual([]);
+    });
+
+    test("o caminho do cronômetro abre em hoje, sem erro no console", async ({
+      studentPage,
+      consoleErrors,
+    }) => {
+      await studentPage.goto("/aluno?estudoExtra=cronometro");
+
+      await expect(testId(studentPage, "extra-study-dialog")).toBeVisible();
+      await expect(field(studentPage, "date")).toHaveValue(todayInSaoPaulo());
+      expect(consoleErrors).toEqual([]);
+    });
   });
 
   test("entra no tempo e no desempenho da semana", async ({ studentPage }) => {

@@ -113,7 +113,7 @@ export async function currentSession(): Promise<Session | null> {
 /** A sessão, ou o erro de leitura que o `ErrorBoundary` da rota mostra. */
 export async function requireSession(): Promise<Session> {
   const session = await currentSession();
-  if (!session) readFailure("Sua sessão expirou. Entre de novo.");
+  if (!session) readFailure("Sua sessão expirou. Entre de novo.", "unauthenticated");
   return session;
 }
 

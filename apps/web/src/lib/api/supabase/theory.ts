@@ -15,7 +15,6 @@ import {
   currentLesson,
   diagnose,
   dueReviews,
-  isLessonComplete,
   isTheoryDone,
   clampPage,
   normalizeSubjectKey,
@@ -38,7 +37,8 @@ import type {
   TheorySubjectControl,
   Uuid,
 } from "../contract.ts";
-import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { checkQuestionRecord } from "../validation.ts";
+import { done, fail, failure, readFailure, studyWriteError, throwDb, translateDbError } from "./errors.ts";
 import { LESSON_CARD_COLUMNS, toLessonCards, type LessonCardRow } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
@@ -153,6 +153,14 @@ export interface TheoryContext {
 /** O mínimo de questões iniciais quando o professor não configurou a disciplina. */
 const DEFAULT_INITIAL_QUESTIONS = 15;
 
+/**
+ * A REGRA DO CATÁLOGO EXISTE EM DOIS LUGARES. Este carregador escolhe o catálogo
+ * (a turma prevalece, o vínculo individual atende quem está fora dela) e lê o
+ * mínimo de questões iniciais por `subject_key`; `record_initial_questions`
+ * repete as duas coisas em SQL (`20261006231152_record_theory_questions.sql`,
+ * junto de `app_private.initial_questions_required`, com o mesmo 15 de
+ * `DEFAULT_INITIAL_QUESTIONS`). Mudar uma é mudar a outra.
+ */
 export async function loadTheoryContext(studyPlanId: Uuid): Promise<TheoryContext> {
   const { data: plan, error: planError } = await supabase
     .from("study_plans")
@@ -294,8 +302,13 @@ function lessonsOfSubject(
   return context.lessons.filter((lesson) => lessonKeys(lesson).includes(subjectKey));
 }
 
-function requiredQuestions(context: TheoryContext, subjectKey: string): number {
-  return context.initialQuestions.get(subjectKey) ?? DEFAULT_INITIAL_QUESTIONS;
+/**
+ * O mínimo é o da regra da AULA: o `subject_key` CRU da aula, no catálogo da aula
+ * — a chave que `initial_questions_required` compara no SQL. Pelo nome da meta
+ * normalizado, as duas divergiam quando o nome não normalizava para a chave.
+ */
+function requiredQuestions(context: TheoryContext, lesson: TheoryLesson): number {
+  return context.initialQuestions.get(lesson.subjectKey) ?? DEFAULT_INITIAL_QUESTIONS;
 }
 
 function toProgress(
@@ -387,31 +400,15 @@ async function reviewsOf(
 }
 
 /**
- * Cria as revisões da aula que acabou de fechar.
- *
- * Uma linha por regra ativa da disciplina, em `pending`. `on conflict do
- * nothing` pela unicidade (aluno, plano, aula, número): concluir a mesma aula
- * duas vezes — reabrir e fechar de novo — não pode duplicar a fila.
+ * As colunas de LEITURA — as únicas que este arquivo escreve em `theory_progress`.
+ * As de questões e de conclusão (`initial_questions_done`, `lesson_done`, …) são
+ * de `record_initial_questions`: gravar a página leva a coluna a um valor, e
+ * questões ACUMULAM, o que só uma instrução no banco faz sem perder soma.
  */
-async function createReviewsFor(
-  context: TheoryContext,
-  lesson: TheoryLesson,
-): Promise<void> {
-  const rules = context.reviewRules.get(normalizeSubjectKey(lesson.subjectKey)) ?? [];
-  if (rules.length === 0) return;
-
-  await supabase.from("theory_reviews").upsert(
-    // Sem `teacher_id`: `theory_reviews` não o carrega. O contexto dela vem da
-    // FK composta com `study_plans`, que já amarra o trio.
-    rules.map((rule) => ({
-      study_plan_id: context.studyPlanId,
-      student_id: context.studentId,
-      theory_lesson_id: lesson.id,
-      review_number: rule.reviewNumber,
-      minimum_questions: rule.minimumQuestions,
-    })),
-    { onConflict: "student_id,study_plan_id,theory_lesson_id,review_number", ignoreDuplicates: true },
-  );
+interface ProgressWrite {
+  current_page?: number;
+  theory_done?: boolean;
+  theory_done_at?: string;
 }
 
 /**
@@ -427,18 +424,6 @@ async function createReviewsFor(
  * valores são idênticos. Por isso: INSERT quando não existe, UPDATE só das
  * colunas de progresso quando existe.
  */
-/** As colunas de PROGRESSO — as únicas que o grant deixa o aluno atualizar. */
-interface ProgressWrite {
-  current_page?: number;
-  theory_done?: boolean;
-  theory_done_at?: string;
-  initial_questions_done?: number;
-  initial_questions_complete?: boolean;
-  initial_questions_complete_at?: string;
-  lesson_done?: boolean;
-  lesson_done_at?: string;
-}
-
 async function writeProgress(
   studyPlanId: Uuid,
   studentId: Uuid,
@@ -540,10 +525,9 @@ export async function loadTheoryGoal(goalId: Uuid): Promise<TheoryGoal> {
     lesson?.title ?? "",
   ) as TheoryDiagnosis;
 
-  const required = requiredQuestions(context, subjectKey);
   const progress =
     lesson && diagnosis.kind === "ok"
-      ? toProgress(lesson.id, context.progress.get(lesson.id), required)
+      ? toProgress(lesson.id, context.progress.get(lesson.id), requiredQuestions(context, lesson))
       : null;
 
   return {
@@ -593,7 +577,7 @@ export function saveTheoryProgress(
 
     const { data: goal, error: goalError } = await supabase
       .from("goals")
-      .select("study_plan_id,teacher_id,subject")
+      .select("study_plan_id")
       .eq("id", input.goalId)
       .maybeSingle();
 
@@ -617,152 +601,74 @@ export function saveTheoryProgress(
     );
     if (writeError) return failure<TheoryProgress>(writeError);
 
-    const context = await loadTheoryContext(goal.study_plan_id);
-    const required = requiredQuestions(context, normalizeSubjectKey(goal.subject));
-
-    // Salvar leitura não publica outra aula. A meta de prática é verificada
-    // separadamente a partir das questões que já foram respondidas.
-    await maybeCompleteLesson(context, lesson, required);
-
+    // Salvar leitura não conclui a aula: a meta de prática fecha por
+    // `record_initial_questions`, a partir das questões respondidas.
     const fresh = await loadTheoryContext(goal.study_plan_id);
-    return done(toProgress(lesson.id, fresh.progress.get(lesson.id), required));
+    return done(toProgress(lesson.id, fresh.progress.get(lesson.id), requiredQuestions(fresh, lesson)));
   });
 }
 
-/** Registra a meta de prática da aula, sem afetar a publicação da próxima. */
-async function maybeCompleteLesson(
-  context: TheoryContext,
-  lesson: TheoryLesson,
-  required: number,
-): Promise<void> {
-  const progress = context.progress.get(lesson.id) ?? null;
-  const complete = isLessonComplete(toEngineLesson(lesson), progress, required);
-  if (!complete || progress?.lessonDone) return;
-
-  const now = new Date().toISOString();
-  await supabase
-    .from("theory_progress")
-    .update({
-      lesson_done: true,
-      lesson_done_at: now,
-      initial_questions_complete: true,
-      initial_questions_complete_at: now,
-    })
-    .eq("study_plan_id", context.studyPlanId)
-    .eq("theory_lesson_id", lesson.id);
-
-  await createReviewsFor(context, lesson);
-}
-
+/**
+ * Registra questões iniciais pela RPC, e é ela que soma, conclui a aula e cria as
+ * revisões, numa transação.
+ *
+ * A validação vem ANTES do `once`: recusa de formulário não ocupa a chave nem
+ * gasta uma viagem. O `once` só junta o clique duplo; a garantia é
+ * `goal_entries_request_uidx`, dentro da RPC — a resposta que se perde e a nova
+ * tentativa somam uma vez.
+ */
 export function recordInitialQuestions(
   input: RecordInitialQuestionsInput,
 ): Promise<Result<TheoryProgress>> {
+  const invalid = checkQuestionRecord(input);
+  if (invalid) return Promise.resolve(failure<TheoryProgress>(invalid));
+
   return once(input.requestId, async () => {
-    if (input.correctAnswers > input.questions) {
-      return fail<TheoryProgress>(
-        "validation",
-        "Os acertos não podem passar do total de questões.",
-        "correctAnswers",
-      );
-    }
-    if (input.questions <= 0) {
-      return fail<TheoryProgress>("validation", "Informe quantas questões você fez.", "questions");
-    }
-
-    const session = await requireSession();
-
-    const { data: goal, error: goalError } = await supabase
-      .from("goals")
-      .select("study_plan_id,teacher_id,subject")
-      .eq("id", input.goalId)
-      .maybeSingle();
-
-    if (goalError) return failure<TheoryProgress>(translateDbError(goalError));
-    if (!goal) return fail<TheoryProgress>("not_found", "Meta não encontrada.");
-
-    const context = await loadTheoryContext(goal.study_plan_id);
-    const lesson = context.lessons.find((candidate) => candidate.id === input.lessonId);
-    if (!lesson) return fail<TheoryProgress>("not_found", "Aula não encontrada no catálogo.");
-
-    const before = context.progress.get(lesson.id);
-    const writeError = await writeProgress(
-      goal.study_plan_id,
-      session.profileId,
-      lesson.id,
-      before !== undefined,
-      {
-        // SOMA, não substitui: as questões iniciais podem ser feitas em duas
-        // sentadas, e substituir apagaria a primeira.
-        initial_questions_done: (before?.initialQuestionsDone ?? 0) + input.questions,
-      },
-    );
-    if (writeError) return failure<TheoryProgress>(writeError);
-
-    // O estudo também entra no ledger da meta: o tempo e o desempenho da semana
-    // contam as questões iniciais como qualquer outro estudo.
-    const { error: entryError } = await supabase.from("goal_entries").insert({
-      goal_id: input.goalId,
-      student_id: session.profileId,
-      teacher_id: goal.teacher_id,
-      minutes: 0,
-      questions: input.questions,
-      correct_answers: input.correctAnswers,
-      theory_stage: "questions_in_progress",
-      manual_lesson: lesson.title,
+    const { data, error } = await supabase.rpc("record_initial_questions", {
+      p_request_id: input.requestId,
+      p_goal_id: input.goalId,
+      p_lesson_id: input.lessonId,
+      p_questions: input.questions,
+      p_correct_answers: input.correctAnswers,
     });
-    if (entryError) return failure<TheoryProgress>(translateDbError(entryError));
+    if (error) return failure<TheoryProgress>(studyWriteError(error));
 
-    const required = requiredQuestions(context, normalizeSubjectKey(goal.subject));
-    const after = await loadTheoryContext(goal.study_plan_id);
-    await maybeCompleteLesson(after, lesson, required);
-
-    const fresh = await loadTheoryContext(goal.study_plan_id);
-    return done(toProgress(lesson.id, fresh.progress.get(lesson.id), required));
+    // `returns table` chega como array, de uma linha.
+    const row = data?.[0];
+    if (!row) return fail<TheoryProgress>("unknown", "O servidor não devolveu o progresso da aula.");
+    return done<TheoryProgress>({
+      lessonId: input.lessonId,
+      currentPage: row.current_page,
+      theoryDone: row.theory_done,
+      initialQuestionsDone: row.initial_questions_done,
+      initialQuestionsRequired: row.initial_questions_required,
+      initialQuestionsComplete: row.initial_questions_done >= row.initial_questions_required,
+      lessonDone: row.lesson_done,
+    });
   });
 }
 
+/** O mesmo para a revisão: `theory_review_entries_request_uidx` segura a retentativa. */
 export function recordReviewQuestions(
   input: RecordReviewQuestionsInput,
 ): Promise<Result<TheoryReview>> {
+  const invalid = checkQuestionRecord(input);
+  if (invalid) return Promise.resolve(failure<TheoryReview>(invalid));
+
   return once(input.requestId, async () => {
-    if (input.correctAnswers > input.questions) {
-      return fail<TheoryReview>(
-        "validation",
-        "Os acertos não podem passar do total de questões.",
-        "correctAnswers",
-      );
-    }
+    const { data, error } = await supabase.rpc("record_review_questions", {
+      p_request_id: input.requestId,
+      p_review_id: input.reviewId,
+      p_questions: input.questions,
+      p_correct_answers: input.correctAnswers,
+    });
+    if (error) return failure<TheoryReview>(studyWriteError(error));
 
-    const { data: row, error } = await supabase
-      .from("theory_reviews")
-      .select("id,study_plan_id,theory_lesson_id,minimum_questions,questions_answered,status")
-      .eq("id", input.reviewId)
-      .maybeSingle();
-
-    if (error) return failure<TheoryReview>(translateDbError(error));
-    if (!row) return fail<TheoryReview>("not_found", "Revisão não encontrada.");
-    if (row.status === "completed") {
-      return fail<TheoryReview>("conflict", "Esta revisão já foi concluída.");
-    }
-
-    const answered = row.questions_answered + input.questions;
-    const complete = answered >= row.minimum_questions;
-    const now = new Date().toISOString();
-
-    const { error: updateError } = await supabase
-      .from("theory_reviews")
-      .update({
-        questions_answered: answered,
-        status: complete ? "completed" : "in_progress",
-        started_at: now,
-        ...(complete ? { completed_at: now } : {}),
-      })
-      .eq("id", row.id);
-
-    if (updateError) return failure<TheoryReview>(translateDbError(updateError));
+    const row = data?.[0];
+    if (!row) return fail<TheoryReview>("unknown", "O servidor não devolveu a revisão.");
 
     const context = await loadTheoryContext(row.study_plan_id);
-    const fresh = (await reviewsOf(context)).find((review) => review.id === row.id);
+    const fresh = (await reviewsOf(context)).find((review) => review.id === input.reviewId);
     if (!fresh) return fail<TheoryReview>("not_found", "Revisão não encontrada.");
     return done(fresh);
   });

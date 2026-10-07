@@ -95,7 +95,7 @@ publica staging.
 | Id | Pergunta | Decidido |
 |---|---|---|
 | D-01 | O que gerar a semana preserva | Concluída (com ou sem registro) + qualquer meta com registro em `goal_entries` + meta com bateria |
-| D-02 | Algum caminho pode apagar estudo registrado? | **Não.** Gerar apaga o plano, nunca o histórico. A FK de `goal_entries` para `goals` deixa de ser `cascade`, e nenhum caminho apaga meta com registro |
+| D-02 | Algum caminho pode apagar estudo registrado? | **Não.** Gerar apaga o plano, nunca o histórico. A FK de `goal_entries` para `goals` deixa de ser `cascade`, e nenhum caminho apaga meta com registro. **Revista em 06/10/2026 (PR 1):** a meta concluída SEM registro também é preservada, porque concluir já é uma afirmação do aluno sobre o que fez; com isso o modo "Replanejar semana inteira" apagaria o mesmo que o padrão, e sai (D-17) |
 | D-17 | O modo "Replanejar semana inteira" | **Sai.** Com D-01 e D-02 ele apagaria exatamente o que o modo "Segura" apaga. Gerar metas fica com um comportamento só, sem seletor de substituição e sem a confirmação extra |
 | D-03 | Na limpeza de dois ativos, o que vira o outro | `paused` (reversível). Vale só para a limpeza da migration: ativar pela tela continua ARQUIVANDO o anterior, como mandam a spec 14 (R-GPLAN-02) e a 03 (R-PLAN-05) |
 | D-04 | Teto de um registro de estudo | 240 min (spec 12 R-CONC-10, spec 19 R-EXTRA-11) e 500 questões; piso 0; não pode ser tudo zero |

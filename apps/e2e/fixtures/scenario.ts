@@ -485,11 +485,12 @@ export async function createScenario(options: ScenarioOptions = {}): Promise<Sce
     }
 
     if (withGoals) {
-      // POR INSERT, E NÃO PELA RPC. `apply_study_plan_batch` não foi portada, e
-      // a fronteira mudou junto: planejamento é escrita direta com RLS e grant
-      // por coluna. Impersonar o professor mantém o que importava na versão
-      // anterior — se a RLS de planejamento regredir, o cenário falha aqui em
-      // vez de fabricar dado que nenhuma tela consegue explicar.
+      // POR INSERT, E NÃO POR `generate_week`. O cenário monta metas fixas, com
+      // sufixo por cenário e caderno ligado, que a geração por peso não produz.
+      // Planejamento é escrita direta com RLS e grant por coluna. Impersonar o
+      // professor mantém o que importava na versão anterior — se a RLS de
+      // planejamento regredir, o cenário falha aqui em vez de fabricar dado que
+      // nenhuma tela consegue explicar.
       const suffix = planId.slice(0, 8);
       for (const goal of weekOneGoals(blocks.map((b) => b.id), suffix)) {
         await asUser(teacher.id, (client) =>

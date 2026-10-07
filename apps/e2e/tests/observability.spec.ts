@@ -31,7 +31,7 @@
  * enuncia a regra; a contagem é quem a sustenta.
  */
 import { expect, test } from "../fixtures/index.ts";
-import { testId } from "../support/ui.ts";
+import { alert, field, testId } from "../support/ui.ts";
 
 /** Hosts do serviço de relato, incluindo o CDN de onde o SDK poderia vir. */
 function isReporting(url: string): boolean {
@@ -83,6 +83,39 @@ test.describe("F-OBS-01 · o ambiente local não fala com o relato de erro", () 
     // o que permite contar logo em seguida: `count()` não espera por nada.
     await expect(testId(teacherPage, "error-code")).toHaveCount(0);
 
+    expect(saidas, `requisições que vazaram: ${saidas.join(", ")}`).toEqual([]);
+  });
+});
+
+test.describe("F-OBS-01 · uma escrita que cai na rede", () => {
+  /*
+   * O LIMITE DESTE TESTE: com o DSN vazio nada sai em caso nenhum, e portanto
+   * `saidas` vazio não distingue "filtrou" de "não havia SDK". O que ele prova é
+   * que a escrita chegou ao código `offline` — a frase "Sem conexão" só existe
+   * nesse ramo —, e é o código que decide o relato (`lib/observability.ts`:
+   * `offline` é estado do produto, e não vai ao painel). A asserção sobre
+   * `saidas` enuncia a regra, como no teste de cima.
+   */
+  test("não é relatada: chega à tela como 'Sem conexão'", async ({ teacherPage }) => {
+    const saidas: string[] = [];
+    teacherPage.on("request", (request) => {
+      if (isReporting(request.url())) saidas.push(request.url());
+    });
+
+    await teacherPage.goto("/professor/turmas");
+    await teacherPage.getByRole("button", { name: "Nova turma" }).click();
+    const dialog = testId(teacherPage, "class-dialog");
+    await field(teacherPage, "name").fill("Turma sem rede");
+
+    await teacherPage.route(
+      (url) => url.pathname.endsWith("/rest/v1/classes"),
+      (route) =>
+        route.request().method() === "POST" ? route.abort("internetdisconnected") : route.fallback(),
+    );
+    await dialog.getByRole("button", { name: "Criar" }).click();
+
+    await expect(alert(dialog, "error")).toContainText("Sem conexão");
+    await expect(testId(teacherPage, "error-code")).toHaveCount(0);
     expect(saidas, `requisições que vazaram: ${saidas.join(", ")}`).toEqual([]);
   });
 });

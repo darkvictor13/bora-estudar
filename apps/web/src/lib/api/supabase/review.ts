@@ -25,7 +25,7 @@ import type {
   TheoryReview,
   Uuid,
 } from "../contract.ts";
-import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
+import { done, fail, failure, throwDb, settle, translateDbError } from "./errors.ts";
 import { requireSession } from "./session.ts";
 import { loadTheoryContext } from "./theory.ts";
 import { loadDueReviews } from "./theory.ts";
@@ -146,50 +146,52 @@ export async function listReinforcements(studyPlanId: Uuid): Promise<readonly Re
  * grade e registra as questões, mas não muda de quantas em quantas aulas a
  * matéria volta. É o professor quem decide o ritmo.
  */
-export async function saveReviewSpacing(
+export function saveReviewSpacing(
   input: SaveReviewSpacingInput,
 ): Promise<Result<ReviewGridRow>> {
-  if (input.lessonSpacing < 1 || input.lessonSpacing > 200) {
-    return fail("validation", "O espaçamento fica entre 1 e 200 aulas.", "lessonSpacing");
-  }
-  if (input.minimumQuestions < 1 || input.minimumQuestions > 200) {
-    return fail("validation", "O mínimo de questões fica entre 1 e 200.", "minimumQuestions");
-  }
+  return settle(async () => {
+    if (input.lessonSpacing < 1 || input.lessonSpacing > 200) {
+      return fail("validation", "O espaçamento fica entre 1 e 200 aulas.", "lessonSpacing");
+    }
+    if (input.minimumQuestions < 1 || input.minimumQuestions > 200) {
+      return fail("validation", "O mínimo de questões fica entre 1 e 200.", "minimumQuestions");
+    }
 
-  const session = await requireSession();
+    const session = await requireSession();
 
-  const context = await loadTheoryContext(input.studyPlanId);
-  if (!context.catalogId) {
-    return fail("conflict", "Este planejamento não tem catálogo de teoria vinculado.");
-  }
+    const context = await loadTheoryContext(input.studyPlanId);
+    if (!context.catalogId) {
+      return fail("conflict", "Este planejamento não tem catálogo de teoria vinculado.");
+    }
 
-  const { data: lesson } = await supabase
-    .from("theory_lessons")
-    .select("subject")
-    .eq("catalog_id", context.catalogId)
-    .eq("subject_key", input.subjectKey)
-    .limit(1)
-    .maybeSingle();
+    const { data: lesson } = await supabase
+      .from("theory_lessons")
+      .select("subject")
+      .eq("catalog_id", context.catalogId)
+      .eq("subject_key", input.subjectKey)
+      .limit(1)
+      .maybeSingle();
 
-  const { error } = await supabase.from("theory_review_rules").upsert(
-    {
-      catalog_id: context.catalogId,
-      teacher_id: session.profileId,
-      subject: lesson?.subject ?? input.subjectKey,
-      subject_key: input.subjectKey,
-      review_number: input.reviewNumber,
-      lesson_spacing: input.lessonSpacing,
-      minimum_questions: input.minimumQuestions,
-    },
-    { onConflict: "catalog_id,subject_key,review_number" },
-  );
+    const { error } = await supabase.from("theory_review_rules").upsert(
+      {
+        catalog_id: context.catalogId,
+        teacher_id: session.profileId,
+        subject: lesson?.subject ?? input.subjectKey,
+        subject_key: input.subjectKey,
+        review_number: input.reviewNumber,
+        lesson_spacing: input.lessonSpacing,
+        minimum_questions: input.minimumQuestions,
+      },
+      { onConflict: "catalog_id,subject_key,review_number" },
+    );
 
-  if (error) return failure(translateDbError(error));
+    if (error) return failure(translateDbError(error));
 
-  const fresh = (await loadReviewGrid(input.studyPlanId)).find(
-    (row) => row.subjectKey === input.subjectKey,
-  );
-  return fresh ? done(fresh) : fail("unknown", "A regra não foi gravada.");
+    const fresh = (await loadReviewGrid(input.studyPlanId)).find(
+      (row) => row.subjectKey === input.subjectKey,
+    );
+    return fresh ? done(fresh) : fail("unknown", "A regra não foi gravada.");
+  });
 }
 
 /**

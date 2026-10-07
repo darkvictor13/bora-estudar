@@ -26,7 +26,7 @@ import { supabase } from "@/lib/supabase/client";
 
 import type { ClassInput, RequestId, Result, TeacherClass, Uuid } from "../contract.ts";
 import { checkClassName } from "../validation.ts";
-import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
+import { done, fail, failure, throwDb, settle, translateDbError } from "./errors.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
 
@@ -137,28 +137,30 @@ export function renameClass(
 }
 
 /** A FK composta impede ligar um catálogo de outro professor à turma. */
-export async function setClassTheoryCatalog(
+export function setClassTheoryCatalog(
   classId: Uuid,
   catalogId: Uuid | null,
 ): Promise<Result<TeacherClass>> {
-  const session = await requireSession();
-  const { data, error } = await supabase
-    .from("classes")
-    .update({ theory_catalog_id: catalogId })
-    .eq("id", classId)
-    .eq("teacher_id", session.profileId)
-    .select("id,name,description,theory_catalog_id")
-    .maybeSingle();
+  return settle(async () => {
+    const session = await requireSession();
+    const { data, error } = await supabase
+      .from("classes")
+      .update({ theory_catalog_id: catalogId })
+      .eq("id", classId)
+      .eq("teacher_id", session.profileId)
+      .select("id,name,description,theory_catalog_id")
+      .maybeSingle();
 
-  if (error) return failure(translateDbError(error));
-  if (!data) return fail("not_found", "Turma não encontrada, ou não é sua.");
+    if (error) return failure(translateDbError(error));
+    if (!data) return fail("not_found", "Turma não encontrada, ou não é sua.");
 
-  const members = await supabase.from("class_students")
-    .select("student_id")
-    .eq("class_id", classId)
-    .eq("teacher_id", session.profileId);
-  if (members.error) return failure(translateDbError(members.error));
-  return done(toClass(data as ClassRow, (members.data ?? []).length));
+    const members = await supabase.from("class_students")
+      .select("student_id")
+      .eq("class_id", classId)
+      .eq("teacher_id", session.profileId);
+    if (members.error) return failure(translateDbError(members.error));
+    return done(toClass(data as ClassRow, (members.data ?? []).length));
+  });
 }
 
 export function deleteClass(classId: Uuid, requestId: RequestId): Promise<Result<void>> {
@@ -187,25 +189,27 @@ export function deleteClass(classId: Uuid, requestId: RequestId): Promise<Result
   });
 }
 
-export async function enrollStudent(classId: Uuid, studentId: Uuid): Promise<Result<void>> {
-  const session = await requireSession();
+export function enrollStudent(classId: Uuid, studentId: Uuid): Promise<Result<void>> {
+  return settle(async () => {
+    const session = await requireSession();
 
-  const { error } = await supabase.from("class_students").insert({
-    class_id: classId,
-    student_id: studentId,
-    teacher_id: session.profileId,
-  });
+    const { error } = await supabase.from("class_students").insert({
+      class_id: classId,
+      student_id: studentId,
+      teacher_id: session.profileId,
+    });
 
-  if (error) {
-    // `23505` aqui é sempre a mesma coisa: o aluno já está numa turma. A frase
-    // genérica de `translateDbError` ("este registro já existe") não diria a
-    // quem clicou o que fazer em seguida.
-    if (error.code === "23505") {
-      return fail<void>("conflict", "Este aluno já está em uma turma. Use “Mover de turma”.");
+    if (error) {
+      // `23505` aqui é sempre a mesma coisa: o aluno já está numa turma. A frase
+      // genérica de `translateDbError` ("este registro já existe") não diria a
+      // quem clicou o que fazer em seguida.
+      if (error.code === "23505") {
+        return fail<void>("conflict", "Este aluno já está em uma turma. Use “Mover de turma”.");
+      }
+      return failure(translateDbError(error));
     }
-    return failure(translateDbError(error));
-  }
-  return done(undefined);
+    return done(undefined);
+  });
 }
 
 /**

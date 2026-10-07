@@ -6,16 +6,17 @@
  * trabalho daqui, e é onde o acoplamento ao banco termina: a tela decide o que
  * mostrar a partir de `ApiErrorCode`, nunca a partir de um código do Postgres.
  */
-import type { AuthError, PostgrestError } from "@supabase/supabase-js";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 import { captureUnexpectedFailure } from "@/lib/observability";
 
 import { ApiThrownError, type ApiError, type ApiErrorCode, type Result } from "../contract.ts";
+import { apiErrorFromThrown, translateDbError } from "./error-translation.ts";
 
 /**
  * `unknown` é a única confissão que este arquivo faz.
  *
- * Os dois tradutores abaixo terminam em `unknown` quando não reconhecem o erro,
+ * Os dois tradutores (`error-translation.ts`) terminam em `unknown` quando não reconhecem o erro,
  * e as cinco chamadas de `fail("unknown", …)` espalhadas pelo adaptador dizem a
  * mesma coisa à mão: a gravação não aconteceu e ninguém sabe por quê. Como o
  * contrato manda a ESCRITA devolver `Result` em vez de lançar, nada disso chega
@@ -36,81 +37,30 @@ export function done<T>(data: T): Result<T> {
   return { ok: true, data };
 }
 
-export function failure<T>(error: ApiError): Result<T> {
-  reportIfUnknown(error);
+export function failure<T>(error: ApiError, cause?: unknown): Result<T> {
+  reportIfUnknown(error, cause);
   return { ok: false, error };
 }
 
-/**
- * Traduz o erro do GoTrue.
- *
- * SEM REVELAR SE O E-MAIL EXISTE: dizer "não há conta com este e-mail" entrega
- * a base de usuários a quem perguntar devagar. Senha errada e conta inexistente
- * saem com a mesma frase, de propósito.
- */
-export function translateAuthError(error: AuthError): ApiError {
-  const m = error.message.toLowerCase();
-
-  if (m.includes("invalid login credentials")) {
-    return { code: "validation", message: "E-mail ou senha incorretos." };
-  }
-  if (m.includes("email not confirmed")) {
-    return { code: "validation", message: "Confirme seu e-mail antes de entrar." };
-  }
-  if (m.includes("user already registered") || error.code === "user_already_exists") {
-    return { code: "conflict", message: "Já existe uma conta com este e-mail.", field: "email" };
-  }
-  if (m.includes("password should be at least") || error.code === "weak_password") {
-    return {
-      code: "validation",
-      message: "A senha precisa ter pelo menos 6 caracteres.",
-      field: "password",
-    };
-  }
-  if (m.includes("rate limit") || m.includes("too many")) {
-    return {
-      code: "conflict",
-      message: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo.",
-    };
-  }
-  // `AuthRetryableFetchError` é o que sobra quando não há rede nenhuma.
-  if (error.name === "AuthRetryableFetchError") {
-    return { code: "offline", message: "Sem conexão. Verifique a rede e tente de novo." };
-  }
-  return { code: "unknown", message: error.message };
+/** O throw que escapou de uma escrita, como `Result` — relatado se for `unknown`. */
+export function recoverThrown(thrown: unknown): Result<never> {
+  return failure(apiErrorFromThrown(thrown), thrown);
 }
 
 /**
- * Traduz o erro do PostgREST.
- *
- * `42501` é o que a RLS devolve quando um `WITH CHECK` recusa a linha, e é a
- * forma mais comum de "seu acesso venceu" chegar até aqui — o banco não tem
- * como saber que foi isso, mas a tela precisa dizer algo melhor do que
- * "insufficient privilege".
- *
- * `P0001` é o `raise exception` dos gatilhos de proteção, e a mensagem deles já
- * está em português e já é dirigida a quem está usando: "somente o professor
- * altera o planejamento da meta" é exatamente o que a tela deve mostrar.
+ * Para a escrita que chama helper que LANÇA (`requireSession`, `throwDb`) e não
+ * passa por `once`. Escrita devolve `Result`: quem garante isso é o adaptador, e
+ * não um try/catch em componente.
  */
-export function translateDbError(error: PostgrestError): ApiError {
-  switch (error.code) {
-    case "42501":
-      return {
-        code: "forbidden",
-        message: "Você não tem permissão para esta operação, ou seu acesso venceu.",
-      };
-    case "P0001":
-      return { code: "conflict", message: error.message };
-    case "23505":
-      return { code: "conflict", message: "Este registro já existe." };
-    case "23503":
-      return { code: "conflict", message: "O registro depende de outro que não existe." };
-    case "PGRST116":
-      return { code: "not_found", message: "Registro não encontrado." };
-    default:
-      return { code: "unknown", message: error.message };
+export async function settle<T>(operation: () => Promise<Result<T>>): Promise<Result<T>> {
+  try {
+    return await operation();
+  } catch (thrown) {
+    return recoverThrown(thrown);
   }
 }
+
+export { studyWriteError, translateAuthError, translateDbError } from "./error-translation.ts";
 
 /**
  * Leitura que falhou é problema do `ErrorBoundary` da rota, não da tela.
