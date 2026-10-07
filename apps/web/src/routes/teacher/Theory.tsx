@@ -459,7 +459,9 @@ export function TeacherTheory() {
         title="Catálogo de teoria"
         description="Aulas, páginas auditadas e as regras de cada disciplina"
         actions={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          // `maxWidth` e `minWidth: 0`: este contêiner é item de uma linha flex, e
+          // sem eles cresce até o texto inteiro do catálogo escolhido (QA-23).
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
             {!pmprCatalog && (
               <Button variant="contained" size="small" disabled={busy} onClick={() => void createPmprCatalog()}>
                 Criar catálogo Soldado PMPR

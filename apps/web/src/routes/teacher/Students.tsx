@@ -245,7 +245,10 @@ export function TeacherStudents() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
               gap: 1.5,
-              [theme.breakpoints.down("md")]: { gridTemplateColumns: "1fr" },
+              // `minmax(0, 1fr)`, e não `1fr`: o `1fr` é `minmax(auto, 1fr)`, e o
+              // nome do plano em `noWrap` empurra o mínimo da coluna para além
+              // dos 375px (QA-23).
+              [theme.breakpoints.down("md")]: { gridTemplateColumns: "minmax(0, 1fr)" },
             })}
           >
             {students.map((student) => (
