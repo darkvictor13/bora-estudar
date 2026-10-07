@@ -178,11 +178,11 @@ diff mostra a omissão.
 | F-AUTH-06 | tela pública com sessão ativa redireciona |
 | F-AUTH-07 | logout apaga o cookie e a área volta a barrar |
 | F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera, sem professor e sem acesso |
-| F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido — com os links "Entrar" e "Esqueci minha senha" junto da frase (QA-29) |
-| F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações |
+| F-AUTH-09 | validações do cadastro: nome curto, senha curta, senha só de espaços (QA-18), e-mail repetido — com os links "Entrar" e "Esqueci minha senha" junto da frase (QA-29) |
+| F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações (senhas diferentes, curtas e só de espaços) |
 | F-AUTH-13 | o link profundo volta depois do login: `next` pelo guarda, por papel errado, externo e por navegação do cliente — QA-25 |
 | F-AUTH-14 | `/confirmar?next=` não manda para fora do site — QA-02 |
-| F-CONTA-01 | meus dados nos dois papéis: o aluno vê o nome do professor, o professor não vê o cartão Acesso, o nome salva — `tests/student-analysis.spec.ts` (QA-08, QA-21) |
+| F-CONTA-01 | meus dados nos dois papéis: o aluno vê o nome do professor, o professor não vê o cartão Acesso, o nome salva, e o campo do nome tem teto de 120 — `tests/student-analysis.spec.ts` (QA-08, QA-21, QA-15) |
 
 ### Casca e navegação — `tests/shell.spec.ts`
 
@@ -234,7 +234,7 @@ diff mostra a omissão.
 |---|---|
 | F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso; o extra de ontem cai em ontem na série por dia — N-07 |
 | F-REV-01 | a grade de revisão mostra o espaçamento do professor; a vencida é marcada; o reforço tem lugar próprio |
-| F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde |
+| F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde; WhatsApp sem formato e nascimento no futuro são recusados, e nada grava (QA-19) |
 | F-CUP-01 | resgatar cupom libera o acesso — **`fixme`** |
 | F-CAD-01 | cadernos TEC do aluno: lista por disciplina, com link e sem botão de bateria |
 
@@ -251,7 +251,7 @@ diff mostra a omissão.
 | F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
 | F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
 | F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno; ativar é uma transação: rede caindo não deixa o aluno sem planejamento, e duas ativações simultâneas terminam com um ativo — QA-03, QA-12 |
-| F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |
+| F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta; link `javascript:` é recusado e o banco fica com o anterior (QA-24) |
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
 | F-TREV-01 | é na tela do professor que o espaçamento se configura |
 | F-TEST-01 | estatísticas do professor: as mesmas do aluno, apontadas para o planejamento dele |
@@ -329,7 +329,13 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
+seção da área, no commit em que o teste passa a existir.
+
+| Id | Cobre |
+|---|---|
+| F-GPLAN-06 | nome de planejamento repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
+| F-MATR-06 | nome de turma repetido é recusado com a frase própria — QA-16 |
+| F-FLASH-06 | deck pessoal repetido é recusado com a frase própria — QA-16 |
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.

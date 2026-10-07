@@ -149,6 +149,7 @@ significa para `public.has_active_access()`:
 | R-MATR-06 | Desmatricular **apaga a linha**. `class_students` já tem `delete` concedido, e matrícula em turma não é histórico: o que não pode sumir — planejamento, metas, ledger, `access_grants` — não tem `delete` para `authenticated` em lugar nenhum. |
 | R-MATR-07 | `StudentCard` ganha `classId`, e `applyFilter` passa a aplicar `filter.classId`. Hoje o campo é declarado no contrato e ignorado em silêncio, e filtrar por turma devolve a lista inteira. O recorte fica na **query string** (`?turma=`), como `?busca=`, `?situacao=` e `?plano=` de `R-TURMA-07`; valor inválido é ignorado e a lista volta inteira, como `R-TURMA-10`. |
 | R-MATR-08 | Matricular exige o **vínculo vigente**, e quem impõe é `is_teacher_of(student_id)` no `WITH CHECK` de `class_students_insert`. A ordem entre vincular e matricular não pode inverter, e é o banco que a impõe — não a tela. |
+| R-MATR-09 | **O nome da turma tem de 3 a 120 caracteres e é único por professor**, ignorando maiúsculas e os espaços das pontas: índice `classes_name_per_teacher_uidx` sobre `(teacher_id, lower(btrim(name)))`. A recusa é "Você já tem uma turma com esse nome." (`code: "conflict"`, `field: "name"`), identificada pelo NOME do índice e nunca pela frase do Postgres. A descrição vai até 2000 (QA-15, QA-16, D-06, D-07). |
 
 ### Regras removidas
 

@@ -72,6 +72,12 @@ erro que esta seção existe para evitar.
 | R-CAD-14 | O resumo conta **Cadernos** (não excluídos), **Ativos**, **Desativados** e **Excluídos**, derivados da lista. Nenhum contador é mantido à mão. |
 | R-CAD-15 | Reordenar bloco e disciplina fica de fora — ver Fora de escopo. |
 
+### O link do caderno
+
+| Id | Regra |
+|---|---|
+| R-CAD-16 | **O link do caderno é `''` ou `https://…` sem espaço, até 2048 caracteres** (QA-24, N-06, D-09): qualquer domínio `https`, não só o do TEC, e nunca `javascript:` nem `http:`. A frase é "Informe um link HTTPS válido.". A regra mora em `checkNotebook` (via `validateHttpsLink`) e na CHECK `study_plan_notebooks_notebook_link_check`; `subject_blocks.link` e `subject_lessons.link` seguem a mesma regra, com `null` no lugar de `''`. O nome do caderno vai até 200, e a meta de acerto, de 0 a 100 ("A meta de acerto vai de 0 a 100%."). |
+
 ---
 
 ## Fluxo
