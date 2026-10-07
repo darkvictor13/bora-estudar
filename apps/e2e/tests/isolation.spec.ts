@@ -18,7 +18,12 @@
 import { expect, test } from "../fixtures/index.ts";
 import { query } from "../fixtures/db.ts";
 import { addTheoryCatalog, createScenario } from "../fixtures/scenario.ts";
-import { STUDENT_STUDY_ROUTES, STUDENT_WEEK_ALL_DAYS, studentPageOf } from "../support/routes.ts";
+import {
+  PAGE_TITLES,
+  STUDENT_STUDY_ROUTES,
+  STUDENT_WEEK_ALL_DAYS,
+  studentPageOf,
+} from "../support/routes.ts";
 import { alert, content, testId } from "../support/ui.ts";
 
 /** Dá ao aluno do cenário um registro de estudo reconhecível. */
@@ -112,7 +117,7 @@ test.describe("F-ISO-01 · leitura", () => {
   });
 });
 
-test.describe("F-ISO-02 · a query string não é uma porta", () => {
+test.describe("F-ISO-02 · a query string não é uma porta (QA-13)", () => {
   test("planejamento alheio em ?plano= é ignorado", async ({ page, signIn, scenario }) => {
     const outro = await createScenario();
     await signIn(outro.teacher);
@@ -120,10 +125,18 @@ test.describe("F-ISO-02 · a query string não é uma porta", () => {
     // A RLS esconde a linha; a tela precisa cair no planejamento DELE em vez de
     // mostrar uma tela vazia que parece defeito.
     await page.goto(`/professor/metas?plano=${scenario.planId}`);
+    // A tela abre (era o "Cannot read properties of null") e mostra o dele.
+    await expect(page.locator("h1")).toHaveText("Gerar metas");
+    await expect(content(page)).toContainText(outro.planName);
     await expect(page.locator("body")).not.toContainText(scenario.planName);
 
     await page.goto(`/professor/cadernos?plano=${scenario.planId}`);
-    await expect(page.locator("body")).not.toContainText(scenario.blocks[0]!.name);
+    await expect(page.locator("h1")).toHaveText("Cadernos TEC");
+    await expect(content(page)).toContainText(outro.planName);
+    // Os blocos dos dois cenários têm o MESMO nome, e por isso não servem de
+    // prova: o nome do planejamento, único por cenário, é quem diz de quem é a
+    // lista que a tela abriu.
+    await expect(page.locator("body")).not.toContainText(scenario.planName);
   });
 
   test("catálogo alheio em ?catalogo= é ignorado", async ({ page, signIn, scenario }) => {
@@ -132,7 +145,45 @@ test.describe("F-ISO-02 · a query string não é uma porta", () => {
     await signIn(outro.teacher);
 
     await page.goto(`/professor/teoria?catalogo=${catalog.id}`);
+    await expect(page.locator("h1")).toHaveText("Catálogo de teoria");
     await expect(page.locator('[data-testid="lesson-row"]')).toHaveCount(0);
+  });
+
+  test("malformado cai no padrão da tela, em silêncio", async ({
+    page,
+    signIn,
+    scenario,
+    consoleErrors,
+  }) => {
+    await addTheoryCatalog(scenario);
+    await signIn(scenario.teacher);
+
+    const professor = [
+      "/professor/metas?plano=nao-e-uuid",
+      "/professor/cadernos?plano=nao-e-uuid",
+      "/professor/revisoes?plano=nao-e-uuid",
+      "/professor/estatisticas?plano=nao-e-uuid",
+      "/professor/teoria?catalogo=nao-e-uuid",
+      "/professor/estatisticas?ano=1e9",
+      "/professor?ritmo=xyz",
+    ];
+    for (const url of professor) {
+      await page.goto(url);
+      await expect(page.locator("h1"), url).toHaveText(PAGE_TITLES[url.split("?")[0]!]!);
+      // Depois do h1: `count()` não espera os loaders.
+      await expect(alert(page, "error"), url).toHaveCount(0);
+    }
+    // O ritmo inventado não esvazia a lista nem deixa o seletor em branco.
+    await page.goto("/professor?ritmo=xyz");
+    await expect(testId(page, "student-card")).toHaveCount(1);
+    await expect(testId(page, "pace-filter")).toHaveValue("");
+
+    await signIn(scenario.student);
+    await page.goto("/aluno/estatisticas?ano=1e9");
+    await expect(page.locator("h1")).toHaveText(PAGE_TITLES["/aluno/estatisticas"]!);
+    await expect(alert(page, "error")).toHaveCount(0);
+
+    expect(consoleErrors).toEqual([]);
   });
 
   test("semana alheia não vaza pelo seletor do aluno", async ({ page, signIn, scenario }) => {

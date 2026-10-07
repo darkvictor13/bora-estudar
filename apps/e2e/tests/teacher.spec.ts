@@ -21,19 +21,74 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures/index.ts";
 import { asUser, count, one, query } from "../fixtures/db.ts";
-import { addTheoryCatalog, addWeek, createUser, joinWaitlist } from "../fixtures/scenario.ts";
+import {
+  addTheoryCatalog,
+  addWeek,
+  createScenario,
+  createUser,
+  joinWaitlist,
+} from "../fixtures/scenario.ts";
 import { alert, content, field, navItem, testId } from "../support/ui.ts";
-import { PAGE_TITLES, TEACHER_ROUTES } from "../support/routes.ts";
+import { PAGE_TITLES, TEACHER_ROUTES, studentPageOf } from "../support/routes.ts";
 
-test.describe("F-PROF-01 · todas as telas do professor abrem", () => {
+/**
+ * Os `id` que se repetem na página (QA-22). Um cartão por disciplina com o `id`
+ * padrão de `Field` repetia `field-<name>`, e o `<label for>` do segundo apontava
+ * para o campo do primeiro.
+ */
+async function duplicatedIds(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const element of document.querySelectorAll("[id]")) {
+      if (seen.has(element.id)) repeated.add(element.id);
+      seen.add(element.id);
+    }
+    return [...repeated];
+  });
+}
+
+test.describe("F-PROF-01 · todas as telas do professor abrem (QA-22)", () => {
   for (const route of TEACHER_ROUTES) {
-    test(`${route} abre sem erro de console`, async ({ teacherPage, consoleErrors }) => {
+    test(`${route} abre sem erro de console e sem id repetido`, async ({
+      teacherPage,
+      consoleErrors,
+      scenario,
+    }) => {
+      // Duas disciplinas, e portanto dois cartões nas telas de regra.
+      await addTheoryCatalog(scenario, { withUnaudited: true });
       await teacherPage.goto(route);
 
       await expect(teacherPage.locator("h1")).toHaveText(PAGE_TITLES[route]!);
+
+      // ANTES da checagem de id: sem dois cartões a checagem passa sem exercitar
+      // nada. Espera o h1 (acima) e conta só depois — `count()` não espera.
+      if (route === "/professor/teoria") {
+        await expect(testId(teacherPage, "subject-rule-form")).toHaveCount(2);
+      }
+      if (route === "/professor/revisoes") {
+        await expect(testId(teacherPage, "spacing-form")).toHaveCount(2);
+      }
+
+      expect(await duplicatedIds(teacherPage)).toEqual([]);
       expect(consoleErrors).toEqual([]);
     });
   }
+
+  test.describe("sem planejamento ativo — N-03", () => {
+    test.use({ scenarioOptions: { withPlan: false } });
+
+    test("Gerar metas diz que não há planejamento, em vez de quebrar", async ({
+      teacherPage,
+      consoleErrors,
+    }) => {
+      await teacherPage.goto("/professor/metas");
+
+      await expect(teacherPage.locator("h1")).toHaveText("Gerar metas");
+      await expect(testId(teacherPage, "empty")).toContainText("Nenhum planejamento ativo");
+      expect(consoleErrors).toEqual([]);
+    });
+  });
 });
 
 test.describe("F-PROF-02 · a lista de alunos", () => {
@@ -94,6 +149,24 @@ test.describe("F-PROF-03 · a ficha do aluno", () => {
     // alguém, botão voltar, e título de aba dizendo de quem é a ficha.
     await teacherPage.goBack();
     await expect(teacherPage).toHaveURL(/\/professor$/);
+  });
+
+  test("aluno alheio ou id malformado mostram 'Não encontrado', sem 'Atualize a página' — QA-13", async ({
+    page,
+    signIn,
+    scenario,
+  }) => {
+    const outro = await createScenario();
+    await signIn(outro.teacher);
+
+    for (const id of [scenario.student.id, "nao-e-uuid"]) {
+      await page.goto(studentPageOf(id));
+
+      await expect(page.locator("h1")).toHaveText("Não encontrado");
+      await expect(content(page)).toContainText("Aluno não encontrado");
+      await expect(page.locator("body")).not.toContainText("Atualize a página");
+      await expect(page.locator("body")).not.toContainText(scenario.student.name);
+    }
   });
 
   test.describe("com a vigência vencida — QA-20", () => {
@@ -788,7 +861,7 @@ test.describe("F-TCAT-01 · catálogo de teoria", () => {
     const form = teacherPage.locator('[data-testid="subject-rule-form"][data-subject="ciencias forenses"]');
     await expect(form).toBeVisible();
 
-    await form.locator("#field-initialQuestions").fill("25");
+    await form.locator('input[name="initialQuestions"]').fill("25");
     await form.getByRole("button", { name: "Acrescentar revisão" }).click();
     await form.getByRole("button", { name: "Salvar regras" }).click();
 
@@ -892,7 +965,7 @@ test.describe("F-TREV-01 · revisões do professor", () => {
 
     await teacherPage.goto("/professor/revisoes");
     const form = teacherPage.locator('[data-testid="spacing-form"][data-subject="ciencias forenses"]');
-    await form.locator("#field-lessonSpacing").fill("4");
+    await form.locator('input[name="lessonSpacing"]').fill("4");
     await form.getByRole("button", { name: "Salvar ritmo" }).click();
 
     await expect(alert(teacherPage, "success")).toContainText("Espaçamento de");
@@ -914,7 +987,7 @@ test.describe("F-TREV-01 · revisões do professor", () => {
 
     await teacherPage.goto("/professor/revisoes");
     const form = teacherPage.locator('[data-testid="spacing-form"]').first();
-    await form.locator("#field-lessonSpacing").fill("0");
+    await form.locator('input[name="lessonSpacing"]').fill("0");
     await form.getByRole("button", { name: "Salvar ritmo" }).click();
 
     await expect(alert(teacherPage, "error")).toContainText("entre 1 e 200");

@@ -8,7 +8,13 @@
  * Todo seletor aqui é `data-testid`. A classe do Emotion muda quando o Emotion
  * decide, e `.sidebar__collapse` sumiu junto com o CSS que a definia.
  */
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "../fixtures/index.ts";
+import { query } from "../fixtures/db.ts";
+import { addTheoryCatalog, type Scenario } from "../fixtures/scenario.ts";
+import { collect, contrast, describe as describeSample } from "../support/contrast.ts";
+import { PAGE_TITLES, STUDENT_ROUTES, TEACHER_ROUTES, studentPageOf } from "../support/routes.ts";
 import {
   activeNavItem,
   content,
@@ -180,4 +186,161 @@ test.describe("F-UI-10 · sem acesso liberado, o estudo fica inerte", () => {
 
     await expect(navItem(studentPage, "Lista de espera")).toBeEnabled();
   });
+});
+
+/**
+ * O quanto o conteúdo transborda, em px. Mede o `<main data-testid="content">`, e
+ * NÃO o `documentElement`: a casca é `overflow: hidden`, o documento nunca rola
+ * na horizontal, e o excesso vira rolagem DENTRO do `main` — que é por onde o
+ * defeito escapava (QA-23).
+ */
+async function overflowOf(page: Page): Promise<number> {
+  return content(page).evaluate((main) => main.scrollWidth - main.clientWidth);
+}
+
+/**
+ * Nomes de verdade, que são longos. O defeito nunca foi o `minWidth` sozinho: o
+ * item flex cresce com o TEXTO da opção escolhida, e "Catálogo E2E 887111a1" cabe
+ * onde "PMPR Soldado 2025 — Edital 01/2025 (versão consolidada)" não cabe.
+ */
+async function nameThingsLikeReality(scenario: Scenario): Promise<void> {
+  const long = "Polícia Militar do Paraná, Soldado 2025 — edital consolidado com retificações";
+  await query("update public.study_plans set name = $2 where id = $1", [scenario.planId, `${long} (plano)`]);
+  await query("update public.theory_catalogs set name = $2 where teacher_id = $1", [
+    scenario.teacher.id,
+    `${long} (catálogo)`,
+  ]);
+}
+
+test.describe("F-UI-11 · nenhuma tela passa de 375px (QA-23)", () => {
+  test.use({
+    viewport: { width: 375, height: 812 },
+    // A casca de cima pede cenário sem planejamento; aqui as telas têm de ter o
+    // que mostrar: cartões, selects, linhas de meta.
+    scenarioOptions: {},
+  });
+
+  test.describe("aluno", () => {
+    for (const route of STUDENT_ROUTES) {
+      test(`${route} cabe`, async ({ studentPage, scenario }) => {
+        await nameThingsLikeReality(scenario);
+        await studentPage.goto(route);
+        await expect(studentPage.locator("h1")).toHaveText(PAGE_TITLES[route]!);
+
+        expect(await overflowOf(studentPage)).toBeLessThanOrEqual(0);
+      });
+    }
+
+    test("o botão de modo do cronômetro cabe e diz o que mostra, parado e rodando", async ({
+      studentPage,
+    }) => {
+      await studentPage.goto("/aluno");
+      await expect(studentPage.locator("h1")).toHaveText("Minha semana");
+
+      // O nome acessível COMEÇA pelo texto visível (WCAG 2.5.3): "Livre" ao
+      // comando de voz acha o botão.
+      const modo = studentPage.getByRole("button", { name: /^Livre/ });
+      await expect(modo).toBeVisible();
+      expect(await modo.evaluate((botao) => botao.scrollWidth - botao.clientWidth)).toBeLessThanOrEqual(0);
+      expect(await overflowOf(studentPage)).toBeLessThanOrEqual(0);
+
+      // Rodando aparece "Lançar tempo", o item que faltava caber.
+      await studentPage.getByRole("button", { name: "Iniciar cronômetro" }).click();
+      await expect(studentPage.getByRole("link", { name: "Lançar tempo" })).toBeVisible();
+
+      expect(await modo.evaluate((botao) => botao.scrollWidth - botao.clientWidth)).toBeLessThanOrEqual(0);
+      expect(await overflowOf(studentPage)).toBeLessThanOrEqual(0);
+    });
+  });
+
+  test.describe("professor", () => {
+    for (const route of TEACHER_ROUTES) {
+      test(`${route} cabe`, async ({ teacherPage, scenario }) => {
+        // O select do catálogo só existe com um catálogo, e as duas disciplinas
+        // dão dois cartões de regra.
+        await addTheoryCatalog(scenario, { withUnaudited: true });
+        await nameThingsLikeReality(scenario);
+        await teacherPage.goto(route);
+        await expect(teacherPage.locator("h1")).toHaveText(PAGE_TITLES[route]!);
+
+        expect(await overflowOf(teacherPage)).toBeLessThanOrEqual(0);
+      });
+    }
+
+    test("a ficha do aluno cabe", async ({ teacherPage, scenario }) => {
+      await teacherPage.goto(studentPageOf(scenario.student.id));
+      await expect(teacherPage.locator("h1")).toHaveText(scenario.student.name);
+
+      expect(await overflowOf(teacherPage)).toBeLessThanOrEqual(0);
+    });
+  });
+});
+
+test.describe("F-UI-12 · a primeira carga mostra que está carregando (QA-26)", () => {
+  test("com a sessão presa: 'Carregando', sem h1 e sem aviso de HydrateFallback", async ({
+    studentPage,
+  }) => {
+    const warnings: string[] = [];
+    studentPage.on("console", (message) => {
+      if (message.type() === "warning") warnings.push(message.text());
+    });
+
+    // Segura a verificação da sessão: sem ela nenhum loader resolve, que é a
+    // janela em que a tela ficava branca. Mesma técnica de F-TEMA-03.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await studentPage.route(/\/auth\/v1\/user/, async (route) => {
+      await held;
+      await route.continue();
+    });
+
+    await studentPage.goto("/aluno", { waitUntil: "commit" });
+
+    const carregando = testId(studentPage, "app-loading");
+    await expect(carregando.first()).toBeVisible();
+    await expect(carregando.first()).toContainText("Carregando");
+    expect(await studentPage.locator("h1").count()).toBe(0);
+
+    release();
+    await expect(studentPage.locator("h1")).toHaveText("Minha semana");
+    await expect(carregando).toHaveCount(0);
+
+    expect(warnings.filter((texto) => /HydrateFallback/.test(texto))).toEqual([]);
+  });
+
+  /**
+   * Sem o bundle: `lib/env.ts` lançando por falta de `VITE_*`, ou a rede caindo.
+   * O primeiro padrão é o módulo do Vite de desenvolvimento, o segundo o build.
+   */
+  for (const tema of ["light", "dark"] as const) {
+    test(`sem o bundle, a tela estática diz o que fazer, tema ${tema}`, async ({ page }) => {
+      await page.addInitScript((escolha) => {
+        if (escolha !== "dark") return;
+        localStorage.setItem("bora.theme.active", "e2e");
+        localStorage.setItem("bora.theme.e2e", "dark");
+      }, tema);
+      await page.route(/\/(src\/main\.tsx|assets\/index-[^/]+\.js)/, (route) => route.abort());
+
+      await page.goto("/entrar");
+
+      const carregando = testId(page, "app-loading");
+      await expect(carregando).toBeVisible();
+      await expect(carregando).toContainText("recarregue");
+      if (tema === "dark") await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      else await expect(page.locator("html")).not.toHaveAttribute("data-theme", "dark");
+      expect(await page.locator("h1").count()).toBe(0);
+
+      const { text } = await collect(page, [
+        { selector: '[data-testid="app-loading"] p', kind: "text" },
+      ]);
+      expect(text.length, "nenhum texto medido").toBeGreaterThan(0);
+      const fracos = text
+        .map((amostra) => ({ amostra, razao: contrast(amostra.color, amostra.background) }))
+        .filter(({ razao }) => razao < 4.5)
+        .map(({ amostra, razao }) => describeSample(amostra, razao));
+      expect(fracos).toEqual([]);
+    });
+  }
 });
