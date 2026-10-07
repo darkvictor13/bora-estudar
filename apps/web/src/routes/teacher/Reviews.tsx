@@ -4,12 +4,13 @@ import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Empty, Field, Metric, PageHeader } from "@bora/ui";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
 import { api, type ApiError, type Reinforcement, type ReviewGridRow } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Revisões, do lado do professor — controle manual e reforços.
@@ -25,7 +26,11 @@ export async function teacherReviewsLoader({ request }: { request: Request }) {
   await requireRole("teacher", request);
 
   const plans = (await api.listPlans()).filter((plan) => plan.status === "active");
-  const planId = new URL(request.url).searchParams.get("plano") ?? plans[0]?.id ?? null;
+  // `?plano=` só vale se for um dos planejamentos que a tela lista; o resto cai
+  // no primeiro, em silêncio (D-13, QA-13). Sem isto o texto da URL ia direto
+  // ao PostgREST, e UUID alheio voltava "Planejamento não encontrado".
+  const asked = new URL(request.url).searchParams.get("plano");
+  const planId = plans.some((plan) => plan.id === asked) ? asked : (plans[0]?.id ?? null);
 
   if (!planId) {
     return {
@@ -45,6 +50,88 @@ export async function teacherReviewsLoader({ request }: { request: Request }) {
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherReviewsLoader>>;
+
+function SpacingCard({
+  row,
+  error,
+  onSave,
+}: {
+  row: ReviewGridRow;
+  error: ApiError | null;
+  onSave: (row: ReviewGridRow, spacing: number, minimum: number) => void;
+}) {
+  // Um cartão por disciplina: o id padrão de `Field` repetiria na página, e o
+  // `<label for>` do segundo apontaria para o campo do primeiro (QA-22). O
+  // `name` NÃO muda — é o que o `FormData` lê. Hook não roda dentro de `.map`,
+  // e por isso o cartão é um componente.
+  const uid = useId();
+
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Card
+        title={row.subject}
+        sub={`${row.reviews.filter((review) => review.status === "completed").length} de ${row.reviews.length} feitas`}
+        action={
+          <Badge tone={row.reviews.some((review) => review.due) ? "warning" : "neutral"}>
+            {row.reviews.filter((review) => review.due).length} vencidas
+          </Badge>
+        }
+      >
+        <Box
+          component="form"
+          noValidate
+          data-testid="spacing-form"
+          data-subject={row.subjectKey}
+          sx={{ display: "flex", gap: 1.5, alignItems: "flex-end", flexWrap: "wrap" }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            onSave(
+              row,
+              Number(data.get("lessonSpacing") ?? 2),
+              Number(data.get("minimumQuestions") ?? 15),
+            );
+          }}
+        >
+          <Field
+            label="A cada N aulas"
+            name="lessonSpacing"
+            id={`field-lessonSpacing-${uid}`}
+            type="number"
+            min={1}
+            max={200}
+            defaultValue={row.lessonSpacing || 2}
+            invalid={error?.field === "lessonSpacing"}
+          />
+          <Field
+            label="Mínimo de questões"
+            name="minimumQuestions"
+            id={`field-minimumQuestions-${uid}`}
+            type="number"
+            min={1}
+            max={200}
+            defaultValue={row.minimumQuestions || 15}
+            invalid={error?.field === "minimumQuestions"}
+          />
+          <Button type="submit" size="small" variant="contained" sx={{ mb: 2.5 }}>
+            Salvar ritmo
+          </Button>
+        </Box>
+
+        {row.reviews.length === 0 ? (
+          <Typography variant="caption" component="p">
+            Nenhuma revisão criada. Elas nascem quando o aluno fecha a aula.
+          </Typography>
+        ) : (
+          <Typography variant="caption" component="p">
+            {row.reviews.filter((review) => review.due).length} vencidas de {row.reviews.length}{" "}
+            criadas.
+          </Typography>
+        )}
+      </Card>
+    </Box>
+  );
+}
 
 export function TeacherReviews() {
   const { plans, planId, grid, reinforcements } = useLoaderData() as LoaderData;
@@ -89,7 +176,7 @@ export function TeacherReviews() {
               params.set("plano", event.target.value);
               setParams(params);
             }}
-            sx={{ minWidth: 260 }}
+            sx={fieldWidth(260)}
           >
             {plans.map((plan) => (
               <MenuItem key={plan.id} value={plan.id}>
@@ -134,67 +221,7 @@ export function TeacherReviews() {
         )}
 
         {grid.map((row) => (
-          <Box key={row.subjectKey} sx={{ mb: 1.5 }}>
-            <Card
-              title={row.subject}
-              sub={`${row.reviews.filter((review) => review.status === "completed").length} de ${row.reviews.length} feitas`}
-              action={
-                <Badge tone={row.reviews.some((review) => review.due) ? "warning" : "neutral"}>
-                  {row.reviews.filter((review) => review.due).length} vencidas
-                </Badge>
-              }
-            >
-              <Box
-                component="form"
-                noValidate
-                data-testid="spacing-form"
-                data-subject={row.subjectKey}
-                sx={{ display: "flex", gap: 1.5, alignItems: "flex-end", flexWrap: "wrap" }}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const data = new FormData(event.currentTarget);
-                  void save(
-                    row,
-                    Number(data.get("lessonSpacing") ?? 2),
-                    Number(data.get("minimumQuestions") ?? 15),
-                  );
-                }}
-              >
-                <Field
-                  label="A cada N aulas"
-                  name="lessonSpacing"
-                  type="number"
-                  min={1}
-                  max={200}
-                  defaultValue={row.lessonSpacing || 2}
-                  invalid={error?.field === "lessonSpacing"}
-                />
-                <Field
-                  label="Mínimo de questões"
-                  name="minimumQuestions"
-                  type="number"
-                  min={1}
-                  max={200}
-                  defaultValue={row.minimumQuestions || 15}
-                  invalid={error?.field === "minimumQuestions"}
-                />
-                <Button type="submit" size="small" variant="contained" sx={{ mb: 2.5 }}>
-                  Salvar ritmo
-                </Button>
-              </Box>
-
-              {row.reviews.length === 0 ? (
-                <Typography variant="caption" component="p">
-                  Nenhuma revisão criada. Elas nascem quando o aluno fecha a aula.
-                </Typography>
-              ) : (
-                <Typography variant="caption" component="p">
-                  {row.reviews.filter((review) => review.due).length} vencidas de{" "}
-                  {row.reviews.length} criadas.
-                </Typography>
-              )}
-            </Card>
-          </Box>
+          <SpacingCard key={row.subjectKey} row={row} error={error} onSave={save} />
         ))}
 
         {planId && (

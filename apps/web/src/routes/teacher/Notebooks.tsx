@@ -10,6 +10,7 @@ import { useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import { ContentBody } from "@/components/AppShell";
 import { api, MAX_LINK_LENGTH, MAX_TITLE_LENGTH, newRequestId, type ApiError, type Notebook } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Cadernos TEC — o `p-cadernos` do professor.
@@ -27,7 +28,10 @@ export async function teacherNotebooksLoader({ request }: { request: Request }) 
   await requireRole("teacher", request);
 
   const plans = await api.listPlans();
-  const planId = new URL(request.url).searchParams.get("plano") ?? plans[0]?.id ?? null;
+  // `?plano=` só vale se for um dos planejamentos que a tela lista; o resto cai
+  // no primeiro, em silêncio (D-13, QA-13).
+  const asked = new URL(request.url).searchParams.get("plano");
+  const planId = plans.some((plan) => plan.id === asked) ? asked : (plans[0]?.id ?? null);
 
   return {
     plans,
@@ -83,7 +87,7 @@ export function TeacherNotebooks() {
                 params.set("plano", event.target.value);
                 setParams(params);
               }}
-              sx={{ minWidth: 260 }}
+              sx={fieldWidth(260)}
             >
               {plans.map((plan) => (
                 <MenuItem key={plan.id} value={plan.id}>

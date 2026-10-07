@@ -1312,3 +1312,16 @@ test("QA-24 · o caderno recusa link javascript:, e a meta fora de 0 a 100, sem 
 
   assert.ok((await api.saveNotebook("plano", { ...caderno, notebookLink: "" }, requestId())).ok);
 });
+
+test("QA-13 · a ficha de um aluno desconhecido rejeita com not_found, e não devolve o primeiro aluno", async () => {
+  const [primeiro] = await api.listStudents({});
+  assert.ok(primeiro);
+  assert.equal((await api.loadStudentFile(primeiro.studentId)).card.studentId, primeiro.studentId);
+
+  await assert.rejects(api.loadStudentFile("nao-e-uuid"), (error: unknown) => {
+    assert.ok(error instanceof ApiThrownError);
+    assert.equal(error.code, "not_found");
+    assert.equal(error.message, "Aluno não encontrado, ou sem vínculo com você.");
+    return true;
+  });
+});

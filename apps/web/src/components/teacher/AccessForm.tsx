@@ -17,6 +17,7 @@ import {
   type StudentCard,
 } from "@/lib/api";
 import { formatInstant, hasExpired } from "@/lib/domain/dates";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * LIBERAR E BLOQUEAR O ACESSO DO ALUNO.
@@ -105,7 +106,7 @@ export function AccessForm({ card }: { card: StudentCard }) {
           value={months}
           slotProps={{ select: { inputProps: { "data-testid": "access-months" } } }}
           onChange={(event) => setMonths(Number(event.target.value))}
-          sx={{ minWidth: 140 }}
+          sx={fieldWidth(140)}
         >
           {ACCESS_MONTHS.map((option) => (
             <MenuItem key={option} value={option}>

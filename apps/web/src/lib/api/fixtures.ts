@@ -1354,8 +1354,15 @@ export const fixturesApi: BoraApi = {
     ),
 
   loadStudentFile: (studentId: Uuid) => {
-    const card =
-      state.students.find((student) => student.studentId === studentId) ?? state.students[0]!;
+    const card = state.students.find((student) => student.studentId === studentId);
+    // A mesma recusa, com a mesma frase, do adaptador: devolver o primeiro
+    // aluno para um id desconhecido escondia o caso que a tela precisa tratar
+    // (QA-13).
+    if (!card) {
+      return Promise.reject(
+        new ApiThrownError("not_found", "Aluno não encontrado, ou sem vínculo com você."),
+      );
+    }
     return later<StudentFile>({
       card,
       plan: PLAN,

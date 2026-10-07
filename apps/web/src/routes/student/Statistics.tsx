@@ -25,6 +25,7 @@ import { requireStudentAccess } from "@/lib/auth/session";
 import { formatDayMonth } from "@/lib/domain/dates";
 import { questionAccuracy } from "@/lib/domain/question-performance";
 import { formatMinutes } from "@/lib/domain/week";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Estatísticas do aluno — o `p-estatisticas` da v2.
@@ -39,19 +40,22 @@ export async function studentStatisticsLoader({ request }: { request: Request })
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { stats: null, comparison: [] as readonly WeeklyQuestionComparison[], subjectPeers: [] as readonly SubjectPeerComparison[], years: [] as number[], year: new Date().getFullYear(), startsOn: null as string | null };
 
-  const asked = Number(params.get("ano"));
+  // OS ANOS VÊM ANTES das leituras: `?ano=` só vale se for um dos que o seletor
+  // oferece, e o resto cai no ano corrente, em silêncio (D-13, QA-13). Sem isto
+  // `?ano=1e9` chegava ao `Date` e lançava `RangeError`. Do ano em que o
+  // planejamento começou até hoje: um seletor com 2019 numa conta criada em
+  // 2026 é ruído.
   const thisYear = new Date().getFullYear();
-  const year = Number.isFinite(asked) && asked > 2000 ? asked : thisYear;
+  const firstYear = Number(plan.startsOn.slice(0, 4));
+  const years = Array.from({ length: Math.max(1, thisYear - firstYear + 1) }, (_, i) => firstYear + i);
+  const asked = Number(params.get("ano"));
+  const year = years.includes(asked) ? asked : thisYear;
 
   const [stats, comparison, subjectPeers] = await Promise.all([
     api.loadStatistics({ studyPlanId: plan.id, year }),
     api.loadStudentWeeklyQuestionComparison(year),
     api.loadStudentSubjectPeerComparison(year),
   ]);
-  // Do ano em que o planejamento começou até hoje: um seletor com 2019 numa
-  // conta criada em 2026 é ruído.
-  const firstYear = Number(plan.startsOn.slice(0, 4));
-  const years = Array.from({ length: Math.max(1, thisYear - firstYear + 1) }, (_, i) => firstYear + i);
 
   return { stats, comparison, subjectPeers, years, year, startsOn: plan.startsOn };
 }
@@ -131,7 +135,7 @@ export function StudentStatistics() {
               next.set("ano", event.target.value);
               setParams(next);
             }}
-            sx={{ minWidth: 140 }}
+            sx={fieldWidth(140)}
           >
             {years.map((option) => (
               <MenuItem key={option} value={String(option)}>

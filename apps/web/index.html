@@ -34,9 +34,66 @@
         /* armazenamento bloqueado: fica no claro, que é o default */
       }
     </script>
+
+    <!--
+      A TELA ESTÁTICA DE PRIMEIRA CARGA (QA-26, R-UI-17).
+
+      Existe para o branco que vem ANTES do bundle — rede lenta, ou `lib/env.ts`
+      lançando por falta de `VITE_*` —, quando nem o tema do MUI nem o React
+      Router existem. Por isso usa as cores do SISTEMA (`Canvas` e `CanvasText`)
+      em vez de copiar os tokens: o script acima já pôs `data-theme`, e
+      `color-scheme: dark` é a mesma declaração que o MUI emite. O React apaga o
+      conteúdo de `#root` no primeiro render.
+
+      A classe `boot` mora num `div` DENTRO de `#root`, e não no próprio `#root`:
+      o React só apaga os filhos, e a classe (com `min-height` e flex) ficaria
+      para sempre no contêiner da aplicação.
+
+      Nada no `body`, e nada de `transition`: ver "Nada de `transition` no
+      `body`" no CLAUDE.md.
+    -->
+    <style>
+      html[data-theme="dark"] {
+        color-scheme: dark;
+      }
+      .boot {
+        min-height: 100vh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 16px;
+        text-align: center;
+        font-family: system-ui, sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+      .boot p {
+        margin: 0;
+      }
+    </style>
+    <noscript>
+      <style>
+        .boot-wait {
+          display: none;
+        }
+      </style>
+    </noscript>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" data-testid="app-loading" role="status">
+        <div class="boot-wait">
+          <p>Carregando a Fronteira Concursos…</p>
+          <p>Se demorar, confira a conexão e recarregue a página.</p>
+        </div>
+        <noscript>
+          <p>Ative o JavaScript do navegador para usar a Fronteira Concursos.</p>
+        </noscript>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -8,6 +8,7 @@ import { Card, WEEKDAY_NAMES } from "@bora/ui";
 import type { DayGroup } from "@/lib/api";
 import { formatDayMonth } from "@/lib/domain/dates";
 import type { ScheduleFilter } from "@/lib/domain/schedule";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 export function StudyCalendar({ days, selectedDate, today, filter, subject, subjects, onChange, onToday }: {
   days: readonly DayGroup[];
@@ -51,13 +52,13 @@ export function StudyCalendar({ days, selectedDate, today, filter, subject, subj
           })}
         </Box>
         <Box sx={{ display: "flex", gap: 1.5, mt: 2, flexWrap: "wrap" }}>
-          <TextField select label="Mostrar" size="small" value={filter} onChange={(event) => onChange("filtro", event.target.value)} sx={{ minWidth: 180 }}>
+          <TextField select label="Mostrar" size="small" value={filter} onChange={(event) => onChange("filtro", event.target.value)} sx={fieldWidth(180)}>
             <MenuItem value="all">Todas as metas</MenuItem>
             <MenuItem value="pending">Pendentes e em andamento</MenuItem>
             <MenuItem value="completed">Concluídas</MenuItem>
             <MenuItem value="reviews">Revisões e reforços</MenuItem>
           </TextField>
-          <TextField select label="Disciplina" size="small" value={subject} slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }} onChange={(event) => onChange("disciplina", event.target.value || null)} sx={{ minWidth: 200, maxWidth: "100%" }}>
+          <TextField select label="Disciplina" size="small" value={subject} slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }} onChange={(event) => onChange("disciplina", event.target.value || null)} sx={fieldWidth(200)}>
             <MenuItem value="">Todas as disciplinas</MenuItem>
             {subjects.map((name) => <MenuItem key={name} value={name}>{name}</MenuItem>)}
           </TextField>

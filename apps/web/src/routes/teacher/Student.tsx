@@ -13,6 +13,7 @@ import { api, type ApiError, type QuizSessionSummary, type StudentCard } from "@
 import { requireRole } from "@/lib/auth/session";
 import { formatInstant, hasExpired } from "@/lib/domain/dates";
 import { formatMinutes } from "@/lib/domain/week";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * A ficha do aluno — era o `aluno-modal` da v2, agora é rota.
@@ -165,7 +166,7 @@ export function TeacherStudent() {
                     setClassMessage(null);
                     setClassError(null);
                   }}
-                  sx={{ minWidth: 220 }}
+                  sx={fieldWidth(220)}
                 >
                   <MenuItem value="">Sem turma</MenuItem>
                   {classes.map((turma) => (
