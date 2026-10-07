@@ -21,19 +21,74 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures/index.ts";
 import { asUser, count, one, query } from "../fixtures/db.ts";
-import { addTheoryCatalog, addWeek, createUser, joinWaitlist } from "../fixtures/scenario.ts";
-import { alert, content, field, testId } from "../support/ui.ts";
-import { PAGE_TITLES, TEACHER_ROUTES } from "../support/routes.ts";
+import {
+  addTheoryCatalog,
+  addWeek,
+  createScenario,
+  createUser,
+  joinWaitlist,
+} from "../fixtures/scenario.ts";
+import { alert, content, field, navItem, testId } from "../support/ui.ts";
+import { PAGE_TITLES, TEACHER_ROUTES, studentPageOf } from "../support/routes.ts";
 
-test.describe("F-PROF-01 · todas as telas do professor abrem", () => {
+/**
+ * Os `id` que se repetem na página (QA-22). Um cartão por disciplina com o `id`
+ * padrão de `Field` repetia `field-<name>`, e o `<label for>` do segundo apontava
+ * para o campo do primeiro.
+ */
+async function duplicatedIds(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const element of document.querySelectorAll("[id]")) {
+      if (seen.has(element.id)) repeated.add(element.id);
+      seen.add(element.id);
+    }
+    return [...repeated];
+  });
+}
+
+test.describe("F-PROF-01 · todas as telas do professor abrem (QA-22)", () => {
   for (const route of TEACHER_ROUTES) {
-    test(`${route} abre sem erro de console`, async ({ teacherPage, consoleErrors }) => {
+    test(`${route} abre sem erro de console e sem id repetido`, async ({
+      teacherPage,
+      consoleErrors,
+      scenario,
+    }) => {
+      // Duas disciplinas, e portanto dois cartões nas telas de regra.
+      await addTheoryCatalog(scenario, { withUnaudited: true });
       await teacherPage.goto(route);
 
       await expect(teacherPage.locator("h1")).toHaveText(PAGE_TITLES[route]!);
+
+      // ANTES da checagem de id: sem dois cartões a checagem passa sem exercitar
+      // nada. Espera o h1 (acima) e conta só depois — `count()` não espera.
+      if (route === "/professor/teoria") {
+        await expect(testId(teacherPage, "subject-rule-form")).toHaveCount(2);
+      }
+      if (route === "/professor/revisoes") {
+        await expect(testId(teacherPage, "spacing-form")).toHaveCount(2);
+      }
+
+      expect(await duplicatedIds(teacherPage)).toEqual([]);
       expect(consoleErrors).toEqual([]);
     });
   }
+
+  test.describe("sem planejamento ativo — N-03", () => {
+    test.use({ scenarioOptions: { withPlan: false } });
+
+    test("Gerar metas diz que não há planejamento, em vez de quebrar", async ({
+      teacherPage,
+      consoleErrors,
+    }) => {
+      await teacherPage.goto("/professor/metas");
+
+      await expect(teacherPage.locator("h1")).toHaveText("Gerar metas");
+      await expect(testId(teacherPage, "empty")).toContainText("Nenhum planejamento ativo");
+      expect(consoleErrors).toEqual([]);
+    });
+  });
 });
 
 test.describe("F-PROF-02 · a lista de alunos", () => {
@@ -72,6 +127,16 @@ test.describe("F-PROF-02 · a lista de alunos", () => {
   });
 });
 
+/**
+ * Um instante como a tela o mostra: o fuso do aparelho, que na suíte é
+ * `America/Sao_Paulo` (`playwright.config.ts`). A data esperada SAI DO BANCO e é
+ * formatada aqui — escrevê-la à mão erraria o `2020-06-01` de `expiryFor`, que é
+ * meia-noite UTC e aparece como 31/05/2020 em Brasília (D-11).
+ */
+function aparelho(instante: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(instante);
+}
+
 test.describe("F-PROF-03 · a ficha do aluno", () => {
   test("é uma ROTA, com endereço próprio", async ({ teacherPage, scenario }) => {
     await teacherPage.goto("/professor");
@@ -84,6 +149,74 @@ test.describe("F-PROF-03 · a ficha do aluno", () => {
     // alguém, botão voltar, e título de aba dizendo de quem é a ficha.
     await teacherPage.goBack();
     await expect(teacherPage).toHaveURL(/\/professor$/);
+  });
+
+  test("aluno alheio ou id malformado mostram 'Não encontrado', sem 'Atualize a página' — QA-13", async ({
+    page,
+    signIn,
+    scenario,
+  }) => {
+    const outro = await createScenario();
+    await signIn(outro.teacher);
+
+    for (const id of [scenario.student.id, "nao-e-uuid"]) {
+      await page.goto(studentPageOf(id));
+
+      await expect(page.locator("h1")).toHaveText("Não encontrado");
+      await expect(content(page)).toContainText("Aluno não encontrado");
+      await expect(page.locator("body")).not.toContainText("Atualize a página");
+      await expect(page.locator("body")).not.toContainText(scenario.student.name);
+    }
+  });
+
+  test.describe("com a vigência vencida — QA-20", () => {
+    test.use({ scenarioOptions: { access: "expired" } });
+
+    test("a ficha diz 'Venceu em', e não 'soma ao que falta'", async ({
+      teacherPage,
+      scenario,
+    }) => {
+      const { vence } = await one<{ vence: Date }>(
+        "select access_expires_at as vence from public.profiles where id = $1",
+        [scenario.student.id],
+      );
+      const data = aparelho(vence);
+
+      await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+      await expect(testId(teacherPage, "access-form")).toContainText(`Venceu em ${data}`);
+      await expect(testId(teacherPage, "access-form")).toContainText(
+        "A liberação conta a partir de hoje.",
+      );
+      await expect(testId(teacherPage, "access-form")).not.toContainText("soma ao que");
+      await expect(content(teacherPage)).toContainText(`Venceu em ${data}`);
+      // Nada de instante em formato de máquina.
+      await expect(content(teacherPage)).not.toContainText("T00:00:00");
+    });
+
+    test("na lista e na ficha, quem passou da data é 'Vencido', e não 'Liberado'", async ({
+      teacherPage,
+      scenario,
+    }) => {
+      // `access_status` fica `active` até alguém o expirar (R-VINC-28): é o
+      // relógio que decide. Ativo com data vencida é o que a lista mostrava
+      // como "Liberado".
+      await query(
+        "update public.profiles set access_status = 'active' where id = $1",
+        [scenario.student.id],
+      );
+
+      await teacherPage.goto("/professor");
+      const card = teacherPage.locator(
+        `[data-testid="student-card"][data-student-id="${scenario.student.id}"]`,
+      );
+      await expect(card).toHaveCount(1);
+      await expect(card).toContainText("Vencido");
+      await expect(card).not.toContainText("Liberado");
+
+      await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+      await expect(content(teacherPage)).toContainText("Vencido");
+      await expect(content(teacherPage)).not.toContainText("Liberado");
+    });
   });
 
   test("o aluno de outro professor não existe para este", async ({ teacherPage }) => {
@@ -355,6 +488,39 @@ test.describe("F-PROF-06 · copiar a semana anterior", () => {
   });
 });
 
+test.describe("F-GPLAN-06 · nome de planejamento repetido — QA-16", () => {
+  test("outra caixa e espaço nas pontas é o mesmo nome, e o campo tem teto de 120 — QA-15", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await teacherPage.goto("/professor/planejamentos");
+    await teacherPage.getByRole("button", { name: "Novo planejamento" }).click();
+
+    const dialogo = testId(teacherPage, "plan-dialog");
+    await expect(field(teacherPage, "name")).toHaveAttribute("maxlength", "120");
+    await expect(field(teacherPage, "targetExam")).toHaveAttribute("maxlength", "200");
+
+    await field(teacherPage, "name").fill(`  ${scenario.planName.toUpperCase()}  `);
+    await dialogo.getByRole("button", { name: "Criar" }).click();
+
+    // A frase é a do contrato, e fica DENTRO do diálogo: "Este registro já
+    // existe." não diria o que fazer.
+    await expect(alert(dialogo, "error")).toHaveText("Este aluno já tem um planejamento com esse nome.");
+    expect(
+      await count(
+        `select count(*) from public.study_plans
+          where student_id = $1 and lower(btrim(name)) = lower(btrim($2))`,
+        [scenario.student.id, scenario.planName],
+      ),
+    ).toBe(1);
+
+    // Com um nome novo o mesmo formulário grava.
+    await field(teacherPage, "name").fill(`Outro ${scenario.planId.slice(0, 8)}`);
+    await dialogo.getByRole("button", { name: "Criar" }).click();
+    await expect(testId(teacherPage, "plan-dialog")).toHaveCount(0);
+  });
+});
+
 test.describe("F-GPLAN-01 · planejamentos (QA-03, QA-12)", () => {
   test("nasce PAUSADO, e ativar arquiva o anterior", async ({ teacherPage, scenario }) => {
     // NOME ÚNICO POR CENÁRIO. Um literal compartilhado faz dois workers
@@ -615,6 +781,60 @@ test.describe("F-CAD-01 · cadernos TEC", () => {
     ).toHaveAttribute("data-deleted", "false");
   });
 
+  test("link javascript: é recusado, e o banco fica com o anterior — QA-24", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const blockId = scenario.blocks[0]!.id;
+    await teacherPage.goto("/professor/cadernos");
+
+    const linha = teacherPage.locator(`[data-testid="notebook-row"][data-block-id="${blockId}"]`);
+    await linha.getByRole("button", { name: "Editar" }).click();
+    await field(teacherPage, "notebookLink").fill("javascript:window.__pwn=1;alert(1)");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(alert(teacherPage, "error")).toContainText("Informe um link HTTPS válido");
+    expect(
+      (await one<{ notebook_link: string }>(
+        "select notebook_link from public.study_plan_notebooks where block_id = $1",
+        [blockId],
+      )).notebook_link,
+    ).toBe("https://www.tecconcursos.com.br/");
+
+    // `http://` também não: a regra é `https://` e nada mais.
+    await field(teacherPage, "notebookLink").fill("http://www.tecconcursos.com.br/");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+    await expect(alert(teacherPage, "error")).toContainText("Informe um link HTTPS válido");
+
+    // Qualquer https passa, não só o do TEC (D-09).
+    await field(teacherPage, "notebookLink").fill("https://outro.example/caderno");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+    await expect(alert(teacherPage, "error")).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        (await one<{ notebook_link: string }>(
+          "select notebook_link from public.study_plan_notebooks where block_id = $1",
+          [blockId],
+        )).notebook_link,
+      )
+      .toBe("https://outro.example/caderno");
+  });
+
+  test("meta de acerto fora de 0 a 100 é recusada com a frase, e não como valor cru — QA-24", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const blockId = scenario.blocks[0]!.id;
+    await teacherPage.goto("/professor/cadernos");
+
+    const linha = teacherPage.locator(`[data-testid="notebook-row"][data-block-id="${blockId}"]`);
+    await linha.getByRole("button", { name: "Editar" }).click();
+    await field(teacherPage, "subjectTarget").fill("150");
+    await linha.getByRole("button", { name: "Salvar" }).click();
+
+    await expect(alert(teacherPage, "error")).toHaveText("A meta de acerto vai de 0 a 100%.");
+  });
+
   test("editar o nome vale para este planejamento", async ({ teacherPage, scenario }) => {
     const blockId = scenario.blocks[0]!.id;
     await teacherPage.goto("/professor/cadernos");
@@ -641,7 +861,7 @@ test.describe("F-TCAT-01 · catálogo de teoria", () => {
     const form = teacherPage.locator('[data-testid="subject-rule-form"][data-subject="ciencias forenses"]');
     await expect(form).toBeVisible();
 
-    await form.locator("#field-initialQuestions").fill("25");
+    await form.locator('input[name="initialQuestions"]').fill("25");
     await form.getByRole("button", { name: "Acrescentar revisão" }).click();
     await form.getByRole("button", { name: "Salvar regras" }).click();
 
@@ -745,7 +965,7 @@ test.describe("F-TREV-01 · revisões do professor", () => {
 
     await teacherPage.goto("/professor/revisoes");
     const form = teacherPage.locator('[data-testid="spacing-form"][data-subject="ciencias forenses"]');
-    await form.locator("#field-lessonSpacing").fill("4");
+    await form.locator('input[name="lessonSpacing"]').fill("4");
     await form.getByRole("button", { name: "Salvar ritmo" }).click();
 
     await expect(alert(teacherPage, "success")).toContainText("Espaçamento de");
@@ -767,7 +987,7 @@ test.describe("F-TREV-01 · revisões do professor", () => {
 
     await teacherPage.goto("/professor/revisoes");
     const form = teacherPage.locator('[data-testid="spacing-form"]').first();
-    await form.locator("#field-lessonSpacing").fill("0");
+    await form.locator('input[name="lessonSpacing"]').fill("0");
     await form.getByRole("button", { name: "Salvar ritmo" }).click();
 
     await expect(alert(teacherPage, "error")).toContainText("entre 1 e 200");
@@ -973,9 +1193,15 @@ test.describe("F-VINC · liberar e bloquear", () => {
     await testId(teacherPage, "grant-access").click();
     await expect(alert(teacherPage, "success")).toContainText("1 mês");
 
-    const primeira = await one<{ vence: string }>(
-      "select to_char(access_expires_at, 'YYYY-MM-DD') as vence from public.profiles where id = $1",
+    const primeira = await one<{ vence: string; instante: Date }>(
+      `select to_char(access_expires_at, 'YYYY-MM-DD') as vence, access_expires_at as instante
+         from public.profiles where id = $1`,
       [scenario.student.id],
+    );
+
+    // A vigência aparece em dd/mm/aaaa, no fuso do aparelho — QA-20.
+    await expect(testId(teacherPage, "access-form")).toContainText(
+      `Vigência atual até ${aparelho(primeira.instante)}. Liberar soma ao que ainda falta.`,
     );
 
     await teacherPage.getByRole("combobox", { name: "Vigência" }).click();
@@ -1066,6 +1292,49 @@ test.describe("F-VINC · liberar e bloquear", () => {
     await teacherPage.goto("/aluno");
     await expect(teacherPage).toHaveURL(/\/aluno\/lista-espera$/);
   });
+
+  test("F-VINC-09 · liberar e bloquear valem na próxima navegação do aluno, sem F5 — QA-09", async ({
+    studentPage,
+    scenario,
+  }) => {
+    // O professor age em OUTRO aparelho: `teacherPage` e `studentPage` são a mesma
+    // aba, então a liberação vai pela RPC real, como em F-VINC-07.
+    const agir = (action: "grant" | "suspend") =>
+      asUser(scenario.teacher.id, (client) =>
+        client.query("select * from public.set_student_access($1, $2, $3, $4)", [
+          scenario.student.id,
+          action,
+          action === "grant" ? 3 : null,
+          randomUUID(),
+        ]),
+      );
+
+    await studentPage.goto("/aluno/conta");
+    await expect(studentPage.locator("h1")).toHaveText("Meus dados");
+    await expect(navItem(studentPage, "Minha semana")).toHaveAttribute("data-enabled", "false");
+    await expect(alert(studentPage, "warning")).toContainText("ainda não foi liberado");
+
+    await agir("grant");
+
+    // O layout não tem caminho, e o router não reexecutava o loader dele quando
+    // só o filho mudava: a barra seguia inerte até o F5. Nenhum `reload` aqui.
+    await navItem(studentPage, "Lista de espera").click();
+    await expect(studentPage.locator("h1")).toHaveText("Lista de espera");
+    await expect(navItem(studentPage, "Minha semana")).toHaveAttribute("data-enabled", "true");
+    await expect(alert(studentPage, "warning")).toHaveCount(0);
+
+    await navItem(studentPage, "Minha semana").click();
+    await expect(studentPage.locator("h1")).toHaveText("Minha semana");
+
+    // O inverso: suspenso, os itens voltam a ficar inertes e o aviso volta, em vez
+    // de cada clique devolver o aluno à lista de espera sem explicação.
+    await agir("suspend");
+
+    await navItem(studentPage, "Meus dados").click();
+    await expect(studentPage.locator("h1")).toHaveText("Meus dados");
+    await expect(navItem(studentPage, "Minha semana")).toHaveAttribute("data-enabled", "false");
+    await expect(alert(studentPage, "warning")).toContainText("ainda não foi liberado");
+  });
 });
 
 test.describe("F-MATR · turmas", () => {
@@ -1103,6 +1372,29 @@ test.describe("F-MATR · turmas", () => {
     await expect(
       teacherPage.locator(`[data-testid="student-card"][data-student-id="${scenario.student.id}"]`),
     ).toContainText(`${nome} (manhã)`);
+  });
+
+  test("F-MATR-06 · turma com nome repetido é recusada — QA-16", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const [turma] = await criarTurmas(teacherPage, scenario.planId, 1);
+
+    await teacherPage.getByRole("button", { name: "Nova turma" }).click();
+    const dialogo = testId(teacherPage, "class-dialog");
+    await expect(field(teacherPage, "name")).toHaveAttribute("maxlength", "120");
+    await expect(field(teacherPage, "description")).toHaveAttribute("maxlength", "2000");
+
+    await field(teacherPage, "name").fill(`  ${turma!.nome.toUpperCase()} `);
+    await dialogo.getByRole("button", { name: "Criar" }).click();
+
+    await expect(alert(dialogo, "error")).toHaveText("Você já tem uma turma com esse nome.");
+    expect(
+      await count(
+        "select count(*) from public.classes where teacher_id = $1 and lower(btrim(name)) = lower(btrim($2))",
+        [scenario.teacher.id, turma!.nome],
+      ),
+    ).toBe(1);
   });
 
   test("F-MATR-02 · matricular quem já está em outra turma MOVE", async ({

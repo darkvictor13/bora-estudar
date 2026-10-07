@@ -139,17 +139,17 @@ Decidido neste plano, sem mudar regra de produto:
      - R-AUTH-06 reescrita: o destino vai em `?next=`, com o fragmento dentro
        dele, só na primeira carga;
      - R-AUTH-07 corrigida: o gatilho cria sempre aluno e IGNORA `role`;
-     - **R-AUTH-16**: o login devolve ao `next`, filtrado por
+     - **R-AUTH-17** (o R-AUTH-16 já é do PR 2, `safeInternalPath`): o login devolve ao `next`, filtrado por
        `safeInternalPath`; `next` de outro papel termina na casa do papel real,
        sem laço;
-     - **R-AUTH-17**: o cadastro diz "Já existe uma conta com este e-mail."
+     - **R-AUTH-18**: o cadastro diz "Já existe uma conta com este e-mail."
        DE PROPÓSITO. Porquê: com a confirmação desligada a API responde 422 a
        qualquer um, e só ligá-la corrige. Mitigação: `sign_in_sign_ups = 30` por
        5 min por IP (`config.toml:215`). Revisitar quando staging entregar
        e-mail. A tela oferece "Entrar" e "Esqueci minha senha" ali mesmo;
      - no diagrama do Fluxo, `/entrar + location.hash` vira `/entrar?next=…`;
      - CA-09 ganha os dois links; CA-13 passa a "o fragmento volta junto com o
-       destino"; **CA-16** = F-AUTH-13; cabeçalho "F-AUTH-01 a F-AUTH-13";
+       destino"; **CA-17** (o CA-16 já é do F-AUTH-14) = F-AUTH-13; cabeçalho "F-AUTH-01 a F-AUTH-14";
      - "Confirmação de e-mail obrigatória", em Fora de escopo, aponta para
        `../plano-email-staging.md`.
    - `docs/specs/02-acesso-e-assinatura.md`, R-ACC-08: o layout do aluno
@@ -178,7 +178,7 @@ Decidido neste plano, sem mudar regra de produto:
      - na tabela de testids, `account-access` em Conta e `existing-account` em
        Autenticação.
    - `docs/bugs-encontrados.md`, GAP-04: troque "Em produção, com confirmação
-     ligada…" pela decisão D-14 e aponte para a R-AUTH-17.
+     ligada…" pela decisão D-14 e aponte para a R-AUTH-18.
 
 2. **Datas no domínio** — `lib/domain/dates.ts`, novo, e `lib/domain/dates.test.ts`.
    - Imports só de tipo e relativos (`import type { IsoDate, IsoDateTime } from
@@ -279,7 +279,7 @@ Decidido neste plano, sem mudar regra de produto:
      | `components/teacher/AccessForm.tsx:90-92` | instante | ver abaixo | some o ISO |
      | `routes/teacher/Plans.tsx:127` | hoje | `todayLocal()` | corrige depois das 21h |
      | `routes/teacher/Plans.tsx:239-240` | data | `formatDate` | some o ISO |
-     | `lib/api/supabase/statistics.ts:391-398` | instante agrupado | `localDateOf(row.created_at)` na chave e no filtro; `.slice(0, 7)` do dia LOCAL no mês; rótulo por `formatDayMonth` | corrige o dia da série |
+     | `lib/api/supabase/statistics.ts:391-398` | instante agrupado | **o 5a já fez** (`entryDay` na chave, no filtro e no mês); aqui só o rótulo por `formatDayMonth` | some a fatia |
      | `routes/student/Planning.tsx:29-33` | data | `formatDate` (o `—` do nulo fica na tela) | igual |
      | `routes/student/MockExams.tsx:33`, `routes/teacher/MockExams.tsx:123` | data | `formatDate` | igual |
      | `routes/student/Overview.tsx:104`, `components/student/StudyCalendar.tsx:32`, `routes/teacher/Goals.tsx:68`, `routes/student/Statistics.tsx:173` | data (dia/mês) | `formatDayMonth` | igual |

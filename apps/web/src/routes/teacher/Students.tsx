@@ -12,6 +12,7 @@ import { api, type StudentCard, type StudentPace } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
 import { ROUTES } from "@/lib/routes";
 import { formatMinutes } from "@/lib/domain/week";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Meus alunos — o `p-meusAlunos` da v2.
@@ -29,11 +30,15 @@ import { formatMinutes } from "@/lib/domain/week";
  * produto até 18/09/2026.
  */
 export async function teacherStudentsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const params = new URL(request.url).searchParams;
   const search = params.get("busca") ?? "";
-  const pace = params.get("ritmo") as StudentPace | null;
+  // `?ritmo=` só vale se for um dos três ritmos; o resto é sem filtro, em
+  // silêncio (D-13, QA-13). Antes, valor inventado esvaziava a lista e deixava
+  // o seletor em branco.
+  const askedPace = params.get("ritmo");
+  const pace = PACES.find((candidate) => candidate === askedPace) ?? null;
   const asked = params.get("turma") ?? "";
 
   // AS TURMAS VÊM PRIMEIRO, e as duas leituras não correm em paralelo de
@@ -54,6 +59,8 @@ export async function teacherStudentsLoader({ request }: { request: Request }) {
 }
 
 type LoaderData = Awaited<ReturnType<typeof teacherStudentsLoader>>;
+
+const PACES: readonly StudentPace[] = ["on_track", "attention", "behind"];
 
 const PACE: Record<StudentPace, { label: string; tone: BadgeTone }> = {
   on_track: { label: "Em ritmo", tone: "success" },
@@ -163,7 +170,7 @@ export function TeacherStudents() {
               defaultValue={search}
               slotProps={{ htmlInput: { "data-testid": "student-search" } }}
               onChange={(event) => setParam("busca", event.target.value)}
-              sx={{ minWidth: 220 }}
+              sx={fieldWidth(220)}
             />
             <TextField
               select
@@ -172,7 +179,7 @@ export function TeacherStudents() {
               value={classId}
               slotProps={{ select: { inputProps: { "data-testid": "class-filter" } } }}
               onChange={(event) => setParam("turma", event.target.value)}
-              sx={{ minWidth: 180 }}
+              sx={fieldWidth(180)}
             >
               <MenuItem value="">Todas</MenuItem>
               {classes.map((turma) => (
@@ -188,7 +195,7 @@ export function TeacherStudents() {
               value={pace}
               slotProps={{ select: { inputProps: { "data-testid": "pace-filter" } } }}
               onChange={(event) => setParam("ritmo", event.target.value)}
-              sx={{ minWidth: 160 }}
+              sx={fieldWidth(160)}
             >
               <MenuItem value="">Todos</MenuItem>
               <MenuItem value="behind">Atrasado</MenuItem>
@@ -238,7 +245,10 @@ export function TeacherStudents() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
               gap: 1.5,
-              [theme.breakpoints.down("md")]: { gridTemplateColumns: "1fr" },
+              // `minmax(0, 1fr)`, e não `1fr`: o `1fr` é `minmax(auto, 1fr)`, e o
+              // nome do plano em `noWrap` empurra o mínimo da coluna para além
+              // dos 375px (QA-23).
+              [theme.breakpoints.down("md")]: { gridTemplateColumns: "minmax(0, 1fr)" },
             })}
           >
             {students.map((student) => (

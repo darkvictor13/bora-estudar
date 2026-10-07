@@ -1,4 +1,5 @@
 import type { DayGroup, Goal, Week, Weekday } from "../api/contract.ts";
+import { localDateOf } from "./dates.ts";
 import { addDays } from "./week.ts";
 
 export type ScheduleFilter = "all" | "pending" | "completed" | "reviews";
@@ -31,7 +32,7 @@ export function scheduleFilter(value: string | null): ScheduleFilter {
 
 /** Hoje no fuso do aluno, sem converter a data local para UTC. */
 export function localDate(now = new Date()): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return localDateOf(now);
 }
 
 /**

@@ -9,6 +9,7 @@ import { MarkingToolbar, markSx } from "@/components/MarkingToolbar";
 import type { Result } from "@/lib/api";
 import { selectedTexts } from "@/lib/ui/textSelection";
 import { useMarkingSession } from "@/lib/ui/useMarkingSession";
+import { formatDate } from "@/lib/domain/dates";
 import type { LawDocument, LawEntry } from "@/lib/domain/law-library";
 import {
   anchorLawMarks,
@@ -107,7 +108,7 @@ export function LawContinuousReader({ law, document: lawDocument, initialMarks, 
       <Card title={law.title} sub={`${law.norm} · ${law.subject}`} action={<Badge tone="success">Lei seca</Badge>}>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", justifyContent: "space-between" }}>
           <Typography variant="body2" color="text.secondary">
-            Transcrição do lote recebido em {law.sourceDate ? new Date(`${law.sourceDate}T12:00:00`).toLocaleDateString("pt-BR") : "2026"}. Confira a redação vigente na fonte oficial.
+            Transcrição do lote recebido em {law.sourceDate ? formatDate(law.sourceDate) : "2026"}. Confira a redação vigente na fonte oficial.
           </Typography>
           <Button component="a" href={law.officialUrl} target="_blank" rel="noopener noreferrer" size="small" variant="outlined" endIcon={<ArrowOutwardIcon />}>
             Fonte oficial · Planalto

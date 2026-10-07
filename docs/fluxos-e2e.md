@@ -108,16 +108,16 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 
 | Área | Testids |
 |---|---|
-| Casca | `content`, `sidebar`, `sidebar-toggle`, `sidebar-foot`, `nav-item`, `user-chip`, `user-name`, `sign-out`, `theme-toggle`, `theme-unsaved` |
+| Casca | `content`, `sidebar`, `sidebar-toggle`, `sidebar-foot`, `nav-item`, `user-chip`, `user-name`, `sign-out`, `theme-toggle`, `theme-unsaved`, `app-loading` (a tela de primeira carga, de `RootLoading` e de `index.html`) |
 | Primitivas | `alert` (+`data-status`), `badge`, `card`, `metric`, `metric-value`, `page-header`, `empty`, `day-chip` |
-| Autenticação | `auth-card`, `auth-overlay` |
+| Autenticação | `auth-card`, `auth-overlay`, `existing-account` |
 | Semana do aluno | `week-hero`, `week-stat`, `week-stat-value`, `day-group`, `day-count`, `goal-row` (+`data-goal-id`, `data-status`), `goal-check`, `goal-actions`, `goal-blocked`, `goal-theory`, `record-study-dialog`, `extra-study-dialog` |
 | Teoria | `theory-dialog`, `theory-tabs`, `theory-subject`, `theory-percent`, `theory-review`, `theory-save-continue`, `theory-save-end`, `initial-questions-form`, `initial-questions-count`, `lesson-row` (+`data-lesson-id`) |
 | Revisões e reforço | `review-row` (+`data-review-id`), `review-rule`, `spacing-form`, `cycle-row`, `reinforcement-row` |
 | Gráficos | `chart-bar`, `chart-point`, `chart-single-value`, `chart-table`, `chart-tooltip`, `ranked-row`, `ranked-target` |
 | Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
-| Conta | `account-form`, `waitlist-form` |
+| Conta | `account-form`, `account-access`, `waitlist-form` |
 | Leitura e grifo | `flashcard-flip` (+`data-flipped`), `flashcard-answer`, `flashcard-mark` e `law-mark` (+`data-style`, `data-color`; o do cartão também `data-side`) |
 | Erro | `error-code` — o identificador do evento relatado, e só existe quando houve relato |
 
@@ -171,17 +171,18 @@ diff mostra a omissão.
 
 | Id | Cobre |
 |---|---|
-| F-AUTH-01 | anônimo é mandado para o login, em toda rota protegida |
+| F-AUTH-01 | anônimo é mandado para o login, em toda rota protegida, com `?next=` apontando para ela |
 | F-AUTH-02/03 | credencial recusada, sem revelar se a conta existe; campos vazios validados pela action |
 | F-AUTH-04 | login leva cada papel para a própria casa |
 | F-AUTH-05 | papel errado é devolvido para a própria casa |
 | F-AUTH-06 | tela pública com sessão ativa redireciona |
 | F-AUTH-07 | logout apaga o cookie e a área volta a barrar |
 | F-AUTH-08 | cadastro público cria o perfil e cai na lista de espera, sem professor e sem acesso |
-| F-AUTH-09 | validações do cadastro: nome curto, senha curta, e-mail repetido |
-| F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações |
+| F-AUTH-09 | validações do cadastro: nome curto, senha curta, senha só de espaços (QA-18), e-mail repetido — com os links "Entrar" e "Esqueci minha senha" junto da frase (QA-29) |
+| F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações (senhas diferentes, curtas e só de espaços) |
+| F-AUTH-13 | o link profundo volta depois do login: `next` pelo guarda, por papel errado, externo e por navegação do cliente — QA-25 |
 | F-AUTH-14 | `/confirmar?next=` não manda para fora do site — QA-02 |
-| F-CONTA-01 | meus dados: o nome salva, o resto é contexto — `tests/student-analysis.spec.ts` |
+| F-CONTA-01 | meus dados nos dois papéis: o aluno vê o nome do professor, o professor não vê o cartão Acesso, o nome salva, e o campo do nome tem teto de 120 — `tests/student-analysis.spec.ts` (QA-08, QA-21, QA-15) |
 
 ### Casca e navegação — `tests/shell.spec.ts`
 
@@ -195,13 +196,15 @@ diff mostra a omissão.
 | F-UI-08 | o item ativo é o da rota mais específica, e só ele |
 | F-UI-09 | o rodapé identifica quem está logado, nos dois papéis |
 | F-UI-10 | sem acesso liberado, os itens de estudo ficam inertes e os da conta não |
+| F-UI-11 | nenhuma tela do aluno nem do professor passa de 375px, com o cronômetro parado e rodando; o botão de modo diz o texto que mostra — QA-23 |
+| F-UI-12 | a primeira carga mostra "Carregando" sem `h1`, e sem o bundle a tela estática diz o que fazer, legível nos dois temas — QA-26 |
 
 ### Aluno — semana e execução — `tests/student-week.spec.ts`
 
 | Id | Cobre |
 |---|---|
 | F-META-01 | os quatro números do cabeçalho saem dos REGISTROS, não das metas |
-| F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona |
+| F-META-02 | a semana escolhida mora na URL, e o botão voltar funciona; semana fora do seletor (`?semana=40`, `1e9`) cai na CORRENTE — QA-13 |
 | F-META-03 | registrar estudo entra no ledger e **não** conclui a meta; dois registros somam; rede caindo mostra "Sem conexão", e a retentativa no mesmo diálogo grava uma vez — QA-06; a resposta que se perde grava um registro só — QA-04; minutos negativos, acima de 240 e fracionados são recusados e nada é gravado — QA-10 |
 | F-META-04 | concluir e reabrir devolve o estado que os registros justificam |
 | F-META-05 | meta de bateria não se mexe pela tela |
@@ -233,7 +236,7 @@ diff mostra a omissão.
 |---|---|
 | F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso; o extra de ontem cai em ontem na série por dia — N-07 |
 | F-REV-01 | a grade de revisão mostra o espaçamento do professor; a vencida é marcada; o reforço tem lugar próprio |
-| F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde |
+| F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde; WhatsApp sem formato e nascimento no futuro são recusados, e nada grava (QA-19) |
 | F-CUP-01 | resgatar cupom libera o acesso — **`fixme`** |
 | F-CAD-01 | cadernos TEC do aluno: lista por disciplina, com link e sem botão de bateria |
 
@@ -241,21 +244,23 @@ diff mostra a omissão.
 
 | Id | Cobre |
 |---|---|
-| F-PROF-01 | todas as telas do professor abrem |
+| F-PROF-01 | todas as telas do professor abrem, sem `id` repetido (QA-22); sem planejamento ativo, "Gerar metas" diz "Nenhum planejamento ativo" (N-03) |
 | F-PROF-02 | a lista abre pelos atrasados; filtros somam; o recorte fica na URL |
-| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a tela diz o que ainda não dá para fazer |
+| F-PROF-03 | a ficha do aluno é uma ROTA; aluno de outro professor não existe; a ficha de aluno alheio ou malformado diz "Não encontrado", sem "Atualize a página" (QA-13); a tela diz o que ainda não dá para fazer; vigência vencida aparece "Venceu em" (QA-20) |
 | F-PROF-04 | a prévia vem antes da escrita, e não grava nada |
 | F-PROF-05 | gerar a semana preserva o concluído e o estudo registrado; só sai o que está pendente, pulado ou em andamento sem registro; a prévia conta o que fica; não há modo de substituição — QA-01 |
 | F-PROF-06 | copiar a semana anterior copia o PLANO, nunca o resultado |
 | F-PROF-10 | gerar a semana é uma transação: a gravação que falha deixa a semana como estava, e repetir o mesmo pedido depois de gravado não duplica — QA-05 |
 | F-PROF-11 | a semana vai de 1 a 520: fora disso a prévia recusa, e nada chega ao banco — QA-17 |
 | F-GPLAN-01 | planejamento nasce pausado; ativar arquiva o anterior; arquivar tira da vista do aluno; ativar é uma transação: rede caindo não deixa o aluno sem planejamento, e duas ativações simultâneas terminam com um ativo — QA-03, QA-12 |
-| F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta |
+| F-GPLAN-06 | nome de planejamento repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
+| F-CAD-01 | cadernos: desativar tira do aluno; remover é MARCAR; restaurar traz de volta; link `javascript:` é recusado e o banco fica com o anterior (QA-24) |
 | F-TCAT-01 | catálogo de teoria: regras por disciplina, até cinco revisões, páginas auditadas, vínculo com o planejamento |
 | F-TREV-01 | é na tela do professor que o espaçamento se configura |
 | F-TEST-01 | estatísticas do professor: as mesmas do aluno, apontadas para o planejamento dele |
-| F-VINC-01 a F-VINC-08 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
+| F-VINC-01 a F-VINC-09 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data, e a barra do aluno acompanhar liberar e bloquear sem F5 (F-VINC-09, QA-09) — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-MATR-01 a F-MATR-05 | turmas: criar, renomear, matricular, mover, recusar apagar turma com aluno, filtrar por `?turma=` — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
+| F-MATR-06 | nome de turma repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
 | F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
 
 ### Simulados — `tests/mock-exams.spec.ts`
@@ -274,6 +279,7 @@ diff mostra a omissão.
 | F-FLASH-03 | biblioteca editorial: revisar o mesmo cartão duas vezes (INSERT e depois UPDATE) |
 | F-FLASH-04 | spec [39](specs/39-biblioteca-de-flashcards-lida-do-banco.md): a lista de decks e a busca por tópico chegam sem o texto dos cartões |
 | F-FLASH-05 | spec 39: cartão corrigido no banco aparece corrigido no deck, sem build novo |
+| F-FLASH-06 | deck pessoal repetido, com outra caixa e espaço, é recusado com a frase própria — QA-16 |
 | F-GRIFO-01 | spec [42](specs/42-grifo-nos-flashcards.md): o grifo do verso de um cartão da biblioteca e o da frente de um cartão pessoal aparecem numa sessão nova, na revisão seguinte de cada cartão |
 | F-GRIFO-02 | spec 42: reescrito o cartão da aula antes do trecho grifado, o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar |
 | F-GRIFO-03 | spec 42: clique simples vira o cartão; terminar uma seleção não vira; desfazer remove o último grifo, e ele continua removido depois de recarregar |
@@ -291,7 +297,7 @@ diff mostra a omissão.
 | Id | Cobre |
 |---|---|
 | F-ISO-01 | o aluno 2 não vê nada do aluno 1; o professor 2 não vê o aluno 1 em tela nenhuma |
-| F-ISO-02 | a query string não é uma porta: `?plano=`, `?catalogo=` e semana alheia são ignorados |
+| F-ISO-02 | a query string não é uma porta: `?plano=`, `?catalogo=` e semana alheia são ignorados; malformado (`nao-e-uuid`, `?ano=1e9`, `?ritmo=xyz`) cai no padrão da tela, sem erro e sem ruído no console — QA-13 |
 
 O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela —
 é assunto de `supabase/tests/`, e não daqui.
@@ -399,7 +405,7 @@ id antigo num comentário de código ou numa mensagem de commit:
 | F-TEMP-\* (tempo e série) | F-EST-01 |
 | F-PREV-\* (prévia e distribuição) | F-PROF-04 e F-PROF-05 |
 | F-TURMA-\* (ficha da turma) | F-PROF-02, e F-MATR-04 para o recorte por turma |
-| F-GPLAN-02 a 07 | F-GPLAN-01 |
+| F-GPLAN-02 a 05 e 07 | F-GPLAN-01. O F-GPLAN-06 foi REUSADO em 07/10/2026 (nome de planejamento repetido, QA-16): a spec 14 já o citava na CA-06 |
 | F-CAD-02 a 06 | F-CAD-01 |
 | F-RCIC-\*, F-RESU-\*, F-DIFI-\* | sem cobertura: dependem do motor de baterias |
 | F-CUP-02 a 04 | sem cobertura enquanto F-CUP-01 estiver `fixme` |

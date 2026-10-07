@@ -6,8 +6,9 @@ import { useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
-import { api, type Account as AccountData, type ApiError } from "@/lib/api";
+import { api, MAX_NAME_LENGTH, type Account as AccountData, type ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth/session";
+import { formatInstant } from "@/lib/domain/dates";
 
 /**
  * Meus dados — o `p-meusDados` da v2.
@@ -19,9 +20,11 @@ import { requireSession } from "@/lib/auth/session";
  * próprio acesso. Mostrar campo editável para eles seria promessa que o banco
  * recusa.
  */
-export async function accountLoader() {
-  await requireSession();
-  return { account: await api.loadAccount() };
+export async function accountLoader({ request }: { request: Request }) {
+  const session = await requireSession(request);
+  // O papel vem junto: a mesma tela serve as duas rotas, com texto por papel
+  // (R-CONTA-01, R-CONTA-09).
+  return { account: await api.loadAccount(), role: session.role };
 }
 
 type LoaderData = Awaited<ReturnType<typeof accountLoader>>;
@@ -33,13 +36,9 @@ const ACCESS_LABEL: Record<AccountData["access"], { label: string; tone: "succes
   expired: { label: "Vencido", tone: "error" },
 };
 
-function formatDate(date: string | null): string {
-  if (!date) return "sem prazo";
-  return `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
-}
-
 export function Account() {
-  const { account } = useLoaderData() as LoaderData;
+  const { account, role } = useLoaderData() as LoaderData;
+  const isTeacher = role === "teacher";
   const { revalidate } = useRevalidator();
   const [error, setError] = useState<ApiError | null>(null);
   const [saved, setSaved] = useState(false);
@@ -67,7 +66,10 @@ export function Account() {
 
   return (
     <>
-      <PageHeader title="Meus dados" description="O que o seu professor vê sobre você" />
+      <PageHeader
+        title="Meus dados"
+        description={isTeacher ? "Como os seus alunos veem você" : "O que o seu professor vê sobre você"}
+      />
 
       <ContentBody>
         <Card title="Identificação">
@@ -80,6 +82,7 @@ export function Account() {
               name="name"
               defaultValue={account.name ?? ""}
               required
+              maxLength={MAX_NAME_LENGTH}
               invalid={error?.field === "name"}
             />
 
@@ -89,7 +92,11 @@ export function Account() {
               aqui prometeria algo que esta tela não faz.
             */}
             <Field label="E-mail" name="email" value={account.email} disabled readOnly
-              hint="Para trocar o e-mail de acesso, fale com seu professor." />
+              hint={
+                isTeacher
+                  ? "É o seu login. A troca de e-mail ainda não está disponível."
+                  : "Para trocar o e-mail de acesso, fale com seu professor."
+              } />
 
             <Button type="submit" variant="contained" disabled={pending}>
               {pending ? "Salvando…" : "Salvar"}
@@ -97,10 +104,13 @@ export function Account() {
           </Box>
         </Card>
 
+        {/* Vigência e professor são do ALUNO (R-CONTA-09): o professor não tem nenhum dos dois. */}
+        {!isTeacher && (
         <Box sx={{ mt: 1.75 }}>
           <Card title="Acesso" action={<Badge tone={access.tone}>{access.label}</Badge>}>
             <Box
               component="dl"
+              data-testid="account-access"
               sx={(theme) => ({
                 display: "grid",
                 gridTemplateColumns: "repeat(3, 1fr)",
@@ -113,7 +123,7 @@ export function Account() {
                 [
                   ["Professor", account.teacherName ?? "Ainda sem professor"],
                   ["Plano", account.plan ?? "—"],
-                  ["Válido até", formatDate(account.accessExpiresAt)],
+                  ["Válido até", account.accessExpiresAt ? formatInstant(account.accessExpiresAt) : "sem prazo"],
                 ] as const
               ).map(([label, value]) => (
                 <Box key={label}>
@@ -128,6 +138,7 @@ export function Account() {
             </Box>
           </Card>
         </Box>
+        )}
       </ContentBody>
     </>
   );

@@ -18,6 +18,8 @@ import {
   type StudyPlanSummary,
 } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { formatDayMonth } from "@/lib/domain/dates";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Gerar metas — o `p-montarMetas` da v2.
@@ -36,11 +38,15 @@ import { requireRole } from "@/lib/auth/session";
  * e `goal_batches` viraria decoração.
  */
 export async function teacherGoalsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const plans = (await api.listPlans()).filter((plan) => plan.status === "active");
   const params = new URL(request.url).searchParams;
-  const planId = params.get("plano") ?? plans[0]?.id ?? null;
+  // `?plano=` só vale se for um dos planejamentos ativos que a tela lista; o
+  // resto cai no primeiro, em silêncio (D-13, QA-13). `?semana=` é de outro
+  // plano (QA-17): a recusa vem do contrato.
+  const asked = params.get("plano");
+  const planId = plans.some((candidate) => candidate.id === asked) ? asked : (plans[0]?.id ?? null);
   // Sem `|| 1`: a recusa de 0, -3 ou 1.5 vem do contrato, com a frase, e não de
   // uma troca silenciosa (QA-17). `weekParam` é o que o campo mostra.
   const weekParam = params.get("semana") ?? "1";
@@ -73,7 +79,7 @@ function PreviewPanel({ preview }: { preview: GenerateWeekPreview }) {
 
       {preview.days.map((day) => (
         <Box key={day.date} sx={{ mb: 1.25 }}>
-          <Card title={`${WEEKDAY_NAMES[day.weekday - 1]} · ${day.date.slice(8, 10)}/${day.date.slice(5, 7)}`}>
+          <Card title={`${WEEKDAY_NAMES[day.weekday - 1]} · ${formatDayMonth(day.date)}`}>
             {day.goals.map((goal) => (
               <Box
                 key={goal.id}
@@ -117,6 +123,9 @@ export function TeacherGoals() {
   const plan = plans.find((candidate) => candidate.id === planId) ?? null;
 
   async function buildPreview() {
+    // O compilador iça a leitura de propriedade de um closure para o render, e
+    // `plan!` não protege nada em tempo de execução: o guarda vem ANTES de
+    // qualquer `plan.id`, na própria função (N-03).
     if (!plan) return;
     setSaved(null);
     const input: GenerateWeekInput = {
@@ -172,7 +181,7 @@ export function TeacherGoals() {
               value={planId ?? ""}
               slotProps={{ select: { inputProps: { "data-testid": "goals-plan" } } }}
               onChange={(event) => setParam("plano", event.target.value)}
-              sx={{ minWidth: 240 }}
+              sx={fieldWidth(240)}
             >
               {plans.map((option: StudyPlanSummary) => (
                 <MenuItem key={option.id} value={option.id}>

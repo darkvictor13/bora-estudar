@@ -9,6 +9,8 @@ import { isAuthApiError, isAuthSessionMissingError, type AuthError } from "@supa
 
 import { supabase } from "@/lib/supabase/client";
 
+import { hasExpired, todayLocal } from "@/lib/domain/dates";
+
 import { ApiThrownError, type Session, type StudyPlanSummary, type Uuid } from "../contract.ts";
 import { readFailure, throwDb, translateAuthError } from "./errors.ts";
 
@@ -25,22 +27,24 @@ export const PROFILE_COLUMNS = "id,name,role,access_status,access_expires_at,tea
 
 /** `2026-09-14` — a data de hoje, sem hora, no fuso de quem está usando. */
 export function today(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
+  return todayLocal();
 }
 
 /**
  * O acesso vence pelo RELÓGIO, não só pelo enum.
  *
  * `access_status` fica `active` até alguém rodar a rotina que o expira, e essa
- * rotina pode atrasar — ou não existir ainda. Enquanto `access_expires_at` já
- * passou, a pessoa continuaria entrando. Comparar aqui custa nada e fecha a
- * janela; o banco continua sendo o guardião de verdade, pela RLS.
+ * rotina não existe (R-VINC-28): `has_active_access()` recusa a escrita pelo
+ * instante, e a tela precisa dizer a mesma coisa. `access_expires_at` é
+ * `timestamptz`, então a comparação é de INSTANTES, na mesma fronteira do banco
+ * (`> now()`): comparar o texto com a data de hoje deixava o dia do vencimento
+ * "Liberado" enquanto a escrita já era recusada (QA-20).
  */
-export function effectiveAccess(row: ProfileRow): Session["access"] {
+export function effectiveAccess(
+  row: Pick<ProfileRow, "access_status" | "access_expires_at">,
+): Session["access"] {
   if (row.access_status !== "active") return row.access_status;
-  if (row.access_expires_at && row.access_expires_at < today()) return "expired";
+  if (row.access_expires_at && hasExpired(row.access_expires_at)) return "expired";
   return "active";
 }
 

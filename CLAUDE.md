@@ -78,9 +78,10 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 | | Quem escreve | Como |
 |---|---|---|
-| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan` |
-| `goal_entries` | o aluno, com acesso vigente | **registrar** por `record_goal_entry` e `record_extra_study` (o INSERT direto ainda é aceito, até o 5c); apagar exige acesso vigente e é direto; `request_id`, `studied_on` e `created_at` ficam fora do grant de INSERT, e quem os escreve são as RPCs |
-| `theory_progress`, `theory_reviews` | o aluno, com acesso vigente | direto, com RLS e grant por coluna; **a página** é escrita direta, mas as **questões** (`initial_questions_done`, a conclusão da aula, `questions_answered`) são de `record_initial_questions` e `record_review_questions` (o direto ainda é aceito, até o 5c) |
+| `study_plans`, `study_plan_notebooks`, `goals` | professor | direto, com RLS e grant por coluna; gerar e limpar a semana passam por `generate_week` e `clear_pending_goals`, e ativar um planejamento (que arquiva o anterior) por `activate_study_plan`; o aluno não insere meta, e estudo extra é `record_extra_study` |
+| `goal_entries` | ninguém direto | INSERT só por `record_goal_entry`, `record_extra_study` e `record_initial_questions`, com `request_id` UNIQUE; sem UPDATE (corrigir é apagar e registrar de novo); DELETE pela policy, com acesso vigente para o aluno |
+| `theory_progress` | o aluno, com acesso vigente | direto, só a leitura (`current_page`, `theory_done`, `theory_done_at`), com grant por coluna no INSERT e no UPDATE; questões iniciais e conclusão da aula só por `record_initial_questions` |
+| `theory_reviews` | ninguém direto | nascem em `record_initial_questions`, avançam em `record_review_questions`; o aluno só apaga a dela |
 | `theory_review_entries` | ninguém | SELECT e nada mais: escrita é de `record_review_questions` |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
 | `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
@@ -99,8 +100,11 @@ O de-para coluna a coluna, contra o banco de origem, está em
 
 Escrita de execução continua fechada porque é onde moram a máquina de estados,
 a idempotência por `request_id` e o ledger append-only — coisas que uma tela
-não tem como respeitar sozinha. Se uma tela precisa mexer em execução e não
-existe RPC, **crie a RPC; não afrouxe o grant.** As três operações que hoje não
+não tem como respeitar sozinha. `goal_entries` e `theory_reviews` entram na
+lista do que é escrito por RPC: desde `20261006233436` (PR 5c) o INSERT e o
+UPDATE diretos não existem para `authenticated`, nem para o professor, e o
+privilégio de coluna recusa com `42501` antes de a RLS ou a FK serem lidas.
+Se uma tela precisa mexer em execução e não existe RPC, **crie a RPC; não afrouxe o grant.** As três operações que hoje não
 têm RPC lançam com o motivo em `apps/web/src/lib/api/supabase/`, e é assim que
 devem continuar até a RPC existir.
 
@@ -228,6 +232,21 @@ A versão anterior codificava `TIPO_REFORCO:1` e o resultado inteiro de uma
 bateria em base64 dentro do campo de observações, e o round-trip destruía texto
 a cada gravação.
 
+**Texto que o cliente grava tem teto no banco.** É uma CHECK de
+`char_length(<coluna>) <= N`, que mede o valor GRAVADO, e não o aparado:
+`char_length(btrim(x)) <= N` deixava passar `'abc'` mais um milhão de espaços.
+O piso, ao contrário, mede sem as pontas (`char_length(btrim(x)) >= 3`).
+`07_schema.sql` varre o catálogo e falha com a coluna `text` que `authenticated`
+grava sem isso — coluna nova de texto gravável nasce com o teto, ou a suíte
+reprova. Os números moram em `lib/api/validation.ts` (`MAX_NAME_LENGTH` e
+irmãs), as telas leem de lá pelo `lib/api`, e o gatilho de cadastro corta o
+nome em 120 em vez de derrubar a conta. Nome único é índice sobre
+`lower(btrim(nome))`, e o `23505` é identificado pelo NOME do índice
+(`isUniqueViolation`), nunca pela frase: o deck pessoal tem PK escolhida pelo
+cliente, e um replay com o mesmo `id` também dá `23505`. Link é `''` ou
+`https://` sem espaço, também no banco: `javascript:` já foi gravado pela API e
+renderizado como `href`.
+
 **Invariante que dá para expressar em constraint vai para o banco.** Um
 planejamento ativo por aluno é índice único parcial, não uma sequência de
 `UPDATE` no cliente.
@@ -353,13 +372,27 @@ de modelo. Já confirmados:
   entrar em lista de dependências de efeito sem provocar laço — e guardá-los em
   ref escrito durante o render é o que o React Compiler recusa.
 
-**O `redirect` do router descarta o fragmento.** Um redirecionamento HTTP
-preserva o `#` por conta do navegador; este monta a URL nova só com o caminho.
-`requireSession` concatena `location.hash` de propósito. O motivo original era
-a volta do TEC com a sessão expirada, em que o fragmento era a única cópia do
-resultado da bateria; esse caminho saiu com a extensão, mas a concatenação fica
-— descartar fragmento num redirecionamento de login é perda de estado em
-qualquer rota que venha a usá-lo.
+**O `redirect` do router descarta o fragmento, e o destino vai em `?next=`.**
+Um redirecionamento HTTP preserva o `#` por conta do navegador; este monta a URL
+nova só com o caminho. `requireSession(request)` põe o destino — `pathname +
+search` de `request.url` — em `/entrar?next=…`, e o fragmento vai DENTRO do
+`next`, **só na primeira carga**: `request.url` nunca traz `#`, e numa navegação
+do cliente `location` ainda é a tela de onde a pessoa saiu, cujo fragmento não é
+deste destino (e ler o caminho dele devolveria o login à tela errada). O motivo
+original do fragmento era a volta do TEC com a sessão expirada; esse caminho
+saiu com a extensão, mas o cuidado fica — descartar estado num redirecionamento
+de login vale para qualquer rota. As três guardas (`requireSession`,
+`requireRole`, `requireStudentAccess`) recebem o `request` OBRIGATÓRIO: o
+redirect do loader MAIS FUNDO vence, então se só o layout montasse o `next`, o
+da página redirecionaria sem ele. O filtro do `next` é `safeInternalPath`, em
+`landAfterAuth` e em `signInLoader`, e NÃO em `useFormActionState`:
+`updatePassword` devolve `/entrar` legitimamente.
+
+**Rota de layout sem caminho não revalida quando só o filho muda.** O layout do
+aluno declara `shouldRevalidate` (`defaultShouldRevalidate || troca de
+pathname`) para a barra acompanhar liberar e bloquear sem F5. Declarar DESLIGA o
+padrão inteiro, e o `||` é o que mantém o `revalidate()` de "Salvar" em Meus
+dados atualizando o nome na barra.
 
 **Vite só injeta variável de ambiente com prefixo `VITE_`,** e só quando o
 acesso é literal: `import.meta.env.VITE_X`. Indexar por variável compila para
@@ -506,6 +539,18 @@ integração seria um segundo reescrever — de telas, não de adaptadores.
 - **`fixtures.test.ts` é a especificação executável do contrato.** Cada
   asserção é uma promessa que o adaptador do Supabase vai ter de cumprir igual.
 
+**Data se fatia, instante se formata no fuso do aparelho.** `IsoDate`
+(`2026-10-06`) é um dia do calendário; `IsoDateTime` é um instante, e o dia em
+que ele cai depende de onde a pessoa está — fatiar o texto devolve o dia UTC, 3h
+adiantado em Brasília e o dia seguinte depois das 21h. Os dois moram em
+`lib/domain/dates.ts` (`formatDate`, `formatDayMonth`, `formatInstant`,
+`localDateOf`, `todayLocal`, `hasExpired`), e nenhuma tela formata data por
+conta própria. Os dois tipos são `string`: o compilador não separa um do outro, e
+passar instante a `formatDate` imprime a data UTC em silêncio. O vencimento do
+acesso é instante (`access_expires_at` é `timestamptz`) e se compara por
+`hasExpired`, a mesma fronteira de `has_active_access()` — comparar o texto com a
+data de hoje deixava o dia do vencimento "Liberado".
+
 ### Tema
 
 **O tema vem da conta, e o MUI não participa da decisão.**
@@ -606,6 +651,38 @@ React Router substitui pelo boundary o elemento da rota que o DECLARA, não o da
 rota que falhou: declarado no próprio layout, um erro de loader de tela apagava
 a barra lateral junto, e a pessoa perdia a navegação no momento em que mais
 precisa dela — para sair dali.
+
+**O parâmetro de URL é conferido contra a lista que o loader carregou.**
+`?plano=`, `?catalogo=`, `?ano=`, `?ritmo=` e `?semana=` só valem se estiverem
+entre as opções que a própria tela oferece; o resto cai na primeira, em
+silêncio (D-13). Ler o texto da URL e passá-lo ao adaptador entrega ao
+PostgREST um `22P02` cru, ou ao `Date` um `RangeError`. O padrão é o de
+`routes/teacher/Students.tsx` (`?turma=`): ler a lista primeiro, e só então
+decidir. E ficha de aluno alheio é `ApiThrownError("not_found")`, que
+`RouteError` mostra como "Não encontrado" — estado, não erro.
+
+**Tela de 375px: `fieldWidth` nos campos, `minmax(0, 1fr)` nas colunas.**
+`minWidth` fixo num select dentro de linha flex faz o item crescer com o texto
+da opção escolhida; use `fieldWidth(min)` de `lib/ui/field-width.ts`. O mesmo
+vale para grade de uma coluna: `1fr` é `minmax(auto, 1fr)`, e um `noWrap`
+dentro empurra o mínimo para além da tela. O documento NUNCA rola na
+horizontal (a casca é `overflow: hidden`): o excesso vira rolagem dentro do
+`<main data-testid="content">`, e é ele que F-UI-11 mede. Nome acessível de
+controle COMEÇA pelo texto visível (WCAG 2.5.3).
+
+**`Field` aceita `id`, e cartão repetido precisa passá-lo.** O padrão
+`field-<name>` é contrato da suíte; uma lista de cartões (um por disciplina)
+repetiria o id e o `<label for>` do segundo apontaria para o campo do primeiro.
+Use `useId()` no sufixo — `subjectKey` não serve, tem espaço — e mantenha o
+`name`, que é o que o `FormData` lê.
+
+**A primeira carga tem duas telas, e nenhuma tem `h1`.** `index.html` traz uma
+estática dentro de `#root` (cores do sistema, `Canvas` e `CanvasText`) para o
+branco que vem ANTES do bundle; `RootLoading` é o `HydrateFallback` da rota
+raiz e, como `RootError`, embrulha o próprio `ThemeShell`, porque substitui o
+`RootLayout` que dá o tema. As duas levam `data-testid="app-loading"`. A classe
+`boot` mora num `div` DENTRO de `#root`: o React só apaga os filhos, e a classe
+no próprio `#root` ficaria para sempre no contêiner da aplicação.
 
 ### `data-testid` nos seletores de teste
 

@@ -714,7 +714,14 @@ test("liberar SOMA ao que ainda falta, e o mesmo request_id não soma duas vezes
   const chave = requestId();
   const primeira = await api.grantAccess({ studentId: aluna!.studentId, requestId: chave, months: 3 });
   assert.ok(primeira.ok);
-  assert.ok(primeira.data.accessExpiresAt! > antes, "quem renova antes do fim não perde dia pago");
+  assert.ok(
+    Date.parse(primeira.data.accessExpiresAt!) > Date.parse(antes),
+    "quem renova antes do fim não perde dia pago",
+  );
+  // Meses de calendário, como `make_interval(months => 3)`: 90 dias a mais não.
+  const esperado = new Date(antes);
+  esperado.setUTCMonth(esperado.getUTCMonth() + 3);
+  assert.equal(primeira.data.accessExpiresAt, esperado.toISOString());
 
   const repetida = await api.grantAccess({ studentId: aluna!.studentId, requestId: chave, months: 3 });
   assert.ok(repetida.ok);
@@ -726,6 +733,21 @@ test("liberar SOMA ao que ainda falta, e o mesmo request_id não soma duas vezes
     (student) => student.studentId === aluna!.studentId,
   );
   assert.equal(relida?.accessExpiresAt, primeira.data.accessExpiresAt);
+});
+
+test("liberar quem JÁ VENCEU conta a partir de hoje, e não da data vencida", async () => {
+  const [vencido] = await api.listStudents({ access: "expired" });
+  assert.ok(vencido?.accessExpiresAt);
+
+  const liberada = await api.grantAccess({
+    studentId: vencido.studentId,
+    requestId: requestId(),
+    months: 1,
+  });
+  assert.ok(liberada.ok);
+  assert.equal(liberada.data.access, "active");
+  // 2026-09-14 (o "hoje" da fixture) + 1 mês de calendário, e não 2026-09-08 + 1.
+  assert.equal(liberada.data.accessExpiresAt, "2026-10-14T12:00:00.000Z");
 });
 
 test("a vigência é de 1, 3, 6 ou 12 meses — o resto é recusado", async () => {
@@ -808,6 +830,20 @@ test("renomear a turma aparece também na linha do aluno", async () => {
 
   const alunos = await api.listStudents({ classId: turmaA!.id });
   assert.deepEqual(new Set(alunos.map((student) => student.className)), new Set(["Fiscal 2028"]));
+});
+
+test("Meus dados traz o nome do professor COM vínculo, e nada sem ele (QA-08, QA-21)", async () => {
+  const aluna = await api.loadAccount();
+  assert.equal(aluna.teacherName, "Professor de Exemplo");
+  assert.equal(aluna.profileId, "22222222-2222-4222-8222-222222222222");
+
+  setFixtureRole("teacher");
+  const professor = await api.loadAccount();
+  assert.equal(professor.teacherName, null, "professor não tem professor");
+  assert.equal(professor.profileId, "33333333-3333-4333-8333-333333333333");
+
+  setFixtureRole("student");
+  assert.equal((await api.loadAccount()).teacherName, "Professor de Exemplo");
 });
 
 test("simulado: o professor vê os nomes, o aluno só o próprio e 'Colega'", async () => {
@@ -1123,4 +1159,169 @@ test("o extra lançado para outro dia conta no dia estudado (N-07)", async () =>
   assert.ok(lancado.ok);
   assert.equal(lancado.data.entries[0]!.studiedOn, "2026-09-10");
   assert.ok((await api.loadStudyDays(2026)).includes("2026-09-10"));
+});
+
+test("QA-16 · turma repetida, com outra caixa e espaço, é recusada ao criar e ao renomear", async () => {
+  const [turma] = await api.listClasses();
+  assert.ok(turma);
+
+  const repetida = await api.createClass({ name: `  ${turma.name.toUpperCase()} ` }, requestId());
+  assert.equal(repetida.ok, false);
+  assert.ok(!repetida.ok);
+  assert.deepEqual(repetida.error, {
+    code: "conflict",
+    message: "Você já tem uma turma com esse nome.",
+    field: "name",
+  });
+
+  const nova = await api.createClass({ name: "Turma nova" }, requestId());
+  assert.ok(nova.ok);
+  const renomeada = await api.renameClass(nova.data.id, { name: turma.name.toLowerCase() }, requestId());
+  assert.ok(!renomeada.ok);
+  assert.equal(renomeada.error.message, "Você já tem uma turma com esse nome.");
+
+  // Renomear para o PRÓPRIO nome, com outra caixa, não é conflito consigo mesma.
+  const propria = await api.renameClass(nova.data.id, { name: "TURMA NOVA" }, requestId());
+  assert.ok(propria.ok);
+});
+
+test("QA-15 · turma recusa nome acima de 120 e descrição acima de 2000", async () => {
+  const nome = await api.createClass({ name: "a".repeat(121) }, requestId());
+  assert.ok(!nome.ok);
+  assert.equal(nome.error.field, "name");
+  assert.equal(nome.error.message, "O nome da turma pode ter até 120 caracteres.");
+  const descricao = await api.createClass({ name: "Turma válida", description: "d".repeat(2001) }, requestId());
+  assert.ok(!descricao.ok);
+  assert.equal(descricao.error.field, "description");
+});
+
+test("QA-16 · deck repetido é recusado com a frase própria, e o assunto diferente passa", async () => {
+  const [deck] = await api.listPersonalFlashcardDecks();
+  assert.ok(deck);
+  const repetido = await api.createPersonalFlashcardDeck({
+    id: "88888888-8888-4888-8888-0000000000a1",
+    requestId: requestId(),
+    subject: ` ${deck.subject.toUpperCase()} `,
+    title: deck.title.toLowerCase(),
+  });
+  assert.ok(!repetido.ok);
+  assert.deepEqual(repetido.error, {
+    code: "conflict",
+    message: "Você já tem um deck com essa disciplina e esse assunto.",
+    field: "title",
+  });
+
+  const outro = await api.createPersonalFlashcardDeck({
+    id: "88888888-8888-4888-8888-0000000000a2",
+    requestId: requestId(),
+    subject: deck.subject,
+    title: "Outro assunto",
+  });
+  assert.ok(outro.ok);
+
+  const longo = await api.createPersonalFlashcardDeck({
+    id: "88888888-8888-4888-8888-0000000000a3",
+    requestId: requestId(),
+    subject: "a".repeat(121),
+    title: "Assunto",
+  });
+  assert.ok(!longo.ok);
+  assert.equal(longo.error.field, "subject");
+});
+
+test("QA-16 · planejamento repetido para o mesmo aluno é recusado, e para outro aluno é aceito", async () => {
+  const [original] = await api.listPlans();
+  assert.ok(original);
+
+  const repetido = await api.createPlan(
+    newPlanInput(`  ${original.name.toUpperCase()} `),
+    requestId(),
+  );
+  assert.ok(!repetido.ok);
+  assert.deepEqual(repetido.error, {
+    code: "conflict",
+    message: "Este aluno já tem um planejamento com esse nome.",
+    field: "name",
+  });
+
+  const outroAluno = await api.createPlan(
+    { ...newPlanInput(original.name), studentId: "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    requestId(),
+  );
+  assert.ok(outroAluno.ok);
+
+  const segundo = await api.createPlan(newPlanInput("Segundo plano"), requestId());
+  assert.ok(segundo.ok);
+  const renomear = await api.updatePlan(segundo.data.id, { name: original.name.toLowerCase() }, requestId());
+  assert.ok(!renomear.ok);
+  assert.equal(renomear.error.message, "Este aluno já tem um planejamento com esse nome.");
+  // O próprio nome, em outra caixa, é o mesmo plano.
+  const proprio = await api.updatePlan(segundo.data.id, { name: "SEGUNDO PLANO" }, requestId());
+  assert.ok(proprio.ok);
+});
+
+test("QA-15 · planejamento recusa nome acima de 120 e concurso acima de 200, e nada é guardado", async () => {
+  const antes = (await api.listPlans()).length;
+  const nome = await api.createPlan(newPlanInput("a".repeat(121)), requestId());
+  assert.ok(!nome.ok);
+  assert.equal(nome.error.field, "name");
+  const concurso = await api.createPlan({ ...newPlanInput("Plano válido"), targetExam: "c".repeat(201) }, requestId());
+  assert.ok(!concurso.ok);
+  assert.equal(concurso.error.field, "targetExam");
+  assert.equal((await api.listPlans()).length, antes);
+});
+
+test("QA-19 · a lista de espera recusa WhatsApp sem formato e nascimento no futuro, com a frase nova", async () => {
+  const base = {
+    name: "Aluna de Exemplo",
+    email: "aluna@exemplo.dev",
+    whatsapp: "(41) 99999-0000",
+    interestArea: "Fiscal",
+    targetExam: "Receita Federal",
+    timezone: "America/Sao_Paulo",
+  };
+  const letras = await api.joinWaitlist({ ...base, whatsapp: "abcdefgh" });
+  assert.ok(!letras.ok);
+  assert.equal(letras.error.field, "whatsapp");
+  assert.equal(letras.error.message, "Informe o WhatsApp com DDD, como (11) 90000-0000.");
+
+  const futuro = await api.joinWaitlist({ ...base, birthDate: "2031-01-01" });
+  assert.ok(!futuro.ok);
+  assert.equal(futuro.error.field, "birthDate");
+  assert.equal(futuro.error.message, "A data de nascimento precisa ser entre 01/01/1900 e hoje.");
+
+  const semArea = await api.joinWaitlist({ ...base, interestArea: " " });
+  assert.ok(!semArea.ok);
+  assert.equal(semArea.error.field, "interestArea");
+  assert.equal(await api.loadWaitlistEntry(), null, "recusado não grava");
+
+  assert.ok((await api.joinWaitlist(base)).ok);
+});
+
+test("QA-24 · o caderno recusa link javascript:, e a meta fora de 0 a 100, sem gravar", async () => {
+  const [caderno] = await api.listNotebooks("plano");
+  assert.ok(caderno);
+  const perigoso = await api.saveNotebook("plano", { ...caderno, notebookLink: "javascript:alert(1)" }, requestId());
+  assert.ok(!perigoso.ok);
+  assert.equal(perigoso.error.field, "notebookLink");
+  assert.equal(perigoso.error.message, "Informe um link HTTPS válido, sem usuário ou senha na URL.");
+
+  const meta = await api.saveNotebook("plano", { ...caderno, subjectTarget: 150 }, requestId());
+  assert.ok(!meta.ok);
+  assert.equal(meta.error.field, "subjectTarget");
+
+  assert.ok((await api.saveNotebook("plano", { ...caderno, notebookLink: "" }, requestId())).ok);
+});
+
+test("QA-13 · a ficha de um aluno desconhecido rejeita com not_found, e não devolve o primeiro aluno", async () => {
+  const [primeiro] = await api.listStudents({});
+  assert.ok(primeiro);
+  assert.equal((await api.loadStudentFile(primeiro.studentId)).card.studentId, primeiro.studentId);
+
+  await assert.rejects(api.loadStudentFile("nao-e-uuid"), (error: unknown) => {
+    assert.ok(error instanceof ApiThrownError);
+    assert.equal(error.code, "not_found");
+    assert.equal(error.message, "Aluno não encontrado, ou sem vínculo com você.");
+    return true;
+  });
 });

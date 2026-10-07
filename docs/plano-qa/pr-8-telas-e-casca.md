@@ -231,8 +231,10 @@ Decidido neste plano:
      `node_modules/react-router/docs/explanation/hydration.md:14`).
    - `router.tsx:70-72`: `HydrateFallback: RootLoading` na rota raiz.
    - `apps/web/index.html`:
-     - `#root` (`:39`) recebe o mesmo texto, com `class="boot"` e
-       `data-testid="app-loading"`, e um `<noscript>` com "Ative o JavaScript do
+     - `#root` (`:39`) recebe o mesmo texto, num `div` com `class="boot"` e
+       `data-testid="app-loading"` DENTRO dele (a classe no próprio `#root`
+       ficaria para sempre no contêiner da aplicação, e o testid também — o
+       F-UI-12 espera zero depois da carga), e um `<noscript>` com "Ative o JavaScript do
        navegador para usar a Fronteira Concursos.". O React apaga o conteúdo de
        `#root` no primeiro render;
      - um `<style>` DEPOIS do script de tema (`:28-36`), com comentário dizendo
@@ -372,3 +374,23 @@ rejeita com `code === "not_found"`.
 - Projeto mobile no `playwright.config.ts`.
 - O aviso de acesso do `StudentLayout.tsx:151-158` com `px: 4` fixo: cabe, só
   desperdiça margem.
+
+## O que a implementação corrigiu neste plano
+
+- **Passo 5 já estava feito.** O PR 1 reescreveu a ação de gerar e tirou o
+  `plan!`; ficou só o comentário. O teste de N-03 (professor sem planejamento
+  ativo) passa também no código ANTES deste PR — é rede, não reprodução.
+- **`session.ts:116` já era do PR 4** (`"unauthenticated"`); nada a fazer.
+- **`#root` não leva a classe `boot`**, e sim um `div` dentro dele (ver o passo
+  8): a classe e o testid no próprio `#root` ficariam depois do primeiro render.
+- **F-UI-11 precisa de nome de verdade.** Com "Catálogo E2E 887111a1" nada
+  transborda, e o teste de 375px passava sem exercitar nada. O teste renomeia o
+  plano e o catálogo para um nome longo antes de medir. Com isso ele achou dois
+  transbordos que o relatório não tinha: a grade de cartões de `/professor`
+  (`1fr` com `noWrap` dentro, agora `minmax(0, 1fr)`) e o contêiner do select
+  de catálogo em `/professor/teoria` (`minWidth: 0` e `maxWidth: 100%`).
+- **F-ISO-02, `?plano=` alheio em cadernos:** os blocos dos dois cenários têm o
+  MESMO nome, então "não contém o nome do bloco" deixou de provar algo; a prova
+  é o nome do planejamento, único por cenário.
+- **O select de `Goals.tsx:209` (Substituição) já tinha saído com o PR 1.**
+

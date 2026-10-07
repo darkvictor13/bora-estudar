@@ -9,9 +9,10 @@ import { MockExamRanking } from "@/components/MockExamRanking";
 import { MockExamSubjectAnalysis } from "@/components/MockExamSubjectAnalysis";
 import { api } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { formatDate } from "@/lib/domain/dates";
 
 export async function mockExamsLoader({ request }: { request: Request }) {
-  const session = await requireStudentAccess();
+  const session = await requireStudentAccess(request);
   const exams = await api.listMockExams();
   const asked = new URL(request.url).searchParams.get("simulado");
   const selected = exams.find((exam) => exam.id === asked) ?? exams[0] ?? null;
@@ -30,7 +31,7 @@ export function MockExams() {
       {!selected ? <Empty icon="🏆">Nenhum resultado publicado para sua turma. Os simulados aparecerão aqui depois da publicação pelo professor.</Empty> : <>
         <Box sx={{ mb: 2.5 }}>
           <TextField select fullWidth label="Simulado" value={selected.id} onChange={(event) => setParams({ simulado: event.target.value })}>
-            {exams.map((exam) => <MenuItem key={exam.id} value={exam.id}>{exam.title} · {exam.examDate.split("-").reverse().join("/")}</MenuItem>)}
+            {exams.map((exam) => <MenuItem key={exam.id} value={exam.id}>{exam.title} · {formatDate(exam.examDate)}</MenuItem>)}
           </TextField>
         </Box>
         <Box sx={{ mb: 2 }}>{selected.className}</Box>

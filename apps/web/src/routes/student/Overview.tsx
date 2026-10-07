@@ -13,6 +13,7 @@ import { GoalRow } from "@/components/student/GoalRow";
 import { WeekHero } from "@/components/student/WeekHero";
 import { StudyCalendar } from "@/components/student/StudyCalendar";
 import { StudyStreakDialog } from "@/components/student/StudyStreakDialog";
+import { formatDayMonth } from "@/lib/domain/dates";
 import { calendarDays, dailyQuestionPerformance, localDate, matchesSchedule, scheduleFilter } from "@/lib/domain/schedule";
 import { defaultExtraDate } from "@/lib/domain/week";
 import {
@@ -28,6 +29,7 @@ import {
 import { RecordStudyDialog } from "@/components/student/RecordStudyDialog";
 import { TheoryDialog } from "@/components/student/TheoryDialog";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * A semana do aluno — o `p-dashboard` da v2.
@@ -38,19 +40,21 @@ import { requireStudentAccess } from "@/lib/auth/session";
  * semana corrente depois de ela ter ido olhar a anterior.
  */
 export async function overviewLoader({ request }: { request: Request }) {
-  await requireStudentAccess();
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { plan: null, week: null, weeks: [] as readonly WeekOption[] };
 
-  const asked = new URL(request.url).searchParams.get("semana");
-  const parsedWeek = Number(asked);
-  const weekNumber = asked && Number.isSafeInteger(parsedWeek) && parsedWeek > 0 ? parsedWeek : undefined;
+  // AS SEMANAS VÊM PRIMEIRO, e as duas leituras não correm em paralelo de
+  // propósito: `?semana=` só vale se for uma das semanas que o seletor oferece.
+  // O resto — texto, negativo, `1e9`, uma semana sem meta — cai na CORRENTE, que
+  // é o que `loadWeek` abre sem número e o que o seletor mostra (D-13, QA-13).
+  // Sem isto o número chegava ao `Date` e `?semana=1e9` derrubava a tela.
+  const weeks = await api.listWeeks(plan.id);
+  const asked = Number(new URL(request.url).searchParams.get("semana"));
+  const weekNumber = weeks.some((option) => option.weekNumber === asked) ? asked : undefined;
 
-  const [week, weeks] = await Promise.all([
-    api.loadWeek(plan.id, Number.isFinite(weekNumber) ? weekNumber : undefined),
-    api.listWeeks(plan.id),
-  ]);
+  const week = await api.loadWeek(plan.id, weekNumber);
 
   return { plan, week, weeks };
 }
@@ -102,7 +106,7 @@ function DayGroupCard({
         <Typography variant="overline" component="h2" sx={{ fontSize: "0.6875rem" }}>
           {WEEKDAY_NAMES[weekday - 1]}
           {" · "}
-          {date.slice(8, 10)}/{date.slice(5, 7)}
+          {formatDayMonth(date)}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
           <Typography variant="numeric" component="span" data-testid="day-count">
@@ -319,7 +323,7 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
               onChange={(event) => {
                 changeParam("semana", event.target.value);
               }}
-              sx={{ minWidth: 200 }}
+              sx={fieldWidth(200)}
             >
               {weeks.map((option) => (
                 <MenuItem key={option.weekNumber} value={String(option.weekNumber)}>

@@ -263,6 +263,10 @@ export function StudyTimerBar({ timerHref, recordHref, profileId, theme }: { tim
     if (document.fullscreenElement === fullscreenRef.current) void document.exitFullscreen();
   }
 
+  // O texto que o botão de modo MOSTRA. O nome acessível começa por ele (WCAG
+  // 2.5.3, R-UI-16): quem diz "Livre" ao comando de voz precisa achar o botão.
+  const modeLabel = timer.mode === "pomodoro" ? (timer.phase === "focus" ? "Foco" : "Pausa") : "Livre";
+
   return (
     <Box
       component="section"
@@ -274,7 +278,12 @@ export function StudyTimerBar({ timerHref, recordHref, profileId, theme }: { tim
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-end",
+        // A linha não cabe em 375px nem sem "Lançar tempo": quebra em vez de
+        // espremer o único item que encolhe (QA-23, R-UI-15).
+        flexWrap: "wrap",
         gap: 0.5,
+        rowGap: 0.5,
+        py: 0.5,
         minHeight: 50,
         px: { xs: 1.5, md: 4 },
         borderBottom: `1px solid ${theme.vars.palette.surface.border}`,
@@ -306,8 +315,8 @@ export function StudyTimerBar({ timerHref, recordHref, profileId, theme }: { tim
         color: theme.vars.palette.text.primary,
         fontVariantNumeric: "tabular-nums",
       })}>{formatStudyTimer(displayMs)}</Typography>
-      <Button size="small" onClick={(event) => setMenuAnchor(event.currentTarget)} aria-label="Modos e tempo do cronômetro" sx={{ minWidth: 0, px: 0.75, fontSize: "0.7rem" }}>
-        {timer.mode === "pomodoro" ? timer.phase === "focus" ? "Foco" : "Pausa" : "Livre"}
+      <Button size="small" onClick={(event) => setMenuAnchor(event.currentTarget)} aria-label={`${modeLabel} — modos e tempo do cronômetro`} sx={{ minWidth: 0, flexShrink: 0, whiteSpace: "nowrap", px: 0.75, fontSize: "0.7rem" }}>
+        {modeLabel}
       </Button>
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
         <MenuItem selected={timer.mode === "stopwatch"} onClick={() => { setMode("stopwatch"); setMenuAnchor(null); }}>Cronômetro livre</MenuItem>

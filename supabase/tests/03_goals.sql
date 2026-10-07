@@ -49,6 +49,9 @@ exception when insufficient_privilege then
   raise notice '01 OK  o aluno nao cria meta de planejamento';
 end $$;
 
+-- Desde o 5c o aluno não tem ramo em `goals_insert`: nem `extra`, nem `reinforcement`.
+-- O WITH CHECK da policy só aceita `teacher_id = auth.uid()`, e Bruno não é o professor
+-- da linha. Estudo extra é `record_extra_study` (R-EXTRA-06).
 do $$ begin
   insert into public.goals (
     study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
@@ -56,7 +59,35 @@ do $$ begin
   ) values (
     'a2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
     '22222222-2222-4222-8222-222222222222',1,3,'Quarta',1,'extra','Ciências Forenses','Simulado');
-  raise notice '02 OK  o aluno cria estudo extra no proprio planejamento ativo';
+  raise exception 'FALHOU: o aluno criou estudo extra por INSERT direto em goals';
+exception when insufficient_privilege then
+  raise notice '02 OK  o aluno nao insere meta, nem extra: o WITH CHECK so aceita o professor';
+end $$;
+
+do $$ begin
+  insert into public.goals (
+    study_plan_id, teacher_id, student_id, week_number, weekday, weekday_name,
+    day_position, type, subject, title, spent_minutes, questions_answered, correct_answers
+  ) values (
+    'a2000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
+    '22222222-2222-4222-8222-222222222222',1,3,'Quarta',1,'reinforcement','Ciências Forenses',
+    'Reforço com resultado de fabrica', 120, 50, 50);
+  raise exception 'FALHOU: o aluno criou reforco ja com o resultado preenchido';
+exception when insufficient_privilege then
+  raise notice '02b OK  nem reforco nasce com minutos e acertos do aluno (o gatilho do QA-28 e BEFORE UPDATE)';
+end $$;
+
+do $$
+declare v_meta uuid;
+begin
+  -- O caminho que sobrou, com a assinatura do 5a: a meta nasce `extra` e `completed`.
+  v_meta := public.record_extra_study('ae000000-0000-4000-8000-000000000002',
+    'a2000000-0000-4000-8000-000000000001', 'extra_questions', 'Ciências Forenses',
+    current_date, 30, 10, 8);
+  if not exists (select 1 from public.goals where id = v_meta and type = 'extra' and status = 'completed') then
+    raise exception 'FALHOU: record_extra_study nao gravou a meta extra';
+  end if;
+  raise notice '02c OK  o estudo extra do aluno nasce por record_extra_study';
 end $$;
 
 -- ---------- Acesso vencido não escreve ----------
@@ -70,7 +101,9 @@ do $$ begin
     '66666666-6666-4666-8666-666666666666',1,3,'Quarta',1,'extra','Ciências Forenses','Simulado');
   raise exception 'FALHOU: aluna com acesso vencido lancou estudo extra';
 exception when insufficient_privilege then
-  raise notice '03 OK  has_active_access() barra quem venceu, no WITH CHECK';
+  -- Desde o 5c o motivo é a falta do ramo do aluno em `goals_insert`, e não o acesso
+  -- vencido. O vencido pela RPC é teste do 5a (casos 36 e seguintes).
+  raise notice '03 OK  quem venceu tambem nao insere meta: o ramo do aluno saiu de goals_insert';
 end $$;
 
 do $$
@@ -342,8 +375,9 @@ end $$;
 -- ---------- O aluno registra na meta nova ----------
 select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
 do $$ begin
-  insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
-  select g.id, g.teacher_id, g.student_id, 30, 0, 0 from public.goals g
+  -- Pela RPC: desde o 5c o INSERT direto em `goal_entries` não existe.
+  perform public.record_goal_entry('ae000000-0000-4000-8000-000000000003', g.id, 30, 0, 0)
+    from public.goals g
    where g.study_plan_id = 'a2000000-0000-4000-8000-000000000001' and g.week_number = 7
      and g.title = 'Nova de segunda';
   raise notice '21 OK  o aluno registra estudo na meta que acabou de ser gerada';
@@ -529,14 +563,17 @@ begin
   raise notice '30 OK  apagar registro e meta extra exige acesso vigente (0 linhas, sem erro)';
 end $$;
 
--- ---------- O INSERT direto do bundle no ar continua aceito ----------
--- Compatibilidade: sai no 5c, depois de staging rodar o bundle novo.
+-- ---------- O INSERT direto do bundle antigo foi fechado (PR 5c) ----------
+-- Antes do 5c este caso esperava o contrário, por compatibilidade com o bundle no ar.
+-- Hoje o registro nasce só nas RPCs, e o privilégio de INSERT não existe.
 select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
 do $$ begin
   insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, questions, correct_answers)
   values ('a5000000-0000-4000-8000-000000000202','11111111-1111-4111-8111-111111111111',
           '22222222-2222-4222-8222-222222222222', 15, 0, 0);
-  raise notice '31 OK  o INSERT direto do aluno continua aceito (sai no 5c)';
+  raise exception 'FALHOU: o INSERT direto do aluno em goal_entries ainda e aceito';
+exception when insufficient_privilege then
+  raise notice '31 OK  o INSERT direto do aluno em goal_entries foi fechado (so as RPCs registram)';
 end $$;
 
 -- ---------- record_goal_entry ----------

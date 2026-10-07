@@ -20,6 +20,7 @@ import { SubjectPerformanceCard } from "@/components/SubjectPerformanceCard";
 import { api, type ClassQuestionDistribution, type Statistics } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
 import { formatMinutes } from "@/lib/domain/week";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Estatísticas do professor — o `renderEstatisticas` da v2.
@@ -30,7 +31,7 @@ import { formatMinutes } from "@/lib/domain/week";
  * mesmo número.
  */
 export async function teacherStatisticsLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const [allPlans, classes] = await Promise.all([api.listPlans(), api.listClasses()]);
   const activePlans = allPlans.filter((plan) => plan.status === "active");
@@ -40,7 +41,13 @@ export async function teacherStatisticsLoader({ request }: { request: Request })
   const classId = requestedClass?.id ?? requestedPlan?.classId ?? classes[0]?.id ?? null;
   const plans = classId ? activePlans.filter((plan) => plan.classId === classId) : activePlans;
   const planId = plans.find((plan) => plan.id === requestedPlan?.id)?.id ?? plans[0]?.id ?? null;
-  const year = Number(params.get("ano")) || new Date().getFullYear();
+  // `?ano=` só vale se for um dos anos que o seletor oferece; o resto cai no ano
+  // corrente, em silêncio (D-13, QA-13). Sem isto `?ano=1e9` chegava ao `Date` e
+  // lançava `RangeError`.
+  const thisYear = new Date().getFullYear();
+  const years = Array.from({ length: 3 }, (_, i) => thisYear - i);
+  const asked = Number(params.get("ano"));
+  const year = years.includes(asked) ? asked : thisYear;
 
   const [stats, questionDistribution] = await Promise.all([
     planId ? api.loadStatistics({ studyPlanId: planId, year }) : Promise.resolve(null),
@@ -53,6 +60,7 @@ export async function teacherStatisticsLoader({ request }: { request: Request })
     planId,
     classId,
     year,
+    years,
     stats,
     questionDistribution,
   };
@@ -61,7 +69,7 @@ export async function teacherStatisticsLoader({ request }: { request: Request })
 type LoaderData = Awaited<ReturnType<typeof teacherStatisticsLoader>>;
 
 export function TeacherStatistics() {
-  const { plans, classes, planId, classId, year, stats, questionDistribution } = useLoaderData() as LoaderData;
+  const { plans, classes, planId, classId, year, years, stats, questionDistribution } = useLoaderData() as LoaderData;
   const [params, setParams] = useSearchParams();
 
   function setParam(key: string, value: string) {
@@ -79,7 +87,6 @@ export function TeacherStatistics() {
     setParams(next);
   }
 
-  const years = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i);
 
   return (
     <>
@@ -95,7 +102,7 @@ export function TeacherStatistics() {
               value={classId ?? ""}
               slotProps={{ select: { inputProps: { "data-testid": "stats-class" } } }}
               onChange={(event) => setClass(event.target.value)}
-              sx={{ minWidth: 220 }}
+              sx={fieldWidth(220)}
             >
               {classes.map((entry) => (
                 <MenuItem key={entry.id} value={entry.id}>
@@ -110,7 +117,7 @@ export function TeacherStatistics() {
               value={planId ?? ""}
               slotProps={{ select: { inputProps: { "data-testid": "stats-plan" } } }}
               onChange={(event) => setParam("plano", event.target.value)}
-              sx={{ minWidth: 260 }}
+              sx={fieldWidth(260)}
             >
               {plans.map((plan) => (
                 <MenuItem key={plan.id} value={plan.id}>
@@ -125,7 +132,7 @@ export function TeacherStatistics() {
               value={String(year)}
               slotProps={{ select: { inputProps: { "data-testid": "stats-year" } } }}
               onChange={(event) => setParam("ano", event.target.value)}
-              sx={{ minWidth: 120 }}
+              sx={fieldWidth(120)}
             >
               {years.map((option) => (
                 <MenuItem key={option} value={String(option)}>

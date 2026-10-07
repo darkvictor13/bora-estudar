@@ -130,6 +130,43 @@ test.describe("F-FLASH-02 · deck pessoal", () => {
   });
 });
 
+test.describe("F-FLASH-06 · deck pessoal repetido — QA-16", () => {
+  test("a mesma disciplina e o mesmo assunto, com outra caixa, é recusado", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const disciplina = `Direito ${scenario.student.id.slice(0, 8)}`;
+    await studentPage.goto("/aluno/flashcards");
+
+    await studentPage.getByRole("button", { name: "Criar flashcards" }).click();
+    const primeiro = studentPage.getByRole("dialog");
+    // O teto dos dois campos vem do contrato, e não de literal da tela.
+    await expect(primeiro.getByLabel("Disciplina")).toHaveAttribute("maxlength", "120");
+    await expect(primeiro.getByLabel("Assunto do deck")).toHaveAttribute("maxlength", "160");
+    await primeiro.getByLabel("Disciplina").fill(disciplina);
+    await primeiro.getByLabel("Assunto do deck").fill("Teoria do crime");
+    await primeiro.getByRole("button", { name: "Criar deck" }).click();
+    await expect(studentPage).toHaveURL(/meuDeck=/);
+
+    await studentPage.goto("/aluno/flashcards");
+    await studentPage.getByRole("button", { name: "Criar flashcards" }).click();
+    const segundo = studentPage.getByRole("dialog");
+    await segundo.getByLabel("Disciplina").fill(` ${disciplina.toUpperCase()} `);
+    await segundo.getByLabel("Assunto do deck").fill("TEORIA DO CRIME");
+    await segundo.getByRole("button", { name: "Criar deck" }).click();
+
+    await expect(alert(segundo, "error")).toHaveText(
+      "Você já tem um deck com essa disciplina e esse assunto.",
+    );
+    expect(
+      await count(
+        "select count(*) from public.personal_flashcard_decks where student_id = $1 and lower(btrim(subject)) = lower(btrim($2))",
+        [scenario.student.id, disciplina],
+      ),
+    ).toBe(1);
+  });
+});
+
 test.describe("F-FLASH-03 · biblioteca editorial", () => {
   test("o aluno revisa um cartão do deck duas vezes", async ({ studentPage, scenario }) => {
     await gradeTwice(studentPage, "/aluno/flashcards?deck=pf2029-informatica-01", "library_flashcard_reviews", scenario.student.id);

@@ -15,7 +15,8 @@
 import { supabase } from "@/lib/supabase/client";
 
 import type { RequestId, Result, StudyPlanInput, StudyPlanSummary, Uuid } from "../contract.ts";
-import { done, fail, failure, translateDbError, throwDb } from "./errors.ts";
+import { checkPlan, PLAN_NAME_TAKEN } from "../validation.ts";
+import { done, fail, failure, isUniqueViolation, translateDbError, throwDb } from "./errors.ts";
 import { once } from "./idempotency.ts";
 import { PLAN_COLUMNS, requireSession, toPlan, type PlanRow } from "./session.ts";
 
@@ -72,26 +73,20 @@ function toRow(input: Partial<StudyPlanInput>): PlanWrite {
   return row as PlanWrite;
 }
 
-function validate(input: Partial<StudyPlanInput>): ReturnType<typeof fail> | null {
-  if (input.name !== undefined && input.name.trim().length < 3) {
-    return fail("validation", "Dê um nome ao planejamento.", "name");
-  }
-  if (input.weeklyGoals !== undefined && (input.weeklyGoals < 1 || input.weeklyGoals > 60)) {
-    return fail("validation", "As metas por semana ficam entre 1 e 60.", "weeklyGoals");
-  }
-  if (input.examDate && input.startsOn && input.examDate < input.startsOn) {
-    return fail("validation", "A prova não pode ser antes do início.", "examDate");
-  }
-  return null;
-}
+/**
+ * O `23505` do NOME do planejamento: `study_plans_name_per_student_uidx`, único
+ * por `(teacher_id, student_id, lower(btrim(name)))`. Casa o nome do índice
+ * porque `study_plans` tem outro único, o de um ativo por aluno.
+ */
+const NAME_INDEX = "study_plans_name_per_student_uidx";
 
 export function createPlan(
   input: StudyPlanInput,
   requestId: RequestId,
 ): Promise<Result<StudyPlanSummary>> {
   return once(requestId, async () => {
-    const invalid = validate(input);
-    if (invalid) return invalid as Result<StudyPlanSummary>;
+    const invalid = checkPlan(input);
+    if (invalid) return failure<StudyPlanSummary>(invalid);
 
     const session = await requireSession();
 
@@ -117,7 +112,10 @@ export function createPlan(
       .select(PLAN_COLUMNS)
       .maybeSingle();
 
-    if (error) return failure(translateDbError(error));
+    if (error) {
+      if (isUniqueViolation(error, NAME_INDEX)) return failure(PLAN_NAME_TAKEN);
+      return failure(translateDbError(error));
+    }
     if (!data) return fail("unknown", "O planejamento não foi criado.");
     return done(toPlan(data as PlanRow));
   });
@@ -129,8 +127,8 @@ export function updatePlan(
   requestId: RequestId,
 ): Promise<Result<StudyPlanSummary>> {
   return once(requestId, async () => {
-    const invalid = validate(input);
-    if (invalid) return invalid as Result<StudyPlanSummary>;
+    const invalid = checkPlan(input);
+    if (invalid) return failure<StudyPlanSummary>(invalid);
 
     const { data, error } = await supabase
       .from("study_plans")
@@ -139,7 +137,10 @@ export function updatePlan(
       .select(PLAN_COLUMNS)
       .maybeSingle();
 
-    if (error) return failure(translateDbError(error));
+    if (error) {
+      if (isUniqueViolation(error, NAME_INDEX)) return failure(PLAN_NAME_TAKEN);
+      return failure(translateDbError(error));
+    }
     if (!data) return fail("not_found", "Planejamento não encontrado.");
     return done(toPlan(data as PlanRow));
   });

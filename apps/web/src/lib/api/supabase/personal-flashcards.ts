@@ -12,7 +12,8 @@ import type {
   PersonalFlashcardReview,
   Result,
 } from "../contract.ts";
-import { done, fail, failure, throwDb, translateDbError } from "./errors.ts";
+import { DECK_TAKEN, checkPersonalDeck } from "../validation.ts";
+import { done, fail, failure, isUniqueViolation, throwDb, translateDbError } from "./errors.ts";
 import { reviewValues, writeReview } from "./flashcards.ts";
 import { once } from "./idempotency.ts";
 import { requireSession } from "./session.ts";
@@ -71,15 +72,23 @@ export async function listPersonalFlashcardDecks(): Promise<readonly PersonalFla
 
 export function createPersonalFlashcardDeck(input: CreatePersonalFlashcardDeckInput): Promise<Result<PersonalFlashcardDeck>> {
   return once(input.requestId, async () => {
+    const invalid = checkPersonalDeck(input);
+    if (invalid) return failure<PersonalFlashcardDeck>(invalid);
     const subject = input.subject.trim();
     const title = input.title.trim();
-    if (subject.length < 2) return fail("validation", "Informe a disciplina.", "subject");
-    if (title.length < 2) return fail("validation", "Informe o assunto do deck.", "title");
     const session = await requireSession();
     const { data, error } = await supabase.from("personal_flashcard_decks")
       .insert({ id: input.id, student_id: session.profileId, subject, title })
       .select("id,subject,title,created_at,updated_at").single();
-    if (error) return failure(translateDbError(error));
+    if (error) {
+      // Só o índice de nome é "deck repetido". A PK é escolhida pelo cliente
+      // (`input.id`), e um replay com o mesmo id também dá `23505`, em
+      // `personal_flashcard_decks_pkey`: esse segue o caminho de sempre.
+      if (isUniqueViolation(error, "personal_flashcard_decks_name_per_student_uidx")) {
+        return failure<PersonalFlashcardDeck>(DECK_TAKEN);
+      }
+      return failure(translateDbError(error));
+    }
     return done({ id: data.id, subject: data.subject, title: data.title, cards: [], createdAt: data.created_at, updatedAt: data.updated_at });
   });
 }

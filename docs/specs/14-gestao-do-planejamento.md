@@ -71,7 +71,7 @@ nenhum; ela dá caminho aos que estavam inalcançáveis.
 | R-GPLAN-06 | Criar e editar planejamento é **escrita direta com RLS**, sem RPC: é planejamento, a linha exata da tabela de fronteira do `CLAUDE.md`, e as três defesas já estão montadas desde a migration inicial. |
 | R-GPLAN-07 | `study_plans_teacher_insert` exige `teacher_id = auth.uid() and public.is_teacher_of(student_id)`. **Criar planejamento para aluno sem vínculo é recusado pelo banco** — é a spec 13 sustentando esta. |
 | R-GPLAN-08 | O `grant update` de `study_plans` cobre `name`, `area`, `target_exam`, `stage`, `study_model`, `weekly_goals`, `start_date`, `status` e `deleted_at`. `student_id`, `teacher_id` e `id` ficam **de fora**: nem com SQL na mão o professor move um planejamento para outro aluno. |
-| R-GPLAN-09 | `study_plan_name_unique (student_id, name)` impede dois planejamentos de mesmo nome para o mesmo aluno. A tela traduz a violação em vez de mostrar o erro do Postgres. |
+| R-GPLAN-09 | O índice `study_plans_name_per_student_uidx (teacher_id, student_id, lower(btrim(name)))` impede dois planejamentos de mesmo nome para o mesmo aluno, ignorando maiúsculas e espaço nas pontas — "Área Fiscal" e "área fiscal" são o mesmo nome. A tela traduz a violação, identificada pelo nome do índice: "Este aluno já tem um planejamento com esse nome." (`code: "conflict"`, `field: "name"`). O nome vai de 3 a 120 caracteres; área, fase e modelo até 120, concurso até 200 (QA-15, QA-16, D-06, D-07). |
 | R-GPLAN-10 | `weekly_goals` fica entre 1 e 200 pela `check` existente; o padrão é **24**, o mesmo de cinco dos seis cursos-modelo da v96. |
 
 ### Os blocos que o planejamento nasce tendo

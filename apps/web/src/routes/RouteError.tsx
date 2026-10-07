@@ -6,6 +6,7 @@ import { Link, isRouteErrorResponse, useRouteError } from "react-router";
 import { useState } from "react";
 
 import { ContentBody } from "@/components/AppShell";
+import { ApiThrownError } from "@/lib/api/contract";
 import { captureRouteError } from "@/lib/observability";
 import { ROUTES } from "@/lib/routes";
 
@@ -14,8 +15,9 @@ import { ROUTES } from "@/lib/routes";
  *
  * Numa SPA um erro em loader não tem servidor para transformá-lo em página de
  * erro: sem isto, a tela fica branca e o motivo só aparece no console. Cobre
- * dois casos: o 404 que `professor/alunos/:studentId` lança de propósito
- * quando não há vínculo, e a falha inesperada.
+ * dois casos: o "não encontrado" — o 404 do roteador e o `not_found` que
+ * `professor/alunos/:studentId` lança de propósito quando não há vínculo —, e a
+ * falha inesperada.
  *
  * É TAMBÉM O ÚNICO LUGAR DE ONDE O ERRO DE LOADER PODE SER RELATADO. O React
  * Router em modo data captura a exceção e renderiza este componente: ela não é
@@ -39,14 +41,24 @@ export function RouteError() {
   // gera dois eventos, e o código mostrado não muda entre montagens.
   const [eventId] = useState(() => captureRouteError(error));
 
-  if (isRouteErrorResponse(error) && error.status === 404) {
+  // "NÃO ENCONTRADO" É ESTADO, NÃO ERRO. Ficha de aluno alheio ou malformado
+  // chega aqui como `ApiThrownError("not_found")`, e mandar a pessoa "atualizar
+  // a página" por um recurso que não existe para ela é a pior resposta
+  // possível (QA-13). `captureRouteError` já não relata esse código.
+  const notFound =
+    (isRouteErrorResponse(error) && error.status === 404) ||
+    (error instanceof ApiThrownError && error.code === "not_found");
+
+  if (notFound) {
     return (
       <>
         <PageHeader title="Não encontrado" />
         <ContentBody>
         <Card>
           <Alert status="warning">
-            Esta página não existe, ou você não tem acesso a ela.
+            {error instanceof ApiThrownError
+              ? error.message
+              : "Esta página não existe, ou você não tem acesso a ela."}
           </Alert>
           <Button component={Link} to={ROUTES.home} variant="outlined" size="small" sx={{ mt: 1.5 }}>
             Voltar para o início

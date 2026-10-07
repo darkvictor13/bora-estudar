@@ -60,7 +60,12 @@ export async function settle<T>(operation: () => Promise<Result<T>>): Promise<Re
   }
 }
 
-export { studyWriteError, translateAuthError, translateDbError } from "./error-translation.ts";
+export {
+  isUniqueViolation,
+  studyWriteError,
+  translateAuthError,
+  translateDbError,
+} from "./error-translation.ts";
 
 /**
  * Leitura que falhou é problema do `ErrorBoundary` da rota, não da tela.

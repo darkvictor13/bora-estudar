@@ -511,7 +511,7 @@ begin
   exception when unique_violation then
     null;
   end;
-  -- Nulo repete: o bundle no ar insere sem a chave.
+  -- Nulo repete: os registros anteriores à coluna ficam sem chave.
   insert into public.goal_entries (goal_id, teacher_id, student_id, minutes, note)
   values ('a5000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111',
           '22222222-2222-4222-8222-222222222222', 5, 'teste-07-21');
@@ -521,4 +521,214 @@ begin
   delete from public.goal_entries
    where note = 'teste-07-21';
   raise notice '21 OK  goal_entries_request_uidx: chave unica, e nulo repete';
+end $$;
+
+-- ---------- O que virou RPC não tem grant direto (QA-04, PR 5c) ----------
+--
+-- Varredura por catálogo: não depende de nenhum cenário, e acusa o dia em que um grant
+-- de coluna voltar por uma migration futura. `has_any_column_privilege` enxerga também
+-- o grant de TABELA, que `revoke (col)` não tira.
+do $$
+declare v_erro text := ''; v_coluna text;
+begin
+  if has_any_column_privilege('authenticated', 'public.goal_entries', 'INSERT') then
+    v_erro := v_erro || ' goal_entries(insert)';
+  end if;
+  if has_any_column_privilege('authenticated', 'public.goal_entries', 'UPDATE') then
+    v_erro := v_erro || ' goal_entries(update)';
+  end if;
+  if has_any_column_privilege('authenticated', 'public.theory_reviews', 'INSERT') then
+    v_erro := v_erro || ' theory_reviews(insert)';
+  end if;
+  if has_any_column_privilege('authenticated', 'public.theory_reviews', 'UPDATE') then
+    v_erro := v_erro || ' theory_reviews(update)';
+  end if;
+  foreach v_coluna in array array['initial_questions_done', 'initial_questions_complete',
+                                  'initial_questions_complete_at', 'lesson_done', 'lesson_done_at'] loop
+    if has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'INSERT') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(insert)';
+    end if;
+    if has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'UPDATE') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(update)';
+    end if;
+  end loop;
+  -- O contrário: a leitura do PDF continua escrita direta, no INSERT e no UPDATE.
+  foreach v_coluna in array array['current_page', 'theory_done', 'theory_done_at'] loop
+    if not has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'INSERT') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(falta insert)';
+    end if;
+    if not has_column_privilege('authenticated', 'public.theory_progress', v_coluna, 'UPDATE') then
+      v_erro := v_erro || ' theory_progress.' || v_coluna || '(falta update)';
+    end if;
+  end loop;
+  -- `anon` nunca teve; confere que nenhum dos dois caminhos reabriu para ele.
+  if has_any_column_privilege('anon', 'public.goal_entries', 'INSERT')
+     or has_any_column_privilege('anon', 'public.theory_reviews', 'INSERT') then
+    v_erro := v_erro || ' anon(insert)';
+  end if;
+  if v_erro <> '' then
+    raise exception 'FALHOU: escrita de execucao com grant direto:%', v_erro;
+  end if;
+  raise notice '22 OK  o que virou RPC nao tem grant direto (a leitura da teoria continua)';
+end $$;
+
+-- As quatro RPCs que sustentam a escrita fechada precisam ser SECURITY DEFINER: uma
+-- `security invoker` dependeria dos grants que o 5c revogou e quebraria em silêncio.
+do $$
+declare v_nome text;
+begin
+  foreach v_nome in array array['record_goal_entry', 'record_extra_study',
+                                'record_initial_questions', 'record_review_questions'] loop
+    if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                    where n.nspname = 'public' and p.proname = v_nome and p.prosecdef) then
+      raise exception 'FALHOU: % nao e security definer, e o 5c fechou o grant que ela usaria', v_nome;
+    end if;
+  end loop;
+  raise notice '23 OK  as quatro RPCs de registro sao security definer';
+end $$;
+
+-- `goals_insert` só aceita o professor: o ramo do aluno saiu, e a policy não pode
+-- voltar a citar `student_id`.
+do $$
+declare v_check text;
+begin
+  select pg_get_expr(p.polwithcheck, p.polrelid) into v_check
+    from pg_policy p where p.polname = 'goals_insert' and p.polrelid = 'public.goals'::regclass;
+  if v_check is null or v_check like '%student_id%' or v_check like '%has_active_access%' then
+    raise exception 'FALHOU: goals_insert voltou a ter ramo do aluno: %', v_check;
+  end if;
+  raise notice '24 OK  goals_insert so aceita o professor';
+end $$;
+
+-- ---------- Texto que o cliente grava tem teto no banco (QA-15) ----------
+-- `has_column_privilege` em vez de `information_schema.column_privileges`:
+-- enxerga grant de tabela, de coluna e o herdado de PUBLIC. O teto que conta é
+-- o do valor GRAVADO — `char_length(btrim(x)) <= N` deixa passar 'abc' mais um
+-- milhão de espaços, e por isso a regex não o reconhece.
+do $$
+declare
+  -- Quem acrescentar exceção escreve o motivo ao lado. Começa vazia.
+  v_excecoes text[] := array[]::text[];
+  v_sem text;
+begin
+  with writable as (
+    select distinct c.oid as relid, c.relname, a.attnum, a.attname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+     where c.relkind = 'r'
+       and a.atttypid in ('text'::regtype, 'varchar'::regtype)
+       and (has_column_privilege('authenticated', c.oid, a.attnum, 'INSERT')
+         or has_column_privilege('authenticated', c.oid, a.attnum, 'UPDATE')))
+  select string_agg(w.relname || '.' || w.attname, ', ' order by w.relname, w.attname)
+    into v_sem
+    from writable w
+   where not exists (           -- CHECK só desta coluna, com teto no valor gravado,
+           select 1 from pg_constraint k          -- ou lista fechada de valores
+            where k.conrelid = w.relid and k.contype = 'c' and k.conkey = array[w.attnum]
+              and (pg_get_constraintdef(k.oid)
+                     ~ ('(char_length|length)\(' || quote_ident(w.attname) || '\) <= [0-9]+')
+                or pg_get_constraintdef(k.oid)
+                     ~ ('\(' || quote_ident(w.attname) || ' = ANY \(ARRAY\[')))
+     and not exists (           -- ou é FK: o valor tem de existir na outra tabela
+           select 1 from pg_constraint k
+            where k.conrelid = w.relid and k.contype = 'f' and w.attnum = any(k.conkey))
+     and (w.relname || '.' || w.attname) <> all (v_excecoes);
+
+  if v_sem is not null then
+    raise exception 'FALHOU: coluna de texto gravavel por authenticated sem teto no banco: %', v_sem;
+  end if;
+  raise notice '25 OK  toda coluna de texto que authenticated grava tem teto no banco';
+end $$;
+
+-- Os ataques: como postgres, porque a CHECK não depende de papel. O ataque
+-- precisa falhar DENTRO do bloco, para o `exception` desfazer a escrita (a suíte
+-- não roda numa transação).
+do $$ begin
+  update public.profiles set name = repeat('a', 121) where id = '22222222-2222-4222-8222-222222222222';
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  raise exception 'FALHOU: profiles.name aceitou 121 caracteres';
+exception when check_violation then
+  raise notice '26 OK  profiles.name recusa 121 caracteres';
+end $$;
+
+do $$ begin
+  update public.classes set name = repeat('a', 121) where id = 'a9000000-0000-4000-8000-000000000001';
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  raise exception 'FALHOU: classes.name aceitou 121 caracteres';
+exception when check_violation then
+  raise notice '27 OK  classes.name recusa 121 caracteres';
+end $$;
+
+do $$ begin
+  update public.study_plans set name = repeat('a', 121) where id = 'a2000000-0000-4000-8000-000000000001';
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  raise exception 'FALHOU: study_plans.name aceitou 121 caracteres';
+exception when check_violation then
+  raise notice '28 OK  study_plans.name recusa 121 caracteres';
+end $$;
+
+-- A RPC de registro não corta a observação, e o aluno nem tem mais INSERT
+-- direto: a CHECK é a única barreira do servidor.
+do $$ begin
+  update public.goal_entries set note = repeat('n', 2001)
+   where id = (select id from public.goal_entries order by id limit 1);
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  raise exception 'FALHOU: goal_entries.note aceitou 2001 caracteres';
+exception when check_violation then
+  raise notice '29 OK  goal_entries.note recusa 2001 caracteres';
+end $$;
+
+-- O piso mede sem as pontas, e o teto mede o valor gravado: o nome de três
+-- espaços e uma letra não é nome, e o de 120 letras mais um espaço não cabe.
+do $$ begin
+  update public.classes set name = '  a  ' where id = 'a9000000-0000-4000-8000-000000000001';
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  raise exception 'FALHOU: classes.name aceitou um nome de uma letra';
+exception when check_violation then
+  raise notice '30 OK  classes.name recusa nome abaixo de 3 caracteres (medido sem as pontas)';
+end $$;
+
+do $$ begin
+  update public.waitlist set interest_area = 'Fiscal' || repeat(' ', 200)
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  raise exception 'FALHOU: waitlist.interest_area aceitou 206 caracteres, 6 deles uteis';
+exception when check_violation then
+  raise notice '31 OK  o teto mede o valor gravado, e nao o aparado (waitlist.interest_area)';
+end $$;
+
+-- Nome repetido (QA-16), ignorando maiúsculas e espaço nas pontas. Confere o
+-- NOME do índice: um 23505 de outro índice não vale (o do planejamento ativo,
+-- por exemplo, também é único por aluno).
+do $$
+declare v_indice text; v_nome text;
+begin
+  -- A 01 renomeia a turma da Ana: o duplicado sai do nome de AGORA.
+  select ' ' || upper(name) || ' ' into v_nome from public.classes
+   where id = 'a9000000-0000-4000-8000-000000000001';
+  insert into public.classes (teacher_id, name)
+  values ('11111111-1111-4111-8111-111111111111', v_nome);
+  raise exception 'FALHOU: a turma repetida (outra caixa, espacos) foi aceita';
+exception when unique_violation then
+  get stacked diagnostics v_indice = constraint_name;
+  if v_indice <> 'classes_name_per_teacher_uidx' then
+    raise exception 'FALHOU: o 23505 veio do indice % e nao de classes_name_per_teacher_uidx', v_indice;
+  end if;
+  raise notice '32 OK  turma repetida, com outra caixa e espaco, e recusada pelo indice de nome';
+end $$;
+
+do $$
+declare v_indice text;
+begin
+  insert into public.study_plans (teacher_id, student_id, name, status)
+  values ('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222',
+          ' plano do bruno ', 'paused');
+  raise exception 'FALHOU: o planejamento repetido (outra caixa, espacos) foi aceito';
+exception when unique_violation then
+  get stacked diagnostics v_indice = constraint_name;
+  if v_indice <> 'study_plans_name_per_student_uidx' then
+    raise exception 'FALHOU: o 23505 veio do indice % e nao de study_plans_name_per_student_uidx', v_indice;
+  end if;
+  raise notice '33 OK  planejamento repetido, com outra caixa e espaco, e recusado pelo indice de nome';
 end $$;

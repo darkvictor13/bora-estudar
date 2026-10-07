@@ -14,8 +14,8 @@ import { buildFlashcardStatistics, type FlashcardStatisticsDeck } from "@/lib/do
 import { lessonReviewFromLibrary, libraryDeckCards } from "@/lib/domain/library-flashcards";
 import { ROUTES } from "@/lib/routes";
 
-export async function flashcardStatisticsLoader() {
-  await requireStudentAccess();
+export async function flashcardStatisticsLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
   const plan = await api.loadActivePlanOrNull();
   const lessons = plan ? (await api.loadTheoryControl(plan.id)).flatMap((subject) => subject.lessons).filter((lesson) => lesson.published && (lesson.flashcardCards ?? []).length > 0) : [];
   const personalDecks = await api.listPersonalFlashcardDecks();

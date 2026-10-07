@@ -59,6 +59,7 @@ import type {
   ImportMasterInput,
   ImportMasterResult,
   IsoDate,
+  IsoDateTime,
   Notebook,
   QuizSessionSummary,
   RecordInitialQuestionsInput,
@@ -104,16 +105,23 @@ import type {
 import { ApiThrownError } from "./contract.ts";
 import {
   checkAccessMonths,
-  checkClassName,
+  checkClass,
   checkCredentials,
   checkExtraStudy,
   checkGenerateWeek,
   checkName,
+  checkNotebook,
   checkPassword,
+  checkPersonalDeck,
+  checkPlan,
   checkQuestionRecord,
   checkSignUp,
   checkStudentEmail,
   checkStudyEntry,
+  checkWaitlist,
+  CLASS_NAME_TAKEN,
+  DECK_TAKEN,
+  PLAN_NAME_TAKEN,
   STUDY_REPLAY_CONFLICT,
 } from "./validation.ts";
 
@@ -137,6 +145,14 @@ let sequence = 0;
 function nextId(prefix: string): Uuid {
   sequence += 1;
   return `${prefix}${String(sequence).padStart(12, "0")}`.slice(0, 36);
+}
+
+/**
+ * Uma data vira o INSTANTE de `access_expires_at` (`timestamptz`). Meio-dia UTC
+ * mantém o mesmo dia em Brasília, que é onde a suíte roda (QA-20).
+ */
+function instantOf(date: IsoDate): IsoDateTime {
+  return `${date}T12:00:00.000Z`;
 }
 
 function addDays(date: IsoDate, days: number): IsoDate {
@@ -547,7 +563,7 @@ function seedState(): State {
       name: "Aluna de Exemplo",
       role: "student",
       access: "active",
-      accessExpiresAt: addDays(TODAY, 120),
+      accessExpiresAt: instantOf(addDays(TODAY, 120)),
       teacherId: TEACHER_ID,
     },
     theme: null,
@@ -619,10 +635,29 @@ function seedState(): State {
 let state = seedState();
 const mockExamContext = { session: () => state.session, students: () => state.students, classes: () => state.classes };
 
+/**
+ * "Meus dados". O nome do professor só existe com vínculo (`teacherId`): a
+ * fixture que o devolvesse sempre — inclusive sem vínculo — foi o que escondeu o
+ * QA-08, em que o adaptador real o lia pela consulta errada.
+ */
+function accountOf(name: string | null): Account {
+  return {
+    profileId: state.session?.profileId ?? STUDENT_ID,
+    name,
+    email: state.session?.email ?? "",
+    plan: "Preparatório PRF",
+    access: state.session?.access ?? "pending",
+    accessExpiresAt: state.session?.accessExpiresAt ?? null,
+    teacherName: state.session?.teacherId ? "Professor de Exemplo" : null,
+  };
+}
+
 /** Somente na implementação de demonstração; não participa da autenticação real. */
 export function setFixtureRole(role: "teacher" | "student") {
   if (state.session) state.session = { ...state.session, role,
     profileId: role === "teacher" ? TEACHER_ID : STUDENT_ID,
+    // Professor não tem professor (R-CONTA-09).
+    teacherId: role === "teacher" ? null : TEACHER_ID,
     name: role === "teacher" ? "Professor de Exemplo" : "Aluna de Exemplo" };
 }
 
@@ -791,32 +826,13 @@ export const fixturesApi: BoraApi = {
     return later<Result<void>>(invalid ? { ok: false, error: invalid } : done(undefined));
   },
 
-  loadAccount: () =>
-    later<Account>({
-      profileId: STUDENT_ID,
-      name: state.session?.name ?? null,
-      email: state.session?.email ?? "",
-      plan: "Preparatório PRF",
-      access: state.session?.access ?? "pending",
-      accessExpiresAt: state.session?.accessExpiresAt ?? null,
-      teacherName: "Professor de Exemplo",
-    }),
+  loadAccount: () => later<Account>(accountOf(state.session?.name ?? null)),
 
   saveAccount: ({ name }: AccountInput) => {
     const invalid = checkName(name);
     if (invalid) return later<Result<Account>>({ ok: false, error: invalid });
     if (state.session) state.session = { ...state.session, name };
-    return later(
-      done<Account>({
-        profileId: STUDENT_ID,
-        name,
-        email: state.session?.email ?? "",
-        plan: "Preparatório PRF",
-        access: state.session?.access ?? "pending",
-        accessExpiresAt: state.session?.accessExpiresAt ?? null,
-        teacherName: "Professor de Exemplo",
-      }),
-    );
+    return later(done<Account>(accountOf(name)));
   },
 
   loadThemePreference: () => later(state.theme),
@@ -1262,10 +1278,15 @@ export const fixturesApi: BoraApi = {
 
   listPersonalFlashcardDecks: () => later(personalFlashcardDecks.map((deck) => ({ ...deck, cards: [...deck.cards] }))),
   createPersonalFlashcardDeck: (input: CreatePersonalFlashcardDeckInput) => later(once(input.requestId, () => {
+    const invalid = checkPersonalDeck(input);
+    if (invalid) return { ok: false, error: invalid } as Result<PersonalFlashcardDeck>;
     const subject = input.subject.trim();
     const title = input.title.trim();
-    if (subject.length < 2) return fail<PersonalFlashcardDeck>("validation", "Informe a disciplina.", "subject");
-    if (title.length < 2) return fail<PersonalFlashcardDeck>("validation", "Informe o assunto do deck.", "title");
+    // O índice de nome do banco: o par disciplina + assunto, sem caixa nem pontas.
+    const key = (value: string) => value.trim().toLowerCase();
+    if (personalFlashcardDecks.some((item) => key(item.subject) === key(subject) && key(item.title) === key(title))) {
+      return { ok: false, error: DECK_TAKEN } as Result<PersonalFlashcardDeck>;
+    }
     const deck: PersonalFlashcardDeck = { id: input.id, subject, title, cards: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     personalFlashcardDecks = [deck, ...personalFlashcardDecks];
     return done(deck);
@@ -1299,9 +1320,8 @@ export const fixturesApi: BoraApi = {
   loadWaitlistEntry: () => later(state.waitlist),
 
   joinWaitlist: (input: WaitlistInput) => {
-    if (input.whatsapp.replace(/\D/g, "").length < 10) {
-      return later(fail<WaitlistEntry>("validation", "WhatsApp incompleto.", "whatsapp"));
-    }
+    const invalid = checkWaitlist(input, TODAY);
+    if (invalid) return later({ ok: false, error: invalid } as Result<WaitlistEntry>);
     state.waitlist = { ...input, studentId: STUDENT_ID, status: "waiting", createdAt: `${TODAY}T09:00:00.000Z` };
     return later(done(state.waitlist));
   },
@@ -1310,7 +1330,7 @@ export const fixturesApi: BoraApi = {
     if (code.trim().toUpperCase() !== "BORA3") {
       return later(fail<Session>("not_found", "Cupom inválido ou já utilizado.", "code"));
     }
-    state.session = { ...state.session!, access: "active", accessExpiresAt: addDays(TODAY, 90) };
+    state.session = { ...state.session!, access: "active", accessExpiresAt: instantOf(addDays(TODAY, 90)) };
     return later(done(state.session));
   },
 
@@ -1334,8 +1354,15 @@ export const fixturesApi: BoraApi = {
     ),
 
   loadStudentFile: (studentId: Uuid) => {
-    const card =
-      state.students.find((student) => student.studentId === studentId) ?? state.students[0]!;
+    const card = state.students.find((student) => student.studentId === studentId);
+    // A mesma recusa, com a mesma frase, do adaptador: devolver o primeiro
+    // aluno para um id desconhecido escondia o caso que a tela precisa tratar
+    // (QA-13).
+    if (!card) {
+      return Promise.reject(
+        new ApiThrownError("not_found", "Aluno não encontrado, ou sem vínculo com você."),
+      );
+    }
     return later<StudentFile>({
       card,
       plan: PLAN,
@@ -1426,11 +1453,18 @@ export const fixturesApi: BoraApi = {
 
         // SOMA AO QUE AINDA FALTA, como o banco: quem renova antes do fim não
         // perde dia pago. Uma fixture que zerasse o prazo esconderia o caso.
+        // Como `greatest(now(), …) + make_interval(months => …)`: meses de CALENDÁRIO,
+        // e o que venceu conta a partir de hoje.
+        const now = instantOf(TODAY);
         const from =
-          card.accessExpiresAt && card.accessExpiresAt > TODAY ? card.accessExpiresAt : TODAY;
+          card.accessExpiresAt && Date.parse(card.accessExpiresAt) > Date.parse(now)
+            ? card.accessExpiresAt
+            : now;
+        const until = new Date(from);
+        until.setUTCMonth(until.getUTCMonth() + input.months);
         return done(patchStudent(card.studentId, {
           access: "active",
-          accessExpiresAt: addDays(from, input.months * 30),
+          accessExpiresAt: until.toISOString(),
         }));
       }),
     ),
@@ -1468,16 +1502,21 @@ export const fixturesApi: BoraApi = {
   createPlan: (input: StudyPlanInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
+        const invalid = checkPlan(input);
+        if (invalid) return { ok: false, error: invalid } as Result<StudyPlanSummary>;
+        if (planNameTaken(input.studentId, input.name)) {
+          return { ok: false, error: PLAN_NAME_TAKEN } as Result<StudyPlanSummary>;
+        }
         // NASCE PAUSADO, como no Supabase: ativar é gesto separado.
         const plan: StudyPlanSummary = {
           id: nextId("c"),
           studentId: input.studentId,
           classId: input.classId ?? null,
-          name: input.name,
-          area: input.area,
-          targetExam: input.targetExam ?? null,
-          stage: input.stage,
-          studyModel: input.studyModel,
+          name: input.name.trim(),
+          area: input.area.trim(),
+          targetExam: input.targetExam?.trim() || null,
+          stage: input.stage.trim(),
+          studyModel: input.studyModel.trim(),
           weeklyGoals: input.weeklyGoals,
           startsOn: input.startsOn,
           examDate: input.examDate ?? null,
@@ -1491,9 +1530,19 @@ export const fixturesApi: BoraApi = {
   updatePlan: (planId: Uuid, input: Partial<StudyPlanInput>, requestId: RequestId) =>
     later(
       once(requestId, () => {
+        const invalid = checkPlan(input);
+        if (invalid) return { ok: false, error: invalid } as Result<StudyPlanSummary>;
         const plan = state.plans.find((candidate) => candidate.id === planId);
         if (!plan) return fail<StudyPlanSummary>("not_found", "Planejamento não encontrado.");
-        return done<StudyPlanSummary>(patchPlan(plan.id, stripUndefined(input)));
+        if (input.name !== undefined && planNameTaken(plan.studentId, input.name, plan.id)) {
+          return { ok: false, error: PLAN_NAME_TAKEN } as Result<StudyPlanSummary>;
+        }
+        return done<StudyPlanSummary>(
+          patchPlan(plan.id, {
+            ...stripUndefined(input),
+            ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          }),
+        );
       }),
     ),
 
@@ -1737,7 +1786,13 @@ export const fixturesApi: BoraApi = {
   listNotebooks: () => later(NOTEBOOKS),
 
   saveNotebook: (_studyPlanId: Uuid, notebook: Notebook, requestId: RequestId) =>
-    later(once(requestId, () => done(notebook))),
+    later(
+      once(requestId, () => {
+        const invalid = checkNotebook(notebook);
+        if (invalid) return { ok: false, error: invalid } as Result<Notebook>;
+        return done(notebook);
+      }),
+    ),
 
   setNotebookActive: (blockId: Uuid, active: boolean, requestId: RequestId) =>
     later(
@@ -1789,8 +1844,9 @@ export const fixturesApi: BoraApi = {
   createClass: (input: ClassInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
-        const invalid = checkClassName(input.name);
+        const invalid = checkClass(input);
         if (invalid) return { ok: false, error: invalid } as Result<TeacherClass>;
+        if (classNameTaken(input.name)) return { ok: false, error: CLASS_NAME_TAKEN } as Result<TeacherClass>;
 
         const created: TeacherClass = {
           id: nextId("7"),
@@ -1807,11 +1863,14 @@ export const fixturesApi: BoraApi = {
   renameClass: (classId: Uuid, input: ClassInput, requestId: RequestId) =>
     later(
       once(requestId, () => {
-        const invalid = checkClassName(input.name);
+        const invalid = checkClass(input);
         if (invalid) return { ok: false, error: invalid } as Result<TeacherClass>;
 
         const turma = state.classes.find((candidate) => candidate.id === classId);
         if (!turma) return fail<TeacherClass>("not_found", "Turma não encontrada.");
+        if (classNameTaken(input.name, classId)) {
+          return { ok: false, error: CLASS_NAME_TAKEN } as Result<TeacherClass>;
+        }
 
         const renamed: TeacherClass = {
           ...turma,
@@ -1886,6 +1945,25 @@ export const fixturesApi: BoraApi = {
  * fixture existe para não ter: a tela mostrava "liberado" no aviso e
  * "aguardando" no cartão logo abaixo.
  */
+/**
+ * O índice de nome do banco, sem caixa e sem espaço nas pontas
+ * (`study_plans_name_per_student_uidx`, `classes_name_per_teacher_uidx`). A
+ * fixture tem um professor só, então o recorte do planejamento é o aluno.
+ */
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function planNameTaken(studentId: Uuid, name: string, exceptPlanId?: Uuid): boolean {
+  return state.plans.some(
+    (plan) => plan.studentId === studentId && plan.id !== exceptPlanId && sameName(plan.name, name),
+  );
+}
+
+function classNameTaken(name: string, exceptClassId?: Uuid): boolean {
+  return state.classes.some((turma) => turma.id !== exceptClassId && sameName(turma.name, name));
+}
+
 function patchPlan(planId: Uuid, patch: Partial<StudyPlanSummary>): StudyPlanSummary {
   const index = state.plans.findIndex((plan) => plan.id === planId);
   const next = { ...state.plans[index]!, ...patch };
@@ -2086,7 +2164,7 @@ function seedStudents(): StudentCard[] {
     name: "Aluna de Exemplo",
     email: "aluna@exemplo.com.br",
     access: "active",
-    accessExpiresAt: addDays(TODAY, 120),
+    accessExpiresAt: instantOf(addDays(TODAY, 120)),
     classId: CLASS_A_ID,
     className: "PRF 2027 · Turma A",
     planName: "Preparatório PRF 2027",
@@ -2102,7 +2180,7 @@ function seedStudents(): StudentCard[] {
     name: "Aluno em Atenção",
     email: "atencao@exemplo.com.br",
     access: "active",
-    accessExpiresAt: addDays(TODAY, 30),
+    accessExpiresAt: instantOf(addDays(TODAY, 30)),
     classId: CLASS_A_ID,
     className: "PRF 2027 · Turma A",
     planName: "Preparatório PRF 2027",
@@ -2118,7 +2196,7 @@ function seedStudents(): StudentCard[] {
     name: "Aluno Atrasado",
     email: "atrasado@exemplo.com.br",
     access: "expired",
-    accessExpiresAt: addDays(TODAY, -6),
+    accessExpiresAt: instantOf(addDays(TODAY, -6)),
     classId: null,
     className: null,
     planName: null,

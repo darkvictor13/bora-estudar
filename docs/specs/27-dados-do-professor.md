@@ -30,7 +30,7 @@ que ele o troque — a promessa da tela não é sustentada por nenhuma defesa.
 
 | Id | Regra |
 |---|---|
-| R-CONTA-01 | `/professor/conta` existe, com os mesmos campos de `/aluno/conta`: nome e telefone. Não é tela nova — é a **mesma** tela, servida às duas rotas. |
+| R-CONTA-01 | `/professor/conta` existe, com os mesmos campos de `/aluno/conta`: nome e telefone. Não é tela nova — é a **mesma** tela, servida às duas rotas, **com texto por papel** (R-CONTA-09). |
 | R-CONTA-02 | `updateProfile` deixa de exigir papel e passa a exigir apenas **sessão**. Quem decide o que pode ser escrito é a RLS, que já limita a linha a `id = auth.uid()`; o papel nunca foi o que protegia isto. |
 | R-CONTA-03 | O `grant update` em `profiles` passa a ser **por coluna**: `name`, `phone` e `updated_at`. `role` e `contact_email` saem. É a segunda das três defesas do `CLAUDE.md`, e é o que faz a frase "para trocar o e-mail, fale com o professor" virar verdade em vez de convenção de tela. |
 | R-CONTA-04 | `role` continua protegido **também** pelo `with check` da policy. Duas defesas para a mesma coisa é o que já existe em `study_plan_blocks`, e por bom motivo: um `grant` esquecido numa migration futura não reabre o buraco sozinho. |
@@ -38,6 +38,7 @@ que ele o troque — a promessa da tela não é sustentada por nenhuma defesa.
 | R-CONTA-06 | Salvar revalida os loaders, e o nome muda **na sidebar** no mesmo instante. É o que o `success` do `useFormActionState` já faz; não há redirecionamento porque o formulário não some. |
 | R-CONTA-07 | A tela do professor **não** oferece campos que não são dele: nada de área de interesse, concurso em foco ou fuso — isso é a lista de espera, que é do aluno. |
 | R-CONTA-08 | Nenhuma tela permite trocar o **papel**. Aluno não vira professor pela interface, e a tentativa direta na API é recusada pelo grant e pela policy. |
+| R-CONTA-09 | **O professor não é tratado como aluno** (QA-21, D-12). Para ele a tela não tem o cartão Acesso (a vigência é do aluno, e o professor não tem professor), não manda ele \"falar com o seu professor\" e o subtítulo é \"Como os seus alunos veem você\". O e-mail diz \"É o seu login. A troca de e-mail ainda não está disponível.\" |
 
 ---
 
@@ -93,6 +94,7 @@ as duas colunas que continuam concedidas. Nenhuma tela publicada escreve
 | CA-06 | Nome curto demais é recusado com mensagem | F-CONTA-03 |
 | CA-07 | O e-mail aparece bloqueado nas duas telas | F-CONTA-04 |
 | CA-08 | A tela do aluno continua funcionando igual | F-ALU-04, que já existia |
+| CA-09 | `/professor/conta` não tem o cartão Acesso nem "fale com seu professor", e o aluno vinculado vê o nome do professor | F-CONTA-01 |
 
 ---
 

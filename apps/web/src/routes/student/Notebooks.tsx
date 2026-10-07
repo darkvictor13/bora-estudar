@@ -19,8 +19,8 @@ import { requireStudentAccess } from "@/lib/auth/session";
  * Caderno DESATIVADO continua na lista, apagado: some da lista faria o aluno
  * procurar o que o professor tirou do ar de propósito.
  */
-export async function studentNotebooksLoader() {
-  await requireStudentAccess();
+export async function studentNotebooksLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { notebooks: [] as readonly Notebook[], hasPlan: false };

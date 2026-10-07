@@ -12,6 +12,8 @@ import { Link as RouterLink, useLoaderData, useRevalidator } from "react-router"
 import { ContentBody } from "@/components/AppShell";
 import {
   api,
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
   newRequestId,
   type ApiError,
   type StudentCard,
@@ -37,8 +39,8 @@ import { ROUTES } from "@/lib/routes";
  * `protect_class_with_students`. Esconder o botão faria a regra existir só aqui
  * — e uma regra que só existe na tela é o que este repositório trata como bug.
  */
-export async function teacherClassesLoader() {
-  await requireRole("teacher");
+export async function teacherClassesLoader({ request }: { request: Request }) {
+  await requireRole("teacher", request);
 
   const [classes, students] = await Promise.all([api.listClasses(), api.listStudents({})]);
   return { classes, students };
@@ -78,6 +80,7 @@ function ClassDialog({
             name="name"
             defaultValue={turma?.name ?? ""}
             required
+            maxLength={MAX_NAME_LENGTH}
             invalid={error?.field === "name"}
             hint="Exemplo: PRF 2027 · Turma A."
           />
@@ -85,6 +88,8 @@ function ClassDialog({
             label="Descrição"
             name="description"
             defaultValue={turma?.description ?? ""}
+            maxLength={MAX_NOTE_LENGTH}
+            invalid={error?.field === "description"}
             hint="Horário, sala, o que ajudar a reconhecer."
           />
         </DialogContent>

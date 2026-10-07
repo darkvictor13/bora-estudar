@@ -6,6 +6,7 @@ import MenuItem from "@mui/material/MenuItem";
 import { Card, Empty } from "@bora/ui";
 import type { Statistics, SubjectPeerComparison } from "@/lib/api";
 import { formatMinutes } from "@/lib/domain/week";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 const colors = ["#16a085", "#448aff", "#a879ef", "#e59c22", "#de668f", "#22b8cf"];
 const subjectColor = (stats: Statistics) => { const names = [...new Set([...stats.bySubject.map((row) => row.subject), ...(stats.studyTime ?? []).map((row) => row.subject), ...(stats.byBlock ?? []).map((row) => row.subject)])].sort(); return (name: string) => colors[names.indexOf(name) % colors.length] ?? colors[0]!; };
@@ -64,7 +65,7 @@ export function StudyTimeDistribution({ stats }: { stats: Statistics }) {
 
   const segments = rows.map(([subject, minutes], index) => { const start = rows.slice(0, index).reduce((sum, row) => sum + row[1], 0) / total * 100; const end = start + minutes / total * 100; return `${color(subject)} ${start}% ${end}%`; });
   return <Card title="Distribuição do tempo de estudo por matéria" sub="Participação de cada disciplina no tempo registrado">
-    <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}><TextField select size="small" label="Período" value={month} onChange={(event) => setMonth(event.target.value)} sx={{ minWidth: 180 }}><MenuItem value="all">Ano selecionado</MenuItem>{months.map((value) => <MenuItem key={value} value={value}>{value.slice(5)}/{value.slice(0, 4)}</MenuItem>)}</TextField></Box>
+    <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}><TextField select size="small" label="Período" value={month} onChange={(event) => setMonth(event.target.value)} sx={fieldWidth(180)}><MenuItem value="all">Ano selecionado</MenuItem>{months.map((value) => <MenuItem key={value} value={value}>{value.slice(5)}/{value.slice(0, 4)}</MenuItem>)}</TextField></Box>
     {!total ? <Empty>Nenhum tempo por matéria registrado neste período.</Empty> : <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "200px 1fr" }, gap: 4, alignItems: "center" }}>
       <Box sx={{ textAlign: "center" }}><Box aria-hidden="true" sx={{ width: 160, height: 160, mx: "auto", borderRadius: "50%", background: `conic-gradient(${segments.join(",")})`, border: "2px solid", borderColor: "divider" }} /><Typography sx={{ mt: 2, fontSize: "1.7rem", fontWeight: 850 }}>{formatMinutes(total)}</Typography><Typography variant="caption">Tempo total registrado</Typography></Box>
       <Box component="table" aria-label="Tempo por matéria" sx={tableStyle}><Box component="tbody">{rows.map(([subject, minutes]) => <Box component="tr" key={subject}><Box component="th" scope="row"><Box component="span" sx={{ color: color(subject), mr: 1 }}>●</Box>{subject}</Box><Box component="td" sx={{ textAlign: "right" }}><Typography fontWeight={800}>{formatMinutes(minutes)}</Typography><Typography variant="caption">{pct(minutes / total * 100)}</Typography></Box></Box>)}</Box></Box>

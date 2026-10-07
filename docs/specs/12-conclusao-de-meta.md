@@ -8,7 +8,7 @@
 > descrito aqui continua valendo; a superfície é que mudou.
 
 > **Atualizada em 06/10/2026 (QA-04, QA-07, QA-10, QA-28, N-05).** Registrar estudo passou a ser a RPC
-> `record_goal_entry` (R-CONC-21 a R-CONC-26): idempotente por `goal_entries.request_id`, com os limites
+> `record_goal_entry` (R-CONC-21 a R-CONC-27): idempotente por `goal_entries.request_id`, com os limites
 > de D-04 em CHECK, e o aluno com o acesso vencido deixa de concluir, reabrir, pular e apagar. As regras
 > de 01 a 20 acima descrevem as RPCs `complete_goal` e `reopen_goal`, que não existem neste schema;
 > concluir, reabrir e pular continuam escrita direta em `goals` (R-CONC-01 segue como dívida).
@@ -119,6 +119,7 @@ Acrescentado em 06/10/2026. Vale para o schema de 14/09/2026, em que o estudo do
 | R-CONC-24 | **Concluir, reabrir, pular e apagar exigem acesso vigente:** `has_active_access()` no `WITH CHECK` de `goals_update` e no `USING` de `goals_delete` e de `goal_entries_delete`. O UPDATE barrado levanta `42501`; o DELETE barrado afeta zero linhas, e o adaptador conta. |
 | R-CONC-25 | O aluno não escreve `spent_minutes`, `questions_answered` nem `correct_answers` de meta sem bateria: o resultado sai dos registros. Quem impede é `protect_goal_planning_fields`; a meta de bateria é de `protect_goal_quiz_result`. |
 | R-CONC-26 | `record_goal_entry` grava `studied_on` **nulo**: registrar numa meta é "estudei agora", e o dia do registro é o dia local de `created_at`. A data escolhida existe só no estudo extra (spec [19](19-estudo-extra-avulso.md), R-EXTRA-28). |
+| R-CONC-27 | **`goal_entries` não tem INSERT nem UPDATE para `authenticated`** — aluno e professor. O registro nasce numa das três RPCs (`record_goal_entry`, `record_extra_study`, `record_initial_questions`) e não se edita: corrigir é apagar e registrar de novo. O professor não tem tela que registre, e quem afirma ter estudado é quem estudou (D-19). O que sobra é SELECT e o DELETE da policy, com acesso vigente para o aluno (R-CONC-24). Fecha o caminho direto que o bundle anterior ao QA-04 ainda usava (PR 5c, 06/10/2026). |
 
 ---
 

@@ -22,8 +22,8 @@ import { ROUTES } from "@/lib/routes";
 import { adoptTheme, DEFAULT_THEME } from "@/lib/theme";
 import { useSidebar } from "@/lib/ui/useSidebar";
 
-export async function studentLayoutLoader() {
-  const session = await requireRole("student");
+export async function studentLayoutLoader({ request }: { request: Request }) {
+  const session = await requireRole("student", request);
   const theme = await api.loadThemePreference();
 
   // Reconcilia a cópia do aparelho com o que a conta diz, no LOADER e não num

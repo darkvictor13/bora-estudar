@@ -1,6 +1,6 @@
 # 29 — Sidebar recolhível e senha visível
 
-**Situação:** implementada · **Comparativo:** §12 item 14 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-UI-01 a F-UI-06
+**Situação:** implementada · **Comparativo:** §12 item 14 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §1 · **Fluxos e2e:** F-UI-01 a F-UI-06, F-UI-11, F-UI-12
 
 ---
 
@@ -46,6 +46,19 @@ e descobrir só na mensagem de erro. A v96 tinha o botão
 | R-UI-10 | Começa **oculto**, sempre. Nada de lembrar "estava visível": o próximo a abrir a tela pode ser outra pessoa. |
 | R-UI-11 | O botão tem `aria-label` que diz a ação — "Mostrar senha" / "Ocultar senha" — e `aria-pressed` que diz o estado. |
 | R-UI-12 | O campo mantém o `autoComplete` que já tinha. Trocar `type` para `text` não pode fazer o gerenciador de senhas perder o campo. |
+
+### A casca em tela estreita e na primeira carga
+
+Nasceram do QA-22, QA-23 e QA-26 (06/10/2026). Os ids R-UI-13 e R-UI-14 ficam
+vagos de propósito: o comentário de `Field.tsx` já citava "R-UI-14" para a regra
+de "começa sempre oculta", que aqui é a R-UI-10.
+
+| Id | Regra |
+|---|---|
+| R-UI-15 | Nada passa da largura em **375 px**. O que não cabe quebra linha ou trunca com reticências; rolar dentro do `<main>` é defeito. O documento nunca rola na horizontal (a casca é `overflow: hidden`), e por isso a medida é a do `<main data-testid="content">`. |
+| R-UI-16 | O nome acessível de um controle **contém o texto visível dele** (WCAG 2.5.3). Quem fala "Livre" ao comando de voz precisa achar o botão que mostra "Livre". |
+| R-UI-17 | A primeira carga mostra que está carregando e o que fazer se não sair: "Carregando a Fronteira Concursos…" e "Se demorar, confira a conexão e recarregue a página.". Sem JavaScript, `<noscript>` diz o motivo. A tela de carregamento não tem `h1` e não usa o `Alert`. |
+| R-UI-18 | Id de campo é **único na página**. `field-<name>` é o padrão do `Field`; cartão repetido (um por disciplina) passa o próprio `id`, com sufixo de `useId()`. O `name` não muda: é o que o `FormData` lê. |
 
 ---
 
@@ -93,13 +106,17 @@ campo de senha
 | CA-07 | O botão de senha revela e volta a ocultar | F-UI-04 |
 | CA-08 | Clicar no botão de senha **não** submete o formulário | F-UI-05 |
 | CA-09 | A senha começa sempre oculta, mesmo depois de revelada antes | F-UI-06 |
+| CA-10 | Nenhuma tela do aluno nem do professor passa de 375 px, com o cronômetro parado e rodando; o botão de modo do cronômetro tem o nome acessível começando pelo texto visível | F-UI-11 |
+| CA-11 | A primeira carga mostra "Carregando" sem `h1` enquanto a sessão não responde, e o React Router não avisa de `HydrateFallback` ausente | F-UI-12 |
+| CA-12 | Sem o bundle, `/entrar` mostra a tela estática com "recarregue", legível (4.5:1) nos dois temas | F-UI-12 |
+| CA-13 | Nenhuma tela do professor repete `id` na página, inclusive com um cartão por disciplina | F-PROF-01 |
 
 ---
 
 ## Fora de escopo
 
 - **Sidebar em gaveta no celular.** O produto não tem layout móvel próprio, e
-  inventar um aqui é redesenho, não ajuste.
+  inventar um aqui é redesenho, não ajuste. R-UI-15 só exige que nada vaze.
 - **Recolher só os grupos.** A v96 recolhe a barra inteira.
 - **Medidor de força da senha.** É outra decisão de produto, e o Supabase já
   impõe o mínimo.

@@ -458,12 +458,18 @@ Não há "Meus dados" na sidebar do professor, e `updateProfile` exige
 
 ### GAP-04 · INFO · Cadastro repetido não confirma nada
 
-Com a confirmação de e-mail desligada no ambiente local, cadastrar um e-mail já
-existente devolve "Já existe uma conta com este e-mail" — o comportamento certo
-em desenvolvimento. Em produção, com confirmação ligada, o GoTrue responde
-sucesso genérico para não revelar quais e-mails existem, e a pessoa vai para a
-lista de espera de uma conta que não é dela. Vale decidir o texto dessa tela
-antes de ligar a confirmação.
+Com a confirmação de e-mail desligada, cadastrar um e-mail já existente devolve
+"Já existe uma conta com este e-mail". Com ela ligada, o GoTrue responde sucesso
+genérico para não revelar quais e-mails existem, e a pessoa iria para a lista de
+espera de uma conta que não é dela.
+
+**Decidido em 06/10/2026 (D-14, QA-29): a frase FICA.** Não há produção, e staging
+também roda sem confirmação; com ela desligada o GoTrue responde 422 a QUALQUER
+chamador, então esconder a frase na tela não tira a informação de quem chama a API
+direto — só ligar a confirmação corrige, e isso espera staging entregar e-mail
+([`plano-email-staging.md`](plano-email-staging.md)). Mitigação: `sign_in_sign_ups = 30`
+por 5 min por IP, e os links "Entrar" e "Esqueci minha senha" na própria mensagem.
+Revisitar quando a confirmação for ligada. Spec 01, R-AUTH-18.
 
 ---
 
@@ -618,7 +624,7 @@ rede "cai". O throw de dentro do `once()` já não tem caminho nessa tela, e que
 
 ---
 
-### QA-04 · ALTO · Registrar estudo duplica na retentativa (parcial: o caminho direto só fecha no 5c)
+### QA-04 · ALTO · Registrar estudo duplica na retentativa (fechado, e o caminho direto também)
 
 `recordStudy` eram dois pedidos (INSERT em `goal_entries`, UPDATE `pending` → `in_progress`) e `recordExtraStudy`
 três (meta, registro e um DELETE de compensação). A única defesa era `once()`, que esquece a chave quando a
@@ -652,9 +658,19 @@ e a chave de retentativa nasce quando o formulário abre (`TheoryDialog`, `Revie
 Spec 32, R-TEO-21 a R-TEO-24. A spec 32, R-TEO-06, exigia "teoria lida E mínimo", e o código (e a spec 36) fechavam
 só pelas questões: o texto foi corrigido.
 
-**Parcial:** o INSERT direto do aluno em `goal_entries`, a escrita das colunas de contagem de `theory_progress` e
-`theory_reviews` continuam aceitos, porque o bundle no ar os usa — o PR 5c os revoga, depois de este bundle estar
-publicado em staging.
+**Caminho direto fechado em 06/10/2026 (PR 5c)** migration `20261006233436_close_direct_execution_writes`:
+`goal_entries` perde INSERT e UPDATE para `authenticated`, professor incluído (D-19; corrigir é apagar e registrar
+de novo); `goals_insert` fica só com o ramo do professor, então o aluno não cria meta `extra` nem `reinforcement`
+(estudo extra é `record_extra_study`) e nenhuma meta nasce com resultado preenchido; `theory_progress` perde, no
+INSERT e no UPDATE, `initial_questions_done`, `initial_questions_complete(_at)` e `lesson_done(_at)`, e fica com a
+leitura (`current_page`, `theory_done`, `theory_done_at`); `theory_reviews` perde INSERT e UPDATE, e a policy
+`for all` dá lugar a `theory_reviews_delete`. Antes disso quem chamasse a API sem passar pela RPC voltava a ter
+todos os defeitos acima: o aluno reescrevia `questions` de um registro que já tinha somado, baixava o mínimo da
+própria revisão para 1 ou a marcava concluída. As quatro RPCs são `security definer` e não dependem dos grants
+revogados. Spec 12, R-CONC-27; spec 19, R-EXTRA-06; spec 32, R-TEO-20. Testes: `01_grants` 10 e 36 a 45, `02_rls`
+03, `03_goals` 02, 02b, 02c, 03, 21 e 31, `06_theory` 02 e `07_schema` 22 a 24. Nenhum dado foi alterado e nenhuma
+constraint nasceu. **Esta migration só pode ser aplicada depois de o 5b estar publicado em staging:** uma aba aberta
+com o bundle anterior passa a receber `42501` ao registrar estudo, e recarregar resolve.
 
 ---
 
@@ -771,4 +787,268 @@ de comparação por ano leem `coalesce(studied_on, dia UTC de created_at)`. A "�
 continua sendo `created_at`: é um instante, mostrado com hora. A migration preencheu `studied_on` dos extras já
 lançados por heurística (meta `extra` concluída, título do diálogo, registro até 60 s depois da meta). Spec 19,
 R-EXTRA-28; spec 25, nota do topo.
+
+
+---
+
+### QA-08 · ALTO · O aluno vinculado lê "Ainda sem professor"
+
+`loadAccount` lia `select name from profiles where id = <teacherId>` e descartava o `error`. A policy
+`profiles_select` só abre a própria linha e as dos próprios alunos: a consulta voltava `[]`, e a tela caía em
+"Ainda sem professor" para quem tinha um. A leitura certa, `public.my_teacher()`, existia com grant e teste, e o
+adaptador nunca a chamava; a fixture devolvia "Professor de Exemplo" sempre, inclusive sem vínculo, e foi o que
+escondeu o defeito.
+
+**Reproduzir** abrir `/aluno/conta` com um aluno vinculado (F-CONTA-01).
+
+**Correção** `loadAccount` chama `my_teacher()` e lê `data[0]`, a leitura de `plan` passou por `throwDb`, e as duas
+rodam em `Promise.all`. A fixture só devolve o nome com `teacherId`. Spec 10, R-CTA-15.
+
+---
+
+### QA-09 · MÉDIO · A barra do aluno não acompanha liberar e bloquear
+
+O layout do aluno é uma rota sem caminho, e o React Router não reexecuta o loader de uma rota que continua casada
+quando só o filho muda. Liberado, o aluno seguia com os itens inertes até o F5; suspenso, seguia com os itens
+ativos, e cada clique o devolvia à lista de espera sem explicação.
+
+**Reproduzir** liberar pela RPC com o aluno aberto em `/aluno/conta` e navegar pela barra (F-VINC-09).
+
+**Correção** `shouldRevalidate` na rota do layout: `defaultShouldRevalidate || troca de pathname`. Declarar
+desliga o padrão inteiro, e o `||` mantém o `revalidate()` de "Salvar" em Meus dados. **Custo, aceito:**
+`studentLayoutLoader` também chama `loadThemePreference`, que são um `getUser` e um `select` em `profiles` a mais por
+navegação dentro da área do aluno. Spec 02, R-ACC-08; spec 13, R-VINC-32.
+
+---
+
+### QA-20 · MÉDIO · Vigência e datas em formato de máquina
+
+`access_expires_at` é `timestamptz`, mas o contrato o declarava `IsoDate` e a tela o imprimia cru ("Vigência atual
+até 2027-01-06T18:37:06.167505+00:00"). "Liberar soma ao que ainda falta" aparecia também para quem já tinha vencido,
+quando a RPC conta de `greatest(now(), …)`. `effectiveAccess` comparava o TEXTO do instante com a data de hoje:
+no dia do vencimento a tela dizia "Liberado" enquanto `has_active_access()` já recusava a escrita. E a lista e a ficha
+do professor repassavam `access_status` cru, então quem tinha vencido aparecia "Liberado" e `expired` não tinha
+escritor (R-VINC-28).
+
+**Reproduzir** a ficha de um aluno com `access: "expired"` (F-PROF-03) e a de um recém-liberado (F-VINC-06).
+
+**Correção** `lib/domain/dates.ts` separa data (`formatDate`, fatia) de instante (`formatInstant`, fuso do
+aparelho); `accessExpiresAt` é `IsoDateTime`; `effectiveAccess` compara instantes por `hasExpired`, na fronteira do
+banco, e a lista e a ficha passam por ele; a ficha tem três textos de vigência. Spec 13, R-VINC-33; spec 10, R-CTA-16.
+
+---
+
+### N-04 · MÉDIO · Datas no fuso errado
+
+A "Última atividade" e o início de cada bateria, na ficha do professor, saíam 3h adiantados (fatiavam o texto UTC); o
+vencimento em Meus dados do aluno aparecia no dia seguinte quando caía depois das 21h de Brasília; "Novo
+planejamento" sugeria `new Date().toISOString().slice(0, 10)`, o dia seguinte depois das 21h; e `minutesByDay` e
+`minutesByMonth` agrupavam por `created_at.slice(…)`, em UTC — este último o PR 5a (N-07) já tinha corrigido, com
+`entryDay`.
+
+**Reproduzir** `lib/domain/dates.test.ts`, com `TZ=America/Sao_Paulo` fixado no próprio arquivo.
+
+**Correção** todo formatador avulso (`slice(8, 10)`, `split("-").reverse()`, `toLocaleString`) saiu das telas e
+passou por `lib/domain/dates.ts`; `todayLocal` sugere o dia local. Fica só em `dates.ts`.
+
+---
+
+### QA-21 · BAIXO · "Meus dados" do professor com os textos do aluno
+
+`/professor/conta` serve a mesma tela do aluno, que dizia "O que o seu professor vê sobre você", "fale com seu
+professor" e mostrava o cartão Acesso com "Ainda sem professor · — · sem prazo".
+
+**Reproduzir** abrir `/professor/conta` (F-CONTA-01).
+
+**Correção** o loader devolve o papel, e para o professor a tela troca o subtítulo ("Como os seus alunos veem você"),
+o texto do e-mail ("É o seu login. A troca de e-mail ainda não está disponível.") e não renderiza o cartão Acesso.
+Spec 27, R-CONTA-09.
+
+---
+
+### QA-25 · MÉDIO · O login não devolve ao link aberto
+
+`requireSession` mandava para `/entrar` sem destino (e colava `location.hash` em `/entrar#…`, onde ele morria), e
+`landAfterAuth` sempre ia para a casa do papel: quem abria `/professor/alunos/<id>` sem sessão entrava e caía na
+lista.
+
+**Reproduzir** abrir uma rota protegida anônimo, entrar, e conferir onde se termina (F-AUTH-13).
+
+**Correção** as três guardas recebem o `request`, obrigatório, e redirecionam para `/entrar?next=<destino>`, com o
+fragmento dentro do `next` e só na primeira carga; `signIn` repassa o `next` e `landAfterAuth` o filtra por
+`safeInternalPath` (QA-02), com a casa do papel real de fallback. Spec 01, R-AUTH-06 e R-AUTH-17.
+
+---
+
+### QA-29 · BAIXO · O cadastro confirma quem já tem conta (decidido: fica)
+
+A frase "Já existe uma conta com este e-mail." diz a quem digita que o e-mail está cadastrado. Com
+`enable_confirmations = false` o GoTrue responde 422 `user_already_exists` a QUALQUER chamador: esconder a frase na
+tela não tira a informação de quem chama a API direto, e só ligar a confirmação corrige — o que espera staging
+entregar e-mail.
+
+**Decisão (D-14)** a frase fica. A tela ganha os links "Entrar" e "Esqueci minha senha" junto da mensagem
+(`existing-account`), decididos pelo CÓDIGO (`conflict` no campo `email`), e `sign_in_sign_ups = 30` por 5 min por IP
+é a mitigação. Spec 01, R-AUTH-18; GAP-04. O comentário de `signUp` que dizia que o gatilho lê `role` do metadado
+era falso desde `20260914190000`: o `role` saiu do `options.data`.
+
+---
+
+### QA-15 · MÉDIO · O teto de texto só existia no navegador
+
+Só o cadastro tinha `maxLength` (120). Meus dados, planejamento e turma não tinham teto nem no navegador, e o banco
+aceitava 400 caracteres no nome, 487 no planejamento e 502 na turma. A varredura do catálogo achou **65 colunas**
+`text` que `authenticated` gravava sem teto algum — de `profiles.name` a `theory_lessons.pdf_url` — e outras 14 cujo
+teto media `char_length(btrim(x))`: `'abc' || repeat(' ', 1000000)` passava num teto de 160. O gatilho de cadastro
+copiava o nome do metadado sem cortar, e com a CHECK nova um nome longo mandado pela API derrubaria a conta inteira
+("Database error saving new user").
+
+**Reproduzir** a consulta de `07_schema` (a varredura) contra o banco anterior, e `04_profiles` casos 21 e 22
+(F-AUTH-08/09, F-CONTA-01, F-GPLAN-06, F-MATR-06).
+
+**Correção** migration `20261007001002`: CHECK de `char_length(<coluna>) <= N` em toda coluna da varredura, as 14 que
+mediam `btrim` recriadas com o mesmo nome, e o gatilho corta o nome em 120 (nulo abaixo de 3). O dado existente foi
+cortado no teto (a `quote` de marcação, apagada: cortar viola `length(quote) = end - start`). `checkName`,
+`checkClass`, `checkPlan` e as irmãs recusam com a frase, e as telas leem `MAX_*` de `lib/api`. Spec 01, R-AUTH-07;
+spec 10, R-CTA-03; spec 13, R-MATR-09.
+
+---
+
+### QA-16 · MÉDIO · Turma, deck e planejamento aceitavam nome repetido
+
+`classes` e `personal_flashcard_decks` não tinham índice de nome, e o de `study_plans` diferenciava maiúscula e
+espaço ("Área Fiscal" e "área fiscal" conviviam). O `23505` do planejamento chegava como "Este registro já existe.".
+
+**Reproduzir** criar a mesma turma, o mesmo deck e o mesmo planejamento com outra caixa e espaço nas pontas
+(F-MATR-06, F-FLASH-06, F-GPLAN-06; `07_schema` casos 32 e 33; `16_personal_flashcards` casos 6 e 7).
+
+**Correção** os três índices ignoram maiúsculas e pontas (`lower(btrim(...))`), e o adaptador troca o `23505` pela
+frase própria olhando o NOME do índice (`isUniqueViolation`) — a PK do deck é escolhida pelo cliente, e um replay com o
+mesmo `id` não é deck repetido. A migration renomeou as duplicatas existentes com " (2)", " (3)"…, sem fundir. A
+fixture passou a recusar com a mesma frase. Spec 13, R-MATR-09; spec 14, R-GPLAN-09; spec 34.
+
+---
+
+### QA-18 · BAIXO · Senha só de espaços
+
+`checkPassword` só media comprimento, e a mesma função serve ao cadastro e à troca de senha: oito espaços eram
+aceitos pelo GoTrue local (`password_requirements = ""`).
+
+**Reproduzir** cadastrar com oito espaços e ler "nenhuma conta nasce" (F-AUTH-09, F-AUTH-12).
+
+**Correção** `checkPassword` recusa "A senha não pode ser formada só por espaços."; o login NÃO recusa
+(`checkCredentials` não muda), para a conta antiga continuar entrando. A política do GoTrue não muda (D-10): quem chama
+a API direto ainda cria a conta, e o contrato é a única barreira. Spec 01, R-AUTH-19.
+
+---
+
+### QA-19 · MÉDIO · WhatsApp sem formato, nascimento no futuro, três regras para um campo
+
+`waitlist_whatsapp_check` pedia 8 a 30 caracteres (`'abcdefgh'` passava), `birth_date` não tinha CHECK, o adaptador só
+pedia "não vazio" e a fixture, 10 dígitos com outra frase ("WhatsApp incompleto."). "Área de interesse" vazia chegava
+ao banco e voltava `23514` cru.
+
+**Reproduzir** `abcdefgh` e `2031-01-01` na lista de espera (F-ESP-01; `05_waitlist` casos 19 a 21).
+
+**Correção** uma faixa só (D-08), em `checkWaitlist` e nas CHECKs: só dígitos, espaço, `()`, `+` e `-`, com 10 a 13
+dígitos; nascimento entre 1900-01-01 e hoje (CHECK com `current_date`, monotônica: vale hoje, vale amanhã). A migration
+apagou as inscrições com WhatsApp fora do formato e zerou o nascimento fora da faixa. A tela marca a área como
+obrigatória. Spec 10, R-CTA-07.
+
+---
+
+### QA-24 · MÉDIO · `javascript:` no link do caderno
+
+`study_plan_notebooks.notebook_link` era `text` sem CHECK, o professor gravava `javascript:window.__pwn=1;alert(1)`, e
+`routes/student/Notebooks.tsx` o renderizava como `href`. A meta de acerto de 150% também chegava ao banco e voltava
+`23514` cru.
+
+**Reproduzir** editar o link do caderno com `javascript:` ou `http://` (F-CAD-01 do professor; `09_lesson_resource_links`
+casos 6 a 10).
+
+**Correção** CHECK `https://` sem espaço, até 2048 (`study_plan_notebooks_notebook_link_check`); `checkNotebook` recusa
+com "Informe um link HTTPS válido…" e confere a meta de 0 a 100. Qualquer `https://` vale, não só o TEC (D-09). A
+migration limpou os links fora da regra para `''`. Spec 15, R-CAD-16.
+
+---
+
+### N-06 · BAIXO · O mesmo, em `subject_blocks.link` e `subject_lessons.link`
+
+As duas colunas eram `text` nulável sem CHECK, renderizadas em `routes/student/Subjects.tsx`. Nenhuma tela as escreve, mas
+o professor as grava pela API: a CHECK é a única defesa.
+
+**Reproduzir** `09_lesson_resource_links` casos 8 e 9.
+
+**Correção** a mesma CHECK, com `null` no lugar de `''`; a migration limpou os links fora da regra para `null`.
+Spec 15, R-CAD-16.
+
+---
+
+### QA-13 · MÉDIO · O parâmetro de URL derruba telas (e N-03, e `?ano=`, `?ritmo=`, `?semana=`)
+
+`/professor/metas?plano=` aceitava qualquer valor: o React Compiler levava o `plan!.id` para o render, e a tela estourava
+com "Cannot read properties of null (reading 'id')" para todo `?plano=` que não fosse de um planejamento ativo do
+professor. **N-03:** o mesmo erro com o professor SEM planejamento ativo, sem parâmetro nenhum — o aviso "Nenhum
+planejamento ativo" nunca era alcançado. Cadernos, Revisões e Teoria passavam o texto da URL direto ao PostgREST (`22P02`,
+ou "Planejamento não encontrado" para UUID alheio). O relatório não tinha três: `?ano=1e9` chegava ao `Date` e lançava
+`RangeError` nas estatísticas do aluno e do professor; `?semana=1e9` derrubava a semana do aluno; `?ritmo=xyz` esvaziava a
+lista e deixava o seletor em branco. A ficha de aluno alheio ou malformado, por fim, dizia "Algo deu errado … Atualize a
+página", porque `RouteError` só reconhecia o 404 do roteador, e a fixture devolvia o primeiro aluno para um id
+desconhecido e escondia o caso.
+
+**Reproduzir** os `?plano=nao-e-uuid`, `?ano=1e9` e `?ritmo=xyz` de F-ISO-02; `?semana=1e9` de F-META-02; a ficha de
+`/professor/alunos/nao-e-uuid` de F-PROF-03; `/professor/metas` sem planejamento de F-PROF-01 (esse passou a passar com o
+PR 1, que reescreveu a ação de gerar e tirou o `plan!`).
+
+**Correção** cada loader lê a lista primeiro e só aceita o parâmetro que esteja nela (D-13): `?plano=` contra os
+planejamentos da tela, `?catalogo=` contra os catálogos, `?ano=` contra os anos do seletor, `?ritmo=` contra os três
+ritmos, `?semana=` contra as semanas do seletor — `?semana=40` sem metas deixa de abrir "Semana 40" e cai na corrente.
+`RouteError` trata `ApiThrownError("not_found")` como "Não encontrado", com a mensagem do erro e sem "Atualize a página",
+e a fixture rejeita com a mesma frase do adaptador. Spec 03 (CA-01 a CA-04).
+
+---
+
+### QA-22 · BAIXO · Ids repetidos nos cartões por disciplina
+
+`Field` gerava `id="field-${name}"` sem como trocá-lo. Um cartão por disciplina repetia o id, e o `<label for>` do segundo
+apontava para o campo do primeiro: `routes/teacher/Theory.tsx` (`initialQuestions`, `spacing-N`, `minimum-N`) e
+`routes/teacher/Reviews.tsx` (`lessonSpacing`, `minimumQuestions`). Os "campos sem nome" do relatório são quase todos o
+`<input aria-hidden>` que o `Select` do MUI esconde.
+
+**Reproduzir** a checagem de `[id]` repetido de F-PROF-01 em `/professor/teoria` e `/professor/revisoes`, com duas
+disciplinas.
+
+**Correção** `Field` ganhou `id` opcional (o padrão continua `field-<name>`), e os cartões passam o próprio com `useId()`
+no sufixo; o cartão de Revisões virou componente, porque hook não roda dentro de `.map`. Os `name` não mudaram. Spec 29,
+R-UI-18.
+
+---
+
+### QA-23 · MÉDIO · Elementos que não cabem em 375px
+
+O chip de modo do cronômetro ("Livre") vazava de uma linha flex sem quebra, e o `aria-label` "Modos e tempo do cronômetro"
+não continha o texto visível (WCAG 2.5.3). Selects de largura mínima fixa dentro de linhas flex cresciam com o texto da
+opção escolhida. O defeito escapava porque o documento nunca rola na horizontal: a casca é `overflow: hidden`, e o
+excesso vira rolagem dentro do `<main>`. Dois achados da própria varredura do F-UI-11, que o relatório não tinha: o cartão
+do aluno em `/professor` (grade `1fr` com `noWrap` dentro) e o contêiner do select de catálogo em `/professor/teoria`.
+
+**Reproduzir** F-UI-11, com nomes de plano e de catálogo do tamanho dos de verdade — com "Catálogo E2E 887111a1" nada
+transborda, e o teste passaria sem exercitar nada.
+
+**Correção** `fieldWidth(min)` em `lib/ui/field-width.ts` nos selects e campos de linha flex; a linha do cronômetro quebra,
+o botão de modo não encolhe e o `aria-label` começa pelo texto visível; as colunas de um cartão por aluno são
+`minmax(0, 1fr)`. Spec 29, R-UI-15 e R-UI-16.
+
+---
+
+### QA-26 · BAIXO · A primeira carga é tela branca
+
+A rota raiz não tinha `HydrateFallback`: o React Router 8 renderizava `null` e avisava no console, e `index.html` deixava
+`#root` vazio. Até a cascata sessão, perfil e loaders terminar, branco; com o bundle fora do ar (rede, ou `lib/env.ts`
+lançando por falta de `VITE_*`), branco para sempre.
+
+**Reproduzir** F-UI-12: sessão presa, e bundle abortado nos dois temas.
+
+**Correção** `RootLoading` (com o próprio `ThemeShell`) é o `HydrateFallback` da raiz, e `index.html` traz uma tela estática
+em `#root` com as cores do sistema, mais `<noscript>`. Nenhuma das duas tem `h1`. Spec 29, R-UI-17.
 

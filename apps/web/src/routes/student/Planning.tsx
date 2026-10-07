@@ -6,6 +6,7 @@ import { useLoaderData } from "react-router";
 import { ContentBody } from "@/components/AppShell";
 import { api, type StudyPlanSummary, type Subject } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { formatDate } from "@/lib/domain/dates";
 
 /**
  * O planejamento, como o aluno o vê — o `p-planejamento` da v2.
@@ -14,8 +15,8 @@ import { requireStudentAccess } from "@/lib/auth/session";
  * A tela existe para o aluno entender o percurso do curso: concurso, período,
  * disciplinas e aulas liberadas. A rotina acompanha as aulas presenciais.
  */
-export async function planningLoader() {
-  await requireStudentAccess();
+export async function planningLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) return { plan: null, subjects: [] as readonly Subject[], theory: [] as const };
@@ -26,12 +27,6 @@ export async function planningLoader() {
 
 type LoaderData = Awaited<ReturnType<typeof planningLoader>>;
 
-/** `2026-09-16` → `16/09/2026`. Sem `toLocaleDateString`: ele depende do fuso. */
-function formatDate(date: string | null): string {
-  if (!date) return "—";
-  return `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
-}
-
 function PlanIdentity({ plan }: { plan: StudyPlanSummary }) {
   const rows: readonly [string, string][] = [
     ["Área", plan.area],
@@ -40,7 +35,7 @@ function PlanIdentity({ plan }: { plan: StudyPlanSummary }) {
     ["Modelo de estudo", plan.studyModel],
     ["Base da rotina", "Aulas presenciais"],
     ["Início", formatDate(plan.startsOn)],
-    ["Data da prova", formatDate(plan.examDate)],
+    ["Data da prova", plan.examDate ? formatDate(plan.examDate) : "—"],
   ];
 
   return (

@@ -19,7 +19,7 @@ import { searchLaws, type LawArticle, type LawEntry } from "@/lib/domain/law-lib
 import { requireStudentAccess } from "@/lib/auth/session";
 
 export async function lawsLoader({ request }: LoaderFunctionArgs) {
-  await requireStudentAccess();
+  await requireStudentAccess(request);
   const query = new URL(request.url).searchParams;
   // O Vade Mecum vem do banco (spec 40): o índice e os mapas, e só depois o
   // texto e as marcações da lei aberta.

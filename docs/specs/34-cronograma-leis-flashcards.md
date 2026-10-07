@@ -29,6 +29,10 @@ aula. Os recortes de edital e a incidência continuam sem dados homologados.
   existentes. O estudo extra usa o dia selecionado; na visão de semana inteira,
   usa inicialmente o primeiro dia da semana.
 - Metas de bateria continuam com execução indisponível, conforme a regra atual.
+- O deck pessoal tem disciplina de 2 a 120 caracteres e assunto de 2 a 160. O
+  par disciplina + assunto é único por aluno, ignorando maiúsculas e espaços
+  nas pontas (`personal_flashcard_decks_name_per_student_uidx`), e a recusa é
+  "Você já tem um deck com essa disciplina e esse assunto." (QA-16, D-07).
 - As três rotas exigem aluno com acesso ativo, como as demais áreas de estudo.
 - `/aluno/leis` usa uma cópia canônica por norma. O leitor mantém a lei e o
   artigo na URL; a fonte oficial acompanha cada norma. Os artigos aparecem em

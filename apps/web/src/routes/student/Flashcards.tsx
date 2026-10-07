@@ -24,8 +24,9 @@ import { Link, useLoaderData, useNavigate, useRevalidator, type LoaderFunctionAr
 
 import { ContentBody } from "@/components/AppShell";
 import { MarkingToolbar, markSx } from "@/components/MarkingToolbar";
-import { api, newRequestId, type FlashcardCard, type FlashcardDeckRef, type FlashcardMark, type FlashcardSide, type FlashcardTextRange, type LawMarkColor, type LawMarkStyle, type FlashcardGrade, type FlashcardReview, type LibraryFlashcardDeckSummary, type LibraryFlashcardNotice, type LibraryFlashcardSubject, type PersonalFlashcardDeck, type Result, type TheoryLesson } from "@/lib/api";
+import { api, MAX_DECK_TITLE_LENGTH, MAX_NAME_LENGTH, newRequestId, type FlashcardCard, type FlashcardDeckRef, type FlashcardMark, type FlashcardSide, type FlashcardTextRange, type LawMarkColor, type LawMarkStyle, type FlashcardGrade, type FlashcardReview, type LibraryFlashcardDeckSummary, type LibraryFlashcardNotice, type LibraryFlashcardSubject, type PersonalFlashcardDeck, type Result, type TheoryLesson } from "@/lib/api";
 import { requireStudentAccess } from "@/lib/auth/session";
+import { formatInstant } from "@/lib/domain/dates";
 import { flashcardDeckProgress, flashcardIntervalLabel, flashcardSessionQueue, flashcardStudyStats, scheduleFlashcardReview } from "@/lib/domain/flashcards";
 import { anchorFlashcardMarks, eraseFlashcardRanges, paintFlashcardRanges, sameCard, withFlashcardQuotes } from "@/lib/domain/flashcard-markings";
 import { flashcardEditorialNote, lessonReviewFromLibrary, libraryCardCount, libraryDeckCards } from "@/lib/domain/library-flashcards";
@@ -35,7 +36,7 @@ import { useMarkingSession } from "@/lib/ui/useMarkingSession";
 import { ROUTES } from "@/lib/routes";
 
 export async function flashcardsLoader({ request }: LoaderFunctionArgs) {
-  await requireStudentAccess();
+  await requireStudentAccess(request);
   const lessonId = new URL(request.url).searchParams.get("aula");
   const deckId = new URL(request.url).searchParams.get("deck");
   const personalDeckId = new URL(request.url).searchParams.get("meuDeck");
@@ -354,7 +355,7 @@ function FlashcardSession({ lesson, deck, initialReviews, initialMarks, onGrade,
         ) : (
           <Card title="Sessão concluída" sub="Nenhum cartão pendente neste lote">
             <Typography variant="body2" sx={{ mb: 2 }}>
-              {nextDue ? `Próxima revisão: ${new Date(nextDue.dueAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.` : "Volte para acompanhar as próximas revisões."}
+              {nextDue ? `Próxima revisão: ${formatInstant(nextDue.dueAt, "dateTime")}.` : "Volte para acompanhar as próximas revisões."}
             </Typography>
             {studyStats.fresh > 0 && <Button variant="contained" onClick={() => { setQueue(flashcardSessionQueue(cards, reviews, new Date(), 20)); setRevealed(false); }} sx={{ mr: 1 }}>Estudar mais 20 novos</Button>}
             <Button component={Link} to={ROUTES.student.flashcards} variant="outlined">Voltar aos decks</Button>
@@ -701,9 +702,9 @@ export function Flashcards() {
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Crie um deck personalizado para estudar com seus próprios flashcards.</Typography>
             {formError && <Box sx={{ mb: 1.5 }}><Alert status="error">{formError}</Alert></Box>}
-            <TextField autoFocus required fullWidth label="Disciplina" placeholder="Busque ou crie uma disciplina" value={subject} onChange={(event) => setSubject(event.target.value)} sx={{ mb: 2 }} inputProps={{ maxLength: 120, list: "personal-flashcard-subjects" }} />
+            <TextField autoFocus required fullWidth label="Disciplina" placeholder="Busque ou crie uma disciplina" value={subject} onChange={(event) => setSubject(event.target.value)} sx={{ mb: 2 }} inputProps={{ maxLength: MAX_NAME_LENGTH, list: "personal-flashcard-subjects" }} />
             <datalist id="personal-flashcard-subjects">{subjectOptions.map((item) => <option key={item} value={item} />)}</datalist>
-            <TextField required fullWidth label="Assunto do deck" placeholder="Ex.: Controle de Constitucionalidade" value={deckTitle} onChange={(event) => setDeckTitle(event.target.value)} inputProps={{ maxLength: 160 }} />
+            <TextField required fullWidth label="Assunto do deck" placeholder="Ex.: Controle de Constitucionalidade" value={deckTitle} onChange={(event) => setDeckTitle(event.target.value)} inputProps={{ maxLength: MAX_DECK_TITLE_LENGTH }} />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}><Button onClick={() => setDeckDialog(false)} disabled={submitting}>Cancelar</Button><Button type="submit" variant="contained" disabled={submitting}>Criar deck</Button></DialogActions>
         </Dialog>

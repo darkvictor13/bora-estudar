@@ -30,8 +30,8 @@ import { parseCount } from "@/lib/domain/week";
  * `theory_review_rules` exige `teacher_id = auth.uid()`, e um campo editável
  * nesta tela seria promessa que o banco recusa.
  */
-export async function studentReviewsLoader() {
-  await requireStudentAccess();
+export async function studentReviewsLoader({ request }: { request: Request }) {
+  await requireStudentAccess(request);
 
   const plan = await api.loadActivePlanOrNull();
   if (!plan) {

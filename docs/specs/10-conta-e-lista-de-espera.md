@@ -24,16 +24,18 @@ não podem depender de planejamento, de meta nem de bateria.
 |---|---|
 | R-CTA-01 | O aluno edita `name` e `phone` do próprio perfil. |
 | R-CTA-02 | O e-mail é `readOnly` na tela: trocá-lo é operação de autenticação, não de perfil. |
-| R-CTA-03 | Nome com menos de 3 caracteres é recusado pela action: "Informe seu nome completo." |
+| R-CTA-03 | O nome tem de 3 a 120 caracteres, medidos sem os espaços das pontas. Abaixo de 3, a action recusa: "Informe seu nome completo."; acima de 120, "O nome pode ter até 120 caracteres.". O teto também mora no banco (`profiles_name_check`), e o campo tem `maxlength` (QA-15, D-06). |
 | R-CTA-04 | O `UPDATE` é filtrado por `session.profileId`, e a RLS de `profiles` confirma. Um aluno não edita o perfil de outro. |
 | R-CTA-05 | Ao salvar com sucesso, a revalidação re-roda os loaders de **todas** as rotas casadas, incluindo o do layout — que é quem alimenta o nome na sidebar. É por isso que o nome novo aparece lá sem recarregar. |
 | R-CTA-06 | O rótulo do e-mail usa `<label htmlFor>` de verdade. Um `<span>` solto não é anunciado por leitor de tela. |
+| R-CTA-15 | O cartão Acesso mostra o professor do aluno **pelo nome**, lido por `my_teacher()`. A policy `profiles_select` só abre a própria linha e as dos próprios alunos, então um `select` direto na linha do professor volta vazio — e era isso que fazia o aluno vinculado ler "Ainda sem professor" (QA-08). A leitura que falha é erro, não ausência: o adaptador lança. |
+| R-CTA-16 | "Válido até" é um **instante** (`timestamptz`), mostrado no fuso do aparelho (D-11): um vencimento às 22h de Brasília aparece no dia dele, não no seguinte (N-04, QA-20). |
 
 ### Lista de espera
 
 | Id | Regra |
 |---|---|
-| R-CTA-07 | Três campos são obrigatórios, validados na action: WhatsApp, área de interesse e concurso em foco. Data de nascimento e fuso são opcionais. |
+| R-CTA-07 | Três campos são obrigatórios, validados na action: WhatsApp, área de interesse e concurso em foco. Data de nascimento e fuso são opcionais. As faixas são UMA só, em `checkWaitlist` e nas CHECKs de `waitlist` (QA-19, D-08): WhatsApp só com dígitos, espaço, `()`, `+` e `-`, e de 10 a 13 dígitos ("Informe o WhatsApp com DDD, como (11) 90000-0000."); área de interesse de 2 a 120 ("Informe sua área de interesse."); concurso de 2 a 200 ("Informe para qual concurso você estuda."); nascimento, quando informado, entre 01/01/1900 e hoje, sem idade mínima ("A data de nascimento precisa ser entre 01/01/1900 e hoje."). Antes o banco pedia 8 a 30 caracteres, o adaptador só "não vazio" e a fixture 10 dígitos. |
 | R-CTA-08 | A gravação é **upsert por `student_id`**, que é a chave primária de `waitlist`. Salvar duas vezes atualiza, nunca duplica. |
 | R-CTA-09 | `name` e `email` não vêm do formulário: são copiados da sessão. O aluno não escolhe com que nome entra na lista. |
 | R-CTA-10 | Campo opcional vazio grava `null`, não string vazia. |
@@ -98,6 +100,7 @@ na Lista de espera.
 | CA-06 | Faltando qualquer um dos três obrigatórios, a action recusa com mensagem única | F-ALU-05 |
 | CA-07 | Com acesso liberado, a tela mostra "Seu acesso já está liberado." | F-ALU-05 |
 | CA-08 | As duas telas abrem com assinatura `suspended` | F-ALU-07 |
+| CA-10 | Aluno vinculado vê o nome do professor no cartão Acesso; sem vínculo, "Ainda sem professor" | F-CONTA-01 |
 | CA-09 | Um aluno não consegue alterar o perfil de outro | **sem cobertura** na suíte de telas; coberto por RLS em `supabase/tests/02_rls.sql` |
 
 ---

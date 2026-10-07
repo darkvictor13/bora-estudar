@@ -10,14 +10,41 @@
  * chamam as mesmas funções antes de qualquer ida ao servidor, o que também
  * significa que nome curto não gasta uma viagem de rede para ser recusado.
  */
+import { MAX_LINK_LENGTH, validateHttpsLink } from "../domain/lesson-resources.ts";
 import type {
   ApiError,
+  ClassInput,
   Credentials,
   ExtraStudyInput,
   GenerateWeekInput,
   IsoDate,
+  Notebook,
   SignUpInput,
+  StudyPlanInput,
+  WaitlistInput,
 } from "./contract.ts";
+
+/**
+ * Os tetos de texto (D-06). Cada um é o número de uma CHECK de
+ * `char_length(<coluna>) <= N` — a regra mora nos dois lugares, e a varredura de
+ * `supabase/tests/07_schema.sql` falha com a coluna que o banco deixou sem teto.
+ * As telas leem daqui, pelo `lib/api`, e nunca escrevem `maxLength` literal.
+ *
+ * Toda medida usa `value.trim().length`, que é o que os adaptadores gravam.
+ */
+export const MAX_NAME_LENGTH = 120;
+export const MAX_TITLE_LENGTH = 200;
+export const MAX_NOTE_LENGTH = 2000;
+/** O assunto do deck pessoal: `personal_flashcard_decks_title_check`. */
+export const MAX_DECK_TITLE_LENGTH = 160;
+/** O WhatsApp CRU, com máscara: `waitlist_whatsapp_check`. */
+export const MAX_WHATSAPP_LENGTH = 30;
+/** Os dígitos do WhatsApp, sem a máscara (D-08). */
+export const WHATSAPP_DIGITS = { min: 10, max: 13 } as const;
+/** O nascimento vai de aqui até hoje (D-08), sem idade mínima. */
+export const MIN_BIRTH_DATE = "1900-01-01";
+
+export { MAX_LINK_LENGTH };
 
 /** O mínimo que o GoTrue aceita, e o mesmo número que a v2 pedia. */
 export const MIN_PASSWORD_LENGTH = 6;
@@ -34,6 +61,14 @@ export function checkCredentials({ email, password }: Credentials): ApiError | n
   return null;
 }
 
+/**
+ * O comprimento, e depois "só espaços" (QA-18). A senha que segue para o GoTrue
+ * NÃO é aparada: a regra recusa o que não é senha, não reescreve o que foi
+ * digitado. O login fica de fora — `checkCredentials` não muda —, para a conta
+ * criada antes desta regra continuar entrando. A política do GoTrue também não
+ * muda (D-10): quem chama a API direto ainda cria a conta, e o contrato é a
+ * única barreira.
+ */
 export function checkPassword(password: string): ApiError | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return invalid(
@@ -41,17 +76,25 @@ export function checkPassword(password: string): ApiError | null {
       "password",
     );
   }
+  if (password.trim() === "") {
+    return invalid("A senha não pode ser formada só por espaços.", "password");
+  }
   return null;
 }
 
 export function checkSignUp({ name, email, password }: SignUpInput): ApiError | null {
-  if (name.trim().length < MIN_NAME_LENGTH) return invalid("Informe seu nome completo.", "name");
+  const nameError = checkName(name);
+  if (nameError) return nameError;
   if (!email.trim()) return invalid("Informe seu e-mail.", "email");
   return checkPassword(password);
 }
 
 export function checkName(name: string): ApiError | null {
-  if (name.trim().length < MIN_NAME_LENGTH) return invalid("Informe seu nome completo.", "name");
+  const length = name.trim().length;
+  if (length < MIN_NAME_LENGTH) return invalid("Informe seu nome completo.", "name");
+  if (length > MAX_NAME_LENGTH) {
+    return invalid(`O nome pode ter até ${MAX_NAME_LENGTH} caracteres.`, "name");
+  }
   return null;
 }
 
@@ -92,7 +135,103 @@ export function checkAccessMonths(months: number): ApiError | null {
 
 /** O nome da turma. Mesmo mínimo de um nome de pessoa: duas letras não nomeiam. */
 export function checkClassName(name: string): ApiError | null {
-  if (name.trim().length < MIN_NAME_LENGTH) return invalid("Dê um nome à turma.", "name");
+  const length = name.trim().length;
+  if (length < MIN_NAME_LENGTH) return invalid("Dê um nome à turma.", "name");
+  if (length > MAX_NAME_LENGTH) {
+    return invalid(`O nome da turma pode ter até ${MAX_NAME_LENGTH} caracteres.`, "name");
+  }
+  return null;
+}
+
+/** Nome e descrição, na ordem da tela. */
+export function checkClass(input: ClassInput): ApiError | null {
+  const name = checkClassName(input.name);
+  if (name) return name;
+  if ((input.description?.trim().length ?? 0) > MAX_NOTE_LENGTH) {
+    return invalid(`A descrição pode ter até ${MAX_NOTE_LENGTH} caracteres.`, "description");
+  }
+  return null;
+}
+
+/**
+ * O planejamento, na ordem da tela. Parcial porque `updatePlan` recebe só o que
+ * mudou: o que falta não é validado.
+ */
+export function checkPlan(input: Partial<StudyPlanInput>): ApiError | null {
+  if (input.name !== undefined) {
+    const length = input.name.trim().length;
+    if (length < MIN_NAME_LENGTH) return invalid("Dê um nome ao planejamento.", "name");
+    if (length > MAX_NAME_LENGTH) {
+      return invalid(`O nome do planejamento pode ter até ${MAX_NAME_LENGTH} caracteres.`, "name");
+    }
+  }
+  if ((input.area?.trim().length ?? 0) > MAX_NAME_LENGTH) {
+    return invalid(`A área pode ter até ${MAX_NAME_LENGTH} caracteres.`, "area");
+  }
+  if ((input.stage?.trim().length ?? 0) > MAX_NAME_LENGTH) {
+    return invalid(`A fase pode ter até ${MAX_NAME_LENGTH} caracteres.`, "stage");
+  }
+  if ((input.studyModel?.trim().length ?? 0) > MAX_NAME_LENGTH) {
+    return invalid(`O modelo de estudo pode ter até ${MAX_NAME_LENGTH} caracteres.`, "studyModel");
+  }
+  if ((input.targetExam?.trim().length ?? 0) > MAX_TITLE_LENGTH) {
+    return invalid(`O concurso pode ter até ${MAX_TITLE_LENGTH} caracteres.`, "targetExam");
+  }
+  if (input.weeklyGoals !== undefined && (input.weeklyGoals < 1 || input.weeklyGoals > 60)) {
+    return invalid("As metas por semana ficam entre 1 e 60.", "weeklyGoals");
+  }
+  if (input.examDate && input.startsOn && input.examDate < input.startsOn) {
+    return invalid("A prova não pode ser antes do início.", "examDate");
+  }
+  return null;
+}
+
+/**
+ * `""` passa (o caderno sem link); o resto é `https://` sem espaço, até 2048
+ * (QA-24, D-09). A CHECK do banco é `^https://[^[:space:]]+$`, e `new URL`
+ * aceita espaço no caminho: por isso o espaço é recusado aqui à parte. O valor
+ * chega JÁ aparado — quem grava apara antes de chamar.
+ */
+export function checkLink(value: string, field: string): ApiError | null {
+  if (value === "") return null;
+  const message = /\s/.test(value) ? "Informe um link HTTPS válido." : validateHttpsLink(value);
+  return message ? invalid(message, field) : null;
+}
+
+/** O caderno, na ordem da tela: nome, link, questões, meta. */
+export function checkNotebook(notebook: Notebook): ApiError | null {
+  const name = notebook.notebookName.trim();
+  if (!name) return invalid("Dê um nome ao caderno.", "notebookName");
+  if (name.length > MAX_TITLE_LENGTH) {
+    return invalid(`O nome do caderno pode ter até ${MAX_TITLE_LENGTH} caracteres.`, "notebookName");
+  }
+  const link = checkLink(notebook.notebookLink.trim(), "notebookLink");
+  if (link) return link;
+  if (notebook.totalQuestions < 0) {
+    return invalid("O total de questões não pode ser negativo.", "totalQuestions");
+  }
+  if (
+    !Number.isInteger(notebook.subjectTarget) ||
+    notebook.subjectTarget < 0 ||
+    notebook.subjectTarget > 100
+  ) {
+    return invalid("A meta de acerto vai de 0 a 100%.", "subjectTarget");
+  }
+  return null;
+}
+
+/** O deck pessoal: disciplina de 2 a 120 e assunto de 2 a 160. */
+export function checkPersonalDeck(input: { subject: string; title: string }): ApiError | null {
+  const subject = input.subject.trim().length;
+  const title = input.title.trim().length;
+  if (subject < 2) return invalid("Informe a disciplina.", "subject");
+  if (subject > MAX_NAME_LENGTH) {
+    return invalid(`A disciplina pode ter até ${MAX_NAME_LENGTH} caracteres.`, "subject");
+  }
+  if (title < 2) return invalid("Informe o assunto do deck.", "title");
+  if (title > MAX_DECK_TITLE_LENGTH) {
+    return invalid(`O assunto pode ter até ${MAX_DECK_TITLE_LENGTH} caracteres.`, "title");
+  }
   return null;
 }
 
@@ -152,6 +291,8 @@ export function checkStudyEntry(input: {
   readonly minutes: number;
   readonly questions: number;
   readonly correctAnswers: number;
+  readonly note?: string;
+  readonly manualLesson?: string;
 }): ApiError | null {
   const { minutes, questions, correctAnswers } = input;
   if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_ENTRY_MINUTES) {
@@ -164,6 +305,21 @@ export function checkStudyEntry(input: {
   if (numbers) return numbers;
   if (minutes === 0 && questions === 0) {
     return invalid("Informe o tempo estudado ou as questões feitas.", "minutes");
+  }
+  return checkEntryText(input);
+}
+
+/**
+ * A observação (2000) e a aula avulsa (200) de um registro. A RPC grava o que
+ * receber, e `goal_entries_note_check` e `goal_entries_manual_lesson_check` são
+ * a barreira do servidor: aqui a recusa chega com a frase certa.
+ */
+function checkEntryText(input: { readonly note?: string; readonly manualLesson?: string }): ApiError | null {
+  if ((input.note?.trim().length ?? 0) > MAX_NOTE_LENGTH) {
+    return invalid(`A observação pode ter até ${MAX_NOTE_LENGTH} caracteres.`, "note");
+  }
+  if ((input.manualLesson?.trim().length ?? 0) > MAX_TITLE_LENGTH) {
+    return invalid(`A aula pode ter até ${MAX_TITLE_LENGTH} caracteres.`, "manualLesson");
   }
   return null;
 }
@@ -207,11 +363,15 @@ export function checkExtraStudyDate(
 
 /** Na ordem dos campos do diálogo: matéria, data, números. */
 export function checkExtraStudy(
-  input: Pick<ExtraStudyInput, "subject" | "date" | "minutes" | "questions" | "correctAnswers">,
+  input: Pick<ExtraStudyInput, "subject" | "date" | "minutes" | "questions" | "correctAnswers" | "note">,
   planStartsOn: IsoDate,
   today: IsoDate,
 ): ApiError | null {
-  if (!input.subject.trim()) return invalid("Informe a matéria.", "subject");
+  const subject = input.subject.trim();
+  if (!subject) return invalid("Informe a matéria.", "subject");
+  if (subject.length > MAX_NAME_LENGTH) {
+    return invalid(`A matéria pode ter até ${MAX_NAME_LENGTH} caracteres.`, "subject");
+  }
   return checkExtraStudyDate(input.date, planStartsOn, today) ?? checkStudyEntry(input);
 }
 
@@ -224,3 +384,72 @@ export function checkExtraStudy(
  */
 export const STUDY_REPLAY_CONFLICT =
   "Este estudo já foi registrado com outros valores. Atualize a página para ver o que foi gravado.";
+
+/**
+ * A lista de espera, na ordem da tela: nome, WhatsApp, área, concurso, nascimento.
+ * Uma faixa só (D-08, QA-19): o banco pedia 8 a 30 caracteres, o adaptador só
+ * "não vazio" e a fixture 10 dígitos, cada um com uma frase.
+ *
+ * `today` entra por parâmetro para o teste fixar a data. O banco compara com o
+ * `current_date` dele, em UTC: às 22h em Brasília já é o dia seguinte lá, então
+ * o contrato recusa antes, e o contrário não acontece no Brasil.
+ */
+export function checkWaitlist(input: WaitlistInput, today: IsoDate): ApiError | null {
+  const name = checkName(input.name);
+  if (name) return name;
+
+  const whatsapp = input.whatsapp.trim();
+  if (!whatsapp) {
+    return invalid("Informe um WhatsApp para o professor falar com você.", "whatsapp");
+  }
+  const digits = whatsapp.replace(/\D/g, "").length;
+  if (
+    whatsapp.length > MAX_WHATSAPP_LENGTH ||
+    !/^[0-9 ()+-]+$/.test(whatsapp) ||
+    digits < WHATSAPP_DIGITS.min ||
+    digits > WHATSAPP_DIGITS.max
+  ) {
+    return invalid("Informe o WhatsApp com DDD, como (11) 90000-0000.", "whatsapp");
+  }
+
+  const area = input.interestArea.trim().length;
+  if (area < 2) return invalid("Informe sua área de interesse.", "interestArea");
+  if (area > MAX_NAME_LENGTH) {
+    return invalid(`A área de interesse pode ter até ${MAX_NAME_LENGTH} caracteres.`, "interestArea");
+  }
+  const exam = input.targetExam.trim().length;
+  if (exam < 2) return invalid("Informe para qual concurso você estuda.", "targetExam");
+  if (exam > MAX_TITLE_LENGTH) {
+    return invalid(`O concurso pode ter até ${MAX_TITLE_LENGTH} caracteres.`, "targetExam");
+  }
+
+  if (
+    input.birthDate !== undefined &&
+    (!isRealIsoDate(input.birthDate) || input.birthDate < MIN_BIRTH_DATE || input.birthDate > today)
+  ) {
+    return invalid("A data de nascimento precisa ser entre 01/01/1900 e hoje.", "birthDate");
+  }
+  return null;
+}
+
+/**
+ * Os conflitos de nome, com a frase que as DUAS implementações devolvem. O
+ * `23505` é identificado pelo NOME do índice (`isUniqueViolation`), nunca por
+ * frase de interface: o deck pessoal tem PK escolhida pelo cliente, e um replay
+ * com o mesmo `id` também dá `23505`, em outro índice, sem ser deck repetido.
+ */
+export const PLAN_NAME_TAKEN: ApiError = {
+  code: "conflict",
+  message: "Este aluno já tem um planejamento com esse nome.",
+  field: "name",
+};
+export const CLASS_NAME_TAKEN: ApiError = {
+  code: "conflict",
+  message: "Você já tem uma turma com esse nome.",
+  field: "name",
+};
+export const DECK_TAKEN: ApiError = {
+  code: "conflict",
+  message: "Você já tem um deck com essa disciplina e esse assunto.",
+  field: "title",
+};

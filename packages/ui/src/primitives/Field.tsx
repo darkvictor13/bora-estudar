@@ -7,7 +7,7 @@ import VisibilityIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOffOutlined';
 import { useState, type InputHTMLAttributes } from 'react';
 
-type NativeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'name' | 'type'>;
+type NativeInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'name' | 'type'>;
 
 export interface FieldProps extends NativeInputProps {
   readonly label: string;
@@ -35,15 +35,26 @@ export interface FieldProps extends NativeInputProps {
  * enquanto a pessoa preenche. A v2 os deixa parados em cima, e é o que mantém
  * a densidade dela: rótulo de 12px, campo de 13px, nada se mexendo.
  *
- * O `id` é `field-<name>`, e é contrato: a suíte e2e digita por `#field-email`
- * e `#field-password`.
+ * O PADRÃO do `id` é `field-<name>`, e é contrato: a suíte e2e digita por
+ * `#field-email` e `#field-password`. Um cartão REPETIDO (um por disciplina)
+ * passa o próprio `id`: o padrão repetiria na página, e o `<label for>` do
+ * segundo cartão apontaria para o campo do primeiro (R-UI-18).
  */
-export function Field({ label, name, type = 'text', hint, error, invalid, ...rest }: FieldProps) {
-  const id = `field-${name}`;
+export function Field({
+  label,
+  name,
+  id: idProp,
+  type = 'text',
+  hint,
+  error,
+  invalid,
+  ...rest
+}: FieldProps) {
+  const id = idProp ?? `field-${name}`;
   const isPassword = type === 'password';
 
   /**
-   * Começa SEMPRE oculta, a cada montagem (R-UI-14).
+   * Começa SEMPRE oculta, a cada montagem (R-UI-10).
    *
    * Nada de lembrar "estava visível": quem abre a tela depois pode ser outra
    * pessoa, no mesmo computador.

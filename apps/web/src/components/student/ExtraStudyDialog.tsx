@@ -16,7 +16,7 @@ import {
   resumeStudyTimer,
 } from "@/components/StudyTimer";
 import type { ApiError, ExtraStudyInput, ExtraStudyKind } from "@/lib/api";
-import { MAX_ENTRY_MINUTES, MAX_ENTRY_QUESTIONS, newRequestId } from "@/lib/api";
+import { MAX_ENTRY_MINUTES, MAX_ENTRY_QUESTIONS, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, newRequestId } from "@/lib/api";
 import { recordedStudyTimerMinutes } from "@/lib/domain/study-timer";
 import { parseCount } from "@/lib/domain/week";
 
@@ -164,6 +164,7 @@ export function ExtraStudyDialog({
             list="extra-subjects"
             placeholder="Direito Penal"
             required
+            maxLength={MAX_NAME_LENGTH}
             invalid={error?.field === "subject"}
           />
           <datalist id="extra-subjects">
@@ -225,6 +226,8 @@ export function ExtraStudyDialog({
             minRows={2}
             fullWidth
             size="small"
+            error={error?.field === "note"}
+            slotProps={{ htmlInput: { maxLength: MAX_NOTE_LENGTH } }}
           />
         </DialogContent>
         <DialogActions>

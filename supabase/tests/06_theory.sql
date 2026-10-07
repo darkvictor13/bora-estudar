@@ -28,8 +28,11 @@ do $$ begin
   values ('22222222-2222-4222-8222-222222222222','a2000000-0000-4000-8000-000000000002',
           'b2000000-0000-4000-8000-000000000001', 2);
   raise exception 'FALHOU: Bruno criou revisao dentro do planejamento da Carla';
-exception when foreign_key_violation then
-  raise notice '02 OK  theory_reviews_study_plan_fk faz o mesmo pela revisao';
+exception when insufficient_privilege then
+  -- Desde o 5c `authenticated` não tem INSERT em `theory_reviews`: a revisão nasce em
+  -- `record_initial_questions`, e o privilégio é conferido antes da FK. A FK composta
+  -- `theory_reviews_study_plan_fk` continua na lista de compostas de `07_schema.sql`.
+  raise notice '02 OK  theory_reviews nao aceita INSERT do aluno, nem no planejamento de outro';
 end $$;
 
 -- ---------- Acesso vencido: fecha a escrita, preserva o passado ----------

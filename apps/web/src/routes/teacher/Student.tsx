@@ -11,7 +11,9 @@ import { ContentBody } from "@/components/AppShell";
 import { AccessForm } from "@/components/teacher/AccessForm";
 import { api, type ApiError, type QuizSessionSummary, type StudentCard } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { formatInstant, hasExpired } from "@/lib/domain/dates";
 import { formatMinutes } from "@/lib/domain/week";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * A ficha do aluno — era o `aluno-modal` da v2, agora é rota.
@@ -29,8 +31,8 @@ import { formatMinutes } from "@/lib/domain/week";
  * bateria precisa nascer como RPC, porque `quiz_sessions` é SELECT e nada mais.
  * Um botão que sempre falha é pior do que botão nenhum; a tela diz o que falta.
  */
-export async function teacherStudentLoader({ params }: { params: { studentId?: string } }) {
-  await requireRole("teacher");
+export async function teacherStudentLoader({ params, request }: { params: { studentId?: string }; request: Request }) {
+  await requireRole("teacher", request);
 
   const [file, classes] = await Promise.all([
     api.loadStudentFile(params.studentId!),
@@ -55,10 +57,6 @@ const SESSION_STATUS: Record<QuizSessionSummary["status"], { label: string; tone
   cancelled: { label: "Cancelada", tone: "neutral" },
   voided: { label: "Anulada", tone: "neutral" },
 };
-
-function formatDateTime(value: string): string {
-  return `${value.slice(8, 10)}/${value.slice(5, 7)} ${value.slice(11, 16)}`;
-}
 
 export function TeacherStudent() {
   const { file, classes } = useLoaderData() as LoaderData;
@@ -124,14 +122,20 @@ export function TeacherStudent() {
           <Metric label="Tempo" value={formatMinutes(statistics.studiedMinutes)} />
           <Metric
             label="Última atividade"
-            value={card.lastActivityAt ? formatDateTime(card.lastActivityAt) : "—"}
+            value={card.lastActivityAt ? formatInstant(card.lastActivityAt, "dateTime") : "—"}
           />
         </Box>
 
         <Card
           title="Acesso"
           action={<Badge tone={ACCESS[card.access].tone}>{ACCESS[card.access].label}</Badge>}
-          sub={card.accessExpiresAt ? `Válido até ${card.accessExpiresAt}` : "Sem prazo"}
+          sub={
+            !card.accessExpiresAt
+              ? "Sem prazo"
+              : hasExpired(card.accessExpiresAt)
+                ? `Venceu em ${formatInstant(card.accessExpiresAt)}`
+                : `Válido até ${formatInstant(card.accessExpiresAt)}`
+          }
         >
           <AccessForm card={card} />
         </Card>
@@ -162,7 +166,7 @@ export function TeacherStudent() {
                     setClassMessage(null);
                     setClassError(null);
                   }}
-                  sx={{ minWidth: 220 }}
+                  sx={fieldWidth(220)}
                 >
                   <MenuItem value="">Sem turma</MenuItem>
                   {classes.map((turma) => (
@@ -230,7 +234,7 @@ export function TeacherStudent() {
                       {session.blockName}
                     </Typography>
                     <Typography variant="caption" component="p">
-                      {session.subject} · {formatDateTime(session.startedAt)}
+                      {session.subject} · {formatInstant(session.startedAt, "dateTime")}
                       {session.durationMinutes === null
                         ? ""
                         : ` · ${formatMinutes(session.durationMinutes)}`}

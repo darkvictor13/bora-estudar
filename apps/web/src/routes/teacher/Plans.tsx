@@ -15,12 +15,15 @@ import { ContentBody } from "@/components/AppShell";
 import { PmprPilot } from "@/components/teacher/PmprPilot";
 import {
   api,
+  MAX_NAME_LENGTH,
+  MAX_TITLE_LENGTH,
   newRequestId,
   type ApiError,
   type StudentCard,
   type StudyPlanSummary,
 } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
+import { formatDate, todayLocal } from "@/lib/domain/dates";
 
 /**
  * Planejamentos — criar, editar, ativar e arquivar.
@@ -30,8 +33,8 @@ import { requireRole } from "@/lib/auth/session";
  * diz isso antes de ser clicado. Um "ativar" que silenciosamente desativa outro
  * é a forma mais rápida de um professor perder o planejamento que montou.
  */
-export async function teacherPlansLoader() {
-  await requireRole("teacher");
+export async function teacherPlansLoader({ request }: { request: Request }) {
+  await requireRole("teacher", request);
 
   const [plans, students] = await Promise.all([api.listPlans(), api.listStudents({})]);
   return { plans, students };
@@ -106,16 +109,38 @@ function PlanDialog({
             name="name"
             defaultValue={plan?.name ?? ""}
             required
+            maxLength={MAX_NAME_LENGTH}
             invalid={error?.field === "name"}
           />
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-            <Field label="Área" name="area" defaultValue={plan?.area ?? "Policial"} required />
-            <Field label="Concurso" name="targetExam" defaultValue={plan?.targetExam ?? "Soldado PMPR"} />
-            <Field label="Fase" name="stage" defaultValue={plan?.stage ?? "Pré-edital"} />
+            <Field
+              label="Área"
+              name="area"
+              defaultValue={plan?.area ?? "Policial"}
+              required
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "area"}
+            />
+            <Field
+              label="Concurso"
+              name="targetExam"
+              defaultValue={plan?.targetExam ?? "Soldado PMPR"}
+              maxLength={MAX_TITLE_LENGTH}
+              invalid={error?.field === "targetExam"}
+            />
+            <Field
+              label="Fase"
+              name="stage"
+              defaultValue={plan?.stage ?? "Pré-edital"}
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "stage"}
+            />
             <Field
               label="Modelo de estudo"
               name="studyModel"
               defaultValue={plan?.studyModel ?? "Avanço progressivo"}
+              maxLength={MAX_NAME_LENGTH}
+              invalid={error?.field === "studyModel"}
             />
             {/* Compatibilidade temporária com o motor semanal. A quantidade
                 deixa de ser decisão pedagógica: a rotina nasce das aulas. */}
@@ -124,7 +149,7 @@ function PlanDialog({
               label="Início"
               name="startsOn"
               type="date"
-              defaultValue={plan?.startsOn ?? new Date().toISOString().slice(0, 10)}
+              defaultValue={plan?.startsOn ?? todayLocal()}
             />
             <Field
               label="Data da prova"
@@ -236,8 +261,8 @@ export function TeacherPlans() {
                   sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}
                 >
                   <Typography variant="caption" sx={{ flex: 1, minWidth: 0 }}>
-                    Início em {plan.startsOn}
-                    {plan.examDate ? ` · prova em ${plan.examDate}` : ""}
+                    Início em {formatDate(plan.startsOn)}
+                    {plan.examDate ? ` · prova em ${formatDate(plan.examDate)}` : ""}
                   </Typography>
 
                   <Button size="small" variant="text" onClick={() => setDialog({ open: true, plan })}>

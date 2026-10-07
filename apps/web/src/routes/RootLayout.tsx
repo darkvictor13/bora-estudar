@@ -1,6 +1,8 @@
 import { theme } from "@bora/ui";
+import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
+import Typography from "@mui/material/Typography";
 import { useEffect, type ReactNode } from "react";
 import { Outlet, useMatches } from "react-router";
 
@@ -87,6 +89,49 @@ export function RootError() {
   return (
     <ThemeShell>
       <RouteError />
+    </ThemeShell>
+  );
+}
+
+/**
+ * A primeira carga: o que a pessoa vê enquanto a sessão, o perfil e os loaders
+ * não terminam (QA-26, R-UI-17).
+ *
+ * Sem `HydrateFallback` o React Router 8 renderiza `null` e avisa no console, e
+ * a tela fica branca até a cascata sessão -> perfil -> loaders acabar. Como o
+ * `ErrorBoundary`, o fallback SUBSTITUI o `RootLayout` — que é quem fornece o
+ * tema —, e por isso embrulha o seu próprio `ThemeShell`.
+ *
+ * Três coisas que não entram aqui, cada uma por um motivo:
+ * - `h1`: F-TEMA-03 afirma zero `h1` enquanto o perfil está preso, e a tela
+ *   ainda não é nenhuma tela;
+ * - `Alert`: o testid `alert` é de aviso ao usuário, e a suíte o confundiria;
+ * - `Outlet`: proibido num fallback de hidratação.
+ *
+ * `index.html` traz o mesmo texto dentro de `#root`, para o branco que vem
+ * ANTES do bundle; este é o que o substitui depois dele.
+ */
+export function RootLoading() {
+  return (
+    <ThemeShell>
+      <Box
+        role="status"
+        data-testid="app-loading"
+        sx={(theme) => ({
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 0.5,
+          p: 2,
+          textAlign: "center",
+          backgroundColor: theme.vars.palette.surface.base,
+        })}
+      >
+        <Typography variant="body1">Carregando a Fronteira Concursos…</Typography>
+        <Typography variant="body2">Se demorar, confira a conexão e recarregue a página.</Typography>
+      </Box>
     </ThemeShell>
   );
 }

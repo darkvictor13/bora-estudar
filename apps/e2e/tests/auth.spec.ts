@@ -15,7 +15,7 @@ import { createUser, deleteUser, setAccess } from "../fixtures/scenario.ts";
 import { count, maybeOne } from "../fixtures/db.ts";
 import { actionLink, clearMailbox, waitForEmail } from "../support/mailpit.ts";
 import { PROTECTED_ROUTES, STUDENT_ROUTES, TEACHER_ROUTES } from "../support/routes.ts";
-import { alert, field, signOut } from "../support/ui.ts";
+import { alert, field, navItem, signOut, testId } from "../support/ui.ts";
 
 /**
  * Cenário SEM planejamento.
@@ -41,17 +41,26 @@ async function signInThroughForm(
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
 }
 
+/**
+ * A URL do login com o destino, como a guarda a monta (R-AUTH-06, QA-25).
+ * Exata, e não `/\/entrar$/`: a regex deixaria passar a guarda que perde o `next`.
+ */
+function loginUrl(baseURL: string | undefined, destination: string): string {
+  return `${baseURL}/entrar?next=${encodeURIComponent(destination)}`;
+}
+
 test.describe("F-AUTH-01 · anônimo é mandado para o login", () => {
   for (const route of PROTECTED_ROUTES) {
-    test(`${route} redireciona para /entrar`, async ({ page }) => {
+    test(`${route} redireciona para /entrar, levando o destino`, async ({ page, baseURL }) => {
       await page.goto(route);
-      await expect(page).toHaveURL(/\/entrar$/);
+      await expect(page).toHaveURL(loginUrl(baseURL, route));
     });
   }
 
-  test("a ficha do aluno também é protegida", async ({ page, scenario }) => {
-    await page.goto(`/professor/alunos/${scenario.student.id}`);
-    await expect(page).toHaveURL(/\/entrar$/);
+  test("a ficha do aluno também é protegida", async ({ page, scenario, baseURL }) => {
+    const route = `/professor/alunos/${scenario.student.id}`;
+    await page.goto(route);
+    await expect(page).toHaveURL(loginUrl(baseURL, route));
   });
 });
 
@@ -148,7 +157,7 @@ test.describe("F-AUTH-06 · tela pública com sessão ativa", () => {
   });
 });
 
-test("F-AUTH-07 · logout apaga o cookie e a área volta a barrar", async ({ studentPage }) => {
+test("F-AUTH-07 · logout apaga o cookie e a área volta a barrar", async ({ studentPage, baseURL }) => {
   await studentPage.goto("/aluno");
   await expect(studentPage.locator("h1")).toHaveText("Minha semana");
 
@@ -159,7 +168,7 @@ test("F-AUTH-07 · logout apaga o cookie e a área volta a barrar", async ({ stu
   expect(cookies.filter((cookie) => /^sb-.*-auth-token/.test(cookie.name))).toHaveLength(0);
 
   await studentPage.goto("/aluno");
-  await expect(studentPage).toHaveURL(/\/entrar$/);
+  await expect(studentPage).toHaveURL(loginUrl(baseURL, "/aluno"));
 });
 
 test.describe("F-AUTH-08/09 · cadastro público", () => {
@@ -240,6 +249,25 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
   });
 
+  test("senha só de espaços é recusada, e nenhuma conta nasce — QA-18", async ({ page }) => {
+    const email = `espacos-${Date.now().toString(36)}@e2e.local`;
+
+    await page.goto("/cadastro");
+    await field(page, "name").fill("Candidata Teste");
+    await field(page, "email").fill(email);
+    await field(page, "password").fill("        ");
+    await page.getByRole("button", { name: "Criar minha conta" }).click();
+
+    await expect(alert(page, "error")).toHaveText("A senha não pode ser formada só por espaços.");
+    // A recusa é do contrato, antes do GoTrue: a conta nem chegou a ser pedida.
+    expect(await count("select count(*) from auth.users where email = $1", [email])).toBe(0);
+  });
+
+  test("o campo do nome tem teto de 120 caracteres — QA-15", async ({ page }) => {
+    await page.goto("/cadastro");
+    await expect(field(page, "name")).toHaveAttribute("maxlength", "120");
+  });
+
   test("e-mail já cadastrado é recusado", async ({ page, scenario }) => {
     await page.goto("/cadastro");
     await field(page, "name").fill("Outra Pessoa");
@@ -248,6 +276,29 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     await page.getByRole("button", { name: "Criar minha conta" }).click();
 
     await expect(alert(page, "error")).toHaveText("Já existe uma conta com este e-mail.");
+
+    // A frase FICA, de propósito (R-AUTH-18, QA-29, D-14) — e a pessoa sai dali
+    // com um clique. Escopado pelo testid: a tela já tem outro "Entrar" no rodapé.
+    const existing = testId(page, "existing-account");
+    await expect(existing.getByRole("link", { name: "Entrar", exact: true })).toHaveAttribute(
+      "href",
+      "/entrar",
+    );
+    await expect(existing.getByRole("link", { name: "Esqueci minha senha" })).toHaveAttribute(
+      "href",
+      "/recuperar-senha",
+    );
+  });
+
+  test("os links só aparecem no e-mail repetido, e não nos outros erros", async ({ page }) => {
+    await page.goto("/cadastro");
+    await field(page, "name").fill("Jo");
+    await field(page, "email").fill(`curto-${Date.now().toString(36)}@e2e.local`);
+    await field(page, "password").fill("SenhaE2E#2026");
+    await page.getByRole("button", { name: "Criar minha conta" }).click();
+
+    await expect(alert(page, "error")).toHaveText("Informe seu nome completo.");
+    await expect(testId(page, "existing-account")).toHaveCount(0);
   });
 });
 
@@ -308,7 +359,7 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     await expect(field(page, "password")).toHaveCount(0);
   });
 
-  test("senhas diferentes e senha curta são recusadas", async ({ page, baseURL }) => {
+  test("senhas diferentes, senha curta e senha só de espaços são recusadas — QA-18", async ({ page, baseURL }) => {
     const person = await createUser("student", "Aluna Confusa", "confusa");
     await setAccess(person.id, "active");
     await clearMailbox();
@@ -327,6 +378,13 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     await field(page, "passwordConfirmation").fill("123");
     await page.getByRole("button", { name: "Salvar nova senha" }).click();
     await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
+
+    // QA-18: oito espaços nos dois campos conferem e passam do mínimo, e não
+    // são senha.
+    await field(page, "password").fill("        ");
+    await field(page, "passwordConfirmation").fill("        ");
+    await page.getByRole("button", { name: "Salvar nova senha" }).click();
+    await expect(alert(page, "error")).toHaveText("A senha não pode ser formada só por espaços.");
   });
 });
 
@@ -336,6 +394,118 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
  * site. O quarto, `/.//host`, é a armadilha da correção ingênua: normalizado,
  * vira `//host`, e já passa hoje porque o `redirect` recebe o texto cru.
  */
+/** Preenche e envia o formulário de login SEM navegar: o `next` já está na URL. */
+async function submitSignIn(
+  page: import("@playwright/test").Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  await field(page, "email").fill(email);
+  await field(page, "password").fill(password);
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+}
+
+test.describe("F-AUTH-13 · o link profundo volta depois do login — QA-25", () => {
+  test("anônimo na ficha do aluno entra e cai na ficha", async ({ page, scenario, baseURL }) => {
+    const route = `/professor/alunos/${scenario.student.id}`;
+    await page.goto(route);
+    await expect(page).toHaveURL(loginUrl(baseURL, route));
+
+    // Errar a senha antes de acertar: o campo escondido do `next` sobrevive ao
+    // reset do formulário do React 19, e é o que garante o destino na segunda.
+    await submitSignIn(page, scenario.teacher.email, "senha-errada");
+    await expect(alert(page, "error")).toHaveText("E-mail ou senha incorretos.");
+    await expect(page).toHaveURL(loginUrl(baseURL, route));
+
+    await submitSignIn(page, scenario.teacher.email, scenario.teacher.password);
+    await expect(page).toHaveURL(new RegExp(`${route}$`));
+    await expect(page.locator("h1")).toHaveText(scenario.student.name);
+  });
+
+  test("o fragmento da primeira carga viaja dentro do next e volta junto", async ({
+    page,
+    scenario,
+    baseURL,
+  }) => {
+    await page.goto("/aluno/planejamento#trecho");
+    await expect(page).toHaveURL(loginUrl(baseURL, "/aluno/planejamento#trecho"));
+
+    await submitSignIn(page, scenario.student.email, scenario.student.password);
+    await expect(page).toHaveURL(/\/aluno\/planejamento#trecho$/);
+  });
+
+  test("next de outro papel termina na casa do papel real, sem laço", async ({
+    page,
+    scenario,
+    baseURL,
+  }) => {
+    await page.goto(`/entrar?next=${encodeURIComponent("/professor")}`);
+    await submitSignIn(page, scenario.student.email, scenario.student.password);
+
+    await expect(page).toHaveURL(`${baseURL}/aluno`);
+    await expect(page.locator("h1")).toHaveText("Minha semana");
+  });
+
+  test("next externo ou de tela pública termina na casa do papel", async ({
+    page,
+    scenario,
+    baseURL,
+  }) => {
+    for (const next of ["https://exemplo.invalid/", "/\\exemplo.invalid/x", "/cadastro"]) {
+      const saidas: string[] = [];
+      await page.route(
+        (url) => url.hostname === "exemplo.invalid",
+        async (route) => {
+          saidas.push(route.request().url());
+          await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>FORA</h1>" });
+        },
+      );
+
+      await page.goto(`/entrar?next=${encodeURIComponent(next)}`);
+      await submitSignIn(page, scenario.student.email, scenario.student.password);
+
+      await expect(page).toHaveURL(`${baseURL}/aluno`);
+      expect(saidas).toEqual([]);
+
+      await signOut(page).click();
+      await expect(page).toHaveURL(`${baseURL}/entrar`);
+    }
+  });
+
+  test("com sessão aberta, /entrar?next= vai ao destino pelo mesmo filtro", async ({
+    studentPage,
+    baseURL,
+  }) => {
+    await studentPage.goto(`/entrar?next=${encodeURIComponent("/aluno/conta")}`);
+    await expect(studentPage).toHaveURL(`${baseURL}/aluno/conta`);
+
+    await studentPage.goto(`/entrar?next=${encodeURIComponent("/professor")}`);
+    await expect(studentPage).toHaveURL(`${baseURL}/aluno`);
+  });
+
+  test("navegação do cliente: o next é o destino, e não a tela de onde saiu", async ({
+    studentPage,
+    baseURL,
+  }) => {
+    await studentPage.goto("/aluno#da-tela-anterior");
+    await expect(studentPage.locator("h1")).toHaveText("Minha semana");
+
+    // A sessão vence com a página aberta: o token passa a ser recusado.
+    await studentPage.route(/\/auth\/v1\/user/, (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ code: 401, error_code: "bad_jwt", msg: "invalid JWT" }),
+      }),
+    );
+
+    // `location` ainda é `/aluno#da-tela-anterior` dentro do loader: ler dele
+    // devolveria o aluno para a tela de onde saiu, com o fragmento dela.
+    await navItem(studentPage, "Meus dados").click();
+    await expect(studentPage).toHaveURL(loginUrl(baseURL, "/aluno/conta"));
+  });
+});
+
 test.describe("F-AUTH-14 · /confirmar não manda para fora do site — QA-02", () => {
   const payloads: Array<[string, string]> = [
     ["barra invertida", "/\\evil.example/x"],

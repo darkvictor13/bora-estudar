@@ -6,7 +6,7 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Empty, Field, Metric, PageHeader } from "@bora/ui";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Link as RouterLink, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
@@ -23,6 +23,7 @@ import {
 import { requireRole } from "@/lib/auth/session";
 import { PMPR_SOLDADO_2025 } from "@/lib/domain/pmpr-soldado";
 import { ROUTES } from "@/lib/routes";
+import { fieldWidth } from "@/lib/ui/field-width";
 
 /**
  * Catálogo de teoria — o `p-disciplinas` do professor.
@@ -36,10 +37,15 @@ import { ROUTES } from "@/lib/routes";
  * aluno baixar o catálogo inteiro para abrir a tela de metas.
  */
 export async function teacherTheoryLoader({ request }: { request: Request }) {
-  await requireRole("teacher");
+  await requireRole("teacher", request);
 
   const catalogs = await api.listCatalogs();
-  const catalogId = new URL(request.url).searchParams.get("catalogo") ?? catalogs[0]?.id ?? null;
+  // `?catalogo=` só vale se for um dos catálogos que a tela lista; o resto cai
+  // no primeiro, em silêncio (D-13, QA-13).
+  const asked = new URL(request.url).searchParams.get("catalogo");
+  const catalogId = catalogs.some((catalog) => catalog.id === asked)
+    ? asked
+    : (catalogs[0]?.id ?? null);
 
   if (!catalogId) {
     return { catalogs, catalogId: null, lessons: [], rules: [], plans: [], classes: [] };
@@ -65,6 +71,11 @@ function SubjectRuleCard({
   onSave: (rule: TheorySubjectRule) => void;
 }) {
   const [reviews, setReviews] = useState(rule.reviews);
+  // Um cartão por disciplina: o id padrão de `Field` (`field-<name>`) repetiria
+  // na página, e o `<label for>` do segundo apontaria para o campo do primeiro
+  // (QA-22). O `name` NÃO muda — é o que o `FormData` lê. `subjectKey` não
+  // serve de sufixo: tem espaço, e id não pode ter.
+  const uid = useId();
 
   return (
     <Box sx={{ mb: 1.5 }}>
@@ -96,6 +107,7 @@ function SubjectRuleCard({
           <Field
             label="Meta de questões por aula"
             name="initialQuestions"
+            id={`field-initialQuestions-${uid}`}
             type="number"
             min={1}
             max={200}
@@ -114,6 +126,7 @@ function SubjectRuleCard({
               <Field
                 label="A cada N aulas"
                 name={`spacing-${index}`}
+                id={`field-spacing-${index}-${uid}`}
                 type="number"
                 min={1}
                 max={200}
@@ -122,6 +135,7 @@ function SubjectRuleCard({
               <Field
                 label="Mínimo de questões"
                 name={`minimum-${index}`}
+                id={`field-minimum-${index}-${uid}`}
                 type="number"
                 min={1}
                 max={200}
@@ -445,7 +459,9 @@ export function TeacherTheory() {
         title="Catálogo de teoria"
         description="Aulas, páginas auditadas e as regras de cada disciplina"
         actions={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          // `maxWidth` e `minWidth: 0`: este contêiner é item de uma linha flex, e
+          // sem eles cresce até o texto inteiro do catálogo escolhido (QA-23).
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
             {!pmprCatalog && (
               <Button variant="contained" size="small" disabled={busy} onClick={() => void createPmprCatalog()}>
                 Criar catálogo Soldado PMPR
@@ -462,7 +478,7 @@ export function TeacherTheory() {
                 params.set("catalogo", event.target.value);
                 setParams(params);
               }}
-              sx={{ minWidth: 260 }}
+              sx={fieldWidth(260)}
             >
               {catalogs.map((catalog) => (
                 <MenuItem key={catalog.id} value={catalog.id}>
@@ -510,12 +526,12 @@ export function TeacherTheory() {
                       }
                     }}
                   >
-                    <TextField select name="subject" label="Matéria" size="small" defaultValue={PMPR_SOLDADO_2025.subjects[0].name} sx={{ minWidth: 230 }}>
+                    <TextField select name="subject" label="Matéria" size="small" defaultValue={PMPR_SOLDADO_2025.subjects[0].name} sx={fieldWidth(230)}>
                       {PMPR_SOLDADO_2025.subjects.map((subject) => (
                         <MenuItem key={subject.name} value={subject.name}>{subject.name}</MenuItem>
                       ))}
                     </TextField>
-                    <TextField name="title" label="Tópico da aula" size="small" required inputProps={{ maxLength: 180 }} sx={{ flex: 1, minWidth: 260 }} />
+                    <TextField name="title" label="Tópico da aula" size="small" required inputProps={{ maxLength: 180 }} sx={{ ...fieldWidth(260), flex: { xs: "1 1 100%", sm: 1 } }} />
                     <Button type="submit" variant="contained" size="small">Criar rascunho</Button>
                   </Box>
                 </Card>
@@ -596,7 +612,7 @@ export function TeacherTheory() {
                         }
                       }}
                     >
-                      <TextField select name="classId" label="Turma" size="small" defaultValue="" sx={{ minWidth: 290 }}>
+                      <TextField select name="classId" label="Turma" size="small" defaultValue="" sx={fieldWidth(290)}>
                         <MenuItem value="">Selecione uma turma</MenuItem>
                         {classes.map((turma) => (
                           <MenuItem key={turma.id} value={turma.id}>
@@ -647,7 +663,7 @@ export function TeacherTheory() {
                     label="Planejamento"
                     defaultValue={eligiblePlans[0]?.id ?? ""}
                     slotProps={{ select: { inputProps: { "data-testid": "link-plan" } } }}
-                    sx={{ minWidth: 260 }}
+                    sx={fieldWidth(260)}
                   >
                     {eligiblePlans.map((plan) => (
                       <MenuItem key={plan.id} value={plan.id}>

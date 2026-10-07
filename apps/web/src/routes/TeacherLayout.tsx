@@ -18,8 +18,8 @@ import { ROUTES } from "@/lib/routes";
 import { adoptTheme, DEFAULT_THEME } from "@/lib/theme";
 import { useSidebar } from "@/lib/ui/useSidebar";
 
-export async function teacherLayoutLoader() {
-  const session = await requireRole("teacher");
+export async function teacherLayoutLoader({ request }: { request: Request }) {
+  const session = await requireRole("teacher", request);
   const theme = await api.loadThemePreference();
 
   adoptTheme(session.profileId, theme);

@@ -22,8 +22,10 @@ só têm mínimo, e a fixture `createPlan` (`lib/api/fixtures.ts:1409`) não val
 O QA gravou nome de 400 caracteres no cadastro, 300 em Meus dados, plano de 487 e
 turma de 502. O banco local tem 7 perfis, 2 planejamentos e 1 turma acima de 120.
 
-O dado é maior que o relatório. A consulta da varredura (passo 3) acha **67
-colunas** `text` que `authenticated` grava sem teto no banco. São de dois tipos:
+O dado é maior que o relatório. A consulta da varredura (passo 3) acha **65
+colunas** (eram 67 antes do 5c: `goal_entries.note` e `manual_lesson` deixaram de
+ser graváveis pelo aluno, mas a RPC de registro as grava sem cortar, e por isso
+a CHECK delas entra do mesmo jeito) `text` que `authenticated` grava sem teto no banco. São de dois tipos:
 
 - **Sem teto nenhum:** `profiles.name`, `classes.*`, `study_plans.*`, `goals.*`,
   `goal_entries.note` e `manual_lesson`, os seis textos de
@@ -198,8 +200,8 @@ Um commit por passo, nesta ordem.
 ### 2. Migration
 
 `supabase migration new text_limits_and_formats`. Um arquivo, nesta ordem:
-tetos → pisos → duplicatas → links → lista de espera → constraints → índices →
-gatilho. A ordem importa. Cortar no teto cria duplicata nova (dois nomes de 487
+índice antigo do planejamento → tetos → pisos → duplicatas → links → lista de
+espera → constraints → índices → gatilho. A ordem importa. Cortar no teto cria duplicata nova (dois nomes de 487
 caracteres com o mesmo começo), e o piso precisa ver o valor já cortado.
 
 ```sql
@@ -220,6 +222,12 @@ caracteres com o mesmo começo), e o piso precisa ver o valor já cortado.
 -- Compatível com o bundle no ar: só restringe o que ele grava. O que o bundle
 -- antigo mandar fora da regra volta 23514/23505 com a frase genérica, até o
 -- bundle novo chegar.
+
+-- 0. O índice antigo de planejamento sai ANTES de tudo -----------------------
+-- Ele é único em `(teacher_id, student_id, name)` pelo valor EXATO: cortar dois
+-- nomes de 487 e 500 caracteres com o mesmo começo (item 1) o violaria no meio
+-- da própria migration. O novo nasce no item 7, depois das duplicatas.
+drop index public.study_plans_name_per_student_uidx;
 
 -- 1. Tetos -------------------------------------------------------------------
 update public.profiles    set name = btrim(left(btrim(name), 120)) where char_length(name) > 120;
@@ -286,8 +294,12 @@ update public.subject_lessons set link = null
    and not (char_length(link) <= 2048 and link ~* '^https://[^[:space:]]+$');
 
 -- 5. Lista de espera ---------------------------------------------------------
+-- A regra antiga media `btrim(whatsapp)`: o valor cru pode passar de 30 com
+-- espaço nas pontas. O item 1 apara esse caso; o `char_length <= 30` abaixo
+-- apaga o que sobrar.
 delete from public.waitlist
- where not (whatsapp ~ '^[0-9 ()+-]+$'
+ where not (char_length(whatsapp) <= 30
+            and whatsapp ~ '^[0-9 ()+-]+$'
             and char_length(regexp_replace(whatsapp, '[^0-9]', '', 'g')) between 10 and 13);
 update public.waitlist set birth_date = null
  where birth_date < date '1900-01-01' or birth_date > current_date;
@@ -315,7 +327,7 @@ alter table public.study_plans
   add constraint study_plans_study_model_check check (char_length(study_model) <= 120),
   add constraint study_plans_target_exam_check check (char_length(target_exam) <= 200);
 
--- goal_entries_note_check só se o 5a não a criou: `grep -rn note supabase/migrations/*record*`.
+-- O 5a NÃO criou `goal_entries_note_check`: a RPC grava a observação sem cortar.
 alter table public.goal_entries
   add constraint goal_entries_note_check          check (char_length(note) <= 2000),
   add constraint goal_entries_manual_lesson_check check (char_length(manual_lesson) <= 200);
@@ -365,7 +377,7 @@ create unique index classes_name_per_teacher_uidx
   on public.classes (teacher_id, lower(btrim(name)));
 create unique index personal_flashcard_decks_name_per_student_uidx
   on public.personal_flashcard_decks (student_id, lower(btrim(subject)), lower(btrim(title)));
-drop index public.study_plans_name_per_student_uidx;
+-- (o `drop index` do antigo está no item 0)
 create unique index study_plans_name_per_student_uidx
   on public.study_plans (teacher_id, student_id, lower(btrim(name)));
 
@@ -373,12 +385,14 @@ create unique index study_plans_name_per_student_uidx
 create or replace function app_private.create_profile_for_new_user() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
-  v_name text := btrim(coalesce(new.raw_user_meta_data ->> 'name', ''));
+  -- Apara, corta e apara de novo: o corte pode terminar num espaço, e o piso da
+  -- CHECK mede sem as pontas.
+  v_name text := btrim(left(btrim(coalesce(new.raw_user_meta_data ->> 'name', '')), 120));
 begin
   -- Sem o corte, profiles_name_check recusa e o GoTrue devolve "Database error
   -- saving new user": a conta inteira deixa de nascer por causa do nome.
   insert into public.profiles (id, name)
-  values (new.id, case when char_length(v_name) >= 3 then btrim(left(v_name, 120)) end)
+  values (new.id, case when char_length(v_name) >= 3 then v_name end)
   on conflict (id) do nothing;
   return new;
 end;
@@ -453,7 +467,7 @@ esperado é diff vazio. Rode mesmo assim, e commite se houver diff.
     | `checkPlan(input: Partial<StudyPlanInput>)` | vem de `validate()` em `supabase/teacher-plans.ts:69-80`, com as mesmas frases, mais nome até 120, área, fase e modelo até 120, e concurso até 200 |
     | `checkWaitlist(input: WaitlistInput, today: IsoDate)` | as regras de R-CTA-07; `today` entra por parâmetro para o teste fixar a data |
     | `checkNotebook(notebook: Notebook)` | vem de `supabase/notebooks.ts:122-127`, mais nome até 200, `checkLink(notebook.notebookLink, "notebookLink")` e `subjectTarget` inteiro de 0 a 100 ("A meta de acerto vai de 0 a 100%.", campo `subjectTarget`). A CHECK `study_plan_notebooks_subject_target_check` já existe; o que falta é a regra no contrato — hoje 150% chega ao banco e volta como `23514` cru, e é a única regra desta tela que o PR 4 deixou sem dono |
-    | `checkLink(value, field)` | `""` passa; o resto passa por `validateHttpsLink` |
+    | `checkLink(value, field)` | `""` passa; o resto passa por `validateHttpsLink`, e o ESPAÇO é recusado ali mesmo: `new URL` aceita `https://x.com/a b` e a CHECK (`[^[:space:]]`) não. A regra de espaço fica fora de `validateHttpsLink` para `readLessonMaterialBlocks` não passar a descartar bloco já gravado |
     | `checkPersonalDeck({ subject, title })` | vem de `supabase/personal-flashcards.ts:74-77`, mais 120 e 160 |
 
     Mensagens de `checkWaitlist`:
@@ -465,7 +479,8 @@ esperado é diff vazio. Rode mesmo assim, e commite se houver diff.
     - nascimento: "A data de nascimento precisa ser entre 01/01/1900 e hoje.".
   - **Observação e matéria do estudo extra.** O 5a criou `checkStudyEntry`. A
     observação ganha teto lá: "A observação pode ter até 2000 caracteres.",
-    `field: "note"`. A matéria ganha teto onde o 5a deixou "Informe a matéria.":
+    `field: "note"` (e `manualLesson`, até 200: "A aula pode ter até 200
+    caracteres."; `checkExtraStudy` passa a aceitar `note` no `Pick`). A matéria ganha teto onde o 5a deixou "Informe a matéria.":
     "A matéria pode ter até 120 caracteres.".
   - **Conflitos**, como constantes `ApiError` com `code: "conflict"`, para as
     duas implementações usarem a mesma frase:
@@ -477,10 +492,12 @@ esperado é diff vazio. Rode mesmo assim, e commite se houver diff.
     | `DECK_TAKEN` | "Você já tem um deck com essa disciplina e esse assunto." | `title` |
 - `lib/api/index.ts:27`: reexporte as `MAX_*`, `MIN_BIRTH_DATE` e
   `MAX_WHATSAPP_LENGTH` ao lado de `ACCESS_MONTHS`. É de lá que a tela importa.
-- `lib/api/supabase/errors.ts`: crie
-  `isUniqueViolation(error: PostgrestError, index: string): boolean`, que é
-  `error.code === "23505" && error.message.includes(index)`. Casa o nome do
-  índice, e nunca uma frase de interface.
+- `lib/api/supabase/error-translation.ts` (reexportada por `errors.ts`): crie
+  `isUniqueViolation(error: DbErrorLike, index: string): boolean`, que é
+  `error.code === "23505" && error.message.includes(`"${index}"`)`. Casa o nome
+  do índice entre aspas, e nunca uma frase de interface. Mora em
+  `error-translation.ts` porque `errors.ts` importa `@/lib/observability`, que o
+  runner do Node não resolve: o teste só alcança o primeiro.
 
 ### 6. Adaptador do Supabase e fixtures
 
@@ -496,8 +513,8 @@ esperado é diff vazio. Rode mesmo assim, e commite se houver diff.
   `personal_flashcard_decks_name_per_student_uidx` vira `DECK_TAKEN`. O `23505`
   da `_pkey` segue o caminho de hoje.
 - `supabase/access.ts:63-74`: as três checagens à mão dão lugar a
-  `checkWaitlist(input, localDate())`, com `localDate` de
-  `lib/domain/schedule.ts:33`, data do aparelho (D-11).
+  `checkWaitlist(input, today())`, com `today` de `supabase/session.ts` (que
+  chama `todayLocal` de `lib/domain/dates.ts`), data do aparelho (D-11).
 - `supabase/notebooks.ts:122-127` dá lugar a `checkNotebook`.
 - `supabase/auth.ts`: nada muda no arquivo. Cadastro, redefinição e Meus dados
   recebem as regras novas por `checkSignUp`, `checkPassword` e `checkName`.
@@ -511,11 +528,9 @@ esperado é diff vazio. Rode mesmo assim, e commite se houver diff.
   - `createClass` e `renameClass` (`:1683,1701`) chamam `checkClass` e recusam
     `CLASS_NAME_TAKEN` contra `state.classes`, excluída a própria turma no
     renomear;
-  - **planejamentos:** a fixture passa a guardar `plans` no `State` (semente
-    `[PLAN]`), e `listPlans` lê dali. `createPlan` e `updatePlan`
-    (`:1409,1429`) chamam `checkPlan` e recusam `PLAN_NAME_TAKEN` contra os
-    planos do mesmo `studentId`. Hoje a fixture nem guarda o que cria: é o mock
-    que "devolve sempre o mesmo objeto", contra o qual o `CLAUDE.md` avisa.
+  - **planejamentos:** o PR 3 já pôs `plans` no `State`. `createPlan` e
+    `updatePlan` chamam `checkPlan` e recusam `PLAN_NAME_TAKEN` contra os
+    planos do mesmo `studentId` (na atualização, excluído o próprio).
 
 ### 7. Telas
 
@@ -609,7 +624,7 @@ begin
 end $$;
 ```
 
-Rodada como SELECT contra o banco de hoje, a consulta acusa as 67 colunas
+Rodada como SELECT contra o banco de hoje, a consulta acusa as 65 colunas
 listadas no defeito. Depois da migration, acusa zero.
 
 **`07_schema.sql` — os ataques.** Um bloco por item, como postgres. A CHECK não
@@ -664,8 +679,9 @@ linha.
   - `checkLink` com `javascript:`, `http:`, `''` e `https:`;
   - `checkPlan`, `checkClass` e `checkPersonalDeck` nos dois limites.
 - **`lesson-resources.test.ts`:** `validateHttpsLink`.
-- **`errors.test.ts`** (o PR 4 o cria): `isUniqueViolation` casa o nome do
-  índice, e não casa `_pkey`.
+- **`supabase/error-translation.test.ts`** (o PR 4 o criou; não existe
+  `errors.test.ts`): `isUniqueViolation` casa o nome do índice, e não casa
+  `_pkey`.
 - **`fixtures.test.ts`:** a especificação executável do contrato.
   - turma repetida com outra caixa, ao criar e ao renomear;
   - deck repetido;
@@ -690,6 +706,38 @@ linha.
 
 Pré-condição só pela tela ou pelas fixtures existentes, nunca por INSERT que
 fabrique estado impossível.
+
+---
+
+## Desvios na implementação (registrados em 07/10/2026)
+
+O que a realidade do código mudou em relação ao texto acima, já corrigido nele:
+
+- **O índice antigo de planejamento cai antes do corte (item 0).** O plano
+  deixava o `drop index` para o item 7, mas cortar dois nomes de 487 e 500
+  caracteres com o mesmo começo viola o índice ANTIGO (único pelo valor exato)
+  dentro da própria migration. Descoberto exercitando a migration com dado sujo.
+- **65 colunas na varredura, não 67**, depois do 5c; a CHECK de
+  `goal_entries.note` e `manual_lesson` entra mesmo assim, e o 5a não a criou.
+- **`goals.*` também ganha CHECK** (`subject`, `title`, `lesson`, `block`,
+  `description`, `weekday_name`): é o que a tabela "O resto" já pedia, e a RPC do
+  estudo extra grava `goals.subject` direto.
+- **`isUniqueViolation` mora em `error-translation.ts`** e casa o nome entre
+  aspas; o teste está em `error-translation.test.ts`.
+- **A fixture já guardava `plans`** (PR 3).
+- **A data de hoje** vem de `today()` (`supabase/session.ts`) no adaptador e de
+  `todayLocal()` (`lib/domain/dates.ts`) na tela, e não de `localDate`.
+- **A regra de espaço no link mora em `checkLink`**, não em `validateHttpsLink`.
+- **O gatilho de cadastro corta ANTES de aparar**, para o nome cujo corte acaba
+  em espaço não ficar abaixo do piso e derrubar a conta.
+- **A migration apara o WhatsApp cru antes de apagar** (a regra antiga media
+  `btrim`), e apaga o que passar de 30.
+- **A numeração dos testes SQL:** `07_schema` 25 a 33, `04_profiles` 21 e 22,
+  `05_waitlist` 19 a 21, `09_lesson_resource_links` 06 a 10,
+  `16_personal_flashcards` 06 e 07. O ataque de turma repetida lê o nome ATUAL da
+  turma da Ana, porque a `01_grants` a renomeia para "Turma da Ana (2027)".
+- **R-AUTH-19** (não R-AUTH-NN livre: o 6 tomou o 18), e a regra do gatilho
+  entrou no texto de R-AUTH-07.
 
 ---
 

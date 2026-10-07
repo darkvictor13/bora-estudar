@@ -95,7 +95,7 @@ test.describe("F-META-01 · o cabeçalho da semana", () => {
   });
 });
 
-test.describe("F-META-02 · a semana escolhida mora na URL", () => {
+test.describe("F-META-02 · a semana escolhida mora na URL (QA-13)", () => {
   test("navega, sobrevive ao recarregar e o botão voltar funciona", async ({
     studentPage,
     scenario,
@@ -124,6 +124,8 @@ test.describe("F-META-02 · a semana escolhida mora na URL", () => {
   for (const [label, value] of [
     ["texto", "abacaxi"],
     ["negativo", "-3"],
+    // QA-13: o número chegava ao `Date` e derrubava a tela.
+    ["fora do alcance", "1e9"],
   ] as const) {
     test(`${label} na query string não quebra a tela`, async ({ studentPage, consoleErrors }) => {
       await studentPage.goto(`/aluno?semana=${value}`);
@@ -133,12 +135,29 @@ test.describe("F-META-02 · a semana escolhida mora na URL", () => {
     });
   }
 
-  test("semana sem meta mostra o vazio, e não uma tela quebrada", async ({ studentPage }) => {
+  test("semana fora do seletor cai na CORRENTE, e não abre 'Semana 40' — QA-13", async ({
+    studentPage,
+    consoleErrors,
+  }) => {
     await studentPage.goto("/aluno?semana=40");
 
-    await expect(testId(studentPage, "week-hero")).toContainText("Semana 40");
-    // A tela abre num dia só; um dia sem meta é "dia livre", não erro.
-    await expect(testId(studentPage, "empty")).toContainText("Dia livre");
+    // A que o seletor oferece e abre: a corrente, e não a que a URL inventou.
+    await expect(testId(studentPage, "week-hero")).toContainText("Semana 1");
+    await expect(studentPage.getByRole("combobox", { name: "Semana" })).toContainText("Semana 1");
+    await expect(testId(studentPage, "week-hero")).not.toContainText("Semana 40");
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test.describe("sem nenhuma meta", () => {
+    test.use({ scenarioOptions: { withGoals: false } });
+
+    test("a semana corrente mostra o vazio, e não uma tela quebrada", async ({ studentPage }) => {
+      await studentPage.goto("/aluno");
+
+      await expect(testId(studentPage, "week-hero")).toContainText("Semana 1");
+      // A tela abre num dia só; um dia sem meta é "dia livre", não erro.
+      await expect(testId(studentPage, "empty")).toContainText("Dia livre");
+    });
   });
 });
 

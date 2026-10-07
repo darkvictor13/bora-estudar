@@ -17,7 +17,7 @@ import { requireStudentAccess } from "@/lib/auth/session";
 import { ROUTES } from "@/lib/routes";
 
 export async function flashSummariesLoader({ request }: LoaderFunctionArgs) {
-  await requireStudentAccess();
+  await requireStudentAccess(request);
   const lessonId = new URL(request.url).searchParams.get("aula");
   const plan = await api.loadActivePlanOrNull();
   const subjects = plan ? await api.loadTheoryControl(plan.id) : [];

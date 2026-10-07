@@ -12,6 +12,7 @@ import { Alert } from "@bora/ui";
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
+import { formatDate } from "@/lib/domain/dates";
 import { localDate } from "@/lib/domain/schedule";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -52,7 +53,7 @@ function Month({ year, month, studied, startsOn, today }: {
           const date = isoDate(year, month, day);
           const status = studied.has(date) ? "studied" : date < today && date >= startsOn ? "missed" : "neutral";
           const label = status === "studied" ? "estudado" : status === "missed" ? "sem registro" : date > today ? "futuro" : "sem registro até agora";
-          return <Box key={date} component="span" role="img" aria-label={`${day} de ${MONTHS[month]} de ${year}: ${label}`} title={`${date.split("-").reverse().join("/")} · ${label}`} sx={(theme) => ({
+          return <Box key={date} component="span" role="img" aria-label={`${day} de ${MONTHS[month]} de ${year}: ${label}`} title={`${formatDate(date)} · ${label}`} sx={(theme) => ({
             aspectRatio: "1", minWidth: 0, display: "grid", placeItems: "center", borderRadius: "50%",
             fontSize: "0.62rem", fontWeight: 800, fontVariantNumeric: "tabular-nums",
             color: status === "studied" ? theme.vars.palette.success.main : status === "missed" ? theme.vars.palette.error.main : theme.vars.palette.text.secondary,
