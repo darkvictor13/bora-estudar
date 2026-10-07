@@ -62,4 +62,54 @@ do $$ declare v_count integer; begin
   if v_count <> 0 then raise exception 'FALHOU: aluno le aula em rascunho'; end if;
   raise notice '05 OK  aula em rascunho nao aparece ao aluno';
 end $$;
+-- O link do caderno e os de bloco e aula seguem a mesma regra da aula: `https://`
+-- e nada mais (QA-24, N-06). Antes um professor gravava `javascript:` pela API, e
+-- a tela do aluno o renderizava como `href`.
+select app_test.act_as('11111111-1111-4111-8111-111111111111');
+do $$
+declare v text;
+begin
+  foreach v in array array['javascript:alert(1)', 'http://x.com', 'https://a b.com', 'ftp://x.com/y'] loop
+    begin
+      update public.study_plan_notebooks set notebook_link = v
+       where id = 'a3000000-0000-4000-8000-000000000001';
+      if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+      raise exception 'FALHOU: notebook_link aceitou %', v;
+    exception when check_violation then null;
+    end;
+  end loop;
+  raise notice '06 OK  notebook_link recusa javascript:, http:, espaco e outros esquemas';
+end $$;
+
+do $$ begin
+  update public.study_plan_notebooks set notebook_link = ''
+   where id = 'a3000000-0000-4000-8000-000000000001';
+  if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  update public.study_plan_notebooks set notebook_link = 'https://www.tecconcursos.com.br/'
+   where id = 'a3000000-0000-4000-8000-000000000001';
+  raise notice '07 OK  notebook_link aceita vazio e qualquer https';
+end $$;
+
+do $$ begin
+  insert into public.subject_blocks (subject_id, name, link)
+  values ('a1000000-0000-4000-8000-000000000001', 'Bloco', 'javascript:alert(1)');
+  raise exception 'FALHOU: subject_blocks.link aceitou javascript:';
+exception when check_violation then
+  raise notice '08 OK  subject_blocks.link recusa javascript:';
+end $$;
+
+do $$ begin
+  insert into public.subject_lessons (subject_id, name, link)
+  values ('a1000000-0000-4000-8000-000000000001', 'Aula', 'javascript:alert(1)');
+  raise exception 'FALHOU: subject_lessons.link aceitou javascript:';
+exception when check_violation then
+  raise notice '09 OK  subject_lessons.link recusa javascript:';
+end $$;
+
+do $$ begin
+  insert into public.subject_blocks (subject_id, name, link)
+  values ('a1000000-0000-4000-8000-000000000001', 'Bloco sem link', null),
+         ('a1000000-0000-4000-8000-000000000001', 'Bloco com link', 'https://www.tecconcursos.com.br/');
+  raise notice '10 OK  subject_blocks.link aceita nulo e https';
+end $$;
 rollback;

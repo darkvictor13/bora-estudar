@@ -384,3 +384,63 @@ begin
   end if;
   raise notice '20 OK  status e data nao divergem (era o BUG-07)';
 end $$;
+
+-- ---------- O gatilho corta o nome, em vez de derrubar o cadastro (QA-15) ----------
+-- `profiles_name_check` tem teto de 120. Sem o corte no gatilho, um nome longo
+-- mandado pela API transformaria "nome longo" em "não consigo me cadastrar".
+reset role;
+do $$
+declare v_nome text; v_total integer;
+begin
+  insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data)
+  values ('00000000-0000-0000-0000-000000000000','78000000-0000-4000-8000-000000000001',
+          'authenticated','authenticated','longo@x.com',
+          jsonb_build_object('name', repeat('N', 300)));
+
+  select name into v_nome from public.profiles where id = '78000000-0000-4000-8000-000000000001';
+  if not found then
+    raise exception 'FALHOU: a conta com nome longo nao ganhou perfil';
+  end if;
+  if v_nome is distinct from repeat('N', 120) then
+    raise exception 'FALHOU: o nome nasceu com % caracteres (esperado 120)', char_length(coalesce(v_nome, ''));
+  end if;
+  select count(*) into v_total from auth.users where id = '78000000-0000-4000-8000-000000000001';
+  if v_total <> 1 then
+    raise exception 'FALHOU: a conta com nome longo nao nasceu';
+  end if;
+  raise notice '21 OK  nome de 300 caracteres no metadado: a conta nasce, com 120';
+end $$;
+
+-- Nome curto grava nulo (e não uma inicial), e o corte que termina em espaço
+-- não deixa o perfil abaixo do piso.
+do $$
+declare v_curto text; v_espaco text; v_achou boolean;
+begin
+  insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data) values
+    ('00000000-0000-0000-0000-000000000000','78000000-0000-4000-8000-000000000002',
+     'authenticated','authenticated','curto@x.com','{"name":"Jo"}'),
+    ('00000000-0000-0000-0000-000000000000','78000000-0000-4000-8000-000000000003',
+     'authenticated','authenticated','espaco@x.com',
+     jsonb_build_object('name', 'ab' || repeat(' ', 200) || 'c'));
+
+  select name, true into v_curto, v_achou from public.profiles
+   where id = '78000000-0000-4000-8000-000000000002';
+  if not coalesce(v_achou, false) then
+    raise exception 'FALHOU: a conta de nome curto nao ganhou perfil';
+  end if;
+  if v_curto is not null then
+    raise exception 'FALHOU: o nome de 2 caracteres virou %', v_curto;
+  end if;
+
+  select name, true into v_espaco, v_achou from public.profiles
+   where id = '78000000-0000-4000-8000-000000000003';
+  if not coalesce(v_achou, false) then
+    raise exception 'FALHOU: a conta cujo corte termina em espaco nao ganhou perfil';
+  end if;
+  if v_espaco is not null then
+    raise exception 'FALHOU: o nome "ab" cortado virou %', v_espaco;
+  end if;
+  raise notice '22 OK  nome curto grava nulo, e o corte que acaba em espaco nao derruba o cadastro';
+end $$;
+
+delete from auth.users where id::text like '78000000-0000-4000-8000-00000000000%';

@@ -48,6 +48,39 @@ do $$ begin
   raise notice '04 OK  outro aluno nao altera nem apaga o deck';
 end $$;
 
+-- Nome repetido (QA-16): o par disciplina + assunto é único por aluno, ignorando
+-- maiúsculas e espaço nas pontas. Confere o NOME do índice, porque a PK também
+-- é escolhida pelo cliente e um replay com o mesmo `id` dá `23505` em outro lugar.
+do $$
+declare v_indice text;
+begin
+  insert into public.personal_flashcard_decks (id, student_id, subject, title)
+  values ('f1000000-0000-4000-8000-000000000009', '22222222-2222-4222-8222-222222222222',
+          ' direito constitucional ', 'MEU DECK');
+  raise exception 'FALHOU: o deck repetido (outra caixa, espacos) foi aceito';
+exception when unique_violation then
+  get stacked diagnostics v_indice = constraint_name;
+  if v_indice <> 'personal_flashcard_decks_name_per_student_uidx' then
+    raise exception 'FALHOU: o 23505 veio de % e nao do indice de nome', v_indice;
+  end if;
+  raise notice '06 OK  deck repetido, com outra caixa e espaco, e recusado pelo indice de nome';
+end $$;
+
+do $$
+declare v_indice text;
+begin
+  insert into public.personal_flashcard_decks (id, student_id, subject, title)
+  values ('f1000000-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222',
+          'Outra disciplina', 'Outro assunto');
+  raise exception 'FALHOU: o replay com o mesmo id foi aceito';
+exception when unique_violation then
+  get stacked diagnostics v_indice = constraint_name;
+  if v_indice <> 'personal_flashcard_decks_pkey' then
+    raise exception 'FALHOU: o replay dava 23505 em % e nao na chave primaria', v_indice;
+  end if;
+  raise notice '07 OK  o replay com o mesmo id e da chave primaria, e nao do indice de nome';
+end $$;
+
 -- Acesso vencido: o que é dele continua visível; escrever, não.
 reset role;
 select app_test.act_as_owner();

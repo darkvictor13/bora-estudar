@@ -268,3 +268,53 @@ exception when raise_exception then
   if sqlerrm not like '%vinculos do cadastro%' then raise; end if;
   raise notice '18 OK  inscricao com dono nao muda de dono';
 end $$;
+
+-- ---------- O formato do WhatsApp e a faixa do nascimento (QA-19) ----------
+-- Como postgres: a CHECK não depende de papel, e a linha de Bruno já existe.
+reset role;
+do $$
+declare v text;
+begin
+  -- Recusados: letras, 9 dígitos, 14 dígitos, nascimento no futuro e antes de 1900.
+  foreach v in array array['abcdefgh', '419999999', '41999990000123', '(41) 9999-ab00'] loop
+    begin
+      update public.waitlist set whatsapp = v
+       where student_id = '22222222-2222-4222-8222-222222222222';
+      if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+      raise exception 'FALHOU: whatsapp % foi aceito', v;
+    exception when check_violation then null;
+    end;
+  end loop;
+  raise notice '19 OK  whatsapp com letras ou fora de 10 a 13 digitos e recusado';
+end $$;
+
+do $$
+declare v date;
+begin
+  foreach v in array array[current_date + 1, date '1899-12-31'] loop
+    begin
+      update public.waitlist set birth_date = v
+       where student_id = '22222222-2222-4222-8222-222222222222';
+      if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+      raise exception 'FALHOU: nascimento % foi aceito', v;
+    exception when check_violation then null;
+    end;
+  end loop;
+  raise notice '20 OK  nascimento no futuro ou antes de 1900 e recusado';
+end $$;
+
+-- Aceitos: os formatos que a tela sugere, e a borda de hoje.
+do $$
+declare v text;
+begin
+  foreach v in array array['(41) 99999-0000', '+55 41 99999-0000', '41999990000'] loop
+    update public.waitlist set whatsapp = v
+     where student_id = '22222222-2222-4222-8222-222222222222';
+    if not found then raise exception 'FALHOU: sem linha para atacar'; end if;
+  end loop;
+  update public.waitlist set birth_date = current_date
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  update public.waitlist set birth_date = date '1900-01-01'
+   where student_id = '22222222-2222-4222-8222-222222222222';
+  raise notice '21 OK  os formatos de WhatsApp da tela e as bordas do nascimento passam';
+end $$;
