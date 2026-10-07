@@ -652,6 +652,38 @@ rota que falhou: declarado no próprio layout, um erro de loader de tela apagava
 a barra lateral junto, e a pessoa perdia a navegação no momento em que mais
 precisa dela — para sair dali.
 
+**O parâmetro de URL é conferido contra a lista que o loader carregou.**
+`?plano=`, `?catalogo=`, `?ano=`, `?ritmo=` e `?semana=` só valem se estiverem
+entre as opções que a própria tela oferece; o resto cai na primeira, em
+silêncio (D-13). Ler o texto da URL e passá-lo ao adaptador entrega ao
+PostgREST um `22P02` cru, ou ao `Date` um `RangeError`. O padrão é o de
+`routes/teacher/Students.tsx` (`?turma=`): ler a lista primeiro, e só então
+decidir. E ficha de aluno alheio é `ApiThrownError("not_found")`, que
+`RouteError` mostra como "Não encontrado" — estado, não erro.
+
+**Tela de 375px: `fieldWidth` nos campos, `minmax(0, 1fr)` nas colunas.**
+`minWidth` fixo num select dentro de linha flex faz o item crescer com o texto
+da opção escolhida; use `fieldWidth(min)` de `lib/ui/field-width.ts`. O mesmo
+vale para grade de uma coluna: `1fr` é `minmax(auto, 1fr)`, e um `noWrap`
+dentro empurra o mínimo para além da tela. O documento NUNCA rola na
+horizontal (a casca é `overflow: hidden`): o excesso vira rolagem dentro do
+`<main data-testid="content">`, e é ele que F-UI-11 mede. Nome acessível de
+controle COMEÇA pelo texto visível (WCAG 2.5.3).
+
+**`Field` aceita `id`, e cartão repetido precisa passá-lo.** O padrão
+`field-<name>` é contrato da suíte; uma lista de cartões (um por disciplina)
+repetiria o id e o `<label for>` do segundo apontaria para o campo do primeiro.
+Use `useId()` no sufixo — `subjectKey` não serve, tem espaço — e mantenha o
+`name`, que é o que o `FormData` lê.
+
+**A primeira carga tem duas telas, e nenhuma tem `h1`.** `index.html` traz uma
+estática dentro de `#root` (cores do sistema, `Canvas` e `CanvasText`) para o
+branco que vem ANTES do bundle; `RootLoading` é o `HydrateFallback` da rota
+raiz e, como `RootError`, embrulha o próprio `ThemeShell`, porque substitui o
+`RootLayout` que dá o tema. As duas levam `data-testid="app-loading"`. A classe
+`boot` mora num `div` DENTRO de `#root`: o React só apaga os filhos, e a classe
+no próprio `#root` ficaria para sempre no contêiner da aplicação.
+
 ### `data-testid` nos seletores de teste
 
 **Casar por classe CSS é casar com o que não é contrato.** As classes de

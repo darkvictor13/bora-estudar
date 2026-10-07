@@ -981,3 +981,74 @@ o professor as grava pela API: a CHECK é a única defesa.
 
 **Correção** a mesma CHECK, com `null` no lugar de `''`; a migration limpou os links fora da regra para `null`.
 Spec 15, R-CAD-16.
+
+---
+
+### QA-13 · MÉDIO · O parâmetro de URL derruba telas (e N-03, e `?ano=`, `?ritmo=`, `?semana=`)
+
+`/professor/metas?plano=` aceitava qualquer valor: o React Compiler levava o `plan!.id` para o render, e a tela estourava
+com "Cannot read properties of null (reading 'id')" para todo `?plano=` que não fosse de um planejamento ativo do
+professor. **N-03:** o mesmo erro com o professor SEM planejamento ativo, sem parâmetro nenhum — o aviso "Nenhum
+planejamento ativo" nunca era alcançado. Cadernos, Revisões e Teoria passavam o texto da URL direto ao PostgREST (`22P02`,
+ou "Planejamento não encontrado" para UUID alheio). O relatório não tinha três: `?ano=1e9` chegava ao `Date` e lançava
+`RangeError` nas estatísticas do aluno e do professor; `?semana=1e9` derrubava a semana do aluno; `?ritmo=xyz` esvaziava a
+lista e deixava o seletor em branco. A ficha de aluno alheio ou malformado, por fim, dizia "Algo deu errado … Atualize a
+página", porque `RouteError` só reconhecia o 404 do roteador, e a fixture devolvia o primeiro aluno para um id
+desconhecido e escondia o caso.
+
+**Reproduzir** os `?plano=nao-e-uuid`, `?ano=1e9` e `?ritmo=xyz` de F-ISO-02; `?semana=1e9` de F-META-02; a ficha de
+`/professor/alunos/nao-e-uuid` de F-PROF-03; `/professor/metas` sem planejamento de F-PROF-01 (esse passou a passar com o
+PR 1, que reescreveu a ação de gerar e tirou o `plan!`).
+
+**Correção** cada loader lê a lista primeiro e só aceita o parâmetro que esteja nela (D-13): `?plano=` contra os
+planejamentos da tela, `?catalogo=` contra os catálogos, `?ano=` contra os anos do seletor, `?ritmo=` contra os três
+ritmos, `?semana=` contra as semanas do seletor — `?semana=40` sem metas deixa de abrir "Semana 40" e cai na corrente.
+`RouteError` trata `ApiThrownError("not_found")` como "Não encontrado", com a mensagem do erro e sem "Atualize a página",
+e a fixture rejeita com a mesma frase do adaptador. Spec 03 (CA-01 a CA-04).
+
+---
+
+### QA-22 · BAIXO · Ids repetidos nos cartões por disciplina
+
+`Field` gerava `id="field-${name}"` sem como trocá-lo. Um cartão por disciplina repetia o id, e o `<label for>` do segundo
+apontava para o campo do primeiro: `routes/teacher/Theory.tsx` (`initialQuestions`, `spacing-N`, `minimum-N`) e
+`routes/teacher/Reviews.tsx` (`lessonSpacing`, `minimumQuestions`). Os "campos sem nome" do relatório são quase todos o
+`<input aria-hidden>` que o `Select` do MUI esconde.
+
+**Reproduzir** a checagem de `[id]` repetido de F-PROF-01 em `/professor/teoria` e `/professor/revisoes`, com duas
+disciplinas.
+
+**Correção** `Field` ganhou `id` opcional (o padrão continua `field-<name>`), e os cartões passam o próprio com `useId()`
+no sufixo; o cartão de Revisões virou componente, porque hook não roda dentro de `.map`. Os `name` não mudaram. Spec 29,
+R-UI-18.
+
+---
+
+### QA-23 · MÉDIO · Elementos que não cabem em 375px
+
+O chip de modo do cronômetro ("Livre") vazava de uma linha flex sem quebra, e o `aria-label` "Modos e tempo do cronômetro"
+não continha o texto visível (WCAG 2.5.3). Selects de largura mínima fixa dentro de linhas flex cresciam com o texto da
+opção escolhida. O defeito escapava porque o documento nunca rola na horizontal: a casca é `overflow: hidden`, e o
+excesso vira rolagem dentro do `<main>`. Dois achados da própria varredura do F-UI-11, que o relatório não tinha: o cartão
+do aluno em `/professor` (grade `1fr` com `noWrap` dentro) e o contêiner do select de catálogo em `/professor/teoria`.
+
+**Reproduzir** F-UI-11, com nomes de plano e de catálogo do tamanho dos de verdade — com "Catálogo E2E 887111a1" nada
+transborda, e o teste passaria sem exercitar nada.
+
+**Correção** `fieldWidth(min)` em `lib/ui/field-width.ts` nos selects e campos de linha flex; a linha do cronômetro quebra,
+o botão de modo não encolhe e o `aria-label` começa pelo texto visível; as colunas de um cartão por aluno são
+`minmax(0, 1fr)`. Spec 29, R-UI-15 e R-UI-16.
+
+---
+
+### QA-26 · BAIXO · A primeira carga é tela branca
+
+A rota raiz não tinha `HydrateFallback`: o React Router 8 renderizava `null` e avisava no console, e `index.html` deixava
+`#root` vazio. Até a cascata sessão, perfil e loaders terminar, branco; com o bundle fora do ar (rede, ou `lib/env.ts`
+lançando por falta de `VITE_*`), branco para sempre.
+
+**Reproduzir** F-UI-12: sessão presa, e bundle abortado nos dois temas.
+
+**Correção** `RootLoading` (com o próprio `ThemeShell`) é o `HydrateFallback` da raiz, e `index.html` traz uma tela estática
+em `#root` com as cores do sistema, mais `<noscript>`. Nenhuma das duas tem `h1`. Spec 29, R-UI-17.
+
