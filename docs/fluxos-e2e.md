@@ -334,7 +334,24 @@ vai buscar seu critério de aceitação.
 ## Fluxos que ainda não existem
 
 Ids reservados por spec ainda não implementada. Cada um sai daqui e entra na
-seção da área, no commit em que o teste passa a existir. Hoje não há nenhum.
+seção da área, no commit em que o teste passa a existir.
+
+**Página de vendas** — spec [44](specs/44-pagina-de-vendas.md), em
+`tests/landing.spec.ts`, contra a página servida por `wrangler dev` (o mesmo
+`_headers` e o mesmo `not_found_handling` do ar):
+
+| Id | Vai provar |
+|---|---|
+| F-VND-01 | com JavaScript desligado aparecem o `h1`, as duas ofertas, o aviso de que o professor libera o acesso (no passo a passo e numa pergunta) e as perguntas que abrem; nenhum "R$" no texto |
+| F-VND-02 | todo "Criar minha conta" aponta para `/cadastro` do app, e todo "Entrar" para `/entrar`; o cadastro feito a partir dali termina na lista de espera, sem professor e sem acesso |
+| F-VND-03 | todo link de WhatsApp é `wa.me/<número>?text=…`, com a oferta na mensagem do cartão dela, em nova aba e com `noopener noreferrer` |
+| F-VND-04 | carregar e rolar até o fim não faz requisição fora da origem da página; a resposta traz a CSP sem `script-src` |
+| F-VND-05 | a 375px nada rola na horizontal, e todo controle de ação mede pelo menos 44×44 |
+| F-VND-06 | o HTML servido, lido sem navegador, traz título, descrição, `canonical`, `og:*` e `twitter:card`, com URLs absolutas da própria página |
+| F-VND-07 | caminho inexistente responde 404, com links para a raiz e para o cadastro |
+| F-VND-08 | contraste AA em toda a página |
+| F-VND-09 | a primeira carga, a 1280×720, transfere no máximo 350 KB |
+| F-VND-10 | o primeiro Tab foca "Pular para o conteúdo" e leva ao `main`; um `h1` só; toda imagem de produto com `alt` |
 
 **Não use F-PROF-07, 08 nem 09:** continuam citados nas specs 03, 04 e 09 e em
 `comparativo-fluxos-v2.md` com outro significado.
