@@ -71,11 +71,22 @@ else
   # ao fim das tentativas ainda vier HTML, aí é falha de verdade — o deploy não
   # publicou o asset que o index.html promete — e o erro passa a dizer isso, em
   # vez de acusar as VITE_*.
+  #
+  # A janela também abre ao contrário, e foi o que derrubou o deploy de
+  # 15/10/2026: o `index.html` que chegou era o da versão ANTERIOR, e o manifesto
+  # de assets já era o novo. O hash que ele cita deixou de existir, e repetir o
+  # mesmo pedido nunca passa — a espera esgotava com o bundle certo no ar. Por
+  # isso cada nova tentativa relê o `index.html` e refaz o caminho do asset: o
+  # par só vale quando os dois vêm da mesma versão.
   tipo=""
   for tentativa in 1 2 3 4 5 6; do
     tipo=$(curl -sS --max-time 60 -o "$bundle" -w '%{content_type}' "$URL$asset" || true)
     case "$tipo" in *javascript*) break ;; esac
-    [ "$tentativa" = 6 ] || sleep 5
+    [ "$tentativa" = 6 ] && break
+    sleep 5
+    casca=$(curl -sS --max-time 30 "$URL/" || true)
+    novo=$(grep -o '/assets/index-[^"]*\.js' <<<"$casca" | head -1 || true)
+    [ -z "$novo" ] || asset="$novo"
   done
 
   case "$tipo" in
