@@ -284,6 +284,13 @@ plano** — o resto está nos arquivos, comentado no lugar onde importa.
 | `ci-banco.yml` | PR que toca em `supabase/**` ou `packages/database/**` | `invariantes` |
 | `deploy-staging.yml` | push em `main`, dispatch | `verificar` → `banco` → `site` → `fumaca` |
 | `deploy-producao.yml` | `workflow_dispatch` | `resolver` → `verificar` → `banco` → `site` → `fumaca` |
+| `keepalive-staging.yml` | todo dia 11:00 UTC (08:00 em Brasília), dispatch | `ping` |
+
+`keepalive-staging.yml` existe porque o plano Free do Supabase pausa o projeto
+sem atividade (~7 dias). Ele faz `supabase link` + `migration list --linked`,
+a mesma conexão do deploy, sem secret novo. Fica fora do `concurrency` do
+deploy de propósito: o GitHub guarda só um item pendente por grupo, e um
+keepalive pendente poderia descartar um deploy pendente.
 
 ### Cinco divergências do plano, e o porquê
 
