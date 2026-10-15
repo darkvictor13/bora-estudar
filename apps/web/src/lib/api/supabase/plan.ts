@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase/client";
 
 import type { StudyPlanSummary, Subject, SubjectBlock, Uuid } from "../contract.ts";
 import { readFailure, throwDb } from "./errors.ts";
-import { activePlanOf, PLAN_COLUMNS, requireSession, toPlan, type PlanRow } from "./session.ts";
+import { activePlanOf, requireSession } from "./session.ts";
 
 export async function loadActivePlan(): Promise<StudyPlanSummary> {
   const session = await requireSession();
@@ -29,18 +29,6 @@ export async function loadActivePlan(): Promise<StudyPlanSummary> {
 export async function loadActivePlanOrNull(): Promise<StudyPlanSummary | null> {
   const session = await requireSession();
   return activePlanOf(session.profileId);
-}
-
-export async function loadPlan(studyPlanId: Uuid): Promise<StudyPlanSummary> {
-  const { data, error } = await supabase
-    .from("study_plans")
-    .select(PLAN_COLUMNS)
-    .eq("id", studyPlanId)
-    .maybeSingle();
-
-  if (error) throwDb(error);
-  if (!data) readFailure("Planejamento não encontrado.");
-  return toPlan(data as PlanRow);
 }
 
 interface ItemRow {

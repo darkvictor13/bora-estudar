@@ -26,7 +26,7 @@ bloqueio. Quem chamasse `nav('dashboard')` pelo console entrava.
 | R-ACC-02 | **Uma assinatura ativa por aluno**, garantido pelo índice parcial `active_subscription_uidx`. O estado "duas vigentes" é inexprimível. |
 | R-ACC-03 | Assinatura `active` exige `validity` preenchido — constraint `active_subscription_has_validity`. Acesso sem data de fim não existe. |
 | R-ACC-04 | A verificação é feita **no loader de cada tela de estudo**, por `requireStudentAccess()`. Não fica no layout: o layout precisa continuar renderizando a sidebar e as duas telas livres. |
-| R-ACC-05 | Duas rotas são alcançáveis sem acesso liberado: `/aluno/conta` e `/aluno/lista-espera`, listadas em `STUDENT_ROUTES_WITHOUT_ACCESS`. |
+| R-ACC-05 | Duas rotas são alcançáveis sem acesso liberado: `/aluno/conta` e `/aluno/lista-espera`. |
 | R-ACC-06 | Sem acesso, as cinco telas de estudo redirecionam para `/aluno/lista-espera`. |
 | R-ACC-07 | Na sidebar, item sem acesso vira `<span aria-disabled="true">` **sem destino** — não um `<Link>` desabilitado. Um Link continua navegando no clique, o loader redireciona de volta, e a pessoa dá a volta inteira para não sair do lugar. |
 | R-ACC-08 | `hasAccess` é recalculado a cada navegação (ver R-AUTH-10). Quando o professor libera o acesso, a próxima navegação do aluno já entra — e quando bloqueia, a próxima já o barra. Para isso o layout do aluno **revalida a cada troca de caminho** (`shouldRevalidate`): o React Router não reexecuta o loader de uma rota que continua casada quando só o filho muda, e sem isso a barra seguia com os itens do estado antigo até o F5 (QA-09). |
@@ -72,7 +72,6 @@ requireStudentAccess()
 | Camada | Item |
 |---|---|
 | Guarda | `requireStudentAccess` — `lib/auth/session.ts` |
-| Constante | `STUDENT_ROUTES_WITHOUT_ACCESS` — `lib/routes.ts` |
 | Layout | `routes/StudentLayout.tsx` (monta a sidebar com `enabled`) |
 | Componente | `components/Sidebar.tsx` |
 | Banco | `subscriptions`, `active_subscription_uidx`, enum `access_status`, `coupons` |

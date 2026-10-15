@@ -1,6 +1,5 @@
 import type { LawDocument, LawMark, LawMarkColor, LawMarkStyle, LawTextRange } from "../api/laws.ts";
 import {
-  MARK_COLORS,
   blankMark,
   diffMarks,
   eraseRanges,
@@ -17,8 +16,6 @@ export type { LawMark, LawMarkColor, LawMarkStyle, LawTextRange } from "../api/l
 /** O mesmo texto é o mesmo parágrafo do mesmo artigo. */
 const sameParagraph = (mark: LawTextRange, range: LawTextRange) =>
   mark.articleId === range.articleId && mark.paragraphIndex === range.paragraphIndex;
-
-export const LAW_MARK_COLORS = MARK_COLORS;
 
 export function eraseLawRanges(marks: readonly LawMark[], ranges: readonly LawTextRange[]): LawMark[] {
   return eraseRanges(marks, ranges, sameParagraph);
