@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "pg": "^8.23.0",
     "supabase": "^2.115.0",
     "typescript": "^5.7.2",
     "wrangler": "4.149.0"
