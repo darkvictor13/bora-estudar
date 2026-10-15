@@ -284,6 +284,13 @@ plano** — o resto está nos arquivos, comentado no lugar onde importa.
 | `ci-banco.yml` | PR que toca em `supabase/**` ou `packages/database/**` | `invariantes` |
 | `deploy-staging.yml` | push em `main`, dispatch | `verificar` → `banco` → `site` → `fumaca` |
 | `deploy-producao.yml` | `workflow_dispatch` | `resolver` → `verificar` → `banco` → `site` → `fumaca` |
+| `keepalive-staging.yml` | todo dia 11:00 UTC (08:00 em Brasília), dispatch | `ping` |
+
+`keepalive-staging.yml` existe porque o plano Free do Supabase pausa o projeto
+sem atividade (~7 dias). Ele faz `supabase link` + `migration list --linked`,
+a mesma conexão do deploy, sem secret novo. Fica fora do `concurrency` do
+deploy de propósito: o GitHub guarda só um item pendente por grupo, e um
+keepalive pendente poderia descartar um deploy pendente.
 
 ### Cinco divergências do plano, e o porquê
 
@@ -338,7 +345,11 @@ economizar as duas linhas.
   CI acusava "build sem as VITE_*" com o bundle correto no ar — diagnóstico
   errado do problema certo, medido em 18/09/2026 onze segundos depois do
   deploy. Seis tentativas, cinco segundos entre elas; se ainda vier HTML, é
-  falha de verdade, e o texto do erro passou a dizer isso.
+  falha de verdade, e o texto do erro passou a dizer isso. **A janela também
+  abre ao contrário**, e derrubou o deploy de 15/10/2026: o `index.html` lido
+  era o da versão anterior e o manifesto já era o novo, então o hash citado
+  deixou de existir e repetir o mesmo pedido nunca passava. Cada tentativa
+  relê o `index.html` e refaz o caminho do asset.
 - **`ci-banco.yml` roda `db:reset` entre `db:test` e `db:types`.** As suítes
   deixam a base truncada; é a mesma armadilha de ordem que o `CLAUDE.md`
   descreve entre `db:test` e `e2e`.
