@@ -411,6 +411,22 @@ export const STUDY_REPLAY_CONFLICT =
  * `current_date` dele, em UTC: às 22h em Brasília já é o dia seguinte lá, então
  * o contrato recusa antes, e o contrário não acontece no Brasil.
  */
+/** O teto do código de cupom, o mesmo de `profiles_coupon_used_check`. */
+export const MAX_COUPON_LENGTH = 64;
+
+/**
+ * O código de cupom, antes de ir ao servidor. Só a forma: se o código EXISTE, vale
+ * ou já foi usado é do servidor, que responde a mesma frase para todos os
+ * motivos de recusa (R-CUP-04). O erro marca o campo `coupon`.
+ */
+export function checkCoupon(code: string): ApiError | null {
+  if (!code.trim()) return invalid("Informe o código do cupom.", "coupon");
+  if (code.length > MAX_COUPON_LENGTH) {
+    return invalid(`O código pode ter até ${MAX_COUPON_LENGTH} caracteres.`, "coupon");
+  }
+  return null;
+}
+
 export function checkWaitlist(input: WaitlistInput, today: IsoDate): ApiError | null {
   const name = checkName(input.name);
   if (name) return name;

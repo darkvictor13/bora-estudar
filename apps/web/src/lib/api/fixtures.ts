@@ -111,6 +111,7 @@ import {
   checkGenerateWeek,
   checkName,
   checkNotebook,
+  checkCoupon,
   checkPassword,
   checkPersonalDeck,
   checkPlan,
@@ -1346,8 +1347,11 @@ export const fixturesApi: BoraApi = {
   },
 
   redeemCoupon: (code: string) => {
-    if (code.trim().toUpperCase() !== "BORA3") {
-      return later(fail<Session>("not_found", "Cupom inválido ou já utilizado.", "code"));
+    const invalid = checkCoupon(code);
+    if (invalid) return later<Result<Session>>({ ok: false, error: invalid });
+    // Normaliza como o servidor: sem espaços e em maiúsculas (R-CUP-02).
+    if (code.replace(/\s+/g, "").toUpperCase() !== "BORA3") {
+      return later(fail<Session>("validation", "Cupom inválido ou expirado.", "coupon"));
     }
     state.session = { ...state.session!, access: "active", accessExpiresAt: instantOf(addDays(TODAY, 90)) };
     return later(done(state.session));

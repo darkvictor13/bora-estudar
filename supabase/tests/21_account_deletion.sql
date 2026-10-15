@@ -66,6 +66,14 @@ select s.id, s.teacher_id, s.student_id, s.study_plan_id, s.block_id, 910001, 1,
  where s.student_id = '22222222-2222-4222-8222-222222222222'
  limit 1;
 
+-- Um cupom que o Bruno resgatou: histórico de liberação, e também FICA.
+insert into public.coupons (code, description, months_granted) values ('EXCL21', 'cupom da exclusao', 3)
+on conflict (code) do nothing;
+insert into public.coupon_redemptions (coupon_id, student_id, months, expires_at)
+select id, '22222222-2222-4222-8222-222222222222', 3, now() + interval '3 months'
+  from public.coupons where code = 'EXCL21'
+on conflict do nothing;
+
 -- Um simulado da turma do Bruno, com a nota dele: é o que DEVE ficar.
 insert into public.mock_exams (id, teacher_id, class_id, title, exam_date, max_score)
 select 'd1000000-0000-4000-8000-000000000005', cs.teacher_id, cs.class_id, 'Simulado da exclusão', current_date, 100
@@ -98,7 +106,7 @@ select 'bruno'::text as who, t.name as tbl,
     ('goal_entries','student_id'),('goals','student_id'),('study_plan_theory_catalogs','student_id'),
     ('study_plan_notebooks','student_id'),('study_plans','student_id'),('class_students','student_id'),
     ('waitlist','student_id'),
-    ('access_grants','student_id'),('mock_exam_results','student_id'),('mock_exam_subject_results','student_id')
+    ('access_grants','student_id'),('coupon_redemptions','student_id'),('mock_exam_results','student_id'),('mock_exam_subject_results','student_id')
   ) as t(name, col);
 
 create temp table carla_before as
@@ -119,6 +127,7 @@ begin
     raise exception 'FALHOU: o semeio regrediu — so % das 15 tabelas-chave tinham dado antes da exclusao', v_filled;
   end if;
   if not exists (select 1 from before_counts where tbl = 'access_grants' and n > 0)
+     or not exists (select 1 from before_counts where tbl = 'coupon_redemptions' and n > 0)
      or not exists (select 1 from before_counts where tbl = 'mock_exam_results' and n > 0)
      or not exists (select 1 from before_counts where tbl = 'mock_exam_subject_results' and n > 0) then
     raise exception 'FALHOU: o semeio nao deixou historico retido para provar que ele fica';
@@ -158,7 +167,7 @@ select app_test.act_as_owner();
 do $$
 declare r record; v_left bigint;
 begin
-  for r in select tbl, n from before_counts where who = 'bruno' and tbl not in ('access_grants','mock_exam_results','mock_exam_subject_results') loop
+  for r in select tbl, n from before_counts where who = 'bruno' and tbl not in ('access_grants','coupon_redemptions','mock_exam_results','mock_exam_subject_results') loop
     execute format('select count(*) from public.%I where %I = %L', r.tbl,
                    case when r.tbl = 'summary_annotations' then 'user_id' else 'student_id' end,
                    '22222222-2222-4222-8222-222222222222') into v_left;
@@ -177,13 +186,13 @@ end $$;
 do $$
 declare r record; v_now bigint;
 begin
-  for r in select tbl, n from before_counts where tbl in ('access_grants','mock_exam_results','mock_exam_subject_results') and n > 0 loop
+  for r in select tbl, n from before_counts where tbl in ('access_grants','coupon_redemptions','mock_exam_results','mock_exam_subject_results') and n > 0 loop
     execute format('select count(*) from public.%I where student_id = %L', r.tbl, '22222222-2222-4222-8222-222222222222') into v_now;
     if v_now <> r.n then
       raise exception 'FALHOU: % tinha % linha(s) retida(s) e agora tem %', r.tbl, r.n, v_now;
     end if;
   end loop;
-  raise notice '04 OK  liberacoes e notas de simulado ficaram';
+  raise notice '04 OK  liberacoes, resgates de cupom e notas de simulado ficaram';
 end $$;
 
 do $$

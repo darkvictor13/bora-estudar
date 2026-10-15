@@ -193,6 +193,45 @@ export type Database = {
           },
         ]
       }
+      coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          expires_at: string
+          months: number
+          redeemed_at: string
+          student_id: string
+        }
+        Insert: {
+          coupon_id: string
+          expires_at: string
+          months: number
+          redeemed_at?: string
+          student_id: string
+        }
+        Update: {
+          coupon_id?: string
+          expires_at?: string
+          months?: number
+          redeemed_at?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           active: boolean
@@ -200,8 +239,10 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          max_uses: number | null
           months_granted: number
           updated_at: string
+          valid_until: string | null
         }
         Insert: {
           active?: boolean
@@ -209,8 +250,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          max_uses?: number | null
           months_granted?: number
           updated_at?: string
+          valid_until?: string | null
         }
         Update: {
           active?: boolean
@@ -218,8 +261,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          max_uses?: number | null
           months_granted?: number
           updated_at?: string
+          valid_until?: string | null
         }
         Relationships: []
       }
@@ -3201,6 +3246,13 @@ export type Database = {
           questions_answered: number
           status: Database["public"]["Enums"]["theory_review_status"]
           study_plan_id: string
+        }[]
+      }
+      redeem_coupon: {
+        Args: { p_code: string }
+        Returns: {
+          access_expires_at: string
+          access_status: Database["public"]["Enums"]["access_status"]
         }[]
       }
       save_summary_notes: {

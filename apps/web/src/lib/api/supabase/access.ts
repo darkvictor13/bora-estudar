@@ -1,21 +1,16 @@
 /**
  * Lista de espera e cupom — o caminho de quem ainda não tem acesso.
  *
- * ## O CUPOM NÃO TEM COMO SER RESGATADO NESTE SCHEMA
- *
- * `coupons` está com RLS ligada, ZERO policy e ZERO grant: nem o aluno nem o
- * professor a enxergam pela API. É a decisão certa — validar código de cupom no
- * cliente é entregar a lista de códigos a quem pedir —, e a consequência é que
- * o resgate precisa nascer como RPC, rodando como definer. O de-para registra
- * isso, e `redeemCoupon` aqui recusa dizendo exatamente o que falta em vez de
- * fingir que tentou.
+ * O cupom é resgatado por RPC (`redeem_coupon`, spec 30): `coupons` tem RLS
+ * ligada, zero policy e zero grant, de propósito — validar o código no cliente
+ * entregaria a lista de códigos a quem pedisse.
  */
 import { supabase } from "@/lib/supabase/client";
 
 import type { Result, Session, WaitlistEntry, WaitlistInput } from "../contract.ts";
-import { checkWaitlist } from "../validation.ts";
+import { checkCoupon, checkWaitlist } from "../validation.ts";
 import { fail, done, failure, throwDb, settle, translateDbError } from "./errors.ts";
-import { requireSession, today } from "./session.ts";
+import { currentSession, requireSession, today } from "./session.ts";
 
 const WAITLIST_COLUMNS =
   "student_id,name,email,whatsapp,interest_area,target_exam,timezone,birth_date,status,created_at";
@@ -106,16 +101,38 @@ export function joinWaitlist(input: WaitlistInput): Promise<Result<WaitlistEntry
 }
 
 /**
- * O resgate de cupom, que este schema não permite.
+ * O resgate de cupom (spec 30): uma RPC que valida o código, concede o acesso e
+ * registra o resgate numa transação só. O cliente NUNCA vê a lista de códigos —
+ * `coupons` não tem policy nem grant —, e é o único caminho em que o próprio
+ * aluno altera o próprio acesso.
  *
- * Lança em vez de devolver `Result` porque não é erro de uso — é operação que
- * não existe. Uma recusa educada faria a tela oferecer o campo e culpar quem
- * digitou o código certo.
+ * A recusa de regra (código inválido, já usado, acesso já liberado) chega como
+ * `P0001`, com a frase já pronta em português e a MESMA para inexistente,
+ * inativo, vencido e esgotado (R-CUP-04). Aqui ela vira `validation` com o campo
+ * `coupon`, porque é a entrada que a pessoa digitou. Os outros códigos seguem a
+ * tradução comum.
+ *
+ * Devolve a sessão RELIDA: é o `access` novo que tira a tela do bloqueio.
+ * Segura a retentativa — a RPC devolve o resultado anterior a quem já resgatou.
  */
-export function redeemCoupon(): Promise<Result<Session>> {
-  throw new Error(
-    "O resgate de cupom precisa nascer como RPC: `coupons` está sem policy e sem grant, " +
-      "de propósito — validar o código no cliente entregaria a lista de códigos. " +
-      "Ver docs/de-para-schema.md, seção Funções e gatilhos.",
-  );
+export function redeemCoupon(code: string): Promise<Result<Session>> {
+  return settle(async () => {
+    const invalid = checkCoupon(code);
+    if (invalid) return failure(invalid);
+    await requireSession();
+
+    const { error } = await supabase.rpc("redeem_coupon", { p_code: code });
+    if (error) {
+      const translated = translateDbError(error);
+      return failure(
+        error.code === "P0001"
+          ? { code: "validation", message: translated.message, field: "coupon" }
+          : translated,
+      );
+    }
+
+    const session = await currentSession();
+    if (!session) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
+    return done(session);
+  });
 }

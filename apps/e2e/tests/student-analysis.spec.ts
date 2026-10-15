@@ -5,10 +5,9 @@
  * `/aluno/estatisticas`, `/aluno/conta`, `/aluno/lista-espera` e
  * `/aluno/cadernos` promete.
  *
- * DUAS COISAS QUE ESTE BANCO AINDA NÃO PERMITE, e que estão marcadas `fixme`
- * em vez de apagadas: resgatar cupom (`coupons` está sem policy e sem grant, de
- * propósito — o resgate precisa nascer como RPC) e executar reforço (o motor de
- * baterias saiu com a extensão).
+ * O RESGATE DE CUPOM ENTROU (spec 30, F-CUP-01 a F-CUP-03): `coupons` continua
+ * sem policy e sem grant, e o resgate é a RPC `redeem_coupon`. Executar reforço
+ * segue fora: o motor de baterias saiu com a extensão.
  */
 import { randomUUID } from "node:crypto";
 
@@ -433,25 +432,92 @@ test.describe("F-ESP-01 · lista de espera", () => {
     await expect(field(studentPage, "name")).toHaveValue("Nome Corrigido E2E");
   });
 
-  /*
-   * SUSPENSO ATÉ O RESGATE NASCER COMO RPC.
-   *
-   * `coupons` está com RLS ligada, ZERO policy e ZERO grant — de propósito:
-   * validar o código no cliente entregaria a lista de códigos a quem pedir. A
-   * tela diz isso em vez de oferecer o campo e culpar quem digitou certo.
-   */
-  test.fixme("resgatar cupom libera o acesso", async ({ studentPage }) => {
-    await studentPage.goto("/aluno/lista-espera");
-    await field(studentPage, "coupon").fill("CUPOM-E2E");
-    await studentPage.getByRole("button", { name: "Resgatar" }).click();
-    await expect(alert(studentPage, "success")).toContainText("Acesso liberado");
-  });
-
   test("com acesso liberado a tela deixa de avisar", async ({ studentPage, scenario }) => {
     await setAccess(scenario.student.id, "active");
 
     await studentPage.goto("/aluno/lista-espera");
     await expect(alert(studentPage, "warning")).toHaveCount(0);
+  });
+});
+
+test.describe("F-CUP · cupom de acesso — spec 30", () => {
+  /** Um cupom novo por teste: o código é UNIQUE, e os testes rodam em paralelo. */
+  async function createCoupon(options: { active?: boolean; validUntil?: string | null } = {}): Promise<string> {
+    const code = `E2E${randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+    await query(
+      "insert into public.coupons (code, description, months_granted, active, valid_until) values ($1, 'e2e', 3, $2, $3)",
+      [code, options.active ?? true, options.validUntil ?? null],
+    );
+    return code;
+  }
+
+  test.describe("sem acesso", () => {
+    test.use({ scenarioOptions: { access: "pending", withPlan: false } });
+
+    test("F-CUP-01 · o código libera o acesso na hora, normalizado, e o cartão some", async ({
+      studentPage,
+      scenario,
+    }) => {
+      const code = await createCoupon();
+
+      await studentPage.goto("/aluno/lista-espera");
+      // Como a pessoa digita o que está no papel: minúsculas e espaço no meio.
+      await field(studentPage, "coupon").fill(` ${code.slice(0, 3).toLowerCase()} ${code.slice(3)} `);
+      await studentPage.getByRole("button", { name: "Resgatar" }).click();
+
+      await expect(alert(studentPage, "success")).toContainText("Acesso liberado");
+      // O aviso de acesso da casca e o cartão do cupom saem junto: o acesso chegou.
+      await expect(testId(studentPage, "coupon-form")).toHaveCount(0);
+
+      const profile = await one<{ access_status: string; coupon_used: string; origin: string; resgates: string }>(
+        `select p.access_status::text, p.coupon_used, p.access_origin as origin,
+                (select count(*) from public.coupon_redemptions r where r.student_id = p.id)::text as resgates
+           from public.profiles p where p.id = $1`,
+        [scenario.student.id],
+      );
+      expect(profile).toMatchObject({ access_status: "active", coupon_used: code, origin: "coupon", resgates: "1" });
+
+      // As telas de estudo abrem: a lista de espera deixou de ser o destino.
+      await studentPage.goto("/aluno");
+      await expect(studentPage).toHaveURL(/\/aluno$/);
+    });
+
+    test("F-CUP-02 · inexistente, inativo e vencido recebem a MESMA resposta, e nada é concedido", async ({
+      studentPage,
+      scenario,
+    }) => {
+      const inativo = await createCoupon({ active: false });
+      const vencido = await createCoupon({ validUntil: "2020-01-01T00:00:00Z" });
+
+      await studentPage.goto("/aluno/lista-espera");
+      const form = testId(studentPage, "coupon-form");
+      for (const tentativa of ["NAOEXISTE", inativo, vencido]) {
+        await field(studentPage, "coupon").fill(tentativa);
+        await studentPage.getByRole("button", { name: "Resgatar" }).click();
+        // Escopado no formulário do cupom: a casca também tem um aviso na tela.
+        await expect(alert(form, "error")).toHaveText("Cupom inválido ou expirado.");
+      }
+      await expect(field(studentPage, "coupon")).toHaveAttribute("aria-invalid", "true");
+
+      expect(
+        await count("select count(*) from public.profiles where id = $1 and access_status = 'active'", [scenario.student.id]),
+      ).toBe(0);
+      expect(
+        await count("select count(*) from public.coupon_redemptions where student_id = $1", [scenario.student.id]),
+      ).toBe(0);
+
+      // E o código vazio pede o código, sem ir ao servidor.
+      await field(studentPage, "coupon").fill("   ");
+      await studentPage.getByRole("button", { name: "Resgatar" }).click();
+      await expect(alert(form, "error")).toHaveText("Informe o código do cupom.");
+    });
+  });
+
+  test("F-CUP-03 · com o acesso liberado a tela não oferece o resgate", async ({ studentPage }) => {
+    await studentPage.goto("/aluno/lista-espera");
+    await expect(studentPage.locator("h1")).toHaveText("Lista de espera");
+    // `count()` não espera: o h1 acima é a espera dos loaders da rota.
+    await expect(testId(studentPage, "coupon-form")).toHaveCount(0);
   });
 });
 

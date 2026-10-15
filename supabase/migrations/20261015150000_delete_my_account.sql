@@ -127,8 +127,10 @@ alter policy waitlist_insert_student on public.waitlist
 --   theory_progress, goal_entries, goals, study_plan_theory_catalogs,
 --   study_plan_notebooks, study_plans (e goal_batches, por cascade),
 --   class_students, waitlist.
--- RETIDAS, sem identificar ninguém: access_grants, mock_exam_results,
---   mock_exam_subject_results. (`mock_exams` é do professor, não do aluno.)
+-- RETIDAS, sem identificar ninguém: access_grants, coupon_redemptions (nasce em
+--   20261015160000; a FK RESTRICT para profiles a mantém, e a RPC não a toca),
+--   mock_exam_results, mock_exam_subject_results. (`mock_exams` é do professor,
+--   não do aluno.)
 create function public.delete_my_account()
   returns void
   language plpgsql

@@ -746,7 +746,7 @@ declare
     'library_flashcard_reviews','personal_flashcard_decks','quiz_sessions','study_plan_notebooks',
     'study_plan_theory_catalogs','study_plans','summary_annotations','theory_progress',
     'theory_reviews','waitlist'];
-  v_retidas constant text[] := array['access_grants','mock_exam_results','mock_exam_subject_results'];
+  v_retidas constant text[] := array['access_grants','coupon_redemptions','mock_exam_results','mock_exam_subject_results'];
   -- Do PROFESSOR: a conta de professor não se exclui por autoatendimento (R-LGPD-09).
   v_do_professor constant text[] := array[
     'classes','mock_exams','subjects','theory_catalogs','theory_catalog_subject_rules',

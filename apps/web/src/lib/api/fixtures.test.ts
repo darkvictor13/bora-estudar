@@ -601,10 +601,16 @@ test("sem sessão, excluir a conta pede para entrar", async () => {
 test("cupom inválido é recusado e não libera acesso", async () => {
   const refused = await api.redeemCoupon("NAOEXISTE");
   assert.ok(!refused.ok);
-  assert.equal(refused.error.code, "not_found");
-  assert.equal(refused.error.field, "code");
+  assert.equal(refused.error.code, "validation");
+  assert.equal(refused.error.field, "coupon");
+  assert.equal(refused.error.message, "Cupom inválido ou expirado.");
 
-  const accepted = await api.redeemCoupon("bora3");
+  const empty = await api.redeemCoupon("   ");
+  assert.ok(!empty.ok);
+  assert.equal(empty.error.message, "Informe o código do cupom.");
+
+  // O código é normalizado: a pessoa digita o que está no papel.
+  const accepted = await api.redeemCoupon(" bo ra3 ");
   assert.ok(accepted.ok);
   assert.equal(accepted.data.access, "active");
 });
