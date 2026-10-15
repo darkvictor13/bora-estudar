@@ -257,7 +257,7 @@ Cloudflare:
 | `apps/web/wrangler.jsonc` | `env.staging` vazio (o sufixo dá `bora-estudar-staging`) e `env.producao` com `name` explícito |
 | `apps/web/public/_headers` | política de cache, com a concatenação de regras já medida e contornada |
 | `supabase/config.toml` | bloco `[remotes.staging]` com `project_id` e o `site_url` do domínio real |
-| `package.json` | `wrangler` pinado em `4.125.0` — sem isso `npx wrangler` resolve o que houver de mais novo no dia, no CI e na sua máquina |
+| `package.json` | `wrangler` pinado em `4.149.0` — sem isso `npx wrangler` resolve o que houver de mais novo no dia, no CI e na sua máquina |
 | `CLAUDE.md` | seção "Deploy", com o que não é dedutível do código |
 | `.gitignore` | `.wrangler/` ignorado |
 
