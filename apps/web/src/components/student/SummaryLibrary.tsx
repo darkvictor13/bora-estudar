@@ -20,6 +20,10 @@ export function SummaryLibrary({ topics }: { topics: SummaryTopic[] }) {
   const [query, setQuery] = useState("");
   const subjects = [...new Set(topics.map(topic => topic.subject))];
   const filtered = topics.filter(topic => normalize(`${topic.subject} ${topic.title}`).includes(normalize(query.trim())));
+  // O material é uma carga manual e pessoal: ambiente sem a carga não tem tópico.
+  if (!topics.length) return <Card title="Biblioteca PF 2029">
+    <Empty>Nenhum resumo foi carregado neste ambiente ainda. Quando o material for importado, os tópicos aparecem aqui.</Empty>
+  </Card>;
   return <Card title="Escolha uma disciplina" sub={`${subjects.length} seções · ${topics.length} tópicos disponíveis`}>
     <TextField fullWidth label="Buscar tópico ou disciplina" size="small" value={query} onChange={event => setQuery(event.target.value)} sx={{ mb: 2 }} />
     <Box sx={{ display: "grid", gap: 1 }}>

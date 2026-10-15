@@ -3190,6 +3190,10 @@ export type Database = {
           study_plan_id: string
         }[]
       }
+      save_summary_notes: {
+        Args: { p_next: Json; p_previous: Json; p_topic_id: string }
+        Returns: boolean
+      }
       set_student_access: {
         Args: {
           p_action: Database["public"]["Enums"]["access_grant_action"]
