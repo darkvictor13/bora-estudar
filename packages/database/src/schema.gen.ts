@@ -1551,6 +1551,7 @@ export type Database = {
           access_status: Database["public"]["Enums"]["access_status"]
           coupon_used: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           name: string | null
           plan: string | null
@@ -1564,6 +1565,7 @@ export type Database = {
           access_status?: Database["public"]["Enums"]["access_status"]
           coupon_used?: string | null
           created_at?: string
+          deleted_at?: string | null
           id: string
           name?: string | null
           plan?: string | null
@@ -1577,6 +1579,7 @@ export type Database = {
           access_status?: Database["public"]["Enums"]["access_status"]
           coupon_used?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string | null
           plan?: string | null
@@ -3096,6 +3099,7 @@ export type Database = {
         Args: { p_study_plan_id: string; p_week_number: number }
         Returns: number
       }
+      delete_my_account: { Args: never; Returns: undefined }
       find_student_by_email: {
         Args: { p_email: string }
         Returns: {
