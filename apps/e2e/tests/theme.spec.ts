@@ -5,23 +5,19 @@
  * `docs/specs/11-tema-claro-escuro.md`, e F-TEMA-09, que existe por causa de
  * um defeito: falha de rede ao verificar a sessão apagava o tema.
  *
- * ## O TEMA PERDEU A CONTA NO SCHEMA DE 14/09/2026
+ * ## A CONTA É A FONTE DA VERDADE
  *
- * `user_preferences` saiu e nada a substituiu: `profiles` não tem coluna de
- * preferência, e `supabase/tests/06_preferences.sql` não tem mais tabela para
- * provar. É a lacuna nº 1 de `apps/web/src/lib/api/contract.ts`, e o pedido à
- * frente do banco é pequeno — uma coluna `theme_preference` em `profiles`.
- *
- * Enquanto ela não existe, a escolha vale por APARELHO. O que continua
- * verdadeiro, e continua testado aqui: a troca aplica na hora, sobrevive ao
- * recarregar, não pisca, e some quando a pessoa sai. O que está suspenso, e
- * está marcado `fixme` em vez de apagado: a escolha atravessar para outro
- * aparelho (F-TEMA-02, R-TEMA-11) e o aviso de gravação que falhou
- * (F-TEMA-04, R-TEMA-12) — não há gravação remota para falhar.
+ * A preferência mora em `profiles.theme_preference` (migration
+ * `20261015145000`). Durante um mês — de 14/09/2026, quando `user_preferences`
+ * saiu, até aquela migration — a escolha valeu só por aparelho, e F-TEMA-02 e
+ * F-TEMA-04 ficaram em `fixme` para a falta continuar visível. Hoje os dois
+ * rodam: a escolha atravessa para outro aparelho sem `localStorage`, e a
+ * gravação que falha avisa em vez de calar.
  */
 import type { Page } from "@playwright/test";
 
 import { expect, test, authenticate } from "../fixtures/index.ts";
+import { one } from "../fixtures/db.ts";
 import { collect, contrast, describe, isLarge, type Spec } from "../support/contrast.ts";
 import { signOut, themeToggle } from "../support/ui.ts";
 
@@ -40,13 +36,24 @@ const toggle = (page: Page) => themeToggle(page);
 const html = (page: Page) => page.locator("html");
 
 /**
- * O tema que este APARELHO guardou para um perfil.
- *
- * Era uma consulta a `user_preferences`. Enquanto a coluna não existe, a
- * cópia local é a única, e é ela que o script anti-flash de `index.html` lê.
+ * O tema que este APARELHO guardou para um perfil: a cópia local, que é a que
+ * o script anti-flash de `index.html` lê. A CONTA é outra coisa — `savedTheme`.
  */
 async function storedTheme(page: Page, profileId: string): Promise<string | null> {
   return page.evaluate((id) => localStorage.getItem(`bora.theme.${id}`), profileId);
+}
+
+/**
+ * O tema que a CONTA guardou (`profiles.theme_preference`). Os testes que
+ * recarregam a página ou abrem outro aparelho esperam por ele antes: a gravação
+ * é assíncrona, e recarregar antes de ela descer faz o loader devolver o valor
+ * antigo — a janela que a spec 11 descreve, e que aqui seria lida como defeito.
+ */
+async function savedTheme(profileId: string): Promise<string | null> {
+  return (await one<{ theme_preference: string | null }>(
+    "select theme_preference::text from public.profiles where id = $1",
+    [profileId],
+  )).theme_preference;
 }
 
 async function localCopy(page: Page): Promise<Record<string, string | null>> {
@@ -77,6 +84,9 @@ test.describe("F-TEMA-01 · escolher o tema", () => {
       theme: "dark",
     });
 
+    // A conta, e não só o aparelho: é ela que o loader consulta ao recarregar.
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("dark");
+
     await studentPage.reload();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
     await expect(toggle(studentPage)).toHaveAccessibleName("Tema claro");
@@ -89,24 +99,18 @@ test.describe("F-TEMA-01 · escolher o tema", () => {
     await studentPage.goto("/aluno");
     await toggle(studentPage).click();
     await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("dark");
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("dark");
 
     await toggle(studentPage).click();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "light");
     await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("light");
+    // Escolher claro depois de escuro É uma escolha: grava `light`, e não volta a nulo.
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("light");
   });
 });
 
 test.describe("F-TEMA-02 · a escolha é da conta", () => {
-  /*
-   * SUSPENSO ATÉ A COLUNA EXISTIR — ver o cabeçalho deste arquivo.
-   *
-   * Este é o teste que define o que "a escolha é da conta" significa: um
-   * aparelho sem `localStorage` só pode ficar escuro se o escuro tiver vindo do
-   * servidor. Sem `theme_preference` em `profiles`, não vem — e o teste falha
-   * dizendo a verdade. Fica `fixme` para que a verdade continue visível na
-   * saída da suíte em vez de sumir num arquivo apagado.
-   */
-  test.fixme("aparece em outro navegador, que não tem cópia local", async ({
+  test("aparece em outro navegador, que não tem cópia local", async ({
     studentPage,
     scenario,
     browser,
@@ -115,6 +119,8 @@ test.describe("F-TEMA-02 · a escolha é da conta", () => {
     await studentPage.goto("/aluno");
     await toggle(studentPage).click();
     await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("dark");
+    // O aparelho novo só pode ficar escuro se o escuro estiver NA CONTA.
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("dark");
 
     // Contexto criado à mão de propósito: é um aparelho NOVO, sem
     // `localStorage`, então o único caminho possível para o escuro é a conta.
@@ -146,6 +152,7 @@ test.describe("F-TEMA-03 · sem piscada", () => {
     // antes de o dark descer faz o loader devolver o valor antigo e desfazer a
     // escolha — comportamento correto, que aqui seria lido como piscada.
     await expect.poll(() => storedTheme(studentPage, scenario.student.id)).toBe("dark");
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("dark");
 
     // Segura a resposta do perfil: sem ela o loader não resolve e nenhuma tela
     // renderiza. É exatamente a janela em que a piscada aconteceria — se o tema
@@ -171,15 +178,9 @@ test.describe("F-TEMA-03 · sem piscada", () => {
 });
 
 test.describe("F-TEMA-04 · a gravação falha", () => {
-  /*
-   * SUSPENSO PELO MESMO MOTIVO DE F-TEMA-02.
-   *
-   * Não há gravação remota para derrubar: `saveThemePreference` escreve no
-   * aparelho e devolve sucesso. Interceptar rota nenhuma produziria o aviso, e
-   * um teste que passa sem exercitar nada é pior do que um `fixme`.
-   */
-  test.fixme("troca na tela, avisa que não salvou, e não inventa linha no banco", async ({
+  test("troca na tela, avisa que não salvou, e não grava nada na conta", async ({
     studentPage,
+    scenario,
   }) => {
     await studentPage.goto("/aluno");
     await expect(studentPage.locator("h1")).toBeVisible();
@@ -199,6 +200,9 @@ test.describe("F-TEMA-04 · a gravação falha", () => {
     await expect(studentPage.locator('[data-testid="theme-unsaved"]')).toContainText(
       "Não foi possível salvar na sua conta",
     );
+
+    // A gravação foi derrubada, então a conta continua em "nunca escolheu".
+    expect(await savedTheme(scenario.student.id)).toBeNull();
   });
 });
 
@@ -367,6 +371,9 @@ test.describe("F-TEMA-09 · a sessão que não pôde ser verificada", () => {
     await expect(studentPage.locator("h1")).toBeVisible();
     await toggle(studentPage).click();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
+    // A conta precisa ter o escuro ANTES de recarregar: é ela que o loader consulta,
+    // e recarregar na janela da gravação devolve o valor antigo (spec 11).
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("dark");
 
     // Era o "Lançar tempo": um link que recarrega a página, e UMA requisição de
     // verificação perdida na recarga. A falha virava "sessão expirada", o tema

@@ -1,6 +1,5 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Field, PageHeader } from "@bora/ui";
 import { useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
@@ -8,6 +7,7 @@ import { useLoaderData, useRevalidator } from "react-router";
 import { ContentBody } from "@/components/AppShell";
 import {
   api,
+  MAX_COUPON_LENGTH,
   MAX_NAME_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_WHATSAPP_LENGTH,
@@ -28,14 +28,13 @@ import { todayLocal } from "@/lib/domain/dates";
  * A tela precisa então fazer duas coisas ao mesmo tempo: explicar por que as
  * outras estão fechadas, e recolher o que o professor precisa para liberar.
  *
- * O CUPOM NÃO ESTÁ AQUI, e a ausência é deliberada. `coupons` está sem policy e
- * sem grant — de propósito: validar o código no cliente entregaria a lista de
- * códigos a quem pedir. O resgate precisa nascer como RPC, e oferecer o campo
- * antes disso seria culpar quem digitou o código certo.
+ * O CUPOM É RESGATADO AQUI (spec 30), e SÓ POR RPC: `coupons` não tem policy nem
+ * grant, e o código nunca é validado no cliente. Quem já tem acesso não vê o
+ * cartão — resolver o acesso é a única coisa que o cupom faz (R-CUP-13).
  */
 export async function waitlistLoader({ request }: { request: Request }) {
   const session = await requireSession(request);
-  return { entry: await api.loadWaitlistEntry(), email: session.email };
+  return { entry: await api.loadWaitlistEntry(), email: session.email, hasAccess: session.hasAccess };
 }
 
 type LoaderData = Awaited<ReturnType<typeof waitlistLoader>>;
@@ -47,11 +46,32 @@ const STATUS: Record<WaitlistEntry["status"], { label: string; tone: "success" |
 };
 
 export function Waitlist() {
-  const { entry, email } = useLoaderData() as LoaderData;
+  const { entry, email, hasAccess } = useLoaderData() as LoaderData;
   const { revalidate } = useRevalidator();
   const [error, setError] = useState<ApiError | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
+  const [couponError, setCouponError] = useState<ApiError | null>(null);
+  const [couponPending, setCouponPending] = useState(false);
+  const [redeemed, setRedeemed] = useState(false);
+
+  async function redeem(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = String(new FormData(event.currentTarget).get("coupon") ?? "");
+
+    setCouponPending(true);
+    const result = await api.redeemCoupon(code);
+    setCouponPending(false);
+
+    if (!result.ok) {
+      setCouponError(result.error);
+      return;
+    }
+    setCouponError(null);
+    setRedeemed(true);
+    // A casca relê o acesso: é o que abre as outras telas e some com o cartão.
+    await revalidate();
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,6 +120,8 @@ export function Waitlist() {
           é o tipo de duplicata que ninguém percebe ao escrever cada tela
           sozinha.
         */}
+        {/* O aviso do resgate vive AQUI, e não dentro do cartão: o cartão some quando o acesso chega. */}
+        {redeemed && <Alert status="success">Acesso liberado. Bons estudos!</Alert>}
         {error && <Alert status="error">{error.message}</Alert>}
         {saved && !error && <Alert status="success">Inscrição enviada. Você está na fila.</Alert>}
 
@@ -173,14 +195,27 @@ export function Waitlist() {
           </Box>
         </Card>
 
-        <Box sx={{ mt: 1.75 }}>
-          <Card title="Tem um cupom?">
-            <Typography variant="body2">
-              O resgate de cupom está sendo reescrito para acontecer no servidor. Enquanto isso,
-              envie o código ao professor — ele libera o acesso pela ficha do aluno.
-            </Typography>
-          </Card>
-        </Box>
+        {!hasAccess && (
+          <Box sx={{ mt: 1.75 }}>
+            <Card title="Tem um cupom?" sub="O código libera o acesso na hora.">
+              <Box component="form" noValidate onSubmit={redeem} data-testid="coupon-form">
+                {couponError && <Alert status="error">{couponError.message}</Alert>}
+                <Field
+                  label="Código do cupom"
+                  name="coupon"
+                  autoComplete="off"
+                  placeholder="CUPOM3MESES"
+                  required
+                  maxLength={MAX_COUPON_LENGTH}
+                  invalid={couponError?.field === "coupon"}
+                />
+                <Button type="submit" variant="outlined" disabled={couponPending}>
+                  {couponPending ? "Resgatando…" : "Resgatar"}
+                </Button>
+              </Box>
+            </Card>
+          </Box>
+        )}
       </ContentBody>
     </>
   );

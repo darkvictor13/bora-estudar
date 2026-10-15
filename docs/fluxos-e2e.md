@@ -15,11 +15,11 @@ que o teste **não** diz: o índice, o ambiente, e o registro do que saiu.
 > isso que ids não são renumerados — ver as convenções em
 > [`specs/README.md`](specs/README.md).
 
-Estado medido em 18/09/2026, com `npm run e2e`: **189 verdes, 4 `fixme`, zero
-falhas** — os três de `F-VINC` passaram a rodar com a migration
-`20260918120000`, treze testes novos entraram com ela (`F-VINC-01` a
-`F-VINC-08` e `F-MATR-01` a `F-MATR-05`), e `F-OBS-01` entrou com o relato de
-erro.
+Estado medido em 15/10/2026, com `npm run e2e`: **326 verdes, nenhum `fixme`,
+zero falhas.** Os três últimos grupos de `fixme` saíram nesse dia — cupom, anulação
+de bateria e tema na conta —, e entraram `F-LGPD-01` a `F-LGPD-05`, `F-AUTH-15` e
+`F-CUP-01` a `F-CUP-03`, junto com a exclusão de conta, a sessão entre abas e os
+documentos legais.
 
 ---
 
@@ -117,7 +117,8 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 | Gráficos | `chart-bar`, `chart-point`, `chart-single-value`, `chart-table`, `chart-tooltip`, `ranked-row`, `ranked-target` |
 | Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
-| Conta | `account-form`, `account-access`, `waitlist-form` |
+| Conta | `account-form`, `account-access`, `waitlist-form`, `delete-account-card`, `delete-account-open`, `delete-account-dialog`, `delete-account-confirm`, `delete-account-cancel`, `deletion-summary` |
+| Documentos legais | `legal-document`, `legal-link-privacy`, `legal-link-terms` |
 | Leitura e grifo | `flashcard-flip` (+`data-flipped`), `flashcard-answer`, `flashcard-mark` e `law-mark` (+`data-style`, `data-color`; o do cartão também `data-side`) |
 | Erro | `error-code` — o identificador do evento relatado, e só existe quando houve relato |
 
@@ -182,6 +183,7 @@ diff mostra a omissão.
 | F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações (senhas diferentes, curtas e só de espaços) |
 | F-AUTH-13 | o link profundo volta depois do login: `next` pelo guarda, por papel errado, externo e por navegação do cliente — QA-25 |
 | F-AUTH-14 | `/confirmar?next=` não manda para fora do site — QA-02 |
+| F-AUTH-15 | sair numa aba leva a outra, aberta numa tela protegida, ao login com o `next` — R-AUTH-20 |
 | F-CONTA-01 | meus dados nos dois papéis: o aluno vê o nome do professor, o professor não vê o cartão Acesso, o nome salva, e o campo do nome tem teto de 120 — `tests/student-analysis.spec.ts` (QA-08, QA-21, QA-15) |
 
 ### Casca e navegação — `tests/shell.spec.ts`
@@ -237,7 +239,14 @@ diff mostra a omissão.
 | F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso; o extra de ontem cai em ontem na série por dia — N-07 |
 | F-REV-01 | a grade de revisão mostra o espaçamento do professor; a vencida é marcada; o reforço tem lugar próprio |
 | F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde; WhatsApp sem formato e nascimento no futuro são recusados, e nada grava (QA-19) |
-| F-CUP-01 | resgatar cupom libera o acesso — **`fixme`** |
+| F-LGPD-01 | excluir a conta: o diálogo repete o que sai e o que fica, só habilita com `EXCLUIR`, encerra a sessão, o login seguinte falha e o mesmo e-mail cadastra de novo uma conta vazia — spec 46 |
+| F-LGPD-02 | o cartão Excluir conta, em Meus dados, diz o que é apagado e o que fica sem identificar ninguém, antes do botão |
+| F-LGPD-03 | `/privacidade` e `/termos` abrem sem login e são linkadas do cadastro, do login e de Meus dados |
+| F-LGPD-04 | aluno com acesso vencido exclui a conta |
+| F-LGPD-05 | o professor não vê o cartão Excluir conta |
+| F-CUP-01 | o código libera o acesso na hora, normalizado, grava o resgate e o cartão do cupom some — spec [30](specs/30-cupom-de-acesso.md) |
+| F-CUP-02 | inexistente, inativo e vencido recebem a MESMA resposta, nada é concedido, e o código vazio pede o código |
+| F-CUP-03 | com o acesso liberado a tela não oferece o resgate |
 | F-CAD-01 | cadernos TEC do aluno: lista por disciplina, com link e sem botão de bateria |
 
 ### Professor — `tests/teacher.spec.ts`
@@ -261,7 +270,10 @@ diff mostra a omissão.
 | F-VINC-01 a F-VINC-09 | achar o aluno pelo e-mail inteiro, assumir, liberar somando ao que falta, bloquear preservando a data, e a barra do aluno acompanhar liberar e bloquear sem F5 (F-VINC-09, QA-09) — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-MATR-01 a F-MATR-05 | turmas: criar, renomear, matricular, mover, recusar apagar turma com aluno, filtrar por `?turma=` — spec [13](specs/13-vinculo-e-liberacao-de-acesso.md) |
 | F-MATR-06 | nome de turma repetido, com outra caixa e espaço, é recusado com a frase própria; o campo tem teto de 120 — QA-15, QA-16 |
-| F-ANUL | anular bateria sem sumir do histórico — **`fixme`** |
+| F-ANUL-01 | a ficha lista as baterias do aluno, com o desempenho oficial — spec [16](specs/16-historico-e-anulacao-de-bateria.md) |
+| F-ANUL-02 | anular troca a situação, mostra o motivo, e o ledger continua intacto |
+| F-ANUL-03 | a meta volta a pendente e pode ser refeita |
+| F-ANUL-05 | motivo vazio grava o padrão; bateria em andamento não oferece o botão. (F-ANUL-04, "as questões voltam a ser inéditas", fica sem cobertura: não há motor de seleção) |
 
 ### Simulados — `tests/mock-exams.spec.ts`
 
@@ -310,9 +322,9 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 | Id | Cobre |
 |---|---|
 | F-TEMA-01 | escolher o tema aplica na hora, fica guardado e sobrevive ao recarregar |
-| F-TEMA-02 | a escolha é da conta, e aparece em outro navegador — **`fixme`** |
+| F-TEMA-02 | a escolha é da conta, e aparece em outro navegador, que não tem cópia local |
 | F-TEMA-03 | sem piscada: o documento já está escuro antes de a rota renderizar |
-| F-TEMA-04 | quando a gravação falha, a tela avisa — **`fixme`** |
+| F-TEMA-04 | quando a gravação falha, a tela avisa e a conta não muda |
 | F-TEMA-05 | sair apaga a cópia local e o próximo não herda |
 | F-TEMA-06 | os dois papéis |
 | F-TEMA-07 | contraste AA nos dois temas, medido em cada tela |
@@ -362,26 +374,21 @@ seção da área, no commit em que o teste passa a existir.
 
 ---
 
-## Os quatro `fixme`, e por que continuam visíveis
+## Nenhum `fixme`
 
-Nenhum é bug de interface: os dois primeiros esperam o banco, e os dois do tema
-esperam a mesma coluna. Ficam como `fixme` em vez de apagados porque um teste
-que some leva a falta junto — e um que passa sem exercitar nada é pior ainda.
+Já foram oito, depois quatro, e hoje a suíte não tem teste marcado como pendente.
+Os três últimos grupos saíram em 15/10/2026, cada um com a migration que faltava:
 
-**Eram oito.** `F-AUTH-08` saiu da lista com a migration `20260914190000`, que
-repôs o gatilho de criação de perfil e resolveu a decisão de produto que ele
-embutia: o perfil nasce **sem professor**, e a lista de espera passou a aceitar
-inscrição sem vínculo.
-
-**Os três de `F-VINC` saíram em 18/09/2026**, com a migration `20260918120000` e
-a spec [13](specs/13-vinculo-e-liberacao-de-acesso.md). `link_student` e
-`set_student_access` são as RPCs que faltavam, e no lugar dos três `fixme`
-entraram `F-VINC-01` a `F-VINC-08` mais `F-MATR-01` a `F-MATR-05` — turmas vieram
-junto porque `classes` e `class_students` já estavam no banco e nunca tinham
-ganhado tela.
-
-| Fluxo | O que falta |
+| Fluxo | O que resolveu |
 |---|---|
+| F-CUP-01 | `redeem_coupon` e `coupon_redemptions` (spec 30). `coupons` segue com RLS ligada, zero policy e zero grant, de propósito |
+| F-ANUL | `void_quiz_session` (spec 16). A pré-condição é a exceção documentada em `addFinishedSession`: não há RPC que inicie e finalize uma bateria |
+| F-TEMA-02, F-TEMA-04 | `profiles.theme_preference` (spec 11) |
+
+Um teste que some leva a falta junto: se um `fixme` voltar, é para a falta
+continuar visível na saída da suíte, e o catálogo acima precisa dizer qual.
+
+---|---|
 | F-CUP-01 | a RPC de resgate. `coupons` está com RLS ligada, zero policy e zero grant, de propósito |
 | F-ANUL | `void_quiz_session` não foi portada, e `quiz_sessions` é SELECT |
 | F-TEMA-02, F-TEMA-04 | uma coluna `theme_preference` em `profiles`. Enquanto não existir, a escolha vale por aparelho |
@@ -429,7 +436,7 @@ id antigo num comentário de código ou numa mensagem de commit:
 | F-GPLAN-02 a 05 e 07 | F-GPLAN-01. O F-GPLAN-06 foi REUSADO em 07/10/2026 (nome de planejamento repetido, QA-16): a spec 14 já o citava na CA-06 |
 | F-CAD-02 a 06 | F-CAD-01 |
 | F-RCIC-\*, F-RESU-\*, F-DIFI-\* | sem cobertura: dependem do motor de baterias |
-| F-CUP-02 a 04 | sem cobertura enquanto F-CUP-01 estiver `fixme` |
+| F-CUP-04 | sem cobertura: o resgate nunca teve quarto fluxo |
 
 O mesmo mapa está no cabeçalho de `tests/student.spec.ts` e de
 `tests/teacher.spec.ts`, ao lado do código que o cumpre. O histórico completo

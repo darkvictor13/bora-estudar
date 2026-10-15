@@ -15,6 +15,9 @@ export const ROUTES = {
   signUp: "/cadastro",
   forgotPassword: "/recuperar-senha",
   resetPassword: "/redefinir-senha",
+  /** Documentos legais: públicos, sem login (R-LGPD-15). */
+  privacy: "/privacidade",
+  terms: "/termos",
   /**
    * Troca o código do link de e-mail por uma sessão.
    *
@@ -83,7 +86,19 @@ const PUBLIC_PATHS: ReadonlySet<string> = new Set([
   ROUTES.forgotPassword,
   ROUTES.resetPassword,
   ROUTES.authCallback,
+  ROUTES.privacy,
+  ROUTES.terms,
 ]);
+
+/**
+ * A tela não exige sessão? A raiz usa isto para decidir se uma sessão que
+ * acabou precisa levar ao login: quem já está numa tela pública não vai a lugar
+ * nenhum, e a Home (`/`) decide sozinha para onde mandar.
+ */
+export function isPublicPath(pathname: string): boolean {
+  const key = routeKey(pathname);
+  return key === null || key === "/" || PUBLIC_PATHS.has(key);
+}
 
 /** Só serve para o `URL` resolver o caminho. `.invalid` nunca resolve (RFC 2606). */
 const BASE = "https://app.invalid";

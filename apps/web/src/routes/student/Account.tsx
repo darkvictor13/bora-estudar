@@ -1,14 +1,18 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Link from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 import { Alert, Badge, Card, Field, PageHeader } from "@bora/ui";
 import { useState } from "react";
-import { useLoaderData, useRevalidator } from "react-router";
+import { Link as RouterLink, useLoaderData, useNavigate, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
+import { DeleteAccountDialog, DeletionSummary } from "@/components/student/DeleteAccountDialog";
 import { api, MAX_NAME_LENGTH, type Account as AccountData, type ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth/session";
 import { formatInstant } from "@/lib/domain/dates";
+import { ROUTES } from "@/lib/routes";
+import { forgetTheme } from "@/lib/theme";
 
 /**
  * Meus dados — o `p-meusDados` da v2.
@@ -43,6 +47,10 @@ export function Account() {
   const [error, setError] = useState<ApiError | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
 
   const access = ACCESS_LABEL[account.access];
 
@@ -62,6 +70,24 @@ export function Account() {
     setError(null);
     setSaved(true);
     await revalidate();
+  }
+
+  /**
+   * Excluir a conta (spec 46). Sucesso encerra a sessão deste aparelho (o
+   * adaptador já limpou os cookies) e leva ao login com a mensagem; falha
+   * fica no diálogo, SEM sair — a RPC é segura para tentar de novo.
+   */
+  async function deleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await api.deleteAccount();
+    setDeleting(false);
+    if (!result.ok) {
+      setDeleteError(result.error);
+      return;
+    }
+    forgetTheme();
+    await navigate(`${ROUTES.signIn}?conta=excluida`, { replace: true });
   }
 
   return (
@@ -139,6 +165,41 @@ export function Account() {
           </Card>
         </Box>
         )}
+
+        {/* O aluno apaga a própria conta; o professor não (R-LGPD-09, R-LGPD-12). */}
+        {!isTeacher && (
+          <Box sx={{ mt: 1.75 }}>
+            <Card title="Excluir conta">
+              <Box data-testid="delete-account-card">
+                <DeletionSummary />
+                <Button
+                  type="button"
+                  variant="outlined"
+                  color="error"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeleteOpen(true);
+                  }}
+                  data-testid="delete-account-open"
+                >
+                  Excluir minha conta…
+                </Button>
+              </Box>
+            </Card>
+            <DeleteAccountDialog
+              open={deleteOpen}
+              pending={deleting}
+              error={deleteError}
+              onCancel={() => setDeleteOpen(false)}
+              onConfirm={() => void deleteAccount()}
+            />
+          </Box>
+        )}
+
+        <Typography variant="caption" component="p" sx={{ mt: 2, display: "flex", gap: 2 }}>
+          <Link component={RouterLink} to={ROUTES.privacy} data-testid="legal-link-privacy">Política de privacidade</Link>
+          <Link component={RouterLink} to={ROUTES.terms} data-testid="legal-link-terms">Termos de uso</Link>
+        </Typography>
       </ContentBody>
     </>
   );

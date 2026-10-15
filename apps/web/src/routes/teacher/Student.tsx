@@ -9,6 +9,7 @@ import { useLoaderData, useParams, useRevalidator } from "react-router";
 
 import { ContentBody } from "@/components/AppShell";
 import { AccessForm } from "@/components/teacher/AccessForm";
+import { VoidSessionDialog } from "@/components/teacher/VoidSessionDialog";
 import { api, type ApiError, type QuizSessionSummary, type StudentCard } from "@/lib/api";
 import { requireRole } from "@/lib/auth/session";
 import { formatInstant, hasExpired } from "@/lib/domain/dates";
@@ -27,9 +28,11 @@ import { fieldWidth } from "@/lib/ui/field-width";
  * é escrita direta em `class_students`, com RLS — e a diferença está explicada
  * em `lib/api/supabase/teacher-classes.ts`.
  *
- * UMA AÇÃO DA v2 CONTINUA DE FORA, e a ausência é do banco, não da tela: anular
- * bateria precisa nascer como RPC, porque `quiz_sessions` é SELECT e nada mais.
- * Um botão que sempre falha é pior do que botão nenhum; a tela diz o que falta.
+ * ANULAR BATERIA (spec 16) passa por `void_quiz_session`, porque `quiz_sessions`
+ * é SELECT e nada mais. O botão só aparece nas baterias que o banco aceitaria
+ * anular — concluída e aguardando tempo (R-ANUL-11) —, e a anulada continua na
+ * lista, com o motivo, porque sumir esconderia o que o professor precisa
+ * auditar depois (R-ANUL-12).
  */
 export async function teacherStudentLoader({ params, request }: { params: { studentId?: string }; request: Request }) {
   await requireRole("teacher", request);
@@ -67,6 +70,29 @@ export function TeacherStudent() {
   const [classError, setClassError] = useState<ApiError | null>(null);
   const [classMessage, setClassMessage] = useState<string | null>(null);
   const [chosenClass, setChosenClass] = useState(card.classId ?? "");
+
+  const [voiding, setVoiding] = useState<QuizSessionSummary | null>(null);
+  const [voidPending, setVoidPending] = useState(false);
+  const [voidError, setVoidError] = useState<ApiError | null>(null);
+  const [voidNotice, setVoidNotice] = useState<string | null>(null);
+
+  async function voidSession(reason: string) {
+    if (!voiding) return;
+    setVoidPending(true);
+    setVoidError(null);
+    const result = await api.voidQuizSession({ sessionId: voiding.id, reason });
+    setVoidPending(false);
+
+    if (!result.ok) {
+      setVoidError(result.error);
+      return;
+    }
+    setVoiding(null);
+    // O aviso vem DEPOIS da revalidação, como o da turma: a lista precisa já
+    // mostrar a bateria como "Anulada" quando a frase aparecer.
+    await revalidate();
+    setVoidNotice("Bateria anulada. A meta voltou a pendente e pode ser refeita.");
+  }
 
   /**
    * Matricular e MOVER são operações diferentes, e a tela escolhe qual chamar
@@ -208,6 +234,7 @@ export function TeacherStudent() {
 
         <Box sx={{ mt: 1.75 }}>
           <Card title="Histórico de baterias" sub="O que o motor registrou">
+            {voidNotice && <Alert status="success">{voidNotice}</Alert>}
             {sessions.length === 0 ? (
               <Empty icon="📝">
                 Nenhuma bateria. A execução de baterias saiu com a extensão e está sendo
@@ -247,11 +274,39 @@ export function TeacherStudent() {
                   <Badge tone={SESSION_STATUS[session.status].tone}>
                     {SESSION_STATUS[session.status].label}
                   </Badge>
+                  {(session.status === "completed" || session.status === "awaiting_time") && (
+                    <Button
+                      type="button"
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => {
+                        setVoidError(null);
+                        setVoidNotice(null);
+                        setVoiding(session);
+                      }}
+                    >
+                      Anular
+                    </Button>
+                  )}
+                  {session.status === "voided" && session.voidReason && (
+                    <Typography variant="caption" component="p" data-testid="void-reason" sx={{ width: "100%" }}>
+                      Motivo: {session.voidReason}
+                    </Typography>
+                  )}
                 </Box>
               ))
             )}
           </Card>
         </Box>
+
+        <VoidSessionDialog
+          session={voiding}
+          pending={voidPending}
+          error={voidError}
+          onCancel={() => setVoiding(null)}
+          onConfirm={(reason) => void voidSession(reason)}
+        />
 
         <Box sx={{ mt: 1.75 }}>
           <Card title="Dificuldades por tópico">

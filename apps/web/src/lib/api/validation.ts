@@ -46,8 +46,24 @@ export const MIN_BIRTH_DATE = "1900-01-01";
 
 export { MAX_LINK_LENGTH };
 
-/** O mínimo que o GoTrue aceita, e o mesmo número que a v2 pedia. */
-export const MIN_PASSWORD_LENGTH = 6;
+/**
+ * Oito caracteres, com maiúscula, minúscula e número. É EXATAMENTE a política
+ * do GoTrue: `minimum_password_length = 8` e `password_requirements =
+ * "lower_upper_letters_digits"` em `supabase/config.toml`. O servidor impõe as
+ * duas coisas, então quem chama a API direto não passa; a regra repetida aqui
+ * existe para a pessoa ler a recusa ANTES de a requisição sair, com a frase
+ * certa.
+ *
+ * As classes são ASCII (`a-z`, `A-Z`, `0-9`) de propósito, porque são as do
+ * GoTrue: "Ação1234" passa nos dois lados, e "çççççççÇ1" não passa em nenhum.
+ * Uma regra Unicode aqui deixaria passar o que o servidor recusa, e a pessoa
+ * veria a frase genérica do servidor em vez da daqui.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/** A mensagem única que o servidor e o contrato dão quando a senha é fraca. */
+export const PASSWORD_RULE_MESSAGE =
+  `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres, com letra maiúscula, minúscula e número.`;
 
 /** O mínimo para um nome ser um nome, e não uma inicial. */
 export const MIN_NAME_LENGTH = 3;
@@ -62,12 +78,10 @@ export function checkCredentials({ email, password }: Credentials): ApiError | n
 }
 
 /**
- * O comprimento, e depois "só espaços" (QA-18). A senha que segue para o GoTrue
- * NÃO é aparada: a regra recusa o que não é senha, não reescreve o que foi
- * digitado. O login fica de fora — `checkCredentials` não muda —, para a conta
- * criada antes desta regra continuar entrando. A política do GoTrue também não
- * muda (D-10): quem chama a API direto ainda cria a conta, e o contrato é a
- * única barreira.
+ * O comprimento, depois "só espaços" (QA-18), depois a composição. A senha que
+ * segue para o GoTrue NÃO é aparada: a regra recusa o que não é senha, não
+ * reescreve o que foi digitado. O login fica de fora — `checkCredentials` não
+ * muda —, para a conta criada antes desta regra continuar entrando.
  */
 export function checkPassword(password: string): ApiError | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
@@ -78,6 +92,9 @@ export function checkPassword(password: string): ApiError | null {
   }
   if (password.trim() === "") {
     return invalid("A senha não pode ser formada só por espaços.", "password");
+  }
+  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return invalid("A senha precisa ter letra maiúscula, minúscula e número.", "password");
   }
   return null;
 }
@@ -384,6 +401,33 @@ export function checkExtraStudy(
  */
 export const STUDY_REPLAY_CONFLICT =
   "Este estudo já foi registrado com outros valores. Atualize a página para ver o que foi gravado.";
+
+/** O teto do motivo de anulação, o mesmo de `quiz_sessions_void_reason_check`. */
+export const MAX_VOID_REASON_LENGTH = 500;
+
+/** O motivo é opcional; só o teto é do contrato (R-ANUL-08). */
+export function checkVoidReason(reason: string): ApiError | null {
+  if (reason.length > MAX_VOID_REASON_LENGTH) {
+    return invalid(`O motivo pode ter até ${MAX_VOID_REASON_LENGTH} caracteres.`, "reason");
+  }
+  return null;
+}
+
+/** O teto do código de cupom, o mesmo de `profiles_coupon_used_check`. */
+export const MAX_COUPON_LENGTH = 64;
+
+/**
+ * O código de cupom, antes de ir ao servidor. Só a forma: se o código EXISTE, vale
+ * ou já foi usado é do servidor, que responde a mesma frase para todos os
+ * motivos de recusa (R-CUP-04). O erro marca o campo `coupon`.
+ */
+export function checkCoupon(code: string): ApiError | null {
+  if (!code.trim()) return invalid("Informe o código do cupom.", "coupon");
+  if (code.length > MAX_COUPON_LENGTH) {
+    return invalid(`O código pode ter até ${MAX_COUPON_LENGTH} caracteres.`, "coupon");
+  }
+  return null;
+}
 
 /**
  * A lista de espera, na ordem da tela: nome, WhatsApp, área, concurso, nascimento.

@@ -295,7 +295,7 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 54 or v_enums <> 20 or v_fks <> 95 or v_views <> 3 then
+  if v_tabelas <> 55 or v_enums <> 21 or v_fks <> 97 or v_views <> 3 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
@@ -731,4 +731,38 @@ exception when unique_violation then
     raise exception 'FALHOU: o 23505 veio do indice % e nao de study_plans_name_per_student_uidx', v_indice;
   end if;
   raise notice '33 OK  planejamento repetido, com outra caixa e espaco, e recusado pelo indice de nome';
+end $$;
+
+-- ---------- Toda tabela que aponta para profiles tem destino na exclusão de conta ----------
+-- `delete_my_account` apaga uma lista EXPLÍCITA de tabelas, e a spec 46 só
+-- deixa de pé duas classes de histórico. Tabela nova com FK para `profiles` que
+-- ninguém classificou seria dado do aluno que sobrevive à exclusão sem que
+-- alguém tenha decidido isso. Este teste obriga a decisão: a tabela precisa
+-- estar numa das três listas abaixo (e a função, se for do aluno, apaga-la).
+do $$
+declare
+  v_apagadas constant text[] := array[
+    'class_students','flashcard_marks','flashcard_reviews','goal_entries','goals','law_marks',
+    'library_flashcard_reviews','personal_flashcard_decks','quiz_sessions','study_plan_notebooks',
+    'study_plan_theory_catalogs','study_plans','summary_annotations','theory_progress',
+    'theory_reviews','waitlist'];
+  v_retidas constant text[] := array['access_grants','coupon_redemptions','mock_exam_results','mock_exam_subject_results'];
+  -- Do PROFESSOR: a conta de professor não se exclui por autoatendimento (R-LGPD-09).
+  v_do_professor constant text[] := array[
+    'classes','mock_exams','subjects','theory_catalogs','theory_catalog_subject_rules',
+    'theory_lesson_flashcards','theory_lessons','theory_review_rules','theory_subject_rules'];
+  v_sem_destino text;
+begin
+  select string_agg(distinct c.conrelid::regclass::text, ', ' order by c.conrelid::regclass::text)
+    into v_sem_destino
+    from pg_constraint c
+   where c.contype = 'f'
+     and c.confrelid = 'public.profiles'::regclass
+     and c.conrelid <> 'public.profiles'::regclass
+     and c.connamespace = 'public'::regnamespace
+     and c.conrelid::regclass::text <> all (v_apagadas || v_retidas || v_do_professor);
+  if v_sem_destino is not null then
+    raise exception 'FALHOU: tabela(s) com FK para profiles sem destino na exclusao de conta: %. Decida se saem (e acrescente a delete_my_account) ou ficam sem identificar ninguem.', v_sem_destino;
+  end if;
+  raise notice '34 OK  toda tabela com FK para profiles tem destino na exclusao de conta';
 end $$;

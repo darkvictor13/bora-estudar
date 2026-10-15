@@ -21,6 +21,9 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_ENVIRONMENT: string | undefined;
   /** O SHA do commit publicado. É o `release` do Sentry. */
   readonly VITE_APP_VERSION: string | undefined;
+  /** Quem responde pelos dados e como falar com ele — `lib/legal.ts`. */
+  readonly VITE_LEGAL_CONTROLLER_NAME: string | undefined;
+  readonly VITE_LEGAL_CONTACT_EMAIL: string | undefined;
 }
 
 interface ImportMeta {

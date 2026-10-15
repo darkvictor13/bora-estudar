@@ -246,7 +246,18 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     await field(page, "password").fill("123");
     await page.getByRole("button", { name: "Criar minha conta" }).click();
 
-    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
+    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 8 caracteres.");
+  });
+
+  test("senha sem maiúscula, minúscula ou número é recusada", async ({ page }) => {
+    await page.goto("/cadastro");
+    await field(page, "name").fill("Candidata Teste");
+    await field(page, "email").fill(`caixa-${Date.now().toString(36)}@e2e.local`);
+    for (const fraca of ["somenteminuscula", "SOMENTEMAIUSCULA", "SemNumeroNenhum"]) {
+      await field(page, "password").fill(fraca);
+      await page.getByRole("button", { name: "Criar minha conta" }).click();
+      await expect(alert(page, "error")).toHaveText("A senha precisa ter letra maiúscula, minúscula e número.");
+    }
   });
 
   test("senha só de espaços é recusada, e nenhuma conta nasce — QA-18", async ({ page }) => {
@@ -377,7 +388,7 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     await field(page, "password").fill("123");
     await field(page, "passwordConfirmation").fill("123");
     await page.getByRole("button", { name: "Salvar nova senha" }).click();
-    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
+    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 8 caracteres.");
 
     // QA-18: oito espaços nos dois campos conferem e passam do mínimo, e não
     // são senha.
@@ -503,6 +514,37 @@ test.describe("F-AUTH-13 · o link profundo volta depois do login — QA-25", ()
     // devolveria o aluno para a tela de onde saiu, com o fragmento dela.
     await navItem(studentPage, "Meus dados").click();
     await expect(studentPage).toHaveURL(loginUrl(baseURL, "/aluno/conta"));
+  });
+});
+
+test.describe("F-AUTH-15 · sair numa aba sai em todas — R-AUTH-20", () => {
+  test("a outra aba, aberta numa tela protegida, vai ao login com o next", async ({ studentPage }) => {
+    // Duas abas do MESMO navegador: é o que o `BroadcastChannel` do cliente
+    // alcança. `studentPage` e a aba nova compartilham o contexto, e portanto o
+    // cookie de sessão.
+    await studentPage.goto("/aluno/conta");
+    const outra = await studentPage.context().newPage();
+    await outra.goto("/aluno/estatisticas");
+    await expect(outra.locator("h1")).toBeVisible();
+
+    await signOut(studentPage).click();
+    await expect(studentPage).toHaveURL(/\/entrar/);
+
+    await expect(outra).toHaveURL(/\/entrar\?next=%2Faluno%2Festatisticas$/);
+  });
+
+  test("numa tela pública, a sessão que acaba não leva a lugar nenhum", async ({ studentPage }) => {
+    await studentPage.goto("/aluno/conta");
+    const publica = await studentPage.context().newPage();
+    await publica.goto("/privacidade");
+    await expect(publica.locator("h1")).toHaveText("Política de privacidade");
+
+    await signOut(studentPage).click();
+    await expect(studentPage).toHaveURL(/\/entrar/);
+
+    // Dá ao evento o tempo de chegar, e confere que a aba continua onde estava.
+    await publica.waitForTimeout(1500);
+    await expect(publica).toHaveURL(/\/privacidade$/);
   });
 });
 

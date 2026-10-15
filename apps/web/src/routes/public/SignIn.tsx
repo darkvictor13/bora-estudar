@@ -1,6 +1,7 @@
 import Button from "@mui/material/Button";
 import Link from "@mui/material/Link";
-import { Field } from "@bora/ui";
+import Typography from "@mui/material/Typography";
+import { Alert, Field } from "@bora/ui";
 import { Link as RouterLink, redirect, useSearchParams } from "react-router";
 
 import { AuthForm } from "@/components/auth/AuthForm";
@@ -35,6 +36,9 @@ export function SignIn() {
   // lê-lo junto do e-mail e da senha; quem o filtra é `landAfterAuth`.
   const [params] = useSearchParams();
   const next = params.get("next") ?? "";
+  // Vem de `useSignOut`-like da exclusão de conta (R-LGPD-13): a sessão já foi
+  // encerrada, e a pessoa precisa ler que deu certo.
+  const accountDeleted = params.get("conta") === "excluida";
 
   return (
     <AuthView
@@ -49,6 +53,7 @@ export function SignIn() {
         </>
       }
     >
+      {accountDeleted && <Alert status="success">Sua conta foi excluída.</Alert>}
       <AuthForm action={signIn} submitLabel="Entrar" pendingLabel="Entrando…">
         {(state) => (
           <>
@@ -84,6 +89,12 @@ export function SignIn() {
       >
         Esqueci minha senha
       </Button>
+
+      <Typography variant="caption" component="p" sx={{ textAlign: "center", mt: 1.5 }}>
+        <Link component={RouterLink} to={ROUTES.privacy} data-testid="legal-link-privacy">Política de privacidade</Link>
+        {" · "}
+        <Link component={RouterLink} to={ROUTES.terms} data-testid="legal-link-terms">Termos de uso</Link>
+      </Typography>
     </AuthView>
   );
 }

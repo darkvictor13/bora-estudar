@@ -36,10 +36,9 @@
  * `supabase/migrations/20260914150000_initial_schema.sql`. Estão aqui porque o
  * contrato é o pedido formal à frente do banco:
  *
- * 1. **Não há onde guardar a preferência de tema.** `user_preferences` saiu e
- *    nada a substituiu. `loadThemePreference`/`saveThemePreference` precisam de
- *    uma coluna em `profiles` ou de uma tabela própria; sem isso a regra de o
- *    tema vir da CONTA, e não do aparelho, não tem como valer (R-TEMA-11).
+ * 1. ~~**Não há onde guardar a preferência de tema.**~~ **Resolvida em
+ *    15/10/2026.** `profiles.theme_preference` (enum, nulável): a conta volta a
+ *    ser a fonte da verdade (R-TEMA-11) e o aparelho é cache.
  * 2. ~~**Não há tabela de assinatura.**~~ **Resolvida em 18/09/2026.** O acesso
  *    continua sendo `profiles.access_status` mais `access_expires_at`, mas quem
  *    os escreve agora é a RPC `set_student_access`, e cada liberação e cada
@@ -211,6 +210,16 @@ export interface AuthApi {
 export interface AccountApi {
   loadAccount(): Promise<Account>;
   saveAccount(input: AccountInput): Promise<Result<Account>>;
+  /**
+   * Exclui a PRÓPRIA conta do aluno (spec 46): apaga tudo o que ele fez, anula o
+   * login e deixa só o histórico sem identificação — as liberações de acesso e
+   * as notas de simulado. Encerra a sessão deste aparelho quando dá certo.
+   *
+   * Vale sem acesso vigente. Professor é recusado (`forbidden`): apagar um
+   * professor apaga o planejamento dos alunos dele. Segura a retentativa:
+   * excluir de novo uma conta já excluída devolve sucesso.
+   */
+  deleteAccount(): Promise<Result<void>>;
   /**
    * `null` = nunca escolheu, e a ausência equivale a claro (R-TEMA-07).
    * Distinguir de `"light"` importa: é o que separa "prefere claro" de "não
@@ -965,6 +974,8 @@ export interface QuizSessionSummary {
   readonly durationMinutes: number | null;
   readonly startedAt: IsoDateTime;
   readonly finishedAt: IsoDateTime | null;
+  /** O motivo da anulação, para a bateria `voided`; `null` nas demais (R-ANUL-12). */
+  readonly voidReason: string | null;
 }
 
 export interface TopicDifficulty {
@@ -1017,6 +1028,11 @@ export interface TeacherStudentsApi {
   grantAccess(input: GrantAccessInput): Promise<Result<StudentCard>>;
   revokeAccess(studentId: Uuid, requestId: RequestId): Promise<Result<StudentCard>>;
   /** Anula uma bateria — some do desempenho sem sumir do histórico. */
+  /**
+   * Anula uma bateria finalizada, sem apagar o ledger, e devolve a meta a
+   * `pending` (spec 16). Só o professor responsável. Segura a retentativa: anular
+   * o que já está anulado devolve o estado gravado.
+   */
   voidQuizSession(input: VoidSessionInput): Promise<Result<QuizSessionSummary>>;
 }
 
@@ -1029,7 +1045,7 @@ export interface GrantAccessInput {
 
 export interface VoidSessionInput {
   readonly sessionId: Uuid;
-  readonly requestId: RequestId;
+  /** Opcional: vazio grava "Anulação administrativa" (R-ANUL-08). */
   readonly reason: string;
 }
 

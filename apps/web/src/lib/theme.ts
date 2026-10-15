@@ -28,11 +28,10 @@ export const DEFAULT_THEME: Theme = "light";
  * CHAVES ESTÃO ESCRITAS LITERALMENTE LÁ TAMBÉM — um script embutido não
  * importa módulo. Mexeu aqui, mexa em `apps/web/index.html`.
  *
- * ENQUANTO A COLUNA NÃO EXISTE, ESTA CÓPIA É A ÚNICA. O schema atual não tem
- * onde guardar a preferência (lacuna nº 1 de `lib/api/contract.ts`), então
- * `supabaseApi.loadThemePreference` lê daqui. No dia em que a frente do banco
- * entregar a coluna, nada disto muda de forma: a cópia local continua sendo o
- * que evita a piscada, e a conta volta a ser a fonte da verdade.
+ * A CONTA É A FONTE DA VERDADE, E ESTA CÓPIA É CACHE (R-TEMA-11). A preferência
+ * mora em `profiles.theme_preference`; o que `supabaseApi.loadThemePreference`
+ * devolve vem de lá, e `adoptTheme` atualiza a cópia. Ela continua sendo o que
+ * evita a piscada, e o que vale quando a leitura da conta falha.
  */
 const ACTIVE_KEY = "bora.theme.active";
 
@@ -69,6 +68,10 @@ export function readLocalTheme(profileId: string): Theme | null {
   }, null);
 }
 
+function removeLocalTheme(profileId: string): void {
+  silently(() => localStorage.removeItem(keyFor(profileId)), undefined);
+}
+
 export function writeLocalTheme(profileId: string, theme: Theme): void {
   silently(() => {
     localStorage.setItem(ACTIVE_KEY, profileId);
@@ -92,6 +95,10 @@ export function writeLocalTheme(profileId: string, theme: Theme): void {
 export function adoptTheme(profileId: string, theme: Theme | null): void {
   applyTheme(theme ?? DEFAULT_THEME);
   if (theme) writeLocalTheme(profileId, theme);
+  // A conta diz "nunca escolheu": uma cópia local que discorde é de uma escolha
+  // que não chegou à conta, e deixá-la faria o script de `index.html` pintar
+  // escuro em toda carga para o loader desfazer logo depois — a piscada.
+  else removeLocalTheme(profileId);
 }
 
 /**

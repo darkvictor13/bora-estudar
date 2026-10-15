@@ -2,9 +2,17 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "bora-estudar",
   "compatibility_date": "2026-08-23",
+  // O portão dos materiais: só `/materials/*` executa código (`worker/index.ts`).
+  // O resto do site continua sendo servido direto pela camada de assets.
+  // `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` NÃO ficam aqui: `vars` não é
+  // herdado pelos ambientes, e os valores são os mesmos `vars` do GitHub que o
+  // build usa — entram por `--var` no deploy. Sem eles o portão FALHA FECHADO.
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/materials/*"]
   },
   "env": {
     // Vazio de propósito: pela regra do sufixo o Worker publicado é

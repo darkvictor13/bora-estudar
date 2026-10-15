@@ -1,11 +1,14 @@
 # 16 — Histórico de baterias e anulação
 
-**Situação:** implementada · **Comparativo:** §12 item 6 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 e §9 · **Fluxos e2e:** F-ANUL (em `fixme`)
+**Situação:** implementada · **Comparativo:** §12 item 6 · **Inventário:** [`inventario-v96.md`](../inventario-v96.md) §6 e §9 · **Fluxos e2e:** F-ANUL-01 a F-ANUL-03 e F-ANUL-05 (F-ANUL-04 depende do motor de seleção, que não existe)
 
-> **Atualizada em 14/09/2026.** `void_quiz_session` não foi portada e `quiz_sessions` é SELECT: anular
-> **precisa nascer como RPC**, e `F-ANUL` está `fixme`. O histórico, que é
-> leitura, continua na ficha do aluno.
-
+> **Atualizada em 15/10/2026.** `void_quiz_session` **nasce neste schema**, e a anulação tem tela. A
+> RPC de 14/09/2026 nunca foi portada, e as regras abaixo que a descrevem como
+> "já existe" valem para o comportamento, não para o objeto: ela é criada por
+> `20261015170000`. Duas coisas mudam em relação ao texto original: **não há
+> `request_id` nem `reserve_operation`** (a tabela `operations` saiu; a
+> idempotência é do estado final `voided`), e o motor que CRIA baterias continua
+> não existindo — o que se anula hoje é o que já estiver registrado.
 ---
 
 ## Problema
@@ -45,10 +48,10 @@ aparece **só** para bateria finalizada, e o motivo é pedido — com
 
 | Id | Regra |
 |---|---|
-| R-ANUL-01 | Anular é `void_quiz_session(p_quiz_session_id, p_request_id, p_reason)`, que **já existe**. Nenhuma linha desta spec repete as verificações dela no cliente. |
+| R-ANUL-01 | Anular é `void_quiz_session(p_quiz_session_id, p_reason)`, `SECURITY DEFINER`, revogada de `public` e `anon`. Nenhuma linha desta spec repete as verificações dela no cliente. |
 | R-ANUL-02 | **Só o professor responsável** anula: `teacher_id <> auth.uid()` levanta `42501`. |
 | R-ANUL-03 | **Só bateria finalizada** é anulável — `completed` ou `awaiting_time`. `in_progress` não: para essa existe cancelar, que é do aluno. `cancelled` já está fora do desempenho. |
-| R-ANUL-04 | A anulação é **idempotente por `request_id` + `reserve_operation`**, com hash de `quiz_session_id \| motivo`; e a RPC ainda devolve cedo se a sessão já está `voided`. |
+| R-ANUL-04 | **Naturalmente idempotente**, e o que sustenta é o estado final: a CHECK `quiz_sessions_state_check` exige `voided_at` e `voided_by` em toda linha `voided`, e a RPC devolve a sessão sem tocar em nada quando ela já está `voided` — antes de conferir o status de origem, para a retentativa de quem já anulou não receber "não está finalizada". A linha é travada (`for update`) antes de ler o status. |
 | R-ANUL-05 | **Nada é apagado.** O ledger fica intacto: as linhas de `quiz_session_questions` continuam lá. O que muda é o status da sessão, e é o status que tira o registro de todas as leituras — `vw_quiz_session_performance` filtra `status = 'completed'`, e `vw_seen_questions` também. |
 | R-ANUL-06 | A meta **volta a `pending`**, com `completed_at` nulo, e pode ser refeita. `quiz_session_goal_uidx` ignora `cancelled` e `voided`, então a bateria nova encontra o slot livre. |
 | R-ANUL-07 | O número visível do bloco é **liberado**: `quiz_session_number_uidx` também ignora `voided`, então a próxima bateria reemite o mesmo `session_number`. |
@@ -62,7 +65,7 @@ aparece **só** para bateria finalizada, e o motivo é pedido — com
 | R-ANUL-10 | O desempenho de cada linha vem de `vw_quiz_session_performance` — `main_correct` sobre `main_count`. Nenhum número é recalculado na tela nem guardado em coluna. |
 | R-ANUL-11 | O botão de anular aparece **apenas** nas linhas `completed` e `awaiting_time`, espelhando `R-ANUL-03`. A tela não oferece um caminho que o banco recusa. |
 | R-ANUL-12 | Bateria anulada continua na lista, com a situação "Anulada" e o motivo visível. Sumir com ela esconderia justamente o que o professor precisa auditar depois. |
-| R-ANUL-13 | O `request_id` é gerado **uma vez por submissão**, na tela. Um duplo clique chega ao banco como a mesma operação. |
+| R-ANUL-13 | Um duplo clique chega ao banco como duas chamadas, e a segunda devolve o que a primeira gravou (R-ANUL-04): não há `request_id` na tela. |
 
 ---
 
@@ -107,16 +110,17 @@ não deve tratá-las como já vistas.
 | Componentes | `VoidSessionForm`, em `components/teacher/` |
 | Actions | `voidQuizSession`, em `lib/data/teacher-actions.ts` |
 | Leitura | `getStudentSessions`, juntando `quiz_sessions` e `vw_quiz_session_performance` |
-| RPCs | **nenhuma nova.** `void_quiz_session` já existe |
-| Migration | **nenhuma** |
+| RPCs | `void_quiz_session` — a décima quarta. Revogada de `public` e `anon`, concedida a `authenticated` |
+| Migration | `20261015170000_void_quiz_session.sql` |
 | Banco | `quiz_sessions` e `vw_quiz_session_performance`, leitura; escrita só pela RPC |
 | Protocolo | **nada muda** |
 | Testes | `apps/e2e/tests/teacher.spec.ts` |
 
-**Por que não há teste novo em `supabase/tests/`.** `void_quiz_session` já é
-exercitada em `01_flow.sql`, incluindo o replay e a volta da meta a `pending`.
-O que falta provar é o comportamento de tela e a propagação para os números —
-que é e2e por natureza.
+**Os testes.** `supabase/tests/21_void_quiz_session.sql` prova a RPC (professor
+responsável, estado, ledger intacto, meta de volta a `pending`, idempotência);
+o e2e prova a tela. **A pré-condição do e2e é a exceção à regra de usar só RPC
+real:** `start_quiz_session` e `finish_quiz_session` não existem, então a bateria
+finalizada é inserida como manutenção, e o teste diz isso.
 
 ---
 
@@ -126,9 +130,10 @@ que é e2e por natureza.
 |---|---|---|
 | CA-01 | A ficha do aluno lista as baterias dele com bloco, número, situação e desempenho oficial, da mais recente para a mais antiga | F-ANUL-01 |
 | CA-02 | Anular uma bateria concluída muda a situação para "Anulada", mostra o motivo, e **o ledger continua com as mesmas linhas** | F-ANUL-02 |
-| CA-03 | Depois de anular, o desempenho oficial do aluno na ficha e nas estatísticas **desce**, e a meta volta a "Pendente" para o aluno | F-ANUL-03 |
-| CA-04 | As questões da bateria anulada voltam a ser inéditas: a bateria seguinte do bloco pode escolhê-las de novo | F-ANUL-04 |
+| CA-03 | Depois de anular, a meta volta a "Pendente" para o aluno e a linha da bateria anulada deixa de mostrar desempenho (a anulada não conta). **Neste schema as estatísticas oficiais vêm de `goal_entries`, não do ledger de baterias**, então anular não altera esses números. | F-ANUL-03 |
+| CA-04 | ~~As questões da bateria anulada voltam a ser inéditas~~ — **sem cobertura**: não existe motor de seleção nem `vw_seen_questions`. | — |
 | CA-05 | Bateria `in_progress` não oferece o botão; motivo vazio grava "Anulação administrativa" | F-ANUL-05 |
+| CA-06 | Só o professor responsável anula; aluno e professor alheio recebem `42501`; `in_progress` e `cancelled` são recusadas; a segunda chamada devolve sem alterar | `21_void_quiz_session.sql` |
 
 ---
 

@@ -45,10 +45,22 @@ test("entrar sem e-mail ou sem senha pede os dois, sem culpar um campo", () => {
 });
 
 test("a senha curta é recusada com o campo, para a tela saber o que marcar", () => {
-  const erro = checkPassword("12345");
+  const erro = checkPassword("Abc1234");
   assert.equal(erro?.field, "password");
-  assert.match(erro!.message, /pelo menos 6 caracteres/);
-  assert.equal(checkPassword("123456"), null);
+  assert.match(erro!.message, /pelo menos 8 caracteres/);
+  assert.equal(checkPassword("Abcd1234"), null);
+});
+
+test("a senha precisa de maiúscula, minúscula e número, nas classes ASCII do GoTrue", () => {
+  for (const fraca of ["abcdefgh", "ABCDEFGH", "12345678", "abcd1234", "ABCD1234", "Abcdefgh", "çççççççÇ1"]) {
+    const erro = checkPassword(fraca);
+    assert.equal(erro?.field, "password", fraca);
+    assert.equal(erro?.message, "A senha precisa ter letra maiúscula, minúscula e número.", fraca);
+  }
+  // Não exige símbolo: o pedido é comprimento mais as três classes.
+  assert.equal(checkPassword("abcdefG1"), null);
+  // Acento convive com as classes ASCII, e conta no comprimento.
+  assert.equal(checkPassword("Ação1234"), null);
 });
 
 test("o cadastro recusa na ordem em que a pessoa preenche", () => {
@@ -63,7 +75,7 @@ test("o cadastro recusa na ordem em que a pessoa preenche", () => {
   const senhaCurta = checkSignUp({ name: "Maria Silva", email: "a@b.com", password: "123" });
   assert.equal(senhaCurta?.field, "password");
 
-  assert.equal(checkSignUp({ name: "Maria Silva", email: "a@b.com", password: "123456" }), null);
+  assert.equal(checkSignUp({ name: "Maria Silva", email: "a@b.com", password: "Abcd1234" }), null);
 });
 
 test("o nome é medido sem os espaços em volta", () => {
@@ -174,8 +186,8 @@ test("QA-18 · senha só de espaços é recusada no cadastro e na redefinição,
   // A conta criada antes da regra continua entrando.
   assert.equal(checkCredentials({ email: "a@b.com", password: "        " }), null);
   // Espaço no meio é senha; o comprimento vem antes da regra do espaço.
-  assert.equal(checkPassword("ab cd ef"), null);
-  assert.match(checkPassword("     ")!.message, /pelo menos 6 caracteres/);
+  assert.equal(checkPassword("Ab cd e1"), null);
+  assert.match(checkPassword("     ")!.message, /pelo menos 8 caracteres/);
 });
 
 test("QA-15 · o nome tem teto de 120, medido sem as pontas", () => {
@@ -184,7 +196,7 @@ test("QA-15 · o nome tem teto de 120, medido sem as pontas", () => {
   const erro = checkName("a".repeat(121));
   assert.equal(erro?.field, "name");
   assert.equal(erro?.message, "O nome pode ter até 120 caracteres.");
-  assert.equal(checkSignUp({ name: "a".repeat(121), email: "a@b.com", password: "123456" })?.field, "name");
+  assert.equal(checkSignUp({ name: "a".repeat(121), email: "a@b.com", password: "Abcd1234" })?.field, "name");
 });
 
 test("QA-15 · turma: nome de 3 a 120 e descrição até 2000", () => {

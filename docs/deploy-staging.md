@@ -362,9 +362,19 @@ Por GitHub Environment (`staging`, e depois `producao`):
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | **var** | `sb_publishable_…` |
 | `SITE_URL` | var | domínio publicado do ambiente |
 | `VITE_SENTRY_DSN` | **var** | DSN do projeto do Sentry daquele ambiente |
+| `VITE_LEGAL_CONTACT_EMAIL` | **var** | E-mail de contato da política de privacidade e dos termos — **obrigatório em produção** (spec 46). `VITE_LEGAL_CONTROLLER_NAME` é opcional e, vazio, vira "Fronteira Concursos" |
 | `SENTRY_ORG` | var | slug da organização no Sentry |
 | `SENTRY_PROJECT` | var | slug do projeto no Sentry |
 | `SENTRY_AUTH_TOKEN` | secret | token com escopo de envio de sourcemap |
+
+**O portão dos materiais usa duas dessas variáveis em tempo de execução.**
+`/materials/*` (os PDFs das aulas) passa por um Worker, `apps/web/worker/index.ts`,
+que só entrega o arquivo a quem tem sessão válida **e** acesso vigente — ou é
+professor — perguntando ao próprio Supabase (`has_active_access` e `is_teacher`).
+`VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` entram no Worker por
+`--var` no `wrangler deploy` (os `vars` do `wrangler.jsonc` não são herdados
+pelos ambientes). **Sem elas o portão responde 503 e não entrega nada**: falha
+fechada. O `scripts/fumaca.sh` confere que `/materials/*` sem sessão dá 401.
 
 Nada no nível do repositório. Não há flag de "produção ativa": o workflow de
 produção existe desde já e simplesmente não roda enquanto ninguém clicar.
@@ -529,7 +539,9 @@ inteiro, e o log fica com registro do que foi publicado.
    precisa ser feito com a conta `darkvictor13`: o `gh` autenticado nesta
    máquina é o `victor-almeida-xbri`, que não tem push no repositório e leva 403
    na API de administração.
-4. **No dia da produção**, criar o Environment `producao` **com a deployment
+4. **No dia da produção**, seguir [`plano-deploy-producao.md`](plano-deploy-producao.md),
+   que reúne tudo o que precisa estar feito antes do primeiro dispatch. O passo
+   mais fácil de errar: criar o Environment `producao` **com a deployment
    branch rule limitada a `main`** antes do primeiro dispatch. Referenciar um
    Environment que não existe faz o GitHub criá-lo na hora, sem proteção
    nenhuma — parece ter funcionado e não protegeu nada. O job `resolver` já

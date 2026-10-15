@@ -429,18 +429,20 @@ function addDays(date: string, days: number): string {
 
 /** A meta de acerto de cada disciplina, para o traço no gráfico. */
 async function targetsBySubject(studentId: Uuid): Promise<ReadonlyMap<string, number>> {
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("teacher_id")
     .eq("id", studentId)
     .maybeSingle();
+  if (profileError) throwDb(profileError);
 
   if (!profile?.teacher_id) return new Map();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("subjects")
     .select("name,target_score")
     .eq("teacher_id", profile.teacher_id);
+  if (error) throwDb(error);
 
   return new Map((data ?? []).map((row) => [row.name, row.target_score]));
 }

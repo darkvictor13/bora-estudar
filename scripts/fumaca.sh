@@ -86,6 +86,22 @@ else
   if [ "$baixou" = nao ]; then
     erro "$asset respondeu ${tipo:-<sem content-type>} em vez de JavaScript — o fallback de SPA atendeu no lugar do bundle, e as checagens de conteúdo não têm o que ler"
   else
+    # O código é dividido por rota, e o que a primeira pintura precisa não cabe
+    # no `index-*.js`: a URL do Supabase e o Sentry moram em chunks que o
+    # index.html pré-carrega (`modulepreload`). As checagens abaixo leem o
+    # entry MAIS esses chunks, no mesmo arquivo — sem isso, um deploy correto
+    # reprovava com "o bundle não cita $HOST".
+    precarregados=$(curl -sS --max-time 30 "$URL/" | grep -oE 'rel="modulepreload"[^>]*href="/assets/[^"]*\.js"' | grep -oE '/assets/[^"]*\.js' || true)
+    for extra in $precarregados; do
+      for tentativa in 1 2 3; do
+        tipo=$(curl -sS --max-time 60 -o "$bundle.parte" -w '%{content_type}' "$URL$extra" || true)
+        case "$tipo" in *javascript*) cat "$bundle.parte" >> "$bundle"; break ;; esac
+        [ "$tentativa" = 3 ] || sleep 5
+      done
+      rm -f "$bundle.parte"
+      case "$tipo" in *javascript*) ;; *) erro "$extra respondeu ${tipo:-<sem content-type>} em vez de JavaScript" ;; esac
+    done
+
     # A chave é assada no bundle pelo Vite. Se ela não está aqui, o build rodou
     # sem as VITE_*, e o produto sobe com tela branca.
     if grep -q "$HOST" "$bundle"; then
@@ -137,6 +153,26 @@ else
     *)               ok "nenhum sourcemap publicado" ;;
   esac
 fi
+
+echo "→ cabeçalhos de segurança"
+# A auditoria de prontidão acrescentou estes ao `_headers`. Conferir no ar é o
+# que pega a regra que não casou, ou o deploy que não os levou.
+cabecalhos=$(curl -sSI --max-time 30 "$URL/" | tr -d '\r' || true)
+for nome in x-content-type-options x-frame-options referrer-policy permissions-policy strict-transport-security content-security-policy-report-only; do
+  case "$(printf '%s' "$cabecalhos" | tr 'A-Z' 'a-z')" in
+    *"$nome:"*) ok "$nome presente" ;;
+    *)          erro "cabeçalho $nome ausente na casca" ;;
+  esac
+done
+
+echo "→ materiais privados"
+# `/materials/*` passa pelo Worker de `worker/index.ts`, que exige sessão E
+# acesso vigente. Sem cookie, a resposta tem de ser 401 — e o caminho nem
+# precisa existir, porque o portão responde antes de procurar o arquivo. Se vier
+# 200, o PDF voltou a ser público (ou o fallback de SPA atendeu no lugar do
+# Worker, e o `run_worker_first` não pegou).
+c=$(codigo "$URL/materials/prf/_fumaca.pdf")
+[ "$c" = 401 ] && ok "/materials sem sessão → 401" || erro "/materials sem sessão → $c (esperado 401): o portão dos materiais não está no ar"
 
 echo "→ cache"
 # A casca não pode ser cacheada longo: é ela que aponta para o hash novo a cada

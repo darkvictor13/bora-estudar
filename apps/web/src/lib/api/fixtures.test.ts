@@ -574,13 +574,43 @@ test("sair esquece o tema da conta", async () => {
   assert.equal(await api.loadThemePreference(), null);
 });
 
+test("excluir a conta encerra a sessão e esquece o tema (spec 46)", async () => {
+  await api.saveThemePreference("dark");
+  const deleted = await api.deleteAccount();
+  assert.ok(deleted.ok);
+
+  assert.equal(await api.loadSession(), null);
+  assert.equal(await api.loadThemePreference(), null);
+});
+
+test("o professor não exclui a própria conta por autoatendimento (R-LGPD-09)", async () => {
+  setFixtureRole("teacher");
+  const refused = await api.deleteAccount();
+  assert.ok(!refused.ok);
+  assert.equal(refused.error.code, "forbidden");
+  assert.notEqual(await api.loadSession(), null);
+});
+
+test("sem sessão, excluir a conta pede para entrar", async () => {
+  await api.signOut();
+  const refused = await api.deleteAccount();
+  assert.ok(!refused.ok);
+  assert.equal(refused.error.code, "unauthenticated");
+});
+
 test("cupom inválido é recusado e não libera acesso", async () => {
   const refused = await api.redeemCoupon("NAOEXISTE");
   assert.ok(!refused.ok);
-  assert.equal(refused.error.code, "not_found");
-  assert.equal(refused.error.field, "code");
+  assert.equal(refused.error.code, "validation");
+  assert.equal(refused.error.field, "coupon");
+  assert.equal(refused.error.message, "Cupom inválido ou expirado.");
 
-  const accepted = await api.redeemCoupon("bora3");
+  const empty = await api.redeemCoupon("   ");
+  assert.ok(!empty.ok);
+  assert.equal(empty.error.message, "Informe o código do cupom.");
+
+  // O código é normalizado: a pessoa digita o que está no papel.
+  const accepted = await api.redeemCoupon(" bo ra3 ");
   assert.ok(accepted.ok);
   assert.equal(accepted.data.access, "active");
 });
@@ -593,23 +623,37 @@ test("a busca de alunos casa nome e e-mail, e os filtros se somam", async () => 
   assert.equal((await api.listStudents({ pace: "behind", access: "active" })).length, 0);
 });
 
-test("anular bateria exige motivo", async () => {
-  const semMotivo = await api.voidQuizSession({
-    sessionId: "88888888-8888-4888-8888-000000000001",
-    requestId: requestId(),
-    reason: "   ",
-  });
-  assert.ok(!semMotivo.ok);
-  assert.equal(semMotivo.error.code, "validation");
+test("anular bateria: motivo opcional com padrão, só finalizada, idempotente (spec 16)", async () => {
+  const concluida = "88888888-8888-4888-8888-000000000001";
 
-  const comMotivo = await api.voidQuizSession({
-    sessionId: "88888888-8888-4888-8888-000000000001",
-    requestId: requestId(),
-    reason: "Questões repetidas.",
-  });
-  assert.ok(comMotivo.ok);
-  assert.equal(comMotivo.data.status, "voided");
-  assert.equal(comMotivo.data.score, null, "bateria anulada sai do desempenho");
+  // O motivo é opcional: vazio grava "Anulação administrativa" (R-ANUL-08).
+  const semMotivo = await api.voidQuizSession({ sessionId: concluida, reason: "   " });
+  assert.ok(semMotivo.ok);
+  assert.equal(semMotivo.data.status, "voided");
+  assert.equal(semMotivo.data.voidReason, "Anulação administrativa");
+  assert.equal(semMotivo.data.score, null, "bateria anulada sai do desempenho");
+
+  // A lista relida mostra a anulada, com o motivo — ela não some (R-ANUL-12).
+  const [aluno] = await api.listStudents({});
+  assert.ok(aluno);
+  const file = await api.loadStudentFile(aluno.studentId);
+  const linha = file.sessions.find((session) => session.id === concluida);
+  assert.equal(linha?.status, "voided");
+  assert.equal(linha?.voidReason, "Anulação administrativa");
+
+  // Anular de novo devolve o estado gravado, sem reescrever o motivo (R-ANUL-04).
+  const denovo = await api.voidQuizSession({ sessionId: concluida, reason: "Outro motivo." });
+  assert.ok(denovo.ok);
+  assert.equal(denovo.data.voidReason, "Anulação administrativa");
+
+  // O teto do motivo é do contrato, com o campo marcado.
+  const longo = await api.voidQuizSession({ sessionId: "88888888-8888-4888-8888-000000000002", reason: "x".repeat(501) });
+  assert.ok(!longo.ok);
+  assert.equal(longo.error.field, "reason");
+
+  const inexistente = await api.voidQuizSession({ sessionId: "88888888-8888-4888-8888-0000000000ff", reason: "" });
+  assert.ok(!inexistente.ok);
+  assert.equal(inexistente.error.code, "not_found");
 });
 
 test("remover caderno marca, não apaga — e restaurar traz de volta", async () => {

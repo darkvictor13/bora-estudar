@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ROUTES, safeInternalPath } from "./routes.ts";
+import { ROUTES, isPublicPath, safeInternalPath } from "./routes.ts";
 
 const FALLBACK = ROUTES.resetPassword;
 
@@ -55,5 +55,23 @@ describe("safeInternalPath — QA-02", () => {
 
   it("não valida o fallback: ele é constante de quem chama", () => {
     assert.equal(safeInternalPath(null, "/aluno"), "/aluno");
+  });
+});
+
+describe("isPublicPath — R-AUTH-20", () => {
+  it("reconhece as telas que não exigem sessão, como o React Router as casa", () => {
+    for (const path of ["/", "/entrar", "/ENTRAR/", "/cadastro", "/recuperar-senha", "/redefinir-senha", "/confirmar", "/privacidade", "/termos"]) {
+      assert.equal(isPublicPath(path), true, path);
+    }
+  });
+
+  it("não trata como pública nenhuma tela de área", () => {
+    for (const path of ["/aluno", "/aluno/conta", "/professor/alunos", "/professor/alunos/123"]) {
+      assert.equal(isPublicPath(path), false, path);
+    }
+  });
+
+  it("`%` malformado conta como pública: não há caminho a devolver ao login", () => {
+    assert.equal(isPublicPath("/aluno/%E0%A4%A"), true);
   });
 });

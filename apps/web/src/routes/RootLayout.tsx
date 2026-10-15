@@ -4,8 +4,11 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 import Typography from "@mui/material/Typography";
 import { useEffect, type ReactNode } from "react";
-import { Outlet, useMatches } from "react-router";
+import { Outlet, useMatches, useNavigate } from "react-router";
 
+import { watchSignedOut } from "@/lib/auth/watch-session";
+import { isPublicPath, ROUTES } from "@/lib/routes";
+import { forgetTheme } from "@/lib/theme";
 import { RouteError } from "@/routes/RouteError";
 
 const DEFAULT_TITLE = "Fronteira Concursos";
@@ -50,6 +53,22 @@ interface TitleHandle {
  */
 export function RootLayout() {
   const matches = useMatches();
+  const navigate = useNavigate();
+
+  // Sessão que acabou em outra aba, ou que não pôde ser renovada (R-AUTH-20).
+  // `navigate` é estável dentro de uma rota de dados (CLAUDE.md), então o efeito
+  // assina uma vez. O caminho vem de `location` na hora do evento, e não de uma
+  // captura: o que importa é onde a pessoa ESTÁ quando a sessão acaba.
+  useEffect(
+    () =>
+      watchSignedOut(() => {
+        const { pathname, search } = window.location;
+        if (isPublicPath(pathname)) return;
+        forgetTheme();
+        void navigate(`${ROUTES.signIn}?next=${encodeURIComponent(pathname + search)}`, { replace: true });
+      }),
+    [navigate],
+  );
 
   useEffect(() => {
     const titled = [...matches]

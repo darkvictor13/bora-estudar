@@ -193,6 +193,45 @@ export type Database = {
           },
         ]
       }
+      coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          expires_at: string
+          months: number
+          redeemed_at: string
+          student_id: string
+        }
+        Insert: {
+          coupon_id: string
+          expires_at: string
+          months: number
+          redeemed_at?: string
+          student_id: string
+        }
+        Update: {
+          coupon_id?: string
+          expires_at?: string
+          months?: number
+          redeemed_at?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           active: boolean
@@ -200,8 +239,10 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          max_uses: number | null
           months_granted: number
           updated_at: string
+          valid_until: string | null
         }
         Insert: {
           active?: boolean
@@ -209,8 +250,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          max_uses?: number | null
           months_granted?: number
           updated_at?: string
+          valid_until?: string | null
         }
         Update: {
           active?: boolean
@@ -218,8 +261,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          max_uses?: number | null
           months_granted?: number
           updated_at?: string
+          valid_until?: string | null
         }
         Relationships: []
       }
@@ -1551,11 +1596,15 @@ export type Database = {
           access_status: Database["public"]["Enums"]["access_status"]
           coupon_used: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           name: string | null
           plan: string | null
           role: Database["public"]["Enums"]["user_role"]
           teacher_id: string | null
+          theme_preference:
+            | Database["public"]["Enums"]["theme_preference"]
+            | null
           updated_at: string
         }
         Insert: {
@@ -1564,11 +1613,15 @@ export type Database = {
           access_status?: Database["public"]["Enums"]["access_status"]
           coupon_used?: string | null
           created_at?: string
+          deleted_at?: string | null
           id: string
           name?: string | null
           plan?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           teacher_id?: string | null
+          theme_preference?:
+            | Database["public"]["Enums"]["theme_preference"]
+            | null
           updated_at?: string
         }
         Update: {
@@ -1577,11 +1630,15 @@ export type Database = {
           access_status?: Database["public"]["Enums"]["access_status"]
           coupon_used?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string | null
           plan?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           teacher_id?: string | null
+          theme_preference?:
+            | Database["public"]["Enums"]["theme_preference"]
+            | null
           updated_at?: string
         }
         Relationships: [
@@ -3096,6 +3153,7 @@ export type Database = {
         Args: { p_study_plan_id: string; p_week_number: number }
         Returns: number
       }
+      delete_my_account: { Args: never; Returns: undefined }
       find_student_by_email: {
         Args: { p_email: string }
         Returns: {
@@ -3190,6 +3248,13 @@ export type Database = {
           study_plan_id: string
         }[]
       }
+      redeem_coupon: {
+        Args: { p_code: string }
+        Returns: {
+          access_expires_at: string
+          access_status: Database["public"]["Enums"]["access_status"]
+        }[]
+      }
       save_summary_notes: {
         Args: { p_next: Json; p_previous: Json; p_topic_id: string }
         Returns: boolean
@@ -3251,6 +3316,14 @@ export type Database = {
           week_number: number
         }[]
       }
+      void_quiz_session: {
+        Args: { p_quiz_session_id: string; p_reason?: string }
+        Returns: {
+          new_reason: string
+          new_status: Database["public"]["Enums"]["quiz_session_status"]
+          new_voided_at: string
+        }[]
+      }
       week_replacement_preview: {
         Args: { p_study_plan_id: string; p_week_number: number }
         Returns: {
@@ -3298,6 +3371,7 @@ export type Database = {
         | "cancelled"
         | "voided"
       study_plan_status: "active" | "paused" | "completed" | "archived"
+      theme_preference: "light" | "dark"
       theory_review_status: "pending" | "in_progress" | "completed"
       theory_stage:
         | "reading"
@@ -3475,6 +3549,7 @@ export const Constants = {
         "voided",
       ],
       study_plan_status: ["active", "paused", "completed", "archived"],
+      theme_preference: ["light", "dark"],
       theory_review_status: ["pending", "in_progress", "completed"],
       theory_stage: [
         "reading",

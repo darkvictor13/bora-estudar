@@ -1,12 +1,24 @@
 # 11 — Tema claro e escuro
 
-**Situação:** implementada · **Comparativo:** §12 item 14 · **Fluxos e2e:** F-TEMA-01 a F-TEMA-08 (02 e 04 em `fixme`)
+**Situação:** implementada · **Comparativo:** §12 item 14 · **Fluxos e2e:** F-TEMA-01 a F-TEMA-08
 
-> **Atualizada em 14/09/2026.** `user_preferences` saiu do schema de 14/09/2026 e nada a substituiu: a escolha
-> vale POR APARELHO até existir uma coluna `theme_preference` em `profiles`. É o
-> que mantém `F-TEMA-02` e `F-TEMA-04` em `fixme`. A camada de papéis migrou de
-> `globals.css` para os tokens de `packages/ui`; o resto desta spec continua
-> valendo.
+> **Atualizada em 15/10/2026.** A preferência mora em **`profiles.theme_preference`**, e a escolha
+> volta a ser da CONTA. `user_preferences` saiu do schema de 14/09/2026 e ficou
+> um mês sem substituta — período em que a escolha valeu só por aparelho e
+> `F-TEMA-02` e `F-TEMA-04` estiveram em `fixme`. As regras `R-TEMA-01` a
+> `R-TEMA-09` descrevem a tabela que não existe mais e estão **substituídas**
+> pela seção abaixo; as demais (aplicação antes do paint, contraste, logout)
+> valem como estão.
+
+### Onde a preferência mora hoje
+
+| Id | Regra |
+|---|---|
+| R-TEMA-19 | A preferência é a coluna `profiles.theme_preference`, do enum `theme_preference` (`light`, `dark`), **nulável e sem default**: `null` é "nunca escolheu" e equivale a claro (R-TEMA-07), mas não é a mesma coisa que ter escolhido claro — gravar `light` na primeira visita transformaria toda abertura numa escolha que ninguém fez. |
+| R-TEMA-20 | A escrita é **direta pelo dono**, sem RPC: `GRANT UPDATE (theme_preference)` por coluna e a policy `profiles_update_own` (`id = auth.uid()` e `deleted_at is null`). O gatilho `protect_profile_admin_fields` não toca na coluna. |
+| R-TEMA-21 | O adaptador lê a coluna no `loadThemePreference` e a grava no `saveThemePreference`. **Se a leitura falhar, vale a cópia do aparelho**: o aparelho é cache (R-TEMA-11), e o tema não pode derrubar a tela. Se a gravação falhar, o contrato devolve erro e o controle mostra o aviso de R-TEMA-12. |
+| R-TEMA-22 | Excluir a conta zera a coluna (spec 46). |
+
 
 ---
 
@@ -141,10 +153,10 @@ claro/escuro" sai do Fora de escopo dela.
 | CA-06 | Os três papéis têm o controle e a preferência persistida — aluno, professor e admin | F-TEMA-06 |
 | CA-07 | Texto sobre fundo cumpre 4.5:1 (3:1 se grande), e o limite de campo e de botão cumpre 3:1, nos dois temas, nas telas de aluno e de professor | F-TEMA-07 |
 | CA-08 | Sem nenhuma escolha feita, e sem linha em `user_preferences`, o site abre em claro mesmo com o sistema operacional no escuro | F-TEMA-08 |
-| CA-09 | Um perfil não escreve a linha de outro: o `INSERT` levanta `42501` e o `UPDATE` afeta **zero linhas** (contadas com `row_count`, porque UPDATE filtra em silêncio) | **sem cobertura**: `user_preferences` saiu do schema |
-| CA-10 | `theme` recusa qualquer valor fora de `light` e `dark` | **sem cobertura**: `user_preferences` saiu do schema |
-| CA-11 | `profile_id` não é atualizável pelo grant por coluna, e `delete` é recusado | **sem cobertura**: `user_preferences` saiu do schema |
-| CA-12 | `student_preferences` não tem mais a coluna `theme`, e as demais colunas continuam intactas | **sem cobertura**: `user_preferences` saiu do schema |
+| CA-09 | Um perfil não escreve a linha de outro: o `UPDATE` de `theme_preference` alheio afeta **zero linhas** (contadas com `row_count`, porque UPDATE filtra em silêncio) | `04_profiles.sql` |
+| CA-10 | `theme_preference` recusa qualquer valor fora de `light` e `dark` (`22P02`) e aceita `null` | `04_profiles.sql` |
+| CA-11 | `theme_preference` é a ÚNICA coluna além de `name` que `authenticated` atualiza em `profiles`; `role`, `teacher_id` e o acesso seguem fora do grant | `01_grants.sql`, `04_profiles.sql` |
+| CA-12 | A conta excluída fica com `theme_preference` nulo | `22_account_deletion.sql` |
 | CA-13 | `/entrar` abre claro mesmo com o sistema no escuro, não declara tema próprio, o cartão é translúcido e desfocado, e o texto passa em AA nos dois temas | F-TEMA-10 |
 
 ---

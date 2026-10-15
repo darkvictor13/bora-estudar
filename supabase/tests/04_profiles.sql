@@ -71,14 +71,21 @@ select app_test.act_as('77777777-7777-4777-8777-777777777777');
 
 do $$
 declare v_role public.user_role; v_status public.access_status; v_plan text; v_cupom text;
+        v_teacher uuid; v_origin text;
 begin
-  insert into public.profiles (id, name, role, access_status, access_expires_at, plan, coupon_used)
-  values ('77777777-7777-4777-8777-777777777777','Gil','teacher','active',
-          now() + interval '10 years','Premium','BORA3M');
+  -- O professor escolhido é o da Ana: sem `link_student`, o cliente não pode
+  -- se anexar a ninguém, nem inserindo a própria linha.
+  insert into public.profiles (id, name, role, teacher_id, access_status, access_expires_at, plan, coupon_used, access_origin)
+  values ('77777777-7777-4777-8777-777777777777','Gil','teacher','11111111-1111-4111-8111-111111111111','active',
+          now() + interval '10 years','Premium','BORA3M','cupom');
 
-  select role, access_status, plan, coupon_used
-    into v_role, v_status, v_plan, v_cupom
+  select role, teacher_id, access_status, plan, coupon_used, access_origin
+    into v_role, v_teacher, v_status, v_plan, v_cupom, v_origin
     from public.profiles where id = '77777777-7777-4777-8777-777777777777';
+
+  if v_teacher is not null or v_origin is not null then
+    raise exception 'FALHOU: a conta nasceu vinculada (%) ou com origem (%)', v_teacher, v_origin;
+  end if;
 
   if v_role <> 'student' then
     raise exception 'FALHOU: a conta nasceu com papel %', v_role;
@@ -444,3 +451,55 @@ begin
 end $$;
 
 delete from auth.users where id::text like '78000000-0000-4000-8000-00000000000%';
+
+-- ---------- A preferência de tema é da conta, e só do dono (spec 11) ----------
+set role authenticated;
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+
+do $$
+declare v_rows integer; v_tema public.theme_preference;
+begin
+  update public.profiles set theme_preference = 'dark'
+   where id = '22222222-2222-4222-8222-222222222222';
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'FALHOU: o dono nao gravou o proprio tema (% linhas)', v_rows;
+  end if;
+  select theme_preference into v_tema from public.profiles where id = '22222222-2222-4222-8222-222222222222';
+  if v_tema is distinct from 'dark' then
+    raise exception 'FALHOU: o tema gravado voltou como %', v_tema;
+  end if;
+  raise notice '23 OK  o dono grava o proprio tema';
+
+  -- Voltar a "nunca escolheu" é válido: nulo não é um terceiro tema.
+  update public.profiles set theme_preference = null
+   where id = '22222222-2222-4222-8222-222222222222';
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then raise exception 'FALHOU: o tema nao voltou a nulo'; end if;
+  raise notice '24 OK  theme_preference aceita nulo (nunca escolheu)';
+end $$;
+
+-- UPDATE filtra em silêncio: a linha alheia não aparece para a operação, e o
+-- que prova a defesa é contar zero linhas — esperar exceção passaria por engano.
+do $$
+declare v_rows integer;
+begin
+  update public.profiles set theme_preference = 'dark'
+   where id = '33333333-3333-4333-8333-333333333333';
+  get diagnostics v_rows = row_count;
+  if v_rows <> 0 then
+    raise exception 'FALHOU: o Bruno gravou o tema da Carla (% linhas)', v_rows;
+  end if;
+  raise notice '25 OK  o tema de outro perfil afeta zero linhas';
+end $$;
+
+do $$ begin
+  update public.profiles set theme_preference = 'azul'
+   where id = '22222222-2222-4222-8222-222222222222';
+  raise exception 'FALHOU: theme_preference aceitou um valor fora de light e dark';
+exception when invalid_text_representation then
+  raise notice '26 OK  theme_preference recusa valor fora do enum';
+end $$;
+
+reset role;
+select app_test.act_as_owner();

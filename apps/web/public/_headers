@@ -7,12 +7,37 @@
 # mundos. Por isso a casca vem primeiro e o asset apaga o cabeçalho com `!`
 # antes de escrever o seu.
 
+# CABEÇALHOS DE SEGURANÇA (auditoria de prontidão, A1).
+#
+# A CSP sai como REPORT-ONLY: o navegador registra a violação no console e não
+# bloqueia nada, então um erro de lista (um domínio que o app usa e esqueci)
+# não derruba o site. Promover a `Content-Security-Policy` é trocar o nome do
+# cabeçalho depois de uma semana em staging sem violação.
+#
+#  - `script-src` aceita o próprio site e o HASH do script embutido de
+#    `index.html` (o tema antes do primeiro paint). Mexeu naquele script, o hash
+#    muda: `src/lib/security-headers.test.ts` reprova se os dois divergirem.
+#  - `style-src 'unsafe-inline'` é o preço do Emotion/MUI, que injeta `<style>`
+#    em tempo de execução; é o único afrouxamento.
+#  - `img-src` e `connect-src` abrem o Supabase (imagens assinadas do bucket,
+#    API e realtime) e o Sentry, que são as únicas origens externas do app. As
+#    fontes são auto-hospedadas (CLAUDE.md, Tipografia), e nada é embutido em
+#    iframe, por isso `frame-ancestors 'none'` e `X-Frame-Options: DENY`.
+#  - HSTS sem `includeSubDomains` nem `preload`: não é este arquivo que decide
+#    sobre os outros subdomínios do domínio.
+
 # A casca da SPA é servida em TODA rota, não só em /index.html: uma regra para
 # `/index.html` não pega `/aluno/revisoes`, e nem sequer pega `/` — o
 # html_handling do Cloudflare redireciona /index.html para / com 307, e é o
 # redirect que fica com o cabeçalho.
 /*
   Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-DiTVfiXkFsLuOyBQsRQfHWUCdQF1uGag0e3som13nFY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
 # Os nomes em assets/ carregam hash de conteúdo — cache eterno é seguro, e é o
 # index.html (acima, sem cache) quem aponta para o hash novo a cada deploy.
