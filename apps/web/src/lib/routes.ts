@@ -65,18 +65,6 @@ export const ROUTES = {
 } as const;
 
 /**
- * Telas que o aluno alcança mesmo sem acesso liberado.
- *
- * Sem assinatura ativa o aluno é empurrado para a lista de espera, mas precisa
- * conseguir editar os próprios dados e se inscrever. Espelha o
- * `data-acesso-livre="1"` do painel antigo.
- */
-export const STUDENT_ROUTES_WITHOUT_ACCESS: readonly string[] = [
-  ROUTES.student.account,
-  ROUTES.student.waitlist,
-];
-
-/**
  * A casa de cada papel.
  *
  * Só dois papéis desde o schema de 14/09/2026: `user_role` é

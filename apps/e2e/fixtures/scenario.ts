@@ -70,9 +70,6 @@ export const CATALOG = {
   ],
 } as const;
 
-/** `main_target` é fixo em `start_quiz_session`. */
-export const MAIN_TARGET = 15;
-
 export type AccessStatus = "active" | "pending" | "suspended" | "expired" | "none";
 
 export interface ScenarioOptions {

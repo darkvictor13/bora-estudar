@@ -76,9 +76,6 @@ export function writeLocalTheme(profileId: string, theme: Theme): void {
   }, undefined);
 }
 
-/** @deprecated Use `writeLocalTheme`. Mantido enquanto as telas antigas existirem. */
-export const rememberTheme = writeLocalTheme;
-
 /**
  * Pinta e guarda, nesta ordem.
  *
