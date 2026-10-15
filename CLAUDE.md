@@ -74,6 +74,17 @@ npm run e2e:video     # a mesma suíte, gravando .webm por teste
 O de-para coluna a coluna, contra o banco de origem, está em
 [`docs/de-para-schema.md`](docs/de-para-schema.md).
 
+**Excluir a conta é `delete_my_account()`, e NÃO é `delete from auth.users`.**
+Cinco tabelas de histórico referenciam `profiles` com `RESTRICT`, então o
+`DELETE` falharia para todo aluno que já teve acesso liberado. A RPC apaga tudo o
+que o aluno fez, deixa o perfil como "Conta excluída" (`profiles.deleted_at`) e
+mantém só `access_grants` e as notas de simulado, sem identificar ninguém; o login
+em `auth.users` é anulado como no soft delete do GoTrue, e a FK `profiles ->
+auth.users` (de que o cascade do e2e e do `db:test` depende) não se toca. É
+idempotente por `deleted_at`, recusa professor, e a lista de tabelas é explícita:
+tabela nova com FK para `profiles` reprova em `07_schema.sql` até alguém decidir se
+ela sai ou fica (spec 46). O app diz as duas listas ao aluno ANTES de confirmar.
+
 **A fronteira da escrita é entre planejar e executar.**
 
 | | Quem escreve | Como |
@@ -784,6 +795,27 @@ código-fonte. Não ligue `build.sourcemap` incondicionalmente.
 **Nada de dado pessoal.** `sendDefaultPii: false` e identidade só por
 `profileId`. Session Replay e tracing estão fora, e a decisão é de privacidade —
 não a reabra sem decidir de novo.
+
+---
+
+## A hospedagem
+
+**Os cabeçalhos de segurança moram em `apps/web/public/_headers`.** A CSP está em
+`Report-Only`: promovê-la é trocar o nome do cabeçalho, depois de uma semana em
+staging sem violação. O hash do script do tema de `index.html` está nela, e
+`security-headers.test.ts` reprova se divergirem — mexeu naquele script, mexa no
+hash.
+
+**`/materials/*` passa por um Worker (`apps/web/worker/index.ts`), e só ele executa
+código no site.** Entrega o PDF a quem tem sessão válida E acesso vigente (ou é
+professor), perguntando ao Supabase. As URLs `/materials/prf/….pdf` que o professor
+cola não mudaram. O nome do cookie sai da URL do Supabase configurada, nunca do
+que o cliente manda, e sem `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` (entram por
+`--var` no `wrangler deploy`) o portão responde 503: falha fechada.
+
+**O código é dividido por rota (`lazy` em `router.tsx`), e `scripts/fumaca.sh` lê o
+entry MAIS os chunks pré-carregados.** A URL do Supabase não está no
+`index-*.js`; uma checagem que leia só ele reprova um deploy correto.
 
 ---
 
