@@ -122,17 +122,16 @@ import {
  * O QUE AINDA NÃO EXISTE, e por quê.
  *
  * A lista esvaziou na Fase 6: o adaptador cobre todas as operações do
- * contrato. O que sobrou de pendência não é fase nenhuma — são três operações
- * que ESTE SCHEMA não permite, e que LANÇAM com o motivo em vez de recusar
+ * contrato. O que sobrou de pendência não é fase nenhuma — é UMA operação que
+ * ESTE SCHEMA não permite, e que LANÇA com o motivo em vez de recusar
  * educadamente. **Eram cinco:** `grantAccess` e `revokeAccess` saíram da lista
- * em 18/09/2026, com `set_student_access`.
+ * em 18/09/2026, com `set_student_access`; `redeemCoupon` e `voidQuizSession`
+ * saíram em 15/10/2026, com `redeem_coupon` e `void_quiz_session`.
  *
- * - `voidQuizSession` — `quiz_sessions` é SELECT; a RPC não foi portada.
- * - `redeemCoupon` — `coupons` está sem policy e sem grant, de propósito.
  * - `setSelectedSubjects` — a tabela de matérias do ciclo não foi portada.
  *
- * Cada uma diz o que falta, em `errors` ou no próprio módulo. Uma recusa muda
- * quando o banco mudar; uma tela que finge ter tentado, não.
+ * Ela diz o que falta, em `errors` ou no próprio módulo. Uma recusa muda quando o
+ * banco mudar; uma tela que finge ter tentado, não.
  */
 export const supabaseApi: BoraApi = {
   ...mockExamsApi,

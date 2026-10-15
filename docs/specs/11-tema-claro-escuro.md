@@ -156,7 +156,7 @@ claro/escuro" sai do Fora de escopo dela.
 | CA-09 | Um perfil não escreve a linha de outro: o `UPDATE` de `theme_preference` alheio afeta **zero linhas** (contadas com `row_count`, porque UPDATE filtra em silêncio) | `04_profiles.sql` |
 | CA-10 | `theme_preference` recusa qualquer valor fora de `light` e `dark` (`22P02`) e aceita `null` | `04_profiles.sql` |
 | CA-11 | `theme_preference` é a ÚNICA coluna além de `name` que `authenticated` atualiza em `profiles`; `role`, `teacher_id` e o acesso seguem fora do grant | `01_grants.sql`, `04_profiles.sql` |
-| CA-12 | A conta excluída fica com `theme_preference` nulo | `21_account_deletion.sql` |
+| CA-12 | A conta excluída fica com `theme_preference` nulo | `22_account_deletion.sql` |
 | CA-13 | `/entrar` abre claro mesmo com o sistema no escuro, não declara tema próprio, o cartão é translúcido e desfocado, e o texto passa em AA nos dois temas | F-TEMA-10 |
 
 ---

@@ -113,6 +113,7 @@ import {
   checkNotebook,
   checkCoupon,
   checkPassword,
+  checkVoidReason,
   checkPersonalDeck,
   checkPlan,
   checkQuestionRecord,
@@ -662,9 +663,22 @@ export function setFixtureRole(role: "teacher" | "student") {
     name: role === "teacher" ? "Professor de Exemplo" : "Aluna de Exemplo" };
 }
 
+/**
+ * As baterias que o professor anulou nesta sessão de demonstração. `SESSIONS` é a
+ * semente e não muda; a anulação vira uma sobreposição, e é por ela que a lista
+ * relida mostra "Anulada" — um mock que devolve sempre o mesmo objeto esconderia
+ * a revalidação que não roda.
+ */
+const voidedSessions = new Map<string, QuizSessionSummary>();
+
+function currentSession(session: QuizSessionSummary): QuizSessionSummary {
+  return voidedSessions.get(session.id) ?? session;
+}
+
 /** Volta o cenário ao começo. Usada por teste, nunca pela aplicação. */
 export function resetFixtures(): void {
   sequence = 0;
+  voidedSessions.clear();
   replayed.clear();
   LESSONS = INITIAL_LESSONS;
   pilotCatalogCreated = false;
@@ -1390,7 +1404,7 @@ export const fixturesApi: BoraApi = {
       card,
       plan: PLAN,
       statistics: STATISTICS,
-      sessions: SESSIONS,
+      sessions: SESSIONS.map(currentSession),
       topicDifficulties: TOPICS,
     });
   },
@@ -1503,17 +1517,26 @@ export const fixturesApi: BoraApi = {
       }),
     ),
 
-  voidQuizSession: (input: VoidSessionInput) =>
-    later(
-      once(input.requestId, () => {
-        const session = SESSIONS.find((candidate) => candidate.id === input.sessionId);
-        if (!session) return fail<QuizSessionSummary>("not_found", "Bateria não encontrada.");
-        if (!input.reason.trim()) {
-          return fail<QuizSessionSummary>("validation", "Informe o motivo da anulação.", "reason");
-        }
-        return done<QuizSessionSummary>({ ...session, status: "voided", score: null });
-      }),
-    ),
+  voidQuizSession: (input: VoidSessionInput) => {
+    const invalid = checkVoidReason(input.reason);
+    if (invalid) return later<Result<QuizSessionSummary>>({ ok: false, error: invalid });
+    const found = SESSIONS.find((candidate) => candidate.id === input.sessionId);
+    if (!found) return later(fail<QuizSessionSummary>("not_found", "Bateria não encontrada."));
+    const session = currentSession(found);
+    // Já anulada: devolve o que está gravado, sem reescrever o motivo (R-ANUL-04).
+    if (session.status === "voided") return later(done<QuizSessionSummary>(session));
+    if (session.status !== "completed" && session.status !== "awaiting_time") {
+      return later(fail<QuizSessionSummary>("conflict", "Só uma bateria finalizada pode ser anulada."));
+    }
+    const voided: QuizSessionSummary = {
+      ...session,
+      status: "voided",
+      score: null,
+      voidReason: input.reason.trim() || "Anulação administrativa",
+    };
+    voidedSessions.set(session.id, voided);
+    return later(done(voided));
+  },
 
   listPlans: (studentId?: Uuid) =>
     later<readonly StudyPlanSummary[]>(
@@ -2295,6 +2318,7 @@ const SESSIONS: readonly QuizSessionSummary[] = [
     durationMinutes: 38,
     startedAt: `${addDays(TODAY, -3)}T19:00:00.000Z`,
     finishedAt: `${addDays(TODAY, -3)}T19:38:00.000Z`,
+    voidReason: null,
   },
   {
     id: "88888888-8888-4888-8888-000000000002",
@@ -2307,6 +2331,7 @@ const SESSIONS: readonly QuizSessionSummary[] = [
     durationMinutes: null,
     startedAt: `${addDays(TODAY, -1)}T21:00:00.000Z`,
     finishedAt: `${addDays(TODAY, -1)}T21:31:00.000Z`,
+    voidReason: null,
   },
 ];
 

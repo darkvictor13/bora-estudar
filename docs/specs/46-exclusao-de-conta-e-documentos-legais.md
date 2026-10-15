@@ -30,7 +30,7 @@ E a pessoa precisa de um documento que diga, em português, quem trata os dados,
 
 | Id | Regra |
 |---|---|
-| R-LGPD-04 | Ficam só dois registros históricos, para métrica: **as liberações e bloqueios de acesso** (`access_grants`: ação, meses, validade, data) e **as notas de simulados presenciais** (`mock_exam_results`, `mock_exam_subject_results`), que sustentam a média e a distribuição da turma. Eles apontam para um perfil que já não tem nome, e-mail, telefone nem vínculo. |
+| R-LGPD-04 | Ficam só três registros históricos, para métrica: **as liberações e bloqueios de acesso** (`access_grants`: ação, meses, validade, data), **os resgates de cupom** (`coupon_redemptions`: cupom, meses, validade, data) e **as notas de simulados presenciais** (`mock_exam_results`, `mock_exam_subject_results`), que sustentam a média e a distribuição da turma. Eles apontam para um perfil que já não tem nome, e-mail, telefone nem vínculo. |
 | R-LGPD-05 | Uma tabela nova que referencie `profiles` não pode entrar sem decisão: `07_schema.sql` compara o catálogo de FKs com a lista "apagada" e a lista "retida" da função, e falha com a tabela que não está em nenhuma. |
 
 ### Como a operação se comporta
@@ -87,7 +87,7 @@ Meus dados (aluno) ─ cartão "Excluir conta" ─ diálogo ─ digita EXCLUIR
 | Contrato | `deleteAccount(): Promise<Result<void>>` |
 | Telas | Meus dados (cartão e diálogo), `/privacidade`, `/termos`, mensagem em `/entrar` |
 | Domínio | `lib/legal.ts` |
-| Testes | `supabase/tests/21_account_deletion.sql`, `07_schema.sql`, `apps/e2e/tests/legal.spec.ts` |
+| Testes | `supabase/tests/22_account_deletion.sql`, `07_schema.sql`, `apps/e2e/tests/legal.spec.ts` |
 
 ---
 
@@ -95,10 +95,10 @@ Meus dados (aluno) ─ cartão "Excluir conta" ─ diálogo ─ digita EXCLUIR
 
 | Id | Critério | Cobertura |
 |---|---|---|
-| CA-01 | Depois de `delete_my_account`, nenhuma tabela apagada guarda linha do aluno; o perfil é "Conta excluída", sem professor, sem acesso e com `deleted_at`; a linha de `auth.users` não tem o e-mail original, nem identidades ou sessões. | `21_account_deletion.sql` |
-| CA-02 | `access_grants` e as notas de simulado do aluno continuam, e o outro aluno do mesmo professor não perde nada. | `21_account_deletion.sql` |
-| CA-03 | A segunda chamada não falha nem altera nada. Professor e anônimo são recusados. Aluno vencido exclui. | `21_account_deletion.sql` |
-| CA-04 | Excluída a conta, um JWT ainda válido não consegue renomear o perfil nem criar inscrição. | `21_account_deletion.sql` |
+| CA-01 | Depois de `delete_my_account`, nenhuma tabela apagada guarda linha do aluno; o perfil é "Conta excluída", sem professor, sem acesso e com `deleted_at`; a linha de `auth.users` não tem o e-mail original, nem identidades ou sessões. | `22_account_deletion.sql` |
+| CA-02 | `access_grants`, `coupon_redemptions` e as notas de simulado do aluno continuam, e o outro aluno do mesmo professor não perde nada. | `22_account_deletion.sql` |
+| CA-03 | A segunda chamada não falha nem altera nada. Professor e anônimo são recusados. Aluno vencido exclui. | `22_account_deletion.sql` |
+| CA-04 | Excluída a conta, um JWT ainda válido não consegue renomear o perfil nem criar inscrição. | `22_account_deletion.sql` |
 | CA-05 | Toda tabela com FK para `profiles` está na lista apagada ou na retida. | `07_schema.sql` |
 | CA-06 | O cartão aparece só para o aluno, com as duas listas; o botão só habilita com `EXCLUIR`; excluir encerra a sessão, e o login seguinte falha. | F-LGPD-01, F-LGPD-02, F-LGPD-05 |
 | CA-07 | O cadastro pode ser refeito com o mesmo e-mail e nasce vazio. | F-LGPD-01 |

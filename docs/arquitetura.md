@@ -422,17 +422,16 @@ conhecido por um risco maior.
   admin para acomodar, e `can_view_context` deu lugar a `can_access_teacher` e
   `is_teacher_of`. Uma área de administração, se nascer, nasce com um papel novo
   e uma decisão nova.
-- **As três operações que o banco ainda não permite.** Anular bateria, resgatar
-  cupom e selecionar as matérias do ciclo lançam com o motivo em
-  `lib/api/supabase/`, em vez de recusar em silêncio. Nas três a defesa do banco
-  é a certa: o que falta é a RPC `security definer` que valida do lado do
-  servidor. A quarta, o tema na conta, espera uma coluna `theme_preference` em
-  `profiles`.
+- **A operação que o banco ainda não permite.** Selecionar as matérias do ciclo
+  lança com o motivo em `lib/api/supabase/`, em vez de recusar em silêncio: a
+  defesa do banco é a certa, e o que falta é a tabela e a RPC `security definer`.
 
-  **Eram seis.** Liberar acesso, suspender acesso e vincular candidato saíram em
-  18/09/2026, com a migration `20260918120000` e a spec 13 — e promover a
-  professor, que nunca esteve nesta lista, continua sendo o `update` deliberado
-  de quem tem a chave do banco.
+  **Eram seis, e depois cinco.** Liberar acesso, suspender acesso e vincular
+  candidato saíram em 18/09/2026, com a migration `20260918120000` e a spec 13.
+  Resgatar cupom (`redeem_coupon`, spec 30), anular bateria (`void_quiz_session`,
+  spec 16) e o tema na conta (`profiles.theme_preference`, spec 11) saíram em
+  15/10/2026. Promover a professor, que nunca esteve nesta lista, continua sendo o
+  `update` deliberado de quem tem a chave do banco.
 - **Como o aluno responde uma bateria.** É a pendência que a remoção da
   extensão abriu, e a maior: o banco tem a sessão, o ledger e as três fases;
   não há superfície que as execute. Enquanto não houver, a tela do aluno abre

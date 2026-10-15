@@ -116,7 +116,7 @@ não deve tratá-las como já vistas.
 | Protocolo | **nada muda** |
 | Testes | `apps/e2e/tests/teacher.spec.ts` |
 
-**Os testes.** `supabase/tests/22_void_quiz_session.sql` prova a RPC (professor
+**Os testes.** `supabase/tests/21_void_quiz_session.sql` prova a RPC (professor
 responsável, estado, ledger intacto, meta de volta a `pending`, idempotência);
 o e2e prova a tela. **A pré-condição do e2e é a exceção à regra de usar só RPC
 real:** `start_quiz_session` e `finish_quiz_session` não existem, então a bateria
@@ -130,10 +130,10 @@ finalizada é inserida como manutenção, e o teste diz isso.
 |---|---|---|
 | CA-01 | A ficha do aluno lista as baterias dele com bloco, número, situação e desempenho oficial, da mais recente para a mais antiga | F-ANUL-01 |
 | CA-02 | Anular uma bateria concluída muda a situação para "Anulada", mostra o motivo, e **o ledger continua com as mesmas linhas** | F-ANUL-02 |
-| CA-03 | Depois de anular, o desempenho oficial do aluno na ficha e nas estatísticas **desce**, e a meta volta a "Pendente" para o aluno | F-ANUL-03 |
+| CA-03 | Depois de anular, a meta volta a "Pendente" para o aluno e a linha da bateria anulada deixa de mostrar desempenho (a anulada não conta). **Neste schema as estatísticas oficiais vêm de `goal_entries`, não do ledger de baterias**, então anular não altera esses números. | F-ANUL-03 |
 | CA-04 | ~~As questões da bateria anulada voltam a ser inéditas~~ — **sem cobertura**: não existe motor de seleção nem `vw_seen_questions`. | — |
 | CA-05 | Bateria `in_progress` não oferece o botão; motivo vazio grava "Anulação administrativa" | F-ANUL-05 |
-| CA-06 | Só o professor responsável anula; aluno e professor alheio recebem `42501`; `in_progress` e `cancelled` são recusadas; a segunda chamada devolve sem alterar | `22_void_quiz_session.sql` |
+| CA-06 | Só o professor responsável anula; aluno e professor alheio recebem `42501`; `in_progress` e `cancelled` são recusadas; a segunda chamada devolve sem alterar | `21_void_quiz_session.sql` |
 
 ---
 

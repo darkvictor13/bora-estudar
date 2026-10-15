@@ -371,6 +371,9 @@ test.describe("F-TEMA-09 · a sessão que não pôde ser verificada", () => {
     await expect(studentPage.locator("h1")).toBeVisible();
     await toggle(studentPage).click();
     await expect(html(studentPage)).toHaveAttribute("data-theme", "dark");
+    // A conta precisa ter o escuro ANTES de recarregar: é ela que o loader consulta,
+    // e recarregar na janela da gravação devolve o valor antigo (spec 11).
+    await expect.poll(() => savedTheme(scenario.student.id)).toBe("dark");
 
     // Era o "Lançar tempo": um link que recarrega a página, e UMA requisição de
     // verificação perdida na recarga. A falha virava "sessão expirada", o tema

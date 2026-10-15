@@ -748,10 +748,10 @@ segue sem escritor no produto, e de propósito: resolver exige decidir se nasce 
 papel `admin` em `user_role`, e quem concede o primeiro. Até lá é o `update`
 deliberado que a `20260914190000` documenta no comentário.
 
-**O resgate de cupom.** `coupons` deixou de ser legível por qualquer um; só o
-professor lê. O resgate, que no banco de origem não existia como RPC, também
-precisa nascer assim — validando o código do lado do servidor, sem expor a
-tabela.
+**O resgate de cupom.** `coupons` deixou de ser legível por qualquer um. O
+resgate, que no banco de origem não existia como RPC, nasceu assim em 15/10/2026:
+`redeem_coupon` valida o código do lado do servidor, sem expor a tabela, e
+registra quem resgatou em `coupon_redemptions` (spec 30).
 
 ---
 
@@ -963,25 +963,35 @@ traz tabela, coluna, constraint ou índice — troca a policy do bucket
 dessa coluna foram **medidos no catálogo**; CHECKs e índices foram **somados** ao
 06/10 · 5c pelos itens das duas tabelas, porque a consulta que produziu aqueles
 dois números não é a que estava à mão (a mesma contagem direta dá 195 CHECKs e
-174 índices, e não 139 e 168). A última coluna é a que
+174 índices, e não 139 e 168). A coluna **15/10 · auditoria** acrescenta as migrations da auditoria de
+prontidão: `20261015130000` (policies `is_teacher()`, nada novo em contagem),
+`20261015140000` (dez índices, `(select …)` em 39 policies, e a função de perfil
+trocada), `20261015141000` (limpeza), `20261015145000` (o enum
+`theme_preference` e a coluna em `profiles`), `20261015150000` (`deleted_at` e
+`delete_my_account`), `20261015160000` (`coupon_redemptions`, duas colunas em
+`coupons`, uma policy, duas FKs e `redeem_coupon`) e `20261015170000`
+(`void_quiz_session` e uma CHECK). Colunas, policies, enums, FKs, views,
+gatilhos e funções foram **medidos no catálogo**; CHECKs e índices seguem a
+mesma soma das colunas anteriores (a contagem direta, hoje, dá 202 CHECKs e 186
+índices). A última coluna é a que
 `supabase/tests/07_schema.sql` confere: a asserção falha no dia em que um número mudar sem esta tabela mudar
 junto. As duas foram medidas pelas mesmas consultas de catálogo, e as da 18/09
 foram conferidas de novo antes de medir a 30/09.
 
-| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 | 06/10 | 06/10 · 5b | 06/10 · 5c | 15/10 |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 | 51 / 51 | 52 / 52 | 52 / 52 | 54 / 54 |
-| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 522 | 530 | 530 | 541 |
-| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 | 120 | 121 | 119 | 123 |
-| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 | 20 | 20 | 20 | 20 |
-| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 137 | 139 | 139 | 145 |
-| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 | 91 | 93 | 93 | 95 |
-| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 163 | 168 | 168 | 172 |
-| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 | 3 | 3 | 3 | 3 |
-| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 | 51 | 51 | 51 | 51 |
-| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 39 | 44 | 44 | 45 |
-| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| | origem | 1ª rodada | 2ª rodada | 18/09 | 30/09 | 01/10 | 03/10 | 06/10 | 06/10 · 5b | 06/10 · 5c | 15/10 | 15/10 · auditoria |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Tabelas / com RLS | 25 / 25 | 24 / 24 | 24 / 24 | 25 / 25 | 36 / 36 | 49 / 49 | 50 / 50 | 51 / 51 | 52 / 52 | 52 / 52 | 54 / 54 | 55 / 55 |
+| Colunas | 326 | 294 | 294 | 302 | 401 | 495 | 514 | 522 | 530 | 530 | 541 | 550 |
+| Policies | 79 | 63 | 62 | 64 | 99 | 115 | 119 | 120 | 121 | 119 | 123 | 124 |
+| Tipos enumerados | 0 | 12 | 12 | 13 | 13 | 18 | 20 | 20 | 20 | 20 | 20 | 21 |
+| CHECK constraints | 68 | 46 | 46 | 47 | 90 | 123 | 129 | 137 | 139 | 139 | 145 | 148 |
+| Foreign keys | 49 | 53 | 53 | 55 | 71 | 86 | 90 | 91 | 93 | 93 | 95 | 97 |
+| Índices | 85 | 81 | 92 | 97 | 128 | 154 | 159 | 163 | 168 | 168 | 172 | 184 |
+| Views | 0 | 1 | 1 | 1 | 1 | 3 | 3 | 3 | 3 | 3 | 3 | 3 |
+| Gatilhos | 12 | 27 | 28 | 29 | 39 | 50 | 51 | 51 | 51 | 51 | 51 | 51 |
+| Funções (`public` + `app_private`) | 13 | 10 | 14 | 20 | 27 | 29 | 29 | 39 | 44 | 44 | 45 | 48 |
+| Tabelas com `GRANT ALL` para `anon` | 20 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Funções sem `search_path` fixo | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 A queda de 68 para 46 CHECKs não é perda de validação: cada
 `CHECK (col = ANY (ARRAY[…]))` virou tipo enumerado.

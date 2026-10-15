@@ -10,10 +10,10 @@
  * `F-VINC-08` e a `F-MATR-01` a `F-MATR-05` — as turmas entraram junto porque
  * `classes` e `class_students` já estavam no banco e nunca tinham ganhado tela.
  *
- * O QUE CONTINUA FALTANDO, e por quê: **anular bateria**. `quiz_sessions` é
- * SELECT e nada mais, e `void_quiz_session` não foi portada. A defesa do banco
- * é a certa, e afrouxá-la para a tela funcionar abriria o buraco que ela fecha;
- * o `fixme` no fim do arquivo mantém a falta visível na saída da suíte.
+ * **ANULAR BATERIA VOLTOU EM 15/10/2026**, com a spec 16 e `void_quiz_session`:
+ * o último `fixme` deste arquivo deu lugar a `F-ANUL-01`, `02`, `03` e `05`. A
+ * pré-condição é a exceção documentada em `addFinishedSession`: não há RPC que
+ * inicie e finalize uma bateria, então ela é inserida como manutenção.
  */
 import { randomUUID } from "node:crypto";
 
@@ -22,6 +22,8 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/index.ts";
 import { asUser, count, one, query } from "../fixtures/db.ts";
 import {
+  addFinishedSession,
+  addOpenSession,
   addTheoryCatalog,
   addWeek,
   createScenario,
@@ -1017,19 +1019,98 @@ test.describe("F-TEST-01 · estatísticas do professor", () => {
   });
 });
 
-test.describe("F-ANUL · anular bateria", () => {
-  /*
-   * `quiz_sessions` é SELECT e nada mais; a escrita é de RPC, e
-   * `void_quiz_session` não foi portada. Sem o motor de baterias também não há
-   * bateria para anular.
-   */
-  test.fixme("anular tira do desempenho sem sumir do histórico", async ({
+test.describe("F-ANUL · anular bateria — spec 16", () => {
+  test("F-ANUL-01 · a ficha lista as baterias do aluno, com o desempenho oficial", async ({
     teacherPage,
     scenario,
   }) => {
+    await addFinishedSession(scenario, { correct: 7, total: 15 });
+
     await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
-    await testId(teacherPage, "quiz-session-row").first().getByRole("button", { name: "Anular" }).click();
+    const linha = testId(teacherPage, "quiz-session-row").first();
+    await expect(linha).toHaveAttribute("data-status", "completed");
+    await expect(linha).toContainText("7/15");
+    await expect(linha).toContainText("47%");
+    await expect(linha).toContainText("Concluída");
+    await expect(linha.getByRole("button", { name: "Anular", exact: true })).toBeVisible();
+  });
+
+  test("F-ANUL-02 · anular troca a situação, mostra o motivo, e o ledger continua intacto", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    const sessionId = await addFinishedSession(scenario, { correct: 7, total: 15 });
+    const ledger = () =>
+      count("select count(*) from public.quiz_session_questions where quiz_session_id = $1", [sessionId]);
+    expect(await ledger()).toBe(15);
+
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await testId(teacherPage, "quiz-session-row").first().getByRole("button", { name: "Anular", exact: true }).click();
+
+    const dialog = testId(teacherPage, "void-session-dialog");
+    await expect(dialog).toContainText("Nada é apagado");
+    await dialog.getByLabel("Motivo").fill("Respondeu no automático.");
+    await testId(teacherPage, "void-session-confirm").click();
+
+    await expect(alert(teacherPage, "success")).toContainText("Bateria anulada");
+
+    // A anulada CONTINUA na lista, com o motivo e sem o percentual (R-ANUL-12).
+    const linha = testId(teacherPage, "quiz-session-row").first();
+    await expect(linha).toHaveAttribute("data-status", "voided");
+    await expect(linha).toContainText("Anulada");
+    await expect(testId(teacherPage, "void-reason")).toHaveText("Motivo: Respondeu no automático.");
+    await expect(linha).not.toContainText("47%");
+    await expect(linha.getByRole("button", { name: "Anular", exact: true })).toHaveCount(0);
+
+    // NADA é apagado: as quinze respostas continuam no ledger.
+    expect(await ledger()).toBe(15);
+    expect(
+      await one<{ status: string; void_reason: string }>(
+        "select status::text, void_reason from public.quiz_sessions where id = $1",
+        [sessionId],
+      ),
+    ).toEqual({ status: "voided", void_reason: "Respondeu no automático." });
+  });
+
+  test("F-ANUL-03 · a meta volta a pendente e pode ser refeita", async ({ teacherPage, scenario }) => {
+    await addFinishedSession(scenario);
+    const goalStatus = () =>
+      one<{ status: string; completed_at: string | null }>(
+        "select status::text, completed_at::text from public.goals where id = $1",
+        [scenario.quizGoal.id],
+      );
+    expect((await goalStatus()).status).toBe("completed");
+
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    await testId(teacherPage, "quiz-session-row").first().getByRole("button", { name: "Anular", exact: true }).click();
+    await testId(teacherPage, "void-session-confirm").click();
     await expect(alert(teacherPage, "success")).toBeVisible();
+
+    expect(await goalStatus()).toEqual({ status: "pending", completed_at: null });
+  });
+
+  test("F-ANUL-05 · motivo vazio grava o padrão; bateria em andamento não oferece o botão", async ({
+    teacherPage,
+    scenario,
+  }) => {
+    await addFinishedSession(scenario);
+    const outra = scenario.goals.find((goal) => goal.type === "question_block" && goal.id !== scenario.quizGoal.id);
+    expect(outra, "o cenário precisa de uma segunda meta de bateria").toBeDefined();
+    await addOpenSession(scenario, outra!);
+
+    await teacherPage.goto(`/professor/alunos/${scenario.student.id}`);
+    const emAndamento = testId(teacherPage, "quiz-session-row").and(teacherPage.locator('[data-status="in_progress"]'));
+    await expect(emAndamento).toHaveCount(1);
+    // O botão espelha o que o banco aceita (R-ANUL-11): em andamento se cancela, não se anula.
+    await expect(emAndamento.getByRole("button", { name: "Anular", exact: true })).toHaveCount(0);
+
+    await testId(teacherPage, "quiz-session-row")
+      .and(teacherPage.locator('[data-status="completed"]'))
+      .getByRole("button", { name: "Anular", exact: true })
+      .click();
+    await testId(teacherPage, "void-session-confirm").click();
+    await expect(alert(teacherPage, "success")).toBeVisible();
+    await expect(testId(teacherPage, "void-reason")).toHaveText("Motivo: Anulação administrativa");
   });
 });
 

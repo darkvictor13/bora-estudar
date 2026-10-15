@@ -411,6 +411,17 @@ export const STUDY_REPLAY_CONFLICT =
  * `current_date` dele, em UTC: às 22h em Brasília já é o dia seguinte lá, então
  * o contrato recusa antes, e o contrário não acontece no Brasil.
  */
+/** O teto do motivo de anulação, o mesmo de `quiz_sessions_void_reason_check`. */
+export const MAX_VOID_REASON_LENGTH = 500;
+
+/** O motivo é opcional; só o teto é do contrato (R-ANUL-08). */
+export function checkVoidReason(reason: string): ApiError | null {
+  if (reason.length > MAX_VOID_REASON_LENGTH) {
+    return invalid(`O motivo pode ter até ${MAX_VOID_REASON_LENGTH} caracteres.`, "reason");
+  }
+  return null;
+}
+
 /** O teto do código de cupom, o mesmo de `profiles_coupon_used_check`. */
 export const MAX_COUPON_LENGTH = 64;
 

@@ -78,7 +78,7 @@ O de-para coluna a coluna, contra o banco de origem, está em
 Cinco tabelas de histórico referenciam `profiles` com `RESTRICT`, então o
 `DELETE` falharia para todo aluno que já teve acesso liberado. A RPC apaga tudo o
 que o aluno fez, deixa o perfil como "Conta excluída" (`profiles.deleted_at`) e
-mantém só `access_grants` e as notas de simulado, sem identificar ninguém; o login
+mantém só `access_grants`, `coupon_redemptions` e as notas de simulado, sem identificar ninguém; o login
 em `auth.users` é anulado como no soft delete do GoTrue, e a FK `profiles ->
 auth.users` (de que o cascade do e2e e do `db:test` depende) não se toca. É
 idempotente por `deleted_at`, recusa professor, e a lista de tabelas é explícita:
@@ -95,7 +95,7 @@ ela sai ou fica (spec 46). O app diz as duas listas ao aluno ANTES de confirmar.
 | `theory_reviews` | ninguém direto | nascem em `record_initial_questions`, avançam em `record_review_questions`; o aluno só apaga a dela |
 | `theory_review_entries` | ninguém | SELECT e nada mais: escrita é de `record_review_questions` |
 | `theory_catalogs`, `theory_lessons`, as três de regra | professor | direto, com RLS |
-| `profiles` (só `name`), `waitlist` | o próprio dono | direto, com RLS |
+| `profiles` (só `name` e `theme_preference`), `waitlist` | o próprio dono | direto, com RLS |
 | `profiles.access_status`, `access_expires_at`, `teacher_id` | ninguém | fora de todo grant: `link_student` e `set_student_access` |
 | `profiles.role` | ninguém | fora de todo grant, e **sem RPC**: promover é spec própria |
 | `access_grants` | ninguém | SELECT e nada mais: escrita é de `set_student_access` |
@@ -108,7 +108,8 @@ ela sai ou fica (spec 46). O app diz as duas listas ao aluno ANTES de confirmar.
 | `summary_topics` | ninguém | SELECT e nada mais; o texto só com acesso vigente ou professor. Carga local por `scripts/load-flash-summaries.mjs`; o bucket `flash-summaries` só entrega `pf2029/<sha256>.<imagem>`, nunca o `.docx` original (spec 45) |
 | `summary_annotations` | o próprio aluno | direto, com RLS e grant por coluna; lê só o dono (nem o professor), criar e alterar exigem acesso vigente. **Gravar passa por `save_summary_notes`**, que compara o estado anterior no corpo da requisição — o filtro de URL não comporta o JSON |
 | `goal_batches` | ninguém | SELECT para o professor dono; escrita é de `generate_week` |
-| `coupons` | ninguém | RLS ligada, zero policy, zero grant |
+| `coupons` | ninguém | RLS ligada, zero policy, zero grant; o código nunca é validado no cliente |
+| `coupon_redemptions` | ninguém | SELECT do próprio aluno e nada mais; escrita é de `redeem_coupon`, que concede o acesso (spec 30). **Fica quando a conta é excluída**, como `access_grants` |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 
 Escrita de execução continua fechada porque é onde moram a máquina de estados,
@@ -117,9 +118,9 @@ não tem como respeitar sozinha. `goal_entries` e `theory_reviews` entram na
 lista do que é escrito por RPC: desde `20261006233436` (PR 5c) o INSERT e o
 UPDATE diretos não existem para `authenticated`, nem para o professor, e o
 privilégio de coluna recusa com `42501` antes de a RLS ou a FK serem lidas.
-Se uma tela precisa mexer em execução e não existe RPC, **crie a RPC; não afrouxe o grant.** As três operações que hoje não
-têm RPC lançam com o motivo em `apps/web/src/lib/api/supabase/`, e é assim que
-devem continuar até a RPC existir.
+Se uma tela precisa mexer em execução e não existe RPC, **crie a RPC; não afrouxe o grant.** A operação que hoje não
+tem RPC (`setSelectedSubjects`, as matérias do ciclo) lança com o motivo em
+`apps/web/src/lib/api/supabase/`, e é assim que deve continuar até a RPC existir.
 
 **Turma é planejamento, e por isso NÃO tem RPC.** `classes` e `class_students`
 têm as três defesas montadas desde a migration inicial — `WITH CHECK`,
@@ -337,9 +338,12 @@ O que **ficou de pé**, e é onde uma execução nova se apoia:
 - **o banco da bateria** — `quiz_sessions`, o ledger `quiz_session_questions` e
   os gatilhos que protegem o resultado da meta de bateria. **As RPCs nunca
   foram portadas** para o schema de 14/09/2026: `start_quiz_session`,
-  `finish_quiz_session`, `record_quiz_session_time` e `void_quiz_session` não
-  existem em `pg_proc` (`docs/arquitetura.md` diz o mesmo), e o tempo da bateria
-  mora em `quiz_sessions.duration_minutes`, nunca em `goal_entries`;
+  `finish_quiz_session` e `record_quiz_session_time` não existem em `pg_proc`
+  (`docs/arquitetura.md` diz o mesmo), e o tempo da bateria mora em
+  `quiz_sessions.duration_minutes`, nunca em `goal_entries`. **A exceção é
+  `void_quiz_session`**, que nasceu em 15/10/2026 (spec 16): o professor anula uma
+  bateria finalizada, o ledger não é tocado e a meta volta a `pending`. O que se
+  anula é o que já estiver registrado — nada cria bateria ainda;
 - **o fechamento da bateria na tela do aluno** — registrar tempo e cancelar,
   que é o que destrava um planejamento com sessão aberta;
 - **o caderno de erros e o reforço**, que linkam para o TEC como páginas
@@ -520,12 +524,13 @@ defeito conhecido, o número do bug.
 banco entregou o schema.
 
 **O adaptador do Supabase cobre o contrato inteiro** — um módulo por assunto em
-`lib/api/supabase/`, composto em `index.ts`. Três operações LANÇAM com o motivo
-em vez de recusar educadamente, porque não são erro de uso: são coisas que este
-schema não permite (anular bateria, resgatar cupom, selecionar matérias do
-ciclo). **Eram cinco:** liberar e bloquear acesso saíram da lista em
-18/09/2026, com `set_student_access`. Uma tela que finge ter tentado é pior do que uma que
-explica, e a recusa muda no dia em que o banco mudar.
+`lib/api/supabase/`, composto em `index.ts`. Uma operação LANÇA com o motivo em
+vez de recusar educadamente, porque não é erro de uso: é coisa que este schema
+não permite (selecionar matérias do ciclo). **Eram cinco:** liberar e bloquear
+acesso saíram da lista em 18/09/2026, com `set_student_access`, e resgatar cupom
+e anular bateria em 15/10/2026, com `redeem_coupon` e `void_quiz_session`. Uma
+tela que finge ter tentado é pior do que uma que explica, e a recusa muda no dia
+em que o banco mudar.
 
 **`VITE_API_IMPL=fixtures` continua servindo** para construir tela sem banco no
 ar. As duas implementações compartilham `lib/api/validation.ts`, então recusam
@@ -570,14 +575,14 @@ data de hoje deixava o dia do vencimento "Liberado".
 
 **O tema vem da conta, e o MUI não participa da decisão.**
 
-**HOJE ELE NÃO TEM ONDE MORAR NA CONTA.** `user_preferences` saiu no schema de
-14/09/2026 e nada a substituiu — é a lacuna nº 1 de `lib/api/contract.ts`, e o
-pedido à frente do banco é uma coluna `theme_preference` em `profiles`.
-Enquanto ela não existe, `supabaseApi` guarda a escolha no APARELHO, pelo mesmo
-`lib/theme.ts` que pinta antes do primeiro paint. A consequência a dizer em voz
-alta: quem escolhe escuro no computador continua vendo claro no celular, e
-R-TEMA-11 está suspenso — com F-TEMA-02 e F-TEMA-04 marcados `fixme` para que a
-falta continue visível na saída da suíte.
+**A PREFERÊNCIA MORA EM `profiles.theme_preference`** (enum `light`/`dark`,
+nulável), e a conta é a fonte da verdade (R-TEMA-11): o aparelho é cache. O
+adaptador lê a coluna e, **se a leitura falhar, usa a cópia do aparelho** — o tema
+não pode derrubar uma tela. Grava no aparelho primeiro e na conta depois, com
+`UPDATE (theme_preference)` por coluna; se a gravação falhar, a escolha vale ali
+até a próxima carga e o controle avisa. Quem recarrega a página logo depois de
+trocar o tema, antes de a gravação descer, vê o valor antigo: é a janela da spec
+11, e os testes que recarregam esperam a conta (`savedTheme`).
 
 **`null` é "nunca escolheu", e não se grava.** A ausência equivale a claro
 (R-TEMA-07), mas não é a mesma coisa que ter escolhido claro: gravar `light` na
@@ -821,7 +826,9 @@ entry MAIS os chunks pré-carregados.** A URL do Supabase não está no
 
 ## Deploy
 
-**`main` publica staging a cada commit. Produção é disparo manual.**
+**`main` publica staging a cada commit. Produção é disparo manual.** O que precisa
+estar feito antes do primeiro dispatch está em
+[`docs/plano-deploy-producao.md`](docs/plano-deploy-producao.md).
 
 | Ambiente | Gatilho | Workflow |
 |---|---|---|

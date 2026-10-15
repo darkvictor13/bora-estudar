@@ -95,7 +95,7 @@ redeem_coupon(code)
 | CA-05 | A retentativa de quem acabou de resgatar devolve o resultado anterior, sem segundo resgate | `23_coupon_redemption.sql` |
 | CA-06 | O último uso de um cupom com `max_uses` não passa duas vezes | `23_coupon_redemption.sql` |
 | CA-07 | Professor, anônimo e conta excluída são recusados; o aluno não escreve em `coupons`, `coupon_redemptions` nem no próprio acesso | `23_coupon_redemption.sql`, `01_grants.sql` |
-| CA-08 | O resgate sobrevive à exclusão da conta, sem identificar ninguém | `21_account_deletion.sql`, `07_schema.sql` |
+| CA-08 | O resgate sobrevive à exclusão da conta, sem identificar ninguém | `22_account_deletion.sql`, `07_schema.sql` |
 | CA-09 | Cupom inválido mostra o erro no campo e não libera nada | F-CUP-02 |
 | CA-10 | Com o acesso liberado a tela não oferece o resgate | F-CUP-03 |
 

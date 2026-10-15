@@ -8,8 +8,9 @@
 -- notas de simulado, sem identificar ninguém). Provar só a primeira aprova uma
 -- função que apaga o histórico; provar só a segunda, uma que não apaga nada.
 --
--- Roda por ÚLTIMO de propósito: apaga o Bruno e a Fabi do cenário, e as suítes
--- compartilham estado ("o que uma apagar, a seguinte não encontra").
+-- Roda depois de TODAS as suítes que usam o Bruno e a Fabi, de propósito: apaga os
+-- dois do cenário, e as suítes compartilham estado ("o que uma apagar, a seguinte
+-- não encontra"). As que vêm depois (23 em diante) criam as próprias contas.
 --
 -- O aluno excluído é o Bruno. Antes da chamada o teste SEMEIA o que o cenário
 -- não traz (lista de espera, baralho pessoal, grifo, anotação, nota de

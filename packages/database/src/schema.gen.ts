@@ -3316,6 +3316,14 @@ export type Database = {
           week_number: number
         }[]
       }
+      void_quiz_session: {
+        Args: { p_quiz_session_id: string; p_reason?: string }
+        Returns: {
+          new_reason: string
+          new_status: Database["public"]["Enums"]["quiz_session_status"]
+          new_voided_at: string
+        }[]
+      }
       week_replacement_preview: {
         Args: { p_study_plan_id: string; p_week_number: number }
         Returns: {

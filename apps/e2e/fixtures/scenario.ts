@@ -792,3 +792,110 @@ export async function addTheoryGoal(
   );
   return rows[0]!.id;
 }
+
+// ---------------------------------------------------------------------------
+// Baterias (pré-condição de F-ANUL)
+// ---------------------------------------------------------------------------
+
+/**
+ * `quiz_sessions` aponta para o caderno pela FK composta
+ * `(…, subject_key, catalog_key)`, e o cenário monta os cadernos SEM `catalog_key`
+ * (a maioria dos testes não precisa dele). Quem vai criar uma bateria liga antes o
+ * caderno à linha do catálogo de que ele veio.
+ */
+async function linkNotebookToCatalog(scenario: Scenario, blockId: string): Promise<void> {
+  const block = scenario.blocks.find((candidate) => candidate.id === blockId);
+  const source = CATALOG.blocks.find((candidate) => candidate.id === block?.catalogBlockId);
+  if (!source) throw new Error(`o caderno ${blockId} não veio de um bloco do catálogo`);
+  // A linha do catálogo também precisa existir: o `global-setup` não a semeia
+  // (o catálogo saiu da suíte com a extensão), e a FK de `catalog_key` a exige.
+  await query(
+    `insert into public.catalog_blocks
+       (catalog_key, catalog_id, catalog_subject_key, subject_name, block_number, block_name,
+        question_slots, active_questions, topics)
+     values ($1, $2, $3, $4, 1, $5, 60, 55, 7)
+     on conflict (catalog_key) do nothing`,
+    [source.blockKey, CATALOG.key, source.subjectKey, source.subjectName, source.name],
+  );
+  await query(
+    "update public.study_plan_notebooks set catalog_key = $2 where block_id = $1 and catalog_key is null",
+    [blockId, source.blockKey],
+  );
+}
+
+/**
+ * Uma bateria FINALIZADA do aluno, com as respostas no ledger, e a meta dela
+ * concluída.
+ *
+ * **ESTA É A EXCEÇÃO À REGRA DE PRÉ-CONDIÇÃO PELAS RPCs REAIS.** O CLAUDE.md
+ * manda montar o estado pelas funções do produto, para que uma regra que regrida
+ * quebre a pré-condição em vez de fabricar dado impossível. Aqui não há função:
+ * `start_quiz_session` e `finish_quiz_session` nunca foram portadas, e a tela do
+ * aluno não tem por onde começar uma bateria. O que sobra é inserir como
+ * MANUTENÇÃO (sem JWT, como a `00_fixtures.sql` dos testes de banco), e o que
+ * protege contra dado impossível são as CHECKs e os gatilhos da própria tabela,
+ * que continuam valendo para o dono do banco. Quando o motor voltar, esta função
+ * deve virar chamada às RPCs dele.
+ */
+export async function addFinishedSession(
+  scenario: Scenario,
+  options: { readonly correct?: number; readonly total?: number } = {},
+): Promise<string> {
+  const goal = scenario.quizGoal;
+  if (!goal.blockId) throw new Error("a meta de bateria do cenário não tem caderno");
+  const total = options.total ?? 15;
+  const correct = options.correct ?? 7;
+  const id = randomUUID();
+  await linkNotebookToCatalog(scenario, goal.blockId);
+
+  await query(
+    `insert into public.quiz_sessions
+       (id, teacher_id, student_id, study_plan_id, goal_id, origin_goal_id, block_id,
+        subject_key, catalog_key, execution_order, session_number, origin, status,
+        duration_minutes, finish_request_id, finish_payload, started_at, finished_at, completed_at)
+     select $1, n.teacher_id, n.student_id, n.study_plan_id, $2, $2, n.block_id,
+            n.subject_key, n.catalog_key, 1, 1, 'goal', 'completed',
+            32, gen_random_uuid(), '{"v":1}'::jsonb,
+            now() - interval '2 hours', now() - interval '1 hour', now() - interval '1 hour'
+       from public.study_plan_notebooks n
+      where n.block_id = $3`,
+    [id, goal.id, goal.blockId],
+  );
+
+  await query(
+    `insert into public.quiz_session_questions
+       (quiz_session_id, teacher_id, student_id, study_plan_id, block_id,
+        question_id, execution_order, outcome, phase)
+     select s.id, s.teacher_id, s.student_id, s.study_plan_id, s.block_id,
+            930000 + g, g,
+            case when g <= $2 then 'correct' else 'incorrect' end::public.question_outcome,
+            'main'
+       from public.quiz_sessions s, generate_series(1, $3::int) as g
+      where s.id = $1`,
+    [id, correct, total],
+  );
+
+  await query(
+    "update public.goals set status = 'completed', completed_at = now() where id = $1",
+    [goal.id],
+  );
+  return id;
+}
+
+/** Uma bateria EM ANDAMENTO numa meta de bateria que ainda não tem uma. */
+export async function addOpenSession(scenario: Scenario, goal: ScenarioGoal): Promise<string> {
+  if (!goal.blockId) throw new Error("a meta não tem caderno");
+  const id = randomUUID();
+  await linkNotebookToCatalog(scenario, goal.blockId);
+  await query(
+    `insert into public.quiz_sessions
+       (id, teacher_id, student_id, study_plan_id, goal_id, origin_goal_id, block_id,
+        subject_key, catalog_key, execution_order, session_number, origin, status)
+     select $1, n.teacher_id, n.student_id, n.study_plan_id, $2, $2, n.block_id,
+            n.subject_key, n.catalog_key, 1, 1, 'goal', 'in_progress'
+       from public.study_plan_notebooks n
+      where n.block_id = $3 and n.study_plan_id = $4`,
+    [id, goal.id, goal.blockId, scenario.planId],
+  );
+  return id;
+}

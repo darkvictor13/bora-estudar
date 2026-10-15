@@ -974,6 +974,8 @@ export interface QuizSessionSummary {
   readonly durationMinutes: number | null;
   readonly startedAt: IsoDateTime;
   readonly finishedAt: IsoDateTime | null;
+  /** O motivo da anulação, para a bateria `voided`; `null` nas demais (R-ANUL-12). */
+  readonly voidReason: string | null;
 }
 
 export interface TopicDifficulty {
@@ -1026,6 +1028,11 @@ export interface TeacherStudentsApi {
   grantAccess(input: GrantAccessInput): Promise<Result<StudentCard>>;
   revokeAccess(studentId: Uuid, requestId: RequestId): Promise<Result<StudentCard>>;
   /** Anula uma bateria — some do desempenho sem sumir do histórico. */
+  /**
+   * Anula uma bateria finalizada, sem apagar o ledger, e devolve a meta a
+   * `pending` (spec 16). Só o professor responsável. Segura a retentativa: anular
+   * o que já está anulado devolve o estado gravado.
+   */
   voidQuizSession(input: VoidSessionInput): Promise<Result<QuizSessionSummary>>;
 }
 
@@ -1038,7 +1045,7 @@ export interface GrantAccessInput {
 
 export interface VoidSessionInput {
   readonly sessionId: Uuid;
-  readonly requestId: RequestId;
+  /** Opcional: vazio grava "Anulação administrativa" (R-ANUL-08). */
   readonly reason: string;
 }
 

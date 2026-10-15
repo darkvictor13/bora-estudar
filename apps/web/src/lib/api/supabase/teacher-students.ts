@@ -11,11 +11,10 @@
  * aluno pelo e-mail é `find_student_by_email`, porque o e-mail mora em
  * `auth.users` e a API não expõe aquele schema.
  *
- * ## O que este schema ainda não permite
+ * ## Anular bateria
  *
- * - **Anular bateria.** `quiz_sessions` é SELECT e nada mais; `void_quiz_session`
- *   não foi portada, e `voidQuizSession` LANÇA dizendo isso em vez de tentar e
- *   colher `42501`.
+ * `quiz_sessions` é SELECT e nada mais; a escrita é de `void_quiz_session`
+ * (spec 16), que não apaga o ledger e devolve a meta a `pending`.
  */
 import { supabase } from "@/lib/supabase/client";
 import { classifyPace, progressUntil } from "@/lib/domain/teacher";
@@ -30,9 +29,10 @@ import type {
   StudentListFilter,
   StudentSearchResult,
   Uuid,
+  VoidSessionInput,
 } from "../contract.ts";
-import { checkAccessMonths, checkStudentEmail } from "../validation.ts";
-import { done, fail, failure, readFailure, throwDb, translateDbError } from "./errors.ts";
+import { checkAccessMonths, checkStudentEmail, checkVoidReason } from "../validation.ts";
+import { done, fail, failure, readFailure, settle, throwDb, translateDbError } from "./errors.ts";
 import { once } from "./idempotency.ts";
 import { effectiveAccess, PLAN_COLUMNS, requireSession, today, toPlan, type PlanRow } from "./session.ts";
 import { loadStatistics } from "./statistics.ts";
@@ -239,7 +239,7 @@ async function loadSessions(studentId: Uuid): Promise<readonly QuizSessionSummar
   const [sessions, performance, notebooks] = await Promise.all([
     supabase
       .from("quiz_sessions")
-      .select("id,status,started_at,finished_at,duration_minutes,block_id")
+      .select("id,status,started_at,finished_at,duration_minutes,block_id,void_reason")
       .eq("student_id", studentId)
       .order("started_at", { ascending: false }),
     supabase
@@ -275,10 +275,13 @@ async function loadSessions(studentId: Uuid): Promise<readonly QuizSessionSummar
       status: row.status,
       mainTotal,
       mainCorrect,
-      score: mainTotal > 0 ? Math.round((mainCorrect / mainTotal) * 100) : null,
+      // A anulada NÃO CONTA: ela segue na lista com o que respondeu, mas sem o
+      // percentual — um número ao lado de "Anulada" seria lido como resultado.
+      score: row.status !== "voided" && mainTotal > 0 ? Math.round((mainCorrect / mainTotal) * 100) : null,
       durationMinutes: row.duration_minutes,
       startedAt: row.started_at,
       finishedAt: row.finished_at,
+      voidReason: row.void_reason,
     };
   });
 }
@@ -385,12 +388,39 @@ async function writeAccess(
   return done(card);
 }
 
-/** A recusa da operação que ainda precisa de RPC. */
-export function voidQuizSession(): Promise<Result<QuizSessionSummary>> {
-  throw new Error(
-    "Anular bateria precisa nascer como RPC: `quiz_sessions` é SELECT e nada mais, " +
-      "e `void_quiz_session` não foi portada. A escrita fechada é a defesa certa; " +
-      "afrouxá-la para a tela funcionar abriria o buraco que ela fecha. " +
-      "Ver docs/de-para-schema.md.",
-  );
+/**
+ * Anular bateria (spec 16): `void_quiz_session`, só do professor responsável.
+ *
+ * O ledger não é tocado — o que muda é o status —, e a meta volta a `pending`.
+ * Idempotente: anular o que já está anulado devolve o estado gravado, então não há
+ * `request_id` aqui. A bateria é RELIDA depois, e não montada com o que a RPC
+ * devolveu: a linha carrega bloco, desempenho e motivo, e remendar três colunas
+ * deixaria a tela com um objeto meio velho.
+ *
+ * O `42501` de bateria alheia, inexistente ou de quem não é professor chega
+ * traduzido como `forbidden`; o `P0001` de "só finalizada" já vem em português.
+ */
+export function voidQuizSession(input: VoidSessionInput): Promise<Result<QuizSessionSummary>> {
+  return settle(async () => {
+    const invalid = checkVoidReason(input.reason);
+    if (invalid) return failure(invalid);
+    await requireSession();
+
+    const { error } = await supabase.rpc("void_quiz_session", {
+      p_quiz_session_id: input.sessionId,
+      p_reason: input.reason,
+    });
+    if (error) return failure(translateDbError(error));
+
+    const row = await supabase
+      .from("quiz_sessions")
+      .select("student_id")
+      .eq("id", input.sessionId)
+      .maybeSingle();
+    if (row.error) throwDb(row.error);
+    if (!row.data) return fail("not_found", "Bateria não encontrada.");
+
+    const fresh = (await loadSessions(row.data.student_id)).find((session) => session.id === input.sessionId);
+    return fresh ? done(fresh) : fail("unknown", "A anulação não foi lida de volta.");
+  });
 }
