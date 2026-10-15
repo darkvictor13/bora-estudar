@@ -71,14 +71,21 @@ select app_test.act_as('77777777-7777-4777-8777-777777777777');
 
 do $$
 declare v_role public.user_role; v_status public.access_status; v_plan text; v_cupom text;
+        v_teacher uuid; v_origin text;
 begin
-  insert into public.profiles (id, name, role, access_status, access_expires_at, plan, coupon_used)
-  values ('77777777-7777-4777-8777-777777777777','Gil','teacher','active',
-          now() + interval '10 years','Premium','BORA3M');
+  -- O professor escolhido é o da Ana: sem `link_student`, o cliente não pode
+  -- se anexar a ninguém, nem inserindo a própria linha.
+  insert into public.profiles (id, name, role, teacher_id, access_status, access_expires_at, plan, coupon_used, access_origin)
+  values ('77777777-7777-4777-8777-777777777777','Gil','teacher','11111111-1111-4111-8111-111111111111','active',
+          now() + interval '10 years','Premium','BORA3M','cupom');
 
-  select role, access_status, plan, coupon_used
-    into v_role, v_status, v_plan, v_cupom
+  select role, teacher_id, access_status, plan, coupon_used, access_origin
+    into v_role, v_teacher, v_status, v_plan, v_cupom, v_origin
     from public.profiles where id = '77777777-7777-4777-8777-777777777777';
+
+  if v_teacher is not null or v_origin is not null then
+    raise exception 'FALHOU: a conta nasceu vinculada (%) ou com origem (%)', v_teacher, v_origin;
+  end if;
 
   if v_role <> 'student' then
     raise exception 'FALHOU: a conta nasceu com papel %', v_role;
