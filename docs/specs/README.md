@@ -71,6 +71,7 @@ de lá vira uma spec nova antes de virar código.
 | 41 | [Conteúdo fora do bundle](41-conteudo-fora-do-bundle.md) | Cartões, leis e editais saem do `dist`; `fixtures` com amostra sintética; varredura do `dist` antes de publicar |
 | 42 | [Grifo nos flashcards](42-grifo-nos-flashcards.md) | Marcações de cartão no banco, nos três tipos e nos dois lados, ancoradas pelo trecho; grifar dentro da revisão |
 | 44 | [Página de vendas](44-pagina-de-vendas.md) | Página pública da Fronteira Concursos, fora do app: duas ofertas, cadastro e WhatsApp, sem JavaScript — **não implementada** |
+| 45 | [Resumos flash e anotações](45-resumos-flash-e-anotacoes.md) | Biblioteca de resumos importada do Word, imagens no bucket privado, anotação pessoal com gravação segura entre abas — **escrita depois do código** |
 
 ---
 

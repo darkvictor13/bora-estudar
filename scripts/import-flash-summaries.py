@@ -15,6 +15,29 @@ NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
       "v": "urn:schemas-microsoft-com:vml"}
 
 
+# Teto do bucket (64 MB) por arquivo, e um total que um DOCX legítimo não alcança.
+MAX_PART_BYTES = 64 * 1024 * 1024
+MAX_TOTAL_BYTES = 512 * 1024 * 1024
+HEADING_NAME = re.compile(r"^(?:heading|t[ií]tulo)\s*([1-3])$", re.IGNORECASE)
+HEADING_ID = re.compile(r"^(?:Heading|Ttulo|T[ií]tulo)([1-3])$")
+
+
+def read_part(archive, name, limit=None):
+    """Lê uma parte do ZIP recusando o que descomprime além do razoável."""
+    limit = MAX_PART_BYTES if limit is None else limit
+    info = archive.getinfo(name)
+    if info.file_size > limit:
+        raise ValueError(f"{name} descomprime para {info.file_size} bytes (limite {limit}).")
+    return archive.read(name)
+
+
+def parse_xml(payload, name):
+    """ElementTree expande entidades: DOCX não precisa de DTD, então recusamos."""
+    if b"<!DOCTYPE" in payload or b"<!ENTITY" in payload:
+        raise ValueError(f"{name} declara DTD ou entidades; recusado.")
+    return ET.fromstring(payload)
+
+
 def slug(text):
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-") or "topico"
@@ -27,11 +50,31 @@ def extract(source, output):
     topics, subjects, assets = [], [], {}
     subject, topic = None, None
     with zipfile.ZipFile(source) as archive:
-        rels = ET.fromstring(archive.read("word/_rels/document.xml.rels"))
+        if sum(info.file_size for info in archive.infolist()) > MAX_TOTAL_BYTES:
+            raise ValueError("O DOCX descomprime além do limite total.")
+        # Estilo de título pelo NOME do estilo (e não só pelo id): o id de
+        # "Título 1" muda com o idioma do Word, e nada era reconhecido.
+        heading_levels = {}
+        if "word/styles.xml" in archive.namelist():
+            styles = parse_xml(read_part(archive, "word/styles.xml"), "word/styles.xml")
+            for style in styles.findall("w:style", NS):
+                name = style.find("w:name", NS)
+                match = HEADING_NAME.match(name.get(f"{{{NS['w']}}}val", "")) if name is not None else None
+                if match:
+                    heading_levels[style.get(f"{{{NS['w']}}}styleId", "")] = int(match.group(1))
+        rels = parse_xml(read_part(archive, "word/_rels/document.xml.rels"), "word/_rels/document.xml.rels")
         images = {r.attrib["Id"]: posixpath.normpath("word/" + r.attrib["Target"])
                   for r in rels if r.attrib.get("Type", "").endswith("/image")
                   and r.attrib.get("TargetMode") != "External"}
-        root = ET.fromstring(archive.read("word/document.xml"))
+        root = parse_xml(read_part(archive, "word/document.xml"), "word/document.xml")
+
+        def heading_level(p):
+            style = p.find("w:pPr/w:pStyle", NS)
+            style = style.get(f"{{{NS['w']}}}val", "") if style is not None else ""
+            if style in heading_levels:
+                return heading_levels[style]
+            match = HEADING_ID.match(style)
+            return int(match.group(1)) if match else 0
 
         def new_topic(title):
             nonlocal topic
@@ -65,7 +108,7 @@ def extract(source, output):
                     target = images.get(rid)
                     if target and target.startswith("word/media/"):
                         flush()
-                        payload = archive.read(target)
+                        payload = read_part(archive, target)
                         key = hashlib.sha256(payload).hexdigest() + Path(target).suffix.lower()
                         if key not in assets:
                             (media / key).write_bytes(payload)
@@ -74,12 +117,24 @@ def extract(source, output):
             flush()
             return blocks
 
+        def table_block(tbl):
+            """Células guardam parágrafos e TABELAS aninhadas, na ordem do documento."""
+            def cell_blocks(cell):
+                blocks = []
+                for child in cell:
+                    if child.tag == f"{{{NS['w']}}}p":
+                        blocks.extend(paragraph(child))
+                    elif child.tag == f"{{{NS['w']}}}tbl":
+                        blocks.append(table_block(child))
+                return blocks
+            return {"type": "table", "rows": [[cell_blocks(cell) for cell in row.findall("w:tc", NS)]
+                                               for row in tbl.findall("w:tr", NS)]}
+
         for element in root.find("w:body", NS):
             if element.tag == f"{{{NS['w']}}}p":
-                style = element.find("w:pPr/w:pStyle", NS)
-                style = style.get(f"{{{NS['w']}}}val", "") if style is not None else ""
+                level = heading_level(element)
                 title = "".join(t.text or "" for t in element.findall(".//w:t", NS)).strip()
-                if style == "Ttulo1" and title:
+                if level == 1 and title:
                     subject = {"id": slug(title), "name": title, "position": len(subjects)}
                     subjects.append(subject)
                     topic = None
@@ -87,12 +142,12 @@ def extract(source, output):
                 if subject is None:
                     subject = {"id": "introducao", "name": "Introdução", "position": 0}
                     subjects.append(subject)
-                if style == "Ttulo2" and title:
+                if level == 2 and title:
                     new_topic(title)
                     continue
                 if topic is None:
                     new_topic("Visão geral")
-                if style == "Ttulo3" and title:
+                if level == 3 and title:
                     topic["blocks"].append({"type": "heading", "text": title})
                 else:
                     topic["blocks"].extend(paragraph(element))
@@ -102,9 +157,7 @@ def extract(source, output):
                     subjects.append(subject)
                 if topic is None:
                     new_topic("Visão geral")
-                rows = [[[block for p in cell.findall("w:p", NS) for block in paragraph(p)]
-                         for cell in row.findall("w:tc", NS)] for row in element.findall("w:tr", NS)]
-                topic["blocks"].append({"type": "table", "rows": rows})
+                topic["blocks"].append(table_block(element))
         topics = [t for t in topics if t["blocks"]]
         result = {"source": source.name, "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                   "subjects": subjects, "topics": topics, "assets": list(assets.values())}

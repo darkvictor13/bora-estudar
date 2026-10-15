@@ -269,7 +269,10 @@ export const dark: SchemeTokens = {
     contrastText: neutral[1000],
   },
   chart: {
-    series: '#39E99C',
+    // Petróleo 500: o `#39E99C` (L 0,83) saía da faixa de luminosidade do escuro
+    // (0,48–0,67) no validador de paleta; o 500 passa nas cinco checagens contra
+    // a superfície `raised`. O verde vivo fica nos botões e no estado de sucesso.
+    series: petrol[500],
     grid: 'rgba(255, 255, 255, 0.10)',
     axis: neutral[200],
   },

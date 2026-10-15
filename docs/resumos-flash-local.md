@@ -5,25 +5,39 @@ das aulas: disciplina, tópico e conteúdo original. O leitor renderiza texto,
 subtítulos, tabelas e imagens; não interpreta HTML do documento. O DOCX original
 também fica no bucket privado para preservar a fonte e sua formatação.
 
-## Importação no Windows
+## Importação
 
-Com Docker e Supabase local ativos, execute na raiz do repositório:
+Com Docker e Supabase local ativos (`npm run db:start`), execute na raiz do
+repositório. Funciona em Linux, macOS e Windows; o carregador usa o CLI do
+`node_modules` e lê as credenciais de `supabase status`.
 
-```powershell
-python scripts/import-flash-summaries.py "C:\caminho\Resumo PF 2029.docx"
-powershell -File scripts/convert-summary-metafiles.ps1
-supabase migration up --local
-node scripts/load-flash-summaries.mjs "C:\caminho\Resumo PF 2029.docx"
+```bash
+python3 scripts/import-flash-summaries.py "/caminho/Resumo PF 2029.docx"
+npx supabase migration up --local
+node scripts/load-flash-summaries.mjs "/caminho/Resumo PF 2029.docx"
 ```
 
-Use Python e Node disponíveis na sua máquina. O conteúdo extraído fica em
+No Windows, entre o primeiro e o terceiro passo, converta as ilustrações EMF do
+Word em PNG (no Linux e no macOS não há conversor: elas são ignoradas):
+
+```powershell
+powershell -File scripts/convert-summary-metafiles.ps1
+```
+
+Use Python e Node (24) disponíveis na sua máquina. O importador reconhece os
+títulos pelo nome do estilo do Word (`Título 1`, `Heading 1`…), mantém tabelas
+dentro de tabelas, e recusa DOCX com DTD/entidades XML ou partes que
+descomprimem além do teto. O conteúdo extraído fica em
 `content/summaries/local/pf2029`, ignorado pelo Git. O carregador só escreve no
 Supabase local; não publica nada no projeto hospedado. Pode ser repetido sem
 duplicar tópicos. Tópicos que desaparecem da fonte não são apagados automaticamente.
 
 Os dados ficam em `public.summary_topics` e no bucket privado `flash-summaries`.
-Alunos com acesso vigente e professores podem ler; usuários anônimos e alunos
-sem acesso não podem ler texto nem assinar URLs de imagens. O catálogo carrega
+Alunos com acesso vigente e professores podem ler o texto; usuários anônimos e
+alunos sem acesso não podem ler texto nem assinar URLs de imagens. **O DOCX
+original fica guardado no bucket mas não é legível por nenhum usuário do site**:
+a policy só libera `pf2029/<sha256>.<imagem>`, e o bucket só aceita PNG, JPEG e
+DOCX. Ambiente sem a carga mostra a biblioteca vazia, com uma frase que diz isso. O catálogo carrega
 só títulos; o conteúdo e as URLs com validade de uma hora são lidos ao abrir
 um tópico. Recarregar o tópico renova as URLs.
 

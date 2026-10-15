@@ -183,7 +183,7 @@ begin
     'find_student_by_email', 'link_student', 'set_student_access',
     'generate_week', 'clear_pending_goals', 'week_replacement_preview',
     'activate_study_plan', 'record_goal_entry', 'record_extra_study',
-    'record_initial_questions', 'record_review_questions'
+    'record_initial_questions', 'record_review_questions', 'save_summary_notes'
   ] loop
     select p.oid into v_oid from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
@@ -214,7 +214,7 @@ begin
   if v_erro <> '' then
     raise exception 'FALHOU: grant de execucao errado em:%', v_erro;
   end if;
-  raise notice '08 OK  as onze RPCs sao chamaveis so por authenticated, nominalmente';
+  raise notice '08 OK  as doze RPCs sao chamaveis so por authenticated, nominalmente';
 end $$;
 
 -- ---------- A vigência é 1, 3, 6 ou 12 — e `suspend` não tem meses ----------
@@ -295,14 +295,14 @@ begin
   select count(*) into v_views from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v';
 
-  if v_tabelas <> 52 or v_enums <> 20 or v_fks <> 93 or v_views <> 3 then
+  if v_tabelas <> 54 or v_enums <> 20 or v_fks <> 95 or v_views <> 3 then
     raise exception
       'FALHOU: o schema mudou de tamanho (tabelas %, enums %, FKs %, views %). '
       'Se a mudanca e legitima, atualize a tabela "Estado dos dois lados" de '
       'docs/de-para-schema.md e este numero junto.',
       v_tabelas, v_enums, v_fks, v_views;
   end if;
-  raise notice '13 OK  52 tabelas, 20 enums, 93 FKs e 3 views — como o de-para registra';
+  raise notice '13 OK  54 tabelas, 20 enums, 95 FKs e 3 views — como o de-para registra';
 end $$;
 
 -- ---------- Semana e minutos têm teto e piso no banco (spec 04, R-GEN-17) ----------

@@ -94,6 +94,8 @@ O de-para coluna a coluna, contra o banco de origem, está em
 | `legal_norms`, `laws`, `law_articles`, `law_subjects`, `exam_notices` e filhas | ninguém | SELECT e nada mais; o texto do artigo só com acesso vigente ou professor. Carga por `scripts/load-law-library.mjs`, no deploy |
 | `law_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar e alterar exigem acesso vigente |
 | `flashcard_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar, alterar e apagar exigem acesso vigente. O cartão é `card_kind` mais um par de colunas por tipo, e a CHECK `flashcard_marks_card_ref_check` exige o par do tipo e nulos nos outros |
+| `summary_topics` | ninguém | SELECT e nada mais; o texto só com acesso vigente ou professor. Carga local por `scripts/load-flash-summaries.mjs`; o bucket `flash-summaries` só entrega `pf2029/<sha256>.<imagem>`, nunca o `.docx` original (spec 45) |
+| `summary_annotations` | o próprio aluno | direto, com RLS e grant por coluna; lê só o dono (nem o professor), criar e alterar exigem acesso vigente. **Gravar passa por `save_summary_notes`**, que compara o estado anterior no corpo da requisição — o filtro de URL não comporta o JSON |
 | `goal_batches` | ninguém | SELECT para o professor dono; escrita é de `generate_week` |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
@@ -208,7 +210,9 @@ e `clear_pending_goals`, de `20261006214424`, `activate_study_plan`, de
   sustenta é `study_plans_one_active_per_student_uidx` (o estado final nunca tem
   dois ativos), e a trava `for no key update` sobre os planejamentos do aluno,
   em ordem de `id`, faz a segunda chamada enxergar a primeira em vez de bater
-  no índice.
+  no índice. `save_summary_notes` também: a PK `(user_id, topic_id)` e o estado
+  final como fato — se a linha já guarda o `p_next`, a retentativa devolve `true`,
+  antes da checagem de acesso.
 
 RPC nova que grava e aceita payload entra na primeira forma. Se você acha que
 ela é naturalmente idempotente, **diga qual índice ou constraint sustenta isso**

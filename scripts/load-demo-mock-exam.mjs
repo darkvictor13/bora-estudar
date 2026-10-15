@@ -7,6 +7,10 @@ const classId = "99999999-0001-4000-8000-000000000001";
 const examId = "99999999-0002-4000-8000-000000000001";
 const title = "Simulado Área Policial — Demonstração (dados fictícios)";
 const subjects = ["Direito Constitucional", "Direito Administrativo", "Português", "Raciocínio Lógico"];
+// Nomes ilustrativos, gravados com os próprios participantes fictícios: o site
+// não conhece este simulado, e o professor os vê como veria qualquer aluno.
+const names = ["Lucas Almeida", "Mariana Santos", "Rafael Oliveira", "Aluno Local", "Pedro Lima", "Camila Souza",
+  "Bruno Ferreira", "Juliana Rocha", "Diego Martins", "Beatriz Silva", "Felipe Gomes", "Larissa Pereira"];
 const results = [
   [24, 24, 23, 22], [23, 23, 22, 21], [22, 21, 21, 20], [21, 19, 18, 17],
   [19, 20, 17, 16], [18, 17, 18, 16], [17, 16, 17, 15], [16, 15, 16, 14],
@@ -24,6 +28,10 @@ try {
     if ((await db.query("select id from public.profiles where id = any($1::uuid[])", [[teacherId, studentId]])).rowCount !== 2) {
       throw new Error("As contas locais de aluno e professor precisam existir antes da demonstração.");
     }
+    // Um aluno, uma turma (class_students_one_per_student_uidx): avisar antes de abortar no meio.
+    if ((await db.query("select 1 from public.class_students where student_id=$1", [studentId])).rowCount) {
+      throw new Error("O Aluno Local já está em uma turma; remova a matrícula antes de carregar a demonstração.");
+    }
     await db.query("insert into public.classes(id,teacher_id,name,description) values($1,$2,$3,$4)",
       [classId, teacherId, "Turma de Demonstração — Área Policial", "Participantes e notas fictícios para apresentação da plataforma."]);
     await db.query("insert into public.mock_exams(id,teacher_id,class_id,title,exam_date,max_score) values($1,$2,$3,$4,$5,100)",
@@ -34,7 +42,7 @@ try {
         // Sem senha nem identidade de login: são apenas participantes fictícios.
         await db.query(`insert into auth.users(instance_id,id,aud,role,email,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
           values('00000000-0000-0000-0000-000000000000',$1,'authenticated','authenticated',$2,'{}',$3::jsonb,now(),now())`,
-        [id, `participante-demo-${i + 1}@example.invalid`, JSON.stringify({ name: `Participante fictício ${String(i + 1).padStart(2, "0")}` })]);
+        [id, `participante-demo-${i + 1}@example.invalid`, JSON.stringify({ name: names[i] })]);
         await db.query("update public.profiles set teacher_id=$1 where id=$2", [teacherId, id]);
       }
       await db.query("insert into public.class_students(class_id,student_id,teacher_id) values($1,$2,$3)", [classId, id, teacherId]);

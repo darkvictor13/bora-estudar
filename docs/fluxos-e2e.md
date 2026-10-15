@@ -283,6 +283,9 @@ diff mostra a omissão.
 | F-GRIFO-01 | spec [42](specs/42-grifo-nos-flashcards.md): o grifo do verso de um cartão da biblioteca e o da frente de um cartão pessoal aparecem numa sessão nova, na revisão seguinte de cada cartão |
 | F-GRIFO-02 | spec 42: reescrito o cartão da aula antes do trecho grifado, o grifo continua no mesmo trecho; apagado o trecho, o cartão avisa que uma marcação ficou sem lugar |
 | F-GRIFO-03 | spec 42: clique simples vira o cartão; terminar uma seleção não vira; desfazer remove o último grifo, e ele continua removido depois de recarregar |
+| F-RES-01 | spec [45](specs/45-resumos-flash-e-anotacoes.md): o grifo feito num resumo aparece numa sessão nova do mesmo aluno |
+| F-RES-02 | spec 45: com ~60 KB de anotações já gravadas, um grifo novo ainda grava (o estado anterior não viaja na URL) |
+| F-RES-03 | spec 45: a aba desatualizada é avisada ("mudaram em outra aba") e não sobrescreve o que a outra gravou |
 
 ### Leis — `tests/laws.spec.ts`
 
@@ -315,6 +318,7 @@ O isolamento pelo lado de FORA da interface — chamada direta à API, sem tela 
 | F-TEMA-07 | contraste AA nos dois temas, medido em cada tela |
 | F-TEMA-08 | sem escolha, abre claro mesmo com o sistema no escuro |
 | F-TEMA-09 | falha de rede ao verificar a sessão não apaga o tema nem desloga; sessão recusada pelo servidor, sim |
+| F-TEMA-10 | as telas sem sessão seguem o tema do documento (claro, sem escopo próprio), o cartão é de vidro nos dois temas e o texto passa em AA — R-TEMA-18 |
 
 ### Relato de erro — `tests/observability.spec.ts`
 

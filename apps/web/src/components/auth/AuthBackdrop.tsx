@@ -11,7 +11,9 @@ export function AuthBackdrop({ paused }: { paused: boolean }) {
         inset: 0,
         overflow: "hidden",
         pointerEvents: "none",
-        opacity: 0.65,
+        // No claro as fitas são mais discretas: o texto do cartão de vidro as atravessa.
+        opacity: 0.4,
+        ...theme.applyStyles("dark", { opacity: 0.65 }),
         maskImage: "linear-gradient(to bottom, transparent, black 15%, black 80%, transparent)",
         "@keyframes authRibbon": {
           "0%, 100%": { transform: "translate3d(0, -12%, 0) scaleY(0.85)", opacity: 0.2 },

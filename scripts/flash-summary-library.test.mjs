@@ -39,11 +39,18 @@ test("biblioteca local preserva tópicos, imagens e acesso restrito", { skip: pr
     await db.query("begin");
     await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: student.id, role: "authenticated" })]);
     await db.query("set local role authenticated");
-    await db.query("insert into public.summary_annotations(user_id,topic_id,notes) values($1,$2,'[]') on conflict do nothing", [student.id, topic]);
-    const before = (await db.query("select notes from public.summary_annotations where user_id=$1 and topic_id=$2", [student.id, topic])).rows[0].notes;
-    const after = [...before, { id: 'test', path: '0', start: 0, end: 5, quote: 'teste', style: 'comment', color: '#d4aa20', comment: 'Nota de teste' }];
-    assert.equal((await db.query("update public.summary_annotations set notes=$1 where user_id=$2 and topic_id=$3 and notes=$4::jsonb", [JSON.stringify(after), student.id, topic, JSON.stringify(before)])).rowCount, 1);
-    assert.equal((await db.query("update public.summary_annotations set notes=$1 where user_id=$2 and topic_id=$3 and notes=$4::jsonb", [JSON.stringify(before), student.id, topic, JSON.stringify(before)])).rowCount, 0);
+    // O aluno com acesso lê as imagens do resumo, e NUNCA o .docx original.
+    const visible = (await db.query("select name from storage.objects where bucket_id='flash-summaries'")).rows.map(row => row.name);
+    assert.ok(!visible.includes("pf2029/source.docx"));
+    assert.ok(visible.every(name => /^pf2029\/[0-9a-f]{64}\.(png|jpe?g|jfif)$/.test(name)));
+    assert.equal(visible.length, source.assets.length);
+    const note = { id: 'test', path: '0', start: 0, end: 5, quote: 'teste', style: 'comment', color: '#d4aa20', comment: 'Nota de teste' };
+    const save = async (previous, next) => (await db.query("select public.save_summary_notes($1,$2::jsonb,$3::jsonb) as saved", [topic, JSON.stringify(previous), JSON.stringify(next)])).rows[0].saved;
+    const before = (await db.query("select notes from public.summary_annotations where user_id=$1 and topic_id=$2", [student.id, topic])).rows[0]?.notes ?? [];
+    const after = [...before, note];
+    assert.equal(await save(before, after), true);
+    assert.equal(await save(before, after), true, "a retentativa de quem já gravou não é conflito");
+    assert.equal(await save(before, [...before, { ...note, id: 'outra-aba' }]), false, "estado anterior desatualizado é conflito");
     await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: teacher.id, role: "authenticated" })]);
     assert.equal((await db.query("select notes from public.summary_annotations where user_id=$1 and topic_id=$2", [student.id, topic])).rowCount, 0);
     await db.query("rollback");

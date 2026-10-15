@@ -6,11 +6,15 @@ import pg from "pg";
 
 const root = resolve("content/summaries/local/pf2029");
 const library = JSON.parse(await readFile(resolve(root, "library.json"), "utf8"));
-const cli = resolve("node_modules/@supabase/cli-windows-x64/bin/supabase.exe");
+// O CLI vem do `node_modules/.bin` da raiz, que existe em qualquer sistema; no
+// Windows ele é um `.cmd`, e o Node só executa `.cmd` por um shell.
+const windows = process.platform === "win32";
+const cli = resolve("node_modules/.bin", windows ? "supabase.cmd" : "supabase");
 // As credenciais ficam só neste processo de carga, nunca no cliente ou nos logs.
-const raw = execFileSync(cli, ["status", "--output", "json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const raw = execFileSync(cli, ["status", "--output", "json"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: windows });
 const config = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
-if (!['localhost', '127.0.0.1'].includes(new URL(config.API_URL).hostname)) throw new Error("Carga permitida apenas no Supabase local.");
+const isLocal = (url) => ["localhost", "127.0.0.1"].includes(new URL(url).hostname);
+if (!isLocal(config.API_URL) || !isLocal(config.DB_URL)) throw new Error("Carga permitida apenas no Supabase local.");
 const headers = { Authorization: `Bearer ${config.SERVICE_ROLE_KEY}`, apikey: config.SERVICE_ROLE_KEY, "x-upsert": "true" };
 const types = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".jfif": "image/jpeg", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
 const uploads = (await readdir(resolve(root, "media"))).filter(f => !f.endsWith('.emf'));
@@ -29,7 +33,7 @@ for (let i = 0; i < uploads.length; i += 6) {
 }
 const original = process.argv[2];
 if (original) await upload('source.docx', await readFile(original), types['.docx']);
-const db = new pg.Client({ connectionString: "postgresql://postgres:postgres@127.0.0.1:54322/postgres" });
+const db = new pg.Client({ connectionString: config.DB_URL });
 await db.connect();
 try {
   await db.query("begin");

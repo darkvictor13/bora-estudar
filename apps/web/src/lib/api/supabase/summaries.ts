@@ -55,14 +55,15 @@ export async function loadSummaryNotes(id: string): Promise<SummaryNote[]> {
 export async function saveSummaryNotes(id: string, previous: readonly SummaryNote[], next: readonly SummaryNote[]): Promise<Result<null>> {
   try {
     if (!validSummaryNotes(next)) return fail("validation", "Confira as anotações: cada comentário aceita até 2.000 caracteres.");
-    const session = await requireSession();
-    const inserted = await supabase.from("summary_annotations").upsert({ user_id: session.profileId, topic_id: id, notes: [] }, { onConflict: "user_id,topic_id", ignoreDuplicates: true });
-    if (inserted.error) return failure(translateDbError(inserted.error));
-    // Comparar o antes evita sobrescrever uma edição feita em outra aba.
-    const updated = await supabase.from("summary_annotations").update({ notes: next as unknown as Json })
-      .eq("user_id", session.profileId).eq("topic_id", id).eq("notes", JSON.stringify(previous)).select("topic_id");
-    if (updated.error) return failure(translateDbError(updated.error));
-    if (!updated.data.length) return fail("conflict", "As anotações mudaram em outra aba. Recarregue o resumo antes de continuar.");
+    await requireSession();
+    // A comparação com o estado anterior (para não sobrescrever outra aba) mora
+    // na função e vai no corpo da requisição: no filtro de URL, o JSON das
+    // anotações estourava o limite dos proxies muito antes do teto da coluna.
+    const saved = await supabase.rpc("save_summary_notes", {
+      p_topic_id: id, p_previous: previous as unknown as Json, p_next: next as unknown as Json,
+    });
+    if (saved.error) return failure(translateDbError(saved.error));
+    if (!saved.data) return fail("conflict", "As anotações mudaram em outra aba. Recarregue o resumo antes de continuar.");
     return done(null);
   } catch (error) { return recoverThrown(error); }
 }
