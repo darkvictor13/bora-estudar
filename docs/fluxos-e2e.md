@@ -244,6 +244,7 @@ diff mostra a omissão.
 | F-LGPD-03 | `/privacidade` e `/termos` abrem sem login e são linkadas do cadastro, do login e de Meus dados |
 | F-LGPD-04 | aluno com acesso vencido exclui a conta |
 | F-LGPD-05 | o professor não vê o cartão Excluir conta |
+| F-LGPD-06 | a outra sessão da conta excluída cai em `/entrar` (o GoTrue responde 4xx, não 500) — QA2-B01 |
 | F-CUP-01 | o código libera o acesso na hora, normalizado, grava o resgate e o cartão do cupom some — spec [30](specs/30-cupom-de-acesso.md) |
 | F-CUP-02 | inexistente, inativo e vencido recebem a MESMA resposta, nada é concedido, e o código vazio pede o código |
 | F-CUP-03 | com o acesso liberado a tela não oferece o resgate |

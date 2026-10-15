@@ -79,7 +79,9 @@ Cinco tabelas de histórico referenciam `profiles` com `RESTRICT`, então o
 `DELETE` falharia para todo aluno que já teve acesso liberado. A RPC apaga tudo o
 que o aluno fez, deixa o perfil como "Conta excluída" (`profiles.deleted_at`) e
 mantém só `access_grants`, `coupon_redemptions` e as notas de simulado, sem identificar ninguém; o login
-em `auth.users` é anulado como no soft delete do GoTrue, e a FK `profiles ->
+em `auth.users` é anulado como no soft delete do GoTrue (`banned_until` é uma data a cem anos, **nunca
+`infinity`**: o GoTrue não lê esse valor e passa a responder 500 em `/user` e na listagem admin de todos
+os usuários), e a FK `profiles ->
 auth.users` (de que o cascade do e2e e do `db:test` depende) não se toca. É
 idempotente por `deleted_at`, recusa professor, e a lista de tabelas é explícita:
 tabela nova com FK para `profiles` reprova em `07_schema.sql` até alguém decidir se

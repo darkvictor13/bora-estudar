@@ -215,8 +215,16 @@ begin
   select * into u from auth.users where id = '22222222-2222-4222-8222-222222222222';
   if u.email like '%bruno%' or u.email not like 'conta-excluida-%@excluida.invalid'
      or u.encrypted_password is not null or u.phone is not null
-     or u.raw_user_meta_data <> '{}'::jsonb or u.banned_until <> 'infinity' or u.deleted_at is null then
+     or u.raw_user_meta_data <> '{}'::jsonb or u.deleted_at is null then
     raise exception 'FALHOU: o login nao foi anulado: email=%, banido=%', u.email, u.banned_until;
+  end if;
+  -- O GoTrue le `banned_until` como time.Time e NAO le `infinity`: com ele, /user e
+  -- /logout da conta davam 500 e a listagem admin falhava para todos (QA2-B01).
+  if u.banned_until is null or u.banned_until = 'infinity' or u.banned_until < now() + interval '50 years' then
+    raise exception 'FALHOU: banned_until deve ser uma data finita bem no futuro, e nao infinity: %', u.banned_until;
+  end if;
+  if exists (select 1 from auth.users where banned_until = 'infinity') then
+    raise exception 'FALHOU: ha usuario com banned_until = infinity, que o GoTrue nao consegue ler';
   end if;
   if exists (select 1 from auth.identities where user_id = u.id)
      or exists (select 1 from auth.sessions where user_id = u.id)
