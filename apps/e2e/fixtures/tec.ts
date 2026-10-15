@@ -15,7 +15,6 @@
 import type { BrowserContext, Page, Route } from "@playwright/test";
 
 export const TEC_HOST = "www.tecconcursos.com.br";
-export const TEC_ORIGIN = `https://${TEC_HOST}`;
 export const TEC_GLOB = "**://*.tecconcursos.com.br/**";
 
 /** Id da questão na URL, quando houver: `/questoes/100001`. */
@@ -42,8 +41,4 @@ async function fulfillTec(route: Route): Promise<void> {
 /** Intercepta o domínio do TEC no contexto inteiro (inclusive novas abas). */
 export async function stubTec(target: BrowserContext | Page): Promise<void> {
   await target.route(TEC_GLOB, (route) => void fulfillTec(route));
-}
-
-export function questionUrl(questionId: number): string {
-  return `${TEC_ORIGIN}/questoes/${questionId}`;
 }

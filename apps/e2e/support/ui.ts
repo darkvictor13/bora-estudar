@@ -107,11 +107,6 @@ export function sidebarToggle(page: Page): Locator {
   return testId(page, "sidebar-toggle");
 }
 
-/** `true` quando a barra está recolhida aos 64px. */
-export function collapsedSidebar(page: Page): Locator {
-  return page.locator('[data-testid="sidebar"][data-collapsed="true"]');
-}
-
 /* ------------------------------------------------------------------ *
  * Formulários — Fase 2
  * ------------------------------------------------------------------ */
@@ -127,11 +122,6 @@ export function field(page: Page, name: string): Locator {
   return page.locator(`#field-${name}`);
 }
 
-/** O cartão de autenticação — o `auth-card` da v2. */
-export function authCard(page: Page): Locator {
-  return testId(page, "auth-card");
-}
-
 /* ------------------------------------------------------------------ *
  * Telas ainda não reescritas — fases 3 a 6
  * ------------------------------------------------------------------ */
@@ -139,11 +129,6 @@ export function authCard(page: Page): Locator {
 /** Uma linha de meta, pelo id da meta. */
 export function goalRow(page: Page | Locator, goalId: string): Locator {
   return page.locator(`[data-testid="goal-row"][data-goal-id="${goalId}"]`);
-}
-
-/** Todas as linhas de meta da tela, na ordem em que aparecem. */
-export function goalRows(page: Page | Locator): Locator {
-  return testId(page, "goal-row");
 }
 
 /**
