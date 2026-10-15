@@ -57,7 +57,7 @@ E a anotação é do aluno, com mais volume do que parece: um tópico bem estuda
 
 | Id | Regra |
 |---|---|
-| R-RES-16 | O importador (`scripts/import-flash-summaries.py`) lê o DOCX **sem executar nada dele**: título é reconhecido pelo NOME do estilo (`heading 1`, `Título 2`…) e, na falta, pelo id (`Heading1`, `Ttulo1`); tabelas aninhadas são mantidas; DTD e entidades XML são recusados; cada parte do ZIP tem teto de 64 MB e o total, 512 MB. |
+| R-RES-16 | O importador (`scripts/import-flash-summaries.mjs`) lê o DOCX **sem executar nada dele**: título é reconhecido pelo NOME do estilo (`heading 1`, `Título 2`…) e, na falta, pelo id (`Heading1`, `Ttulo1`); tabelas aninhadas são mantidas; DTD e entidades XML são recusados; cada parte do ZIP tem teto de 64 MB e o total, 512 MB. |
 | R-RES-17 | A carga (`scripts/load-flash-summaries.mjs`) roda em qualquer sistema, só contra o Supabase **local**, e repetida não duplica tópico. Tópico que sumiu da fonte não é apagado. O material não entra no repositório (`/content/summaries/local/` é ignorado). |
 
 ---
@@ -65,7 +65,7 @@ E a anotação é do aluno, com mais volume do que parece: um tópico bem estuda
 ## Fluxo
 
 ```
-Word (.docx) → import-flash-summaries.py → content/summaries/local/pf2029 (ignorado pelo Git)
+Word (.docx) → import-flash-summaries.mjs → content/summaries/local/pf2029 (ignorado pelo Git)
              → load-flash-summaries.mjs  → summary_topics (service_role)
                                           → bucket flash-summaries: pf2029/<sha>.png … e source.docx (só service_role lê)
 
@@ -86,8 +86,8 @@ selecionar → atalho/barra         → nova lista → saveSummaryNotes(anterior
 | Contrato | `lib/api/summaries.ts` (tipos), `loadSummaryCatalog`, `loadSummaryDocument`, `loadSummaryNotes`, `saveSummaryNotes` |
 | Adaptadores | `lib/api/supabase/summaries.ts`; fixtures devolvem vazio |
 | Domínio | `lib/domain/summary-notes.ts`, `summary-sections.ts`, `summary-shortcuts.ts` |
-| Scripts | `import-flash-summaries.py`, `load-flash-summaries.mjs`, `convert-summary-metafiles.ps1` (Windows: converte EMF em PNG) |
-| Testes | `supabase/tests/20_summaries.sql` (11), `07_schema.sql` (08 e 13), `import-flash-summaries.test.py`, `flash-summary-library.test.mjs` (opcional, `BORA_LOCAL_TEST=1`), `lib/domain/summary-*.test.ts`, `apps/e2e/tests/summaries.spec.ts` |
+| Scripts | `import-flash-summaries.mjs`, `load-flash-summaries.mjs`, `convert-summary-metafiles.ps1` (Windows: converte EMF em PNG) |
+| Testes | `supabase/tests/20_summaries.sql` (11), `07_schema.sql` (08 e 13), `import-flash-summaries.test.mjs`, `flash-summary-library.test.mjs` (opcional, `BORA_LOCAL_TEST=1`), `lib/domain/summary-*.test.ts`, `apps/e2e/tests/summaries.spec.ts` |
 
 ---
 
@@ -101,7 +101,7 @@ selecionar → atalho/barra         → nova lista → saveSummaryNotes(anterior
 | CA-04 | `notes` só aceita array, no máximo 2000 itens. | `20_summaries.sql` (08) |
 | CA-05 | Com o acesso vencido: a retentativa de quem gravou antes passa, escrita nova dá `42501`, e a leitura da própria anotação continua. | `20_summaries.sql` (09) |
 | CA-06 | O aluno com acesso vê só `pf2029/<sha256>.<imagem>`; **nunca** `source.docx`; o professor também não; o vencido não vê o bucket. O bucket é privado e só aceita PNG, JPEG e DOCX. | `20_summaries.sql` (10, 11) |
-| CA-07 | O importador reconhece título por nome de estilo, mantém tabela aninhada, e recusa DTD e parte do ZIP acima do teto. | `import-flash-summaries.test.py` |
+| CA-07 | O importador reconhece título por nome de estilo, mantém tabela aninhada, e recusa DTD e parte do ZIP acima do teto. | `import-flash-summaries.test.mjs` |
 | CA-08 | O grifo feito numa sessão aparece em outra sessão do mesmo aluno. | F-RES-01 |
 | CA-09 | Com ~60 KB de anotações já gravadas, um grifo novo ainda grava. | F-RES-02 |
 | CA-10 | A aba desatualizada é avisada e não sobrescreve o que a outra gravou. | F-RES-03 |
