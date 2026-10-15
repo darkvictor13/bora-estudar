@@ -517,6 +517,37 @@ test.describe("F-AUTH-13 · o link profundo volta depois do login — QA-25", ()
   });
 });
 
+test.describe("F-AUTH-15 · sair numa aba sai em todas — R-AUTH-20", () => {
+  test("a outra aba, aberta numa tela protegida, vai ao login com o next", async ({ studentPage }) => {
+    // Duas abas do MESMO navegador: é o que o `BroadcastChannel` do cliente
+    // alcança. `studentPage` e a aba nova compartilham o contexto, e portanto o
+    // cookie de sessão.
+    await studentPage.goto("/aluno/conta");
+    const outra = await studentPage.context().newPage();
+    await outra.goto("/aluno/estatisticas");
+    await expect(outra.locator("h1")).toBeVisible();
+
+    await signOut(studentPage).click();
+    await expect(studentPage).toHaveURL(/\/entrar/);
+
+    await expect(outra).toHaveURL(/\/entrar\?next=%2Faluno%2Festatisticas$/);
+  });
+
+  test("numa tela pública, a sessão que acaba não leva a lugar nenhum", async ({ studentPage }) => {
+    await studentPage.goto("/aluno/conta");
+    const publica = await studentPage.context().newPage();
+    await publica.goto("/privacidade");
+    await expect(publica.locator("h1")).toHaveText("Política de privacidade");
+
+    await signOut(studentPage).click();
+    await expect(studentPage).toHaveURL(/\/entrar/);
+
+    // Dá ao evento o tempo de chegar, e confere que a aba continua onde estava.
+    await publica.waitForTimeout(1500);
+    await expect(publica).toHaveURL(/\/privacidade$/);
+  });
+});
+
 test.describe("F-AUTH-14 · /confirmar não manda para fora do site — QA-02", () => {
   const payloads: Array<[string, string]> = [
     ["barra invertida", "/\\evil.example/x"],
