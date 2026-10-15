@@ -183,6 +183,7 @@ diff mostra a omissão.
 | F-AUTH-10/11/12 | recuperação de senha, do pedido à senha nova; link expirado; validações (senhas diferentes, curtas e só de espaços) |
 | F-AUTH-13 | o link profundo volta depois do login: `next` pelo guarda, por papel errado, externo e por navegação do cliente — QA-25 |
 | F-AUTH-14 | `/confirmar?next=` não manda para fora do site — QA-02 |
+| F-AUTH-15 | sair numa aba leva a outra, aberta numa tela protegida, ao login com o `next` — R-AUTH-20 |
 | F-CONTA-01 | meus dados nos dois papéis: o aluno vê o nome do professor, o professor não vê o cartão Acesso, o nome salva, e o campo do nome tem teto de 120 — `tests/student-analysis.spec.ts` (QA-08, QA-21, QA-15) |
 
 ### Casca e navegação — `tests/shell.spec.ts`
