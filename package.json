@@ -15,7 +15,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present && npm run test:scripts",
-    "test:scripts": "node --test --test-reporter=dot scripts/check-dist-content.test.mjs scripts/police-flashcards.test.mjs scripts/law-library.test.mjs && node scripts/run-python-tests.mjs",
+    "test:scripts": "node --test --test-reporter=dot scripts/check-dist-content.test.mjs scripts/police-flashcards.test.mjs scripts/law-library.test.mjs scripts/import-flash-summaries.test.mjs",
     "check": "npm run typecheck && npm run lint && npm run test",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
@@ -27,6 +27,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@xmldom/xmldom": "0.9.12",
+    "fflate": "0.8.3",
     "supabase": "^2.115.0",
     "typescript": "^5.7.2",
     "wrangler": "4.149.0"

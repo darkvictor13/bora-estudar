@@ -12,7 +12,7 @@ repositório. Funciona em Linux, macOS e Windows; o carregador usa o CLI do
 `node_modules` e lê as credenciais de `supabase status`.
 
 ```bash
-python3 scripts/import-flash-summaries.py "/caminho/Resumo PF 2029.docx"
+node scripts/import-flash-summaries.mjs "/caminho/Resumo PF 2029.docx"
 npx supabase migration up --local
 node scripts/load-flash-summaries.mjs "/caminho/Resumo PF 2029.docx"
 ```
@@ -24,7 +24,7 @@ Word em PNG (no Linux e no macOS não há conversor: elas são ignoradas):
 powershell -File scripts/convert-summary-metafiles.ps1
 ```
 
-Use Python e Node (24) disponíveis na sua máquina. O importador reconhece os
+Use o Node (24) disponível na sua máquina. O importador reconhece os
 títulos pelo nome do estilo do Word (`Título 1`, `Heading 1`…), mantém tabelas
 dentro de tabelas, e recusa DOCX com DTD/entidades XML ou partes que
 descomprimem além do teto. O conteúdo extraído fica em
