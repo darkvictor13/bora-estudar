@@ -51,17 +51,16 @@ test("a senha curta é recusada com o campo, para a tela saber o que marcar", ()
   assert.equal(checkPassword("Abcd1234"), null);
 });
 
-test("a senha precisa de maiúscula e de minúscula, com acento contando", () => {
-  for (const fraca of ["abcdefgh", "ABCDEFGH", "12345678", "abcd1234", "ABCD1234"]) {
+test("a senha precisa de maiúscula, minúscula e número, nas classes ASCII do GoTrue", () => {
+  for (const fraca of ["abcdefgh", "ABCDEFGH", "12345678", "abcd1234", "ABCD1234", "Abcdefgh", "çççççççÇ1"]) {
     const erro = checkPassword(fraca);
     assert.equal(erro?.field, "password", fraca);
-    assert.equal(erro?.message, "A senha precisa ter letra maiúscula e minúscula.", fraca);
+    assert.equal(erro?.message, "A senha precisa ter letra maiúscula, minúscula e número.", fraca);
   }
-  // Não exige dígito nem símbolo: o pedido é comprimento mais as duas caixas.
-  assert.equal(checkPassword("abcdefgH"), null);
-  // `[A-Z]` não enxergaria o Ç; a propriedade Unicode enxerga.
-  assert.equal(checkPassword("Ação-boa"), null);
-  assert.equal(checkPassword("çççççççÇ"), null);
+  // Não exige símbolo: o pedido é comprimento mais as três classes.
+  assert.equal(checkPassword("abcdefG1"), null);
+  // Acento convive com as classes ASCII, e conta no comprimento.
+  assert.equal(checkPassword("Ação1234"), null);
 });
 
 test("o cadastro recusa na ordem em que a pessoa preenche", () => {
@@ -187,7 +186,7 @@ test("QA-18 · senha só de espaços é recusada no cadastro e na redefinição,
   // A conta criada antes da regra continua entrando.
   assert.equal(checkCredentials({ email: "a@b.com", password: "        " }), null);
   // Espaço no meio é senha; o comprimento vem antes da regra do espaço.
-  assert.equal(checkPassword("Ab cd ef"), null);
+  assert.equal(checkPassword("Ab cd e1"), null);
   assert.match(checkPassword("     ")!.message, /pelo menos 8 caracteres/);
 });
 

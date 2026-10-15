@@ -249,14 +249,14 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 8 caracteres.");
   });
 
-  test("senha sem maiúscula ou sem minúscula é recusada", async ({ page }) => {
+  test("senha sem maiúscula, minúscula ou número é recusada", async ({ page }) => {
     await page.goto("/cadastro");
     await field(page, "name").fill("Candidata Teste");
     await field(page, "email").fill(`caixa-${Date.now().toString(36)}@e2e.local`);
-    for (const fraca of ["somenteminuscula", "SOMENTEMAIUSCULA"]) {
+    for (const fraca of ["somenteminuscula", "SOMENTEMAIUSCULA", "SemNumeroNenhum"]) {
       await field(page, "password").fill(fraca);
       await page.getByRole("button", { name: "Criar minha conta" }).click();
-      await expect(alert(page, "error")).toHaveText("A senha precisa ter letra maiúscula e minúscula.");
+      await expect(alert(page, "error")).toHaveText("A senha precisa ter letra maiúscula, minúscula e número.");
     }
   });
 

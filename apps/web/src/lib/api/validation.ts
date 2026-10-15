@@ -47,17 +47,23 @@ export const MIN_BIRTH_DATE = "1900-01-01";
 export { MAX_LINK_LENGTH };
 
 /**
- * Oito caracteres, com uma maiúscula e uma minúscula. O GoTrue só sabe impor o
- * comprimento (`minimum_password_length` em `supabase/config.toml`): a
- * composição "maiúscula + minúscula" sem exigir dígito não existe entre as
- * `password_requirements` dele, então ela vive aqui, e quem chama a API direto
- * só encontra o piso do comprimento.
+ * Oito caracteres, com maiúscula, minúscula e número. É EXATAMENTE a política
+ * do GoTrue: `minimum_password_length = 8` e `password_requirements =
+ * "lower_upper_letters_digits"` em `supabase/config.toml`. O servidor impõe as
+ * duas coisas, então quem chama a API direto não passa; a regra repetida aqui
+ * existe para a pessoa ler a recusa ANTES de a requisição sair, com a frase
+ * certa.
+ *
+ * As classes são ASCII (`a-z`, `A-Z`, `0-9`) de propósito, porque são as do
+ * GoTrue: "Ação1234" passa nos dois lados, e "çççççççÇ1" não passa em nenhum.
+ * Uma regra Unicode aqui deixaria passar o que o servidor recusa, e a pessoa
+ * veria a frase genérica do servidor em vez da daqui.
  */
 export const MIN_PASSWORD_LENGTH = 8;
 
 /** A mensagem única que o servidor e o contrato dão quando a senha é fraca. */
 export const PASSWORD_RULE_MESSAGE =
-  `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres, com letra maiúscula e minúscula.`;
+  `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres, com letra maiúscula, minúscula e número.`;
 
 /** O mínimo para um nome ser um nome, e não uma inicial. */
 export const MIN_NAME_LENGTH = 3;
@@ -75,9 +81,7 @@ export function checkCredentials({ email, password }: Credentials): ApiError | n
  * O comprimento, depois "só espaços" (QA-18), depois a composição. A senha que
  * segue para o GoTrue NÃO é aparada: a regra recusa o que não é senha, não
  * reescreve o que foi digitado. O login fica de fora — `checkCredentials` não
- * muda —, para a conta criada antes desta regra continuar entrando. Letra
- * maiúscula e minúscula são medidas por propriedade Unicode (`\p{Lu}`, `\p{Ll}`):
- * "Ação" tem as duas, e `[A-Z]` não enxergaria o "Ç".
+ * muda —, para a conta criada antes desta regra continuar entrando.
  */
 export function checkPassword(password: string): ApiError | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
@@ -89,8 +93,8 @@ export function checkPassword(password: string): ApiError | null {
   if (password.trim() === "") {
     return invalid("A senha não pode ser formada só por espaços.", "password");
   }
-  if (!/\p{Lu}/u.test(password) || !/\p{Ll}/u.test(password)) {
-    return invalid("A senha precisa ter letra maiúscula e minúscula.", "password");
+  if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return invalid("A senha precisa ter letra maiúscula, minúscula e número.", "password");
   }
   return null;
 }
