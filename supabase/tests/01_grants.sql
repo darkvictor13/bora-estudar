@@ -16,11 +16,19 @@
 set role authenticated;
 select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
 
--- ---------- profiles: só `name` ----------
+-- ---------- profiles: só `name` e `theme_preference` ----------
 do $$ begin
   update public.profiles set name = 'Bruno Corrigido'
    where id = '22222222-2222-4222-8222-222222222222';
   raise notice '01 OK  o dono grava o proprio nome';
+end $$;
+
+do $$ begin
+  update public.profiles set theme_preference = 'dark'
+   where id = '22222222-2222-4222-8222-222222222222';
+  update public.profiles set theme_preference = null
+   where id = '22222222-2222-4222-8222-222222222222';
+  raise notice '01 OK  o dono grava o proprio tema (UPDATE por coluna)';
 end $$;
 
 do $$ begin

@@ -451,3 +451,55 @@ begin
 end $$;
 
 delete from auth.users where id::text like '78000000-0000-4000-8000-00000000000%';
+
+-- ---------- A preferência de tema é da conta, e só do dono (spec 11) ----------
+set role authenticated;
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+
+do $$
+declare v_rows integer; v_tema public.theme_preference;
+begin
+  update public.profiles set theme_preference = 'dark'
+   where id = '22222222-2222-4222-8222-222222222222';
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'FALHOU: o dono nao gravou o proprio tema (% linhas)', v_rows;
+  end if;
+  select theme_preference into v_tema from public.profiles where id = '22222222-2222-4222-8222-222222222222';
+  if v_tema is distinct from 'dark' then
+    raise exception 'FALHOU: o tema gravado voltou como %', v_tema;
+  end if;
+  raise notice '23 OK  o dono grava o proprio tema';
+
+  -- Voltar a "nunca escolheu" é válido: nulo não é um terceiro tema.
+  update public.profiles set theme_preference = null
+   where id = '22222222-2222-4222-8222-222222222222';
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then raise exception 'FALHOU: o tema nao voltou a nulo'; end if;
+  raise notice '24 OK  theme_preference aceita nulo (nunca escolheu)';
+end $$;
+
+-- UPDATE filtra em silêncio: a linha alheia não aparece para a operação, e o
+-- que prova a defesa é contar zero linhas — esperar exceção passaria por engano.
+do $$
+declare v_rows integer;
+begin
+  update public.profiles set theme_preference = 'dark'
+   where id = '33333333-3333-4333-8333-333333333333';
+  get diagnostics v_rows = row_count;
+  if v_rows <> 0 then
+    raise exception 'FALHOU: o Bruno gravou o tema da Carla (% linhas)', v_rows;
+  end if;
+  raise notice '25 OK  o tema de outro perfil afeta zero linhas';
+end $$;
+
+do $$ begin
+  update public.profiles set theme_preference = 'azul'
+   where id = '22222222-2222-4222-8222-222222222222';
+  raise exception 'FALHOU: theme_preference aceitou um valor fora de light e dark';
+exception when invalid_text_representation then
+  raise notice '26 OK  theme_preference recusa valor fora do enum';
+end $$;
+
+reset role;
+select app_test.act_as_owner();

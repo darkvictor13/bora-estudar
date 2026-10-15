@@ -1557,6 +1557,9 @@ export type Database = {
           plan: string | null
           role: Database["public"]["Enums"]["user_role"]
           teacher_id: string | null
+          theme_preference:
+            | Database["public"]["Enums"]["theme_preference"]
+            | null
           updated_at: string
         }
         Insert: {
@@ -1571,6 +1574,9 @@ export type Database = {
           plan?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           teacher_id?: string | null
+          theme_preference?:
+            | Database["public"]["Enums"]["theme_preference"]
+            | null
           updated_at?: string
         }
         Update: {
@@ -1585,6 +1591,9 @@ export type Database = {
           plan?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           teacher_id?: string | null
+          theme_preference?:
+            | Database["public"]["Enums"]["theme_preference"]
+            | null
           updated_at?: string
         }
         Relationships: [
@@ -3302,6 +3311,7 @@ export type Database = {
         | "cancelled"
         | "voided"
       study_plan_status: "active" | "paused" | "completed" | "archived"
+      theme_preference: "light" | "dark"
       theory_review_status: "pending" | "in_progress" | "completed"
       theory_stage:
         | "reading"
@@ -3479,6 +3489,7 @@ export const Constants = {
         "voided",
       ],
       study_plan_status: ["active", "paused", "completed", "archived"],
+      theme_preference: ["light", "dark"],
       theory_review_status: ["pending", "in_progress", "completed"],
       theory_stage: [
         "reading",

@@ -178,30 +178,54 @@ export const authApi = {
   },
 
   /**
-   * O TEMA AINDA NÃO TEM ONDE MORAR NO BANCO — é a lacuna nº 1 do contrato.
+   * O tema mora em `profiles.theme_preference` (spec 11, R-TEMA-19), e a CONTA é a
+   * fonte da verdade: o loader do layout adota o que vem daqui e atualiza a
+   * cópia do aparelho (`adoptTheme`).
    *
-   * O schema de 14/09/2026 removeu `user_preferences` e nada a substituiu:
-   * `profiles` não tem coluna de preferência. Enquanto a frente do banco não
-   * entregar (uma coluna `theme_preference` em `profiles` basta), a escolha
-   * vale por APARELHO, guardada pelo mesmo `lib/theme.ts` que pinta o
-   * documento antes do primeiro paint.
+   * `null` é "nunca escolheu", e equivale a claro sem ter sido escolhido.
    *
-   * A consequência a dizer em voz alta: quem escolhe escuro no computador
-   * continua vendo claro no celular, e R-TEMA-11 — "o que a conta diz
-   * prevalece" — está suspenso até a coluna existir. Nada aqui inventa tabela:
-   * um adaptador que grava onde ninguém combinou é pior do que um que avisa.
+   * SE A LEITURA FALHAR, VALE A CÓPIA DO APARELHO (R-TEMA-21). O aparelho é
+   * cache da conta, e o tema não pode derrubar uma tela: rede caída no meio de
+   * uma navegação cairia no `ErrorBoundary` da rota por causa de uma cor. Por
+   * isso esta leitura não lança, ao contrário das outras do adaptador.
    */
   async loadThemePreference(): Promise<ThemePreference | null> {
     const session = await currentSession();
-    return session ? readLocalTheme(session.profileId) : null;
+    if (!session) return null;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("theme_preference")
+      .eq("id", session.profileId)
+      .maybeSingle();
+    if (error) return readLocalTheme(session.profileId);
+    return data?.theme_preference ?? null;
   },
 
+  /**
+   * Grava na conta e, antes, no aparelho: a escolha vale aqui mesmo que a
+   * gravação remota falhe, e o controle avisa que ela não subiu (R-TEMA-12).
+   *
+   * `.select("id")` depois do UPDATE é o que distingue "gravou" de "a RLS filtrou
+   * em silêncio": UPDATE sem linha visível afeta zero linhas e não dá erro, e a
+   * conta excluída cai exatamente aí (`profiles_update_own` exige `deleted_at is
+   * null`).
+   */
   async saveThemePreference(theme: ThemePreference): Promise<Result<void>> {
     const found = await sessionForWrite();
     if (!found.ok) return failure(found.error);
     const session = found.data;
     if (!session) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
+
     writeLocalTheme(session.profileId, theme);
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ theme_preference: theme })
+      .eq("id", session.profileId)
+      .select("id");
+    if (error) return failure(translateDbError(error));
+    if (!data?.length) return fail("forbidden", "Não foi possível salvar o tema na sua conta.");
     return done(undefined);
   },
 };

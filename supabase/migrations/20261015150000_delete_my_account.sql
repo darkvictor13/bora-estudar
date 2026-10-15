@@ -197,6 +197,7 @@ begin
          plan = null,
          coupon_used = null,
          access_origin = null,
+         theme_preference = null,
          deleted_at = now()
    where id = v_uid;
 

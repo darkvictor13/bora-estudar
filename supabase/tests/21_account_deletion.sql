@@ -21,6 +21,9 @@
 -- ---------- Semeio, como manutenção (sem JWT) ----------
 select app_test.act_as_owner();
 
+update public.profiles set theme_preference = 'dark'
+ where id = '22222222-2222-4222-8222-222222222222';
+
 insert into public.waitlist (student_id, teacher_id, name, email, whatsapp, interest_area, target_exam)
 select p.id, p.teacher_id, p.name, u.email, '(11) 90000-0000', 'Policial', 'PF'
   from public.profiles p join auth.users u on u.id = p.id
@@ -189,7 +192,8 @@ begin
   select * into p from public.profiles where id = '22222222-2222-4222-8222-222222222222';
   if p.name <> 'Conta excluída' or p.teacher_id is not null or p.deleted_at is null
      or p.access_status <> 'suspended' or p.access_expires_at is not null
-     or p.plan is not null or p.coupon_used is not null or p.access_origin is not null then
+     or p.plan is not null or p.coupon_used is not null or p.access_origin is not null
+     or p.theme_preference is not null then
     raise exception 'FALHOU: o perfil nao ficou anonimo e sem acesso: %', row_to_json(p);
   end if;
   raise notice '05 OK  o perfil e "Conta excluida", sem professor nem acesso';

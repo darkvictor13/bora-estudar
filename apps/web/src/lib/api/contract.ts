@@ -36,10 +36,9 @@
  * `supabase/migrations/20260914150000_initial_schema.sql`. Estão aqui porque o
  * contrato é o pedido formal à frente do banco:
  *
- * 1. **Não há onde guardar a preferência de tema.** `user_preferences` saiu e
- *    nada a substituiu. `loadThemePreference`/`saveThemePreference` precisam de
- *    uma coluna em `profiles` ou de uma tabela própria; sem isso a regra de o
- *    tema vir da CONTA, e não do aparelho, não tem como valer (R-TEMA-11).
+ * 1. ~~**Não há onde guardar a preferência de tema.**~~ **Resolvida em
+ *    15/10/2026.** `profiles.theme_preference` (enum, nulável): a conta volta a
+ *    ser a fonte da verdade (R-TEMA-11) e o aparelho é cache.
  * 2. ~~**Não há tabela de assinatura.**~~ **Resolvida em 18/09/2026.** O acesso
  *    continua sendo `profiles.access_status` mais `access_expires_at`, mas quem
  *    os escreve agora é a RPC `set_student_access`, e cada liberação e cada
