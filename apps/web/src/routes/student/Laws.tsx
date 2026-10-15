@@ -53,10 +53,13 @@ function LawLibraryNav({
         <TextField
           size="small"
           placeholder="Buscar lei ou número"
-          aria-label="Buscar lei ou número"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+          // O nome vai no <input>: `aria-label` no TextField cai na div da raiz (QA2-B05).
+          slotProps={{
+            htmlInput: { "aria-label": "Buscar lei ou número" },
+            input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> },
+          }}
         />
         <Box component="nav" aria-label="Matérias do Vade Mecum" sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
           <Chip label={`Todas (${library.laws.length})`} size="small" color={!subject ? "primary" : "default"} variant={!subject ? "filled" : "outlined"} onClick={() => setSubject("")} />
@@ -125,9 +128,9 @@ function ArticleNav({
         size="small"
         fullWidth
         placeholder="Buscar artigo"
-        aria-label="Buscar artigo"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        slotProps={{ htmlInput: { "aria-label": "Buscar artigo" } }}
         sx={{ mb: 1.25 }}
       />
       <Box component="nav" aria-label="Artigos da lei" sx={{ display: "grid", gap: 0.4, maxHeight: { lg: "calc(100vh - 210px)" }, overflowY: { lg: "auto" } }}>

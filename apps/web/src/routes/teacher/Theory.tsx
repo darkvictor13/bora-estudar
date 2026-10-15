@@ -363,7 +363,7 @@ function LessonRow({
               display: "grid",
               gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 1.25,
-              [theme.breakpoints.down("md")]: { gridTemplateColumns: "1fr" },
+              [theme.breakpoints.down("md")]: { gridTemplateColumns: "minmax(0, 1fr)" },
             })}>
               <Field label="Link externo de flashcards (opcional)" name="flashcardsUrl" type="url" defaultValue={lesson.resources.flashcards ?? ""} />
               <Field label="Resumo flash" name="flashSummaryUrl" type="url" defaultValue={lesson.resources.flashSummary ?? ""} />
@@ -544,7 +544,7 @@ export function TeacherTheory() {
                 gridTemplateColumns: "repeat(3, 1fr)",
                 gap: 1.25,
                 mb: 1.75,
-                [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+                [theme.breakpoints.down("lg")]: { gridTemplateColumns: "minmax(0, 1fr)" },
               })}
             >
               <Metric label="Aulas" value={lessons.length} />

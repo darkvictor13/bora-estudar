@@ -84,6 +84,8 @@ test.describe("F-LGPD-02 · o cartão diz o que sai e o que fica", () => {
     await expect(card).toContainText("O que fica, sem identificar você");
     await expect(card).toContainText("liberações de acesso");
     await expect(card).toContainText("notas dos simulados presenciais");
+    // A spec 46 manda os resgates de cupom ficarem (R-CUP-11): o texto tem de dizer (QA2).
+    await expect(card).toContainText("cupons que você resgatou");
     await expect(card).toContainText("Não há como desfazer");
 
     // Cancelar fecha o diálogo e não exclui nada.

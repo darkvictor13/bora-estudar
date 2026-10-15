@@ -78,7 +78,7 @@ export function Privacy() {
           sem pedir a ninguém. Não há como desfazer.
         </p>
         <p><strong>O que é apagado:</strong> tudo o que você fez e escreveu — planejamento, cadernos, metas e registros de estudo, progresso e revisões de teoria, baterias e reforços, marcações em leis e cartões, anotações dos resumos, baralhos e cartões pessoais, revisões de cartões, a inscrição na lista de espera e a matrícula em turma. O seu login também deixa de existir: e-mail, telefone e senha são removidos, e o e-mail fica livre para um novo cadastro.</p>
-        <p><strong>O que fica, sem identificar você:</strong> apenas o histórico de liberações e bloqueios de acesso (datas e prazos) e as notas dos simulados presenciais, que servem a estatísticas e à média da turma. Esses registros ficam ligados a uma conta que já não tem nome, e-mail, telefone nem professor.</p>
+        <p><strong>O que fica, sem identificar você:</strong> apenas o histórico de liberações e bloqueios de acesso (datas e prazos), os cupons de acesso que você resgatou e as notas dos simulados presenciais, que servem a estatísticas e à média da turma. Esses registros ficam ligados a uma conta que já não tem nome, e-mail, telefone nem professor.</p>
         <p>A conta de professor não é excluída por esse caminho; peça pelo contato da seção 1.</p>
       </LegalSection>
 

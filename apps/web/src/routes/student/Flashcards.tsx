@@ -247,7 +247,7 @@ function FlashcardSession({ lesson, deck, initialReviews, initialMarks, onGrade,
           </Button>
         </Box>
 
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1, mb: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(4, minmax(0, 1fr))" }, gap: 1, mb: 2 }}>
           {[
             ["Novos", studyStats.fresh],
             ["Aprendendo", studyStats.learning],

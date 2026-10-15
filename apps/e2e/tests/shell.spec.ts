@@ -12,7 +12,8 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures/index.ts";
 import { query } from "../fixtures/db.ts";
-import { addTheoryCatalog, type Scenario } from "../fixtures/scenario.ts";
+import { addFinishedSession, addTheoryCatalog, type Scenario } from "../fixtures/scenario.ts";
+import { randomUUID } from "node:crypto";
 import { collect, contrast, describe as describeSample } from "../support/contrast.ts";
 import { PAGE_TITLES, STUDENT_ROUTES, TEACHER_ROUTES, studentPageOf } from "../support/routes.ts";
 import {
@@ -253,6 +254,39 @@ test.describe("F-UI-11 · nenhuma tela passa de 375px (QA-23)", () => {
     });
   });
 
+  test.describe("aluno com dados (QA2-B02)", () => {
+    // A varredura acima roda com o cenário VAZIO, e é por isso que o excesso de
+    // /aluno/estatisticas escapou: os gráficos só existem com dois pontos ou mais,
+    // e a grade de `1fr` só cresce com o conteúdo deles.
+    test("estatísticas, semana e revisões cabem com estudo registrado", async ({
+      studentPage,
+      scenario,
+    }) => {
+      await addFinishedSession(scenario, { correct: 7, total: 15 });
+      const goals = await query<{ id: string }>("select id from public.goals where student_id = $1", [
+        scenario.student.id,
+      ]);
+      for (const goal of goals) {
+        await query(
+          `insert into public.goal_entries
+             (goal_id, teacher_id, student_id, minutes, questions, correct_answers, request_id, studied_on)
+           values ($1, $2, $3, 90, 40, 25, $4, current_date)`,
+          [goal.id, scenario.teacher.id, scenario.student.id, randomUUID()],
+        );
+      }
+      await query(
+        "update public.goals set status = 'completed', completed_at = now() where student_id = $1 and type <> 'question_block'",
+        [scenario.student.id],
+      );
+
+      for (const route of ["/aluno/estatisticas", "/aluno?dia=todos", "/aluno/revisoes", "/aluno/flashcards/estatisticas"]) {
+        await studentPage.goto(route);
+        await expect(studentPage.locator("h1")).toBeVisible();
+        expect(await overflowOf(studentPage), route).toBeLessThanOrEqual(0);
+      }
+    });
+  });
+
   test.describe("professor", () => {
     for (const route of TEACHER_ROUTES) {
       test(`${route} cabe`, async ({ teacherPage, scenario }) => {
@@ -343,4 +377,35 @@ test.describe("F-UI-12 · a primeira carga mostra que está carregando (QA-26)",
       expect(fracos).toEqual([]);
     });
   }
+});
+
+test.describe("F-UI-13 · alvos de toque e nomes acessíveis (QA2-B05)", () => {
+  // As metas só existem com planejamento; a casca de cima roda sem.
+  test.use({ scenarioOptions: {} });
+
+  test("a caixa de concluir alcança 24px de área, e o botão de modo do cronômetro tem altura", async ({
+    studentPage,
+  }) => {
+    await studentPage.goto("/aluno?dia=todos");
+    const check = studentPage.locator('[data-testid="goal-check"]').first();
+    await expect(check).toBeVisible();
+    const box = (await check.boundingBox())!;
+    // A área de toque passa do quadrado desenhado: 2px fora dele ainda cai no botão.
+    const hit = await studentPage.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.closest('[data-testid="goal-check"]') !== null,
+      [box.x - 2, box.y + box.height / 2],
+    );
+    expect(hit).toBe(true);
+
+    const mode = studentPage.getByRole("button", { name: /^Livre/ });
+    expect((await mode.boundingBox())!.height).toBeGreaterThanOrEqual(24);
+  });
+
+  test("as buscas de leis nomeiam o <input>, e o cronômetro tem h1", async ({ studentPage }) => {
+    await studentPage.goto("/aluno/leis");
+    await expect(studentPage.getByRole("textbox", { name: "Buscar lei ou número" })).toBeVisible();
+
+    await studentPage.goto("/aluno/cronometro");
+    await expect(studentPage.getByRole("heading", { level: 1, name: "Cronômetro de estudo" })).toBeAttached();
+  });
 });

@@ -28,8 +28,8 @@ export function DeletionSummary() {
       </p>
       <p>
         <strong>O que fica, sem identificar você:</strong> apenas o histórico de liberações de acesso
-        (datas e prazos) e as notas dos simulados presenciais, para estatísticas. Eles passam a
-        pertencer a uma conta sem nome, e-mail nem professor.
+        (datas e prazos), os cupons que você resgatou e as notas dos simulados presenciais, para
+        estatísticas. Eles passam a pertencer a uma conta sem nome, e-mail nem professor.
       </p>
       <p>
         <strong>Não há como desfazer.</strong>
