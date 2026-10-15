@@ -45,7 +45,7 @@ export function AuthView({
       )}
 
       <Typography
-        component="h2"
+        component="h1"
         sx={{ textAlign: "center", fontSize: "1.375rem", fontWeight: 800, letterSpacing: "-0.025em" }}
       >
         {title}

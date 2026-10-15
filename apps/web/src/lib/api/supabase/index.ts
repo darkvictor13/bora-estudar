@@ -36,6 +36,7 @@ import { mockExamsApi } from "./mock-exams.ts";
 import { gradeFlashcard, loadFlashcardReviews, loadFlashcardReviewsForLessons } from "./flashcards.ts";
 import { gradeLibraryFlashcard, loadLibraryFlashcardCatalog, loadLibraryFlashcardDeck, loadLibraryFlashcardReviews } from "./library-flashcards.ts";
 import { loadExamMaps, loadLawDocument, loadLawLibrary, loadLawMarks, saveLawMarks } from "./laws.ts";
+import { loadSummaryCatalog, loadSummaryDocument, loadSummaryNotes, saveSummaryNotes } from "./summaries.ts";
 import { loadFlashcardMarks, saveFlashcardMarks } from "./flashcard-marks.ts";
 import { createPersonalFlashcard, createPersonalFlashcardDeck, gradePersonalFlashcard, listPersonalFlashcardDecks, loadPersonalFlashcardReviews } from "./personal-flashcards.ts";
 import { authApi } from "./auth.ts";
@@ -158,6 +159,10 @@ export const supabaseApi: BoraApi = {
   loadFlashcardReviewsForLessons,
   gradeFlashcard,
   loadLawLibrary,
+  loadSummaryCatalog,
+  loadSummaryDocument,
+  loadSummaryNotes,
+  saveSummaryNotes,
   loadLawDocument,
   loadExamMaps,
   loadLawMarks,

@@ -1,13 +1,19 @@
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
+import PauseIcon from "@mui/icons-material/PauseOutlined";
+import PlayArrowIcon from "@mui/icons-material/PlayArrowOutlined";
+import { useState } from "react";
 import { Outlet } from "react-router";
 
+import { AuthBackdrop } from "@/components/auth/AuthBackdrop";
 import { getSessionContext } from "@/lib/auth/session";
 import { forgetTheme } from "@/lib/theme";
 
 /**
- * Sem sessão o tema é claro (R-TEMA-14).
+ * Sem sessão a preferência da conta é limpa. As telas públicas usam um
+ * escopo visual escuro próprio, sem mudar a preferência da área do aluno.
  *
  * Quem sai pelo botão já teve a cópia local apagada, e quem esbarra numa rota
  * protegida passa por `requireSession`. Sobra um caso: a sessão vence com a
@@ -19,33 +25,24 @@ export async function publicLayoutLoader() {
   return null;
 }
 
-/** As três promessas que a v2 mostra ao lado do formulário. */
-const BENEFITS = ["Plano de estudos", "Metas semanais", "Evolução real"] as const;
-
-/**
- * A ENTRADA EM DUAS COLUNAS DA v2 — `auth-story` à esquerda, `auth-card` à
- * direita.
- *
- * O layout é o da v2; a cor não é. Lá o fundo era um degradê azul-marinho fixo
- * com o cartão em vidro escuro, o que fazia da tela de entrada a única do
- * produto que ignorava o tema — e que, no modo claro, aparecia como um bloco
- * preto entre duas telas claras. Aqui as duas colunas são pintadas pelos
- * tokens, então a entrada acompanha o tema como qualquer outra tela.
- *
- * Abaixo de `xl` a coluna da história SOME, como na v2: ela é enfeite de tela
- * larga, e num celular empurraria o formulário para baixo da dobra.
- */
+/** Centered access card with decorative animated brand lights. */
 export function PublicLayout() {
+  const [paused, setPaused] = useState(false);
   return (
     <Box
       data-testid="auth-overlay"
+      data-theme="dark"
       sx={(theme) => ({
         minHeight: "100vh",
+        position: "relative",
+        isolation: "isolate",
         display: "grid",
         placeItems: "center",
         p: 4,
         overflow: "auto",
         backgroundColor: theme.vars.palette.surface.base,
+        color: theme.vars.palette.text.primary,
+        colorScheme: "dark",
         // Os dois halos da v2, repintados com os verdes da marca. Em alfa baixo — o
         // fundo precisa dar profundidade sem disputar com o cartão.
         backgroundImage: `
@@ -55,73 +52,8 @@ export function PublicLayout() {
         [theme.breakpoints.down("sm")]: { p: 1.75, placeItems: "start center" },
       })}
     >
-      <Box
-        sx={(theme) => ({
-          width: "min(1120px, 100%)",
-          display: "grid",
-          gridTemplateColumns: "minmax(320px, 1fr) minmax(390px, 440px)",
-          alignItems: "center",
-          gap: 9,
-          [theme.breakpoints.down("xl")]: {
-            gridTemplateColumns: "1fr",
-            gap: 3,
-            maxWidth: 520,
-            margin: "auto 0",
-          },
-        })}
-      >
-        <Box
-          component="section"
-          aria-label="Apresentação da plataforma"
-          sx={(theme) => ({
-            maxWidth: 470,
-            justifySelf: "center",
-            textAlign: "center",
-            [theme.breakpoints.down("xl")]: { display: "none" },
-          })}
-        >
-          <Typography
-            component="h1"
-            sx={{
-              fontSize: "clamp(2.375rem, 4.2vw, 3.625rem)",
-              lineHeight: 0.98,
-              letterSpacing: "-0.055em",
-              fontWeight: 800,
-              maxWidth: 450,
-              mx: "auto",
-              mb: 3,
-            }}
-          >
-            Seu concurso começa com um plano.
-          </Typography>
-          <Typography
-            sx={{ fontSize: "1rem", lineHeight: 1.55, maxWidth: 410, mx: "auto" }}
-            color="text.secondary"
-          >
-            Organize seus estudos, acompanhe sua evolução e avance com metas claras até a
-            aprovação.
-          </Typography>
-
-          <Box sx={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 1.25, mt: 5 }}>
-            {BENEFITS.map((benefit) => (
-              <Box
-                key={benefit}
-                sx={(theme) => ({
-                  px: 1.875,
-                  py: 1.125,
-                  borderRadius: `${theme.brand.radius.pill}px`,
-                  border: `1px solid ${theme.vars.palette.surface.border}`,
-                  backgroundColor: theme.vars.palette.surface.raised,
-                  fontSize: "0.8125rem",
-                  color: theme.vars.palette.text.secondary,
-                })}
-              >
-                {benefit}
-              </Box>
-            ))}
-          </Box>
-        </Box>
-
+      <AuthBackdrop paused={paused} />
+      <Box sx={{ position: "relative", width: "min(440px, 100%)" }}>
         <Paper
           component="main"
           data-testid="auth-card"
@@ -131,7 +63,17 @@ export function PublicLayout() {
             display: "flex",
             flexDirection: "column",
             borderRadius: `${theme.brand.radius.xl}px`,
-            boxShadow: theme.vars.palette.elevation.xl,
+            color: theme.vars.palette.text.primary,
+            // Override Paper's theme-specific opaque gradient as well as its base surface.
+            "&&": {
+              border: "1px solid rgba(235, 255, 247, 0.28)",
+              boxShadow: "0 24px 80px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.07)",
+              backgroundColor: "rgba(220, 245, 235, 0.07)",
+              backgroundImage: "linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 32%, transparent 48%, rgba(255, 255, 255, 0.06) 51%, transparent 72%)",
+              backdropFilter: "blur(18px) saturate(140%)",
+              WebkitBackdropFilter: "blur(18px) saturate(140%)",
+              "@supports not (backdrop-filter: blur(1px))": { backgroundColor: "#23372f" },
+            },
             px: 4,
             pt: 4.25,
             pb: 3,
@@ -174,6 +116,15 @@ export function PublicLayout() {
             Acesso protegido e dados sincronizados.
           </Typography>
         </Paper>
+      <Button
+        variant="text"
+        size="small"
+        startIcon={paused ? <PlayArrowIcon /> : <PauseIcon />}
+        onClick={() => setPaused((value) => !value)}
+        sx={{ display: "flex", mx: "auto", mt: 2, color: "text.secondary", "@media (prefers-reduced-motion: reduce)": { display: "none" } }}
+      >
+        {paused ? "Ativar animação" : "Pausar animação"}
+      </Button>
       </Box>
     </Box>
   );

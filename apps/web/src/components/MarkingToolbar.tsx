@@ -31,6 +31,7 @@ interface Props {
   readonly onUndo: () => void;
   readonly onDismiss: () => void;
   readonly sx?: SxProps<Theme>;
+  readonly colorShortcuts?: Partial<Record<MarkColor, string>>;
 }
 
 const TOOLS: readonly { style: MarkStyle; label: string; icon: ReactNode }[] = [
@@ -62,7 +63,7 @@ export function markSx(mark: Pick<TextMark, "style" | "color"> | null) {
   }
 }
 
-export function MarkingToolbar({ selectionCount, canUndo, selectHint, onPaint, onErase, onUndo, onDismiss, sx }: Props) {
+export function MarkingToolbar({ selectionCount, canUndo, selectHint, onPaint, onErase, onUndo, onDismiss, sx, colorShortcuts }: Props) {
   const [style, setStyle] = useState<MarkStyle>("highlight");
   const [color, setColor] = useState<MarkColor>("yellow");
   const hasSelection = selectionCount > 0;
@@ -88,7 +89,7 @@ export function MarkingToolbar({ selectionCount, canUndo, selectHint, onPaint, o
       <Tooltip title="Apagar marcação do trecho"><span><IconButton size="small" aria-label="Apagar marcação" disabled={!hasSelection} onClick={onErase}><BackspaceIcon fontSize="small" /></IconButton></span></Tooltip>
       <Box aria-hidden="true" sx={{ width: "1px", flex: "0 0 1px", height: 25, backgroundColor: "divider", mx: 0.4 }} />
       {(Object.keys(MARK_COLORS) as MarkColor[]).map((tone) => (
-        <Tooltip key={tone} title={COLOR_LABELS[tone]}>
+        <Tooltip key={tone} title={colorShortcuts?.[tone] ? `${COLOR_LABELS[tone]} · atalho ${colorShortcuts[tone]}` : COLOR_LABELS[tone]}>
           <span><IconButton
             size="small"
             aria-label={`Marcar em ${COLOR_LABELS[tone].toLowerCase()}`}

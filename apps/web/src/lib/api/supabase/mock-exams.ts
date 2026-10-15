@@ -4,6 +4,7 @@ import { PEER_NAME, peerId, validScore, validateMockExam } from "../../domain/mo
 import { done, fail, failure, throwDb, settle, translateDbError } from "./errors.ts";
 import { requireSession } from "./session.ts";
 import type { Row } from "@bora/database";
+import { demoMockExamName } from "../../domain/mock-exam-demo.ts";
 
 function toExam(row: Row<"mock_exams">, className: string): MockExam {
   return { id: row.id, classId: row.class_id, className, title: row.title,
@@ -33,7 +34,7 @@ export const mockExamsApi: MockExamsApi = {
       if (subjectResults.error) throwDb(subjectResults.error);
       return {
         results: (results.data ?? []).map((row) => ({ studentId: row.student_id,
-          studentName: row.student?.name?.trim() || "Aluno", score: row.score })),
+          studentName: demoMockExamName(examId, row.score, row.student?.name?.trim() || "Aluno"), score: row.score })),
         subjectResults: (subjectResults.data ?? []).map((row) => ({ studentId: row.student_id,
           subject: row.subject, correctAnswers: row.correct_answers })),
       };
@@ -46,7 +47,7 @@ export const mockExamsApi: MockExamsApi = {
     const idOf = (row: { is_self: boolean; participant: number }) => row.is_self ? session.profileId : peerId(row.participant);
     return {
       results: rows.filter((row) => row.subject === null).map((row) => ({ studentId: idOf(row),
-        studentName: row.is_self ? session.name?.trim() || "Você" : PEER_NAME, score: Number(row.score) })),
+        studentName: demoMockExamName(examId, Number(row.score), row.is_self ? session.name?.trim() || "Você" : PEER_NAME), score: Number(row.score) })),
       subjectResults: rows.filter((row) => row.subject !== null).map((row) => ({ studentId: idOf(row),
         subject: row.subject ?? "", correctAnswers: Number(row.score) })),
     };

@@ -5,6 +5,7 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { Badge, Card, Empty } from "@bora/ui";
 import type { MockExamResult } from "@/lib/api";
 import { rankMockExam } from "@/lib/domain/mock-exams";
@@ -26,7 +27,10 @@ export function MockExamRanking({ results, maxScore, profileId, draft = false }:
             <TableHead><TableRow><TableCell>Posição</TableCell><TableCell>Aluno</TableCell><TableCell align="right">Nota</TableCell><TableCell align="right">Aproveitamento</TableCell></TableRow></TableHead>
             <TableBody>{ranking.map((row) => (
               <TableRow key={row.studentId} selected={row.studentId === profileId} data-testid="ranking-row">
-                <TableCell>{row.rank}º</TableCell>
+                <TableCell><Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  {row.rank <= 3 && <EmojiEventsIcon titleAccess={`Troféu de ${row.rank}º lugar`} sx={{ fontSize: 22, color: row.rank === 1 ? "#b78b12" : row.rank === 2 ? "#8796a5" : "#b7773e" }} />}
+                  {row.rank}º
+                </Box></TableCell>
                 <TableCell>{row.studentName} {row.studentId === profileId && <Badge tone="accent">Você</Badge>}</TableCell>
                 <TableCell align="right">{formatScore(row.score)}</TableCell>
                 <TableCell align="right">{formatScore(row.score / maxScore * 100)}%</TableCell>

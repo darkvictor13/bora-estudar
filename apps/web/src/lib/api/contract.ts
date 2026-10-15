@@ -664,7 +664,14 @@ export interface TheorySubjectControl {
   readonly reviewsDue: number;
 }
 
+export type { SummaryBlock, SummaryDocument, SummaryTopic, SummaryNote, SummaryNoteStyle } from "./summaries.ts";
+import type { SummaryDocument, SummaryTopic, SummaryNote } from "./summaries.ts";
+
 export interface TheoryApi {
+  loadSummaryCatalog(): Promise<SummaryTopic[]>;
+  loadSummaryDocument(id: string): Promise<SummaryDocument | null>;
+  loadSummaryNotes(id: string): Promise<SummaryNote[]>;
+  saveSummaryNotes(id: string, previous: readonly SummaryNote[], next: readonly SummaryNote[]): Promise<Result<null>>;
   loadTheoryControl(studyPlanId: Uuid): Promise<readonly TheorySubjectControl[]>;
   loadTheoryGoal(goalId: Uuid): Promise<TheoryGoal>;
   loadFlashcardReviews(lessonId: Uuid): Promise<readonly FlashcardReview[]>;

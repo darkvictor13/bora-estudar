@@ -2280,6 +2280,72 @@ export type Database = {
           },
         ]
       }
+      summary_annotations: {
+        Row: {
+          notes: Json
+          topic_id: string
+          user_id: string
+        }
+        Insert: {
+          notes?: Json
+          topic_id: string
+          user_id: string
+        }
+        Update: {
+          notes?: Json
+          topic_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "summary_annotations_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "summary_topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "summary_annotations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      summary_topics: {
+        Row: {
+          blocks: Json
+          id: string
+          position: number
+          source_hash: string
+          source_name: string
+          subject: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blocks: Json
+          id: string
+          position: number
+          source_hash: string
+          source_name: string
+          subject: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          id?: string
+          position?: number
+          source_hash?: string
+          source_name?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       theory_catalog_subject_rules: {
         Row: {
           active: boolean

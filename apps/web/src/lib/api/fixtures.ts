@@ -1255,6 +1255,10 @@ export const fixturesApi: BoraApi = {
   })),
 
   loadLibraryFlashcardCatalog: async () => later((await fixtureLibrary()).catalog),
+  loadSummaryCatalog: async () => [],
+  loadSummaryDocument: async () => null,
+  loadSummaryNotes: async () => [],
+  saveSummaryNotes: async () => done(null),
   loadLibraryFlashcardDeck: async (deckId: string) => later((await fixtureLibrary()).decks.get(deckId) ?? null),
   loadLibraryFlashcardReviews: async (deckIds: readonly string[]) => {
     const { aliases } = (await fixtureLibrary()).catalog;

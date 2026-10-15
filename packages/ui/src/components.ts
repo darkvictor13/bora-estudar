@@ -52,6 +52,10 @@ export const components: Components<Omit<Theme, 'components'>> = {
       '::selection': {
         backgroundColor: theme.vars.palette.accent.primarySoftHover,
         color: theme.vars.palette.text.primary,
+        ...theme.applyStyles('dark', {
+          backgroundColor: theme.vars.palette.accent.primary,
+          color: theme.vars.palette.fill.primaryText,
+        }),
       },
       '*::-webkit-scrollbar': { width: 10, height: 10 },
       '*::-webkit-scrollbar-track': { background: theme.vars.palette.surface.base },
@@ -336,6 +340,8 @@ export const components: Components<Omit<Theme, 'components'>> = {
         '&.Mui-disabled': { backgroundColor: theme.vars.palette.action.disabledBackground },
       }),
       input: ({ theme }) => ({
+        // O contorno de foco já fica no campo externo; não duplicar no textarea.
+        '&:focus-visible': { outline: 'none', boxShadow: 'none' },
         /**
          * 16px NO CELULAR, e não é preferência de tamanho.
          *
