@@ -14,7 +14,6 @@
  */
 import type { BrowserContext, Page, Route } from "@playwright/test";
 
-export const TEC_HOST = "www.tecconcursos.com.br";
 export const TEC_GLOB = "**://*.tecconcursos.com.br/**";
 
 /** Id da questão na URL, quando houver: `/questoes/100001`. */
