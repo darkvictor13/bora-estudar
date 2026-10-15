@@ -412,3 +412,36 @@ test.describe("F-TEMA-09 · a sessão que não pôde ser verificada", () => {
     expect(await storedTheme(studentPage, scenario.student.id)).toBeNull();
   });
 });
+
+test.describe("F-TEMA-10 · telas sem sessão", () => {
+  // O app tem dois temas, e a tela de entrada é parte dele: segue o `data-theme`
+  // do documento (claro, sem sessão — R-TEMA-14), sem escopo próprio, e o vidro
+  // do cartão existe nos dois. O escuro é forçado no documento porque, sem
+  // sessão, não há onde escolhê-lo.
+  for (const theme of ["light", "dark"] as const) {
+    test(`/entrar segue o tema do documento e o cartão é de vidro, tema ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: "dark" }); // R-TEMA-06: o sistema não decide
+      await page.goto("/entrar");
+      await expect(page.getByTestId("auth-card")).toBeVisible();
+      await expect(html(page)).toHaveAttribute("data-theme", "light");
+      if (theme === "dark") {
+        // Trocar o atributo em execução dispara a transição de fundo do MUI, e o
+        // contraste mediria um quadro do meio dela — o mesmo defeito que o
+        // `body` sem `transition` evita (CLAUDE.md, "Tema").
+        await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; }" });
+        await page.evaluate(() => { document.documentElement.dataset["theme"] = "dark"; });
+      }
+
+      await expect(page.getByTestId("auth-overlay")).not.toHaveAttribute("data-theme", /.+/);
+      const glass = await page.getByTestId("auth-card").evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { filter: style.backdropFilter, background: style.backgroundColor };
+      });
+      expect(glass.filter, `vidro sem desfoque (${theme})`).toContain("blur");
+      const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(glass.background)?.[1] ?? 1);
+      expect(alpha, `o cartão é opaco (${theme}): ${glass.background}`).toBeLessThan(1);
+
+      await assertAA(page, `/entrar (${theme})`);
+    });
+  }
+});

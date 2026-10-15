@@ -66,6 +66,7 @@ dado. Depois de existir tela, custa migração de dado.
 | R-TEMA-15 | Os dois temas cumprem **WCAG AA**: 4.5:1 para texto normal, 3:1 para texto grande e para o limite visível de **campo e de botão**. Cartão fica de fora: contêiner não interativo não é componente na acepção da 1.4.11, e o tema claro que já está no ar nunca cumpriu 3:1 ali — a redação anterior desta regra dizia "campo, botão e cartão" e reprovava o design existente por uma exigência que ele não precisa cumprir. Corrigida em 29/08/2026, ao implementar. |
 | R-TEMA-17 | Cumprir a regra acima **mudou o tema claro também**: a borda de campo e de botão saiu de `--ink-300` para `--ink-500`. `--ink-300` sobre branco dá 1,5:1, e o limite do controle é informação necessária para identificá-lo. O mesmo valeu para o botão da sidebar, que passou de 22% para 40% de branco. |
 | R-TEMA-16 | Os tokens de cor passam a ter **nome de papel** (`--surface`, `--text`, `--border`, …) definidos **sobre** a escala existente. O tema escuro redefine papéis, nunca a escala: `--ink-900` continua sendo o tom mais escuro nos dois temas. Sem essa camada, o tema escuro inverte `--ink-900` e o nome do token passa a mentir — e é assim que o terceiro tema, se existir um dia, nasce ilegível. |
+| R-TEMA-18 | **O app tem dois temas, e nenhuma tela tem tema próprio.** As telas sem sessão (entrar, cadastro, recuperação, lista de espera) seguem o `data-theme` do `<html>` como as demais — claro, por R-TEMA-14 — e não declaram escopo escuro nem claro por conta. O cartão de acesso é de **vidro nos dois temas** (translúcido com desfoque), pintado por `theme.applyStyles` sobre os tokens, e cumpre R-TEMA-15. *(Decidido pelo autor em 15/10/2026, depois que o redesign de 14/10 fixou o escuro nessas telas: a exceção contrariava R-TEMA-14 e a nota de R-VND-08.)* |
 
 ---
 
@@ -144,6 +145,7 @@ claro/escuro" sai do Fora de escopo dela.
 | CA-10 | `theme` recusa qualquer valor fora de `light` e `dark` | **sem cobertura**: `user_preferences` saiu do schema |
 | CA-11 | `profile_id` não é atualizável pelo grant por coluna, e `delete` é recusado | **sem cobertura**: `user_preferences` saiu do schema |
 | CA-12 | `student_preferences` não tem mais a coluna `theme`, e as demais colunas continuam intactas | **sem cobertura**: `user_preferences` saiu do schema |
+| CA-13 | `/entrar` abre claro mesmo com o sistema no escuro, não declara tema próprio, o cartão é translúcido e desfocado, e o texto passa em AA nos dois temas | F-TEMA-10 |
 
 ---
 

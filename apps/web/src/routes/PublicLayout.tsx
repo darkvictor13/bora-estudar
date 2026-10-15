@@ -12,8 +12,9 @@ import { getSessionContext } from "@/lib/auth/session";
 import { forgetTheme } from "@/lib/theme";
 
 /**
- * Sem sessão a preferência da conta é limpa. As telas públicas usam um
- * escopo visual escuro próprio, sem mudar a preferência da área do aluno.
+ * Sem sessão a preferência da conta é limpa, e o tema é o `light` de
+ * R-TEMA-14. As telas públicas NÃO têm escopo de tema próprio: seguem o
+ * `data-theme` do `<html>` como o resto do app, e o vidro existe nos dois temas.
  *
  * Quem sai pelo botão já teve a cópia local apagada, e quem esbarra numa rota
  * protegida passa por `requireSession`. Sobra um caso: a sessão vence com a
@@ -25,13 +26,12 @@ export async function publicLayoutLoader() {
   return null;
 }
 
-/** Centered access card with decorative animated brand lights. */
+/** Cartão de acesso centralizado, em vidro, com luzes de marca animadas ao fundo. */
 export function PublicLayout() {
   const [paused, setPaused] = useState(false);
   return (
     <Box
       data-testid="auth-overlay"
-      data-theme="dark"
       sx={(theme) => ({
         minHeight: "100vh",
         position: "relative",
@@ -42,7 +42,6 @@ export function PublicLayout() {
         overflow: "auto",
         backgroundColor: theme.vars.palette.surface.base,
         color: theme.vars.palette.text.primary,
-        colorScheme: "dark",
         // Os dois halos da v2, repintados com os verdes da marca. Em alfa baixo — o
         // fundo precisa dar profundidade sem disputar com o cartão.
         backgroundImage: `
@@ -64,15 +63,24 @@ export function PublicLayout() {
             flexDirection: "column",
             borderRadius: `${theme.brand.radius.xl}px`,
             color: theme.vars.palette.text.primary,
-            // Override Paper's theme-specific opaque gradient as well as its base surface.
+            // O Paper tem gradiente opaco próprio, por tema: `&&` o vence nos dois.
+            // Vidro claro: branco leitoso sobre o fundo claro; vidro escuro: verde
+            // translúcido sobre o grafite. O texto continua nos tokens do tema.
             "&&": {
-              border: "1px solid rgba(235, 255, 247, 0.28)",
-              boxShadow: "0 24px 80px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.07)",
-              backgroundColor: "rgba(220, 245, 235, 0.07)",
-              backgroundImage: "linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 32%, transparent 48%, rgba(255, 255, 255, 0.06) 51%, transparent 72%)",
+              border: "1px solid rgba(255, 255, 255, 0.85)",
+              boxShadow: "0 24px 64px rgba(12, 80, 55, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.5)",
+              backgroundColor: "rgba(255, 255, 255, 0.64)",
+              backgroundImage: "linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.15) 34%, transparent 50%, rgba(255, 255, 255, 0.25) 52%, transparent 74%)",
               backdropFilter: "blur(18px) saturate(140%)",
               WebkitBackdropFilter: "blur(18px) saturate(140%)",
-              "@supports not (backdrop-filter: blur(1px))": { backgroundColor: "#23372f" },
+              "@supports not (backdrop-filter: blur(1px))": { backgroundColor: theme.vars.palette.surface.raised },
+              ...theme.applyStyles("dark", {
+                border: "1px solid rgba(235, 255, 247, 0.28)",
+                boxShadow: "0 24px 80px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.07)",
+                backgroundColor: "rgba(220, 245, 235, 0.07)",
+                backgroundImage: "linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 32%, transparent 48%, rgba(255, 255, 255, 0.06) 51%, transparent 72%)",
+                "@supports not (backdrop-filter: blur(1px))": { backgroundColor: theme.vars.palette.surface.raised },
+              }),
             },
             px: 4,
             pt: 4.25,
