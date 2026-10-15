@@ -77,7 +77,7 @@ export function SignUp() {
               name="password"
               type="password"
               autoComplete="new-password"
-              placeholder="Mínimo de 6 caracteres"
+              placeholder="Mínimo de 8 caracteres, com maiúscula e minúscula"
               required
               invalid={state.field === "password" && Boolean(state.error)}
             />

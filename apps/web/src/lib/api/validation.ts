@@ -46,8 +46,18 @@ export const MIN_BIRTH_DATE = "1900-01-01";
 
 export { MAX_LINK_LENGTH };
 
-/** O mínimo que o GoTrue aceita, e o mesmo número que a v2 pedia. */
-export const MIN_PASSWORD_LENGTH = 6;
+/**
+ * Oito caracteres, com uma maiúscula e uma minúscula. O GoTrue só sabe impor o
+ * comprimento (`minimum_password_length` em `supabase/config.toml`): a
+ * composição "maiúscula + minúscula" sem exigir dígito não existe entre as
+ * `password_requirements` dele, então ela vive aqui, e quem chama a API direto
+ * só encontra o piso do comprimento.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/** A mensagem única que o servidor e o contrato dão quando a senha é fraca. */
+export const PASSWORD_RULE_MESSAGE =
+  `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres, com letra maiúscula e minúscula.`;
 
 /** O mínimo para um nome ser um nome, e não uma inicial. */
 export const MIN_NAME_LENGTH = 3;
@@ -62,12 +72,12 @@ export function checkCredentials({ email, password }: Credentials): ApiError | n
 }
 
 /**
- * O comprimento, e depois "só espaços" (QA-18). A senha que segue para o GoTrue
- * NÃO é aparada: a regra recusa o que não é senha, não reescreve o que foi
- * digitado. O login fica de fora — `checkCredentials` não muda —, para a conta
- * criada antes desta regra continuar entrando. A política do GoTrue também não
- * muda (D-10): quem chama a API direto ainda cria a conta, e o contrato é a
- * única barreira.
+ * O comprimento, depois "só espaços" (QA-18), depois a composição. A senha que
+ * segue para o GoTrue NÃO é aparada: a regra recusa o que não é senha, não
+ * reescreve o que foi digitado. O login fica de fora — `checkCredentials` não
+ * muda —, para a conta criada antes desta regra continuar entrando. Letra
+ * maiúscula e minúscula são medidas por propriedade Unicode (`\p{Lu}`, `\p{Ll}`):
+ * "Ação" tem as duas, e `[A-Z]` não enxergaria o "Ç".
  */
 export function checkPassword(password: string): ApiError | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
@@ -78,6 +88,9 @@ export function checkPassword(password: string): ApiError | null {
   }
   if (password.trim() === "") {
     return invalid("A senha não pode ser formada só por espaços.", "password");
+  }
+  if (!/\p{Lu}/u.test(password) || !/\p{Ll}/u.test(password)) {
+    return invalid("A senha precisa ter letra maiúscula e minúscula.", "password");
   }
   return null;
 }

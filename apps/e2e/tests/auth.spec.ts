@@ -246,7 +246,18 @@ test.describe("F-AUTH-08/09 · cadastro público", () => {
     await field(page, "password").fill("123");
     await page.getByRole("button", { name: "Criar minha conta" }).click();
 
-    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
+    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 8 caracteres.");
+  });
+
+  test("senha sem maiúscula ou sem minúscula é recusada", async ({ page }) => {
+    await page.goto("/cadastro");
+    await field(page, "name").fill("Candidata Teste");
+    await field(page, "email").fill(`caixa-${Date.now().toString(36)}@e2e.local`);
+    for (const fraca of ["somenteminuscula", "SOMENTEMAIUSCULA"]) {
+      await field(page, "password").fill(fraca);
+      await page.getByRole("button", { name: "Criar minha conta" }).click();
+      await expect(alert(page, "error")).toHaveText("A senha precisa ter letra maiúscula e minúscula.");
+    }
   });
 
   test("senha só de espaços é recusada, e nenhuma conta nasce — QA-18", async ({ page }) => {
@@ -377,7 +388,7 @@ test.describe("F-AUTH-10/11/12 · recuperação de senha", () => {
     await field(page, "password").fill("123");
     await field(page, "passwordConfirmation").fill("123");
     await page.getByRole("button", { name: "Salvar nova senha" }).click();
-    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 6 caracteres.");
+    await expect(alert(page, "error")).toHaveText("A senha precisa ter pelo menos 8 caracteres.");
 
     // QA-18: oito espaços nos dois campos conferem e passam do mínimo, e não
     // são senha.

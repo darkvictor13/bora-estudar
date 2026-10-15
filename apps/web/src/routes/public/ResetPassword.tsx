@@ -38,7 +38,7 @@ export function ResetPassword() {
                 name="password"
                 type="password"
                 autoComplete="new-password"
-                placeholder="Digite a nova senha"
+                placeholder="Mínimo de 8 caracteres, com maiúscula e minúscula"
                 required
                 invalid={state.field === "password" && Boolean(state.error)}
               />

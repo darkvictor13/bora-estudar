@@ -9,7 +9,7 @@
 import type { AuthError } from "@supabase/supabase-js";
 
 import { ApiThrownError, type ApiError } from "../contract.ts";
-import { STUDY_REPLAY_CONFLICT } from "../validation.ts";
+import { PASSWORD_RULE_MESSAGE, STUDY_REPLAY_CONFLICT } from "../validation.ts";
 
 export const OFFLINE_MESSAGE = "Sem conexão. Verifique a rede e tente de novo.";
 export const INVALID_VALUE_MESSAGE =
@@ -45,7 +45,7 @@ export function translateAuthError(error: Pick<AuthError, "name" | "message" | "
   if (m.includes("password should be at least") || error.code === "weak_password") {
     return {
       code: "validation",
-      message: "A senha precisa ter pelo menos 6 caracteres.",
+      message: PASSWORD_RULE_MESSAGE,
       field: "password",
     };
   }
