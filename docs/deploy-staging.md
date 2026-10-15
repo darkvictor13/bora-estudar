@@ -367,6 +367,15 @@ Por GitHub Environment (`staging`, e depois `producao`):
 | `SENTRY_PROJECT` | var | slug do projeto no Sentry |
 | `SENTRY_AUTH_TOKEN` | secret | token com escopo de envio de sourcemap |
 
+**O portão dos materiais usa duas dessas variáveis em tempo de execução.**
+`/materials/*` (os PDFs das aulas) passa por um Worker, `apps/web/worker/index.ts`,
+que só entrega o arquivo a quem tem sessão válida **e** acesso vigente — ou é
+professor — perguntando ao próprio Supabase (`has_active_access` e `is_teacher`).
+`VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` entram no Worker por
+`--var` no `wrangler deploy` (os `vars` do `wrangler.jsonc` não são herdados
+pelos ambientes). **Sem elas o portão responde 503 e não entrega nada**: falha
+fechada. O `scripts/fumaca.sh` confere que `/materials/*` sem sessão dá 401.
+
 Nada no nível do repositório. Não há flag de "produção ativa": o workflow de
 produção existe desde já e simplesmente não roda enquanto ninguém clicar.
 
