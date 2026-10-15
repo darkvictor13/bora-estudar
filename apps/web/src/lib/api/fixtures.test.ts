@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
 import { ApiThrownError } from "./contract.ts";
-import { fixturesApi as api, resetFixtures, setFixtureRole } from "./fixtures.ts";
+import { fixturesApi as api, resetFixtures, setFixtureAccess, setFixtureRole } from "./fixtures.ts";
 import { FIXTURE_STATUS_NOTICES } from "./fixtures-library.ts";
 
 beforeEach(() => {
@@ -599,6 +599,7 @@ test("sem sessão, excluir a conta pede para entrar", async () => {
 });
 
 test("cupom inválido é recusado e não libera acesso", async () => {
+  setFixtureAccess("pending");
   const refused = await api.redeemCoupon("NAOEXISTE");
   assert.ok(!refused.ok);
   assert.equal(refused.error.code, "validation");
@@ -613,6 +614,26 @@ test("cupom inválido é recusado e não libera acesso", async () => {
   const accepted = await api.redeemCoupon(" bo ra3 ");
   assert.ok(accepted.ok);
   assert.equal(accepted.data.access, "active");
+});
+
+test("cupom: o estado do aluno vem antes do código (R-CUP-04, R-CUP-06, R-CUP-15)", async () => {
+  // Com acesso vigente, código válido e inexistente recebem a MESMA frase.
+  setFixtureAccess("active");
+  for (const code of ["BORA3", "NAOEXISTE"]) {
+    const refused = await api.redeemCoupon(code);
+    assert.ok(!refused.ok);
+    assert.equal(refused.error.message, "Seu acesso já está liberado.");
+  }
+
+  // Bloqueado pelo professor não se reativa com cupom, e continua bloqueado.
+  setFixtureAccess("suspended");
+  for (const code of ["BORA3", "NAOEXISTE"]) {
+    const refused = await api.redeemCoupon(code);
+    assert.ok(!refused.ok);
+    assert.equal(refused.error.field, "coupon");
+    assert.equal(refused.error.message, "Seu acesso está bloqueado. Fale com seu professor.");
+  }
+  assert.equal((await api.loadSession())?.access, "suspended");
 });
 
 test("a busca de alunos casa nome e e-mail, e os filtros se somam", async () => {
