@@ -72,6 +72,7 @@ de lá vira uma spec nova antes de virar código.
 | 42 | [Grifo nos flashcards](42-grifo-nos-flashcards.md) | Marcações de cartão no banco, nos três tipos e nos dois lados, ancoradas pelo trecho; grifar dentro da revisão |
 | 44 | [Página de vendas](44-pagina-de-vendas.md) | Página pública da Fronteira Concursos, fora do app: duas ofertas, cadastro e WhatsApp, sem JavaScript — **não implementada** |
 | 45 | [Resumos flash e anotações](45-resumos-flash-e-anotacoes.md) | Biblioteca de resumos importada do Word, imagens no bucket privado, anotação pessoal com gravação segura entre abas — **escrita depois do código** |
+| 46 | [Exclusão de conta e documentos legais](46-exclusao-de-conta-e-documentos-legais.md) | O aluno apaga a conta e o que fez, o que fica sem identificar ninguém, e as páginas de privacidade e termos |
 
 ---
 

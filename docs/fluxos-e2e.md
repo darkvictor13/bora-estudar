@@ -237,6 +237,11 @@ diff mostra a omissão.
 | F-EST-01 | os números vêm do ledger; toda figura traz a tabela; um ponto vira número; sem registro, a tela diz isso; o extra de ontem cai em ontem na série por dia — N-07 |
 | F-REV-01 | a grade de revisão mostra o espaçamento do professor; a vencida é marcada; o reforço tem lugar próprio |
 | F-ESP-01 | lista de espera: a inscrição grava e pode ser corrigida enquanto o professor não responde; WhatsApp sem formato e nascimento no futuro são recusados, e nada grava (QA-19) |
+| F-LGPD-01 | excluir a conta: o diálogo repete o que sai e o que fica, só habilita com `EXCLUIR`, encerra a sessão, o login seguinte falha e o mesmo e-mail cadastra de novo uma conta vazia — spec 46 |
+| F-LGPD-02 | o cartão Excluir conta, em Meus dados, diz o que é apagado e o que fica sem identificar ninguém, antes do botão |
+| F-LGPD-03 | `/privacidade` e `/termos` abrem sem login e são linkadas do cadastro, do login e de Meus dados |
+| F-LGPD-04 | aluno com acesso vencido exclui a conta |
+| F-LGPD-05 | o professor não vê o cartão Excluir conta |
 | F-CUP-01 | resgatar cupom libera o acesso — **`fixme`** |
 | F-CAD-01 | cadernos TEC do aluno: lista por disciplina, com link e sem botão de bateria |
 
