@@ -5,14 +5,20 @@ import { done, fail, failure, throwDb, settle, translateDbError } from "./errors
 import { requireSession } from "./session.ts";
 import type { Row } from "@bora/database";
 
-function toExam(row: Row<"mock_exams">, className: string): MockExam {
+/** Só o que `toExam` lê: o resto da linha (`teacher_id`, carimbos) não viaja. */
+const EXAM_COLUMNS = "id,class_id,title,exam_date,max_score,published";
+
+function toExam(
+  row: Pick<Row<"mock_exams">, "id" | "class_id" | "title" | "exam_date" | "max_score" | "published">,
+  className: string,
+): MockExam {
   return { id: row.id, classId: row.class_id, className, title: row.title,
     examDate: row.exam_date, maxScore: row.max_score, published: row.published };
 }
 
 export const mockExamsApi: MockExamsApi = {
   async listMockExams() {
-    const { data, error } = await supabase.from("mock_exams").select("*").order("exam_date", { ascending: false }).order("id");
+    const { data, error } = await supabase.from("mock_exams").select(EXAM_COLUMNS).order("exam_date", { ascending: false }).order("id");
     if (error) throwDb(error);
     if (!data?.length) return [];
     const classes = await supabase.from("classes").select("id,name").in("id", [...new Set(data.map((exam) => exam.class_id))]);
@@ -65,9 +71,9 @@ export const mockExamsApi: MockExamsApi = {
       if (session.role !== "teacher") return fail("forbidden", "Somente o professor cadastra simulados.");
       const payload = { id: input.id, teacher_id: session.profileId, class_id: input.classId,
         title: input.title.trim(), exam_date: input.examDate, max_score: input.maxScore };
-      const inserted = await supabase.from("mock_exams").insert(payload).select("*").single();
+      const inserted = await supabase.from("mock_exams").insert(payload).select(EXAM_COLUMNS).single();
       if (inserted.error && inserted.error.code !== "23505") return failure(translateDbError(inserted.error));
-      const result = inserted.error ? await supabase.from("mock_exams").select("*").eq("id", input.id).single() : inserted;
+      const result = inserted.error ? await supabase.from("mock_exams").select(EXAM_COLUMNS).eq("id", input.id).single() : inserted;
       if (result.error) return failure(translateDbError(result.error));
       const row = result.data;
       if (!row || row.class_id !== input.classId || row.title !== payload.title || row.exam_date !== input.examDate || row.max_score !== input.maxScore) {
