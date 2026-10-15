@@ -217,3 +217,11 @@ end $$;
 
 reset role;
 select app_test.act_as_owner();
+
+-- ---------- O código é único sem distinguir a caixa ----------
+do $$ begin
+  insert into public.coupons (code, description, months_granted) values ('teste3', 'mesmo codigo, caixa baixa', 3);
+  raise exception 'FALHOU: o banco aceitou dois cupons que so diferem na caixa';
+exception when unique_violation then
+  raise notice '17 OK  coupons nao aceita codigos que so diferem na caixa';
+end $$;

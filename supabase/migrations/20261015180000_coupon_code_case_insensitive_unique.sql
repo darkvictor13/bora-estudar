@@ -1,0 +1,15 @@
+-- O código do cupom é único SEM distinguir maiúscula de minúscula.
+--
+-- `coupons.code` já é `unique`, mas a comparação do índice é sensível a caixa, e
+-- `redeem_coupon` casa por `upper(code)`: dois cupons `promo` e `PROMO` conviviam
+-- no banco, e a RPC pegaria um dos dois sem critério. Quem digita o código não
+-- distingue caixa (a RPC também tira os espaços e põe em maiúsculas), então o
+-- banco também não pode.
+--
+-- A `unique` original fica: continua valendo para o que o `on conflict (code)` do
+-- seed e das cargas usa. Este índice só acrescenta a regra mais estreita.
+--
+-- Compatível com o bundle no ar: nenhum código lê o índice. Falha, de propósito,
+-- se já existirem dois códigos que só diferem na caixa — e quem lê o erro precisa
+-- decidir qual dos dois fica, não o banco.
+create unique index coupons_code_upper_uidx on public.coupons (upper(code));

@@ -402,15 +402,6 @@ export function checkExtraStudy(
 export const STUDY_REPLAY_CONFLICT =
   "Este estudo já foi registrado com outros valores. Atualize a página para ver o que foi gravado.";
 
-/**
- * A lista de espera, na ordem da tela: nome, WhatsApp, área, concurso, nascimento.
- * Uma faixa só (D-08, QA-19): o banco pedia 8 a 30 caracteres, o adaptador só
- * "não vazio" e a fixture 10 dígitos, cada um com uma frase.
- *
- * `today` entra por parâmetro para o teste fixar a data. O banco compara com o
- * `current_date` dele, em UTC: às 22h em Brasília já é o dia seguinte lá, então
- * o contrato recusa antes, e o contrário não acontece no Brasil.
- */
 /** O teto do motivo de anulação, o mesmo de `quiz_sessions_void_reason_check`. */
 export const MAX_VOID_REASON_LENGTH = 500;
 
@@ -438,6 +429,15 @@ export function checkCoupon(code: string): ApiError | null {
   return null;
 }
 
+/**
+ * A lista de espera, na ordem da tela: nome, WhatsApp, área, concurso, nascimento.
+ * Uma faixa só (D-08, QA-19): o banco pedia 8 a 30 caracteres, o adaptador só
+ * "não vazio" e a fixture 10 dígitos, cada um com uma frase.
+ *
+ * `today` entra por parâmetro para o teste fixar a data. O banco compara com o
+ * `current_date` dele, em UTC: às 22h em Brasília já é o dia seguinte lá, então
+ * o contrato recusa antes, e o contrário não acontece no Brasil.
+ */
 export function checkWaitlist(input: WaitlistInput, today: IsoDate): ApiError | null {
   const name = checkName(input.name);
   if (name) return name;
