@@ -304,3 +304,34 @@ do $$ begin
 exception when insufficient_privilege then
   raise notice '19 OK  activate_study_plan recusa o aluno';
 end $$;
+
+-- ---------- Catálogo de teoria: escrever é de professor, não de quem tem o próprio id ----------
+-- O aluno põe o PRÓPRIO id em `teacher_id`, que é o que `teacher_id = auth.uid()`
+-- sozinho aceitava. O payload satisfaz NOT NULL e CHECK de propósito: essas
+-- conferências vêm ANTES do WITH CHECK da RLS, e um payload incompleto
+-- levantaria 23502/23514 e passaria por engano no dia em que a policy sumisse.
+-- A FK composta só é conferida no fim da instrução, então o catálogo inexistente
+-- aqui não mascara nada: sem a policy, o erro seria 23503 e a suíte falharia.
+select app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno, aluno
+do $$
+declare
+  v_bruno constant uuid := '22222222-2222-4222-8222-222222222222';
+  v_catalog constant uuid := 'b1000000-0000-4000-8000-000000000001';
+  v_stmt text;
+  v_stmts constant text[] := array[
+    format($s$insert into public.theory_catalogs (teacher_id, name, key) values (%L, 'Catalogo do aluno', 'aluno-key')$s$, v_bruno),
+    format($s$insert into public.theory_lessons (teacher_id, catalog_id, subject, subject_key, lesson_code, position, title, pdf_file, theory_start_page, theory_end_page, pdf_total_pages) values (%L, %L, 'X', 'x', 'X-01', 1, 'Aula do aluno', 'x.pdf', 1, 5, 5)$s$, v_bruno, v_catalog),
+    format($s$insert into public.theory_subject_rules (teacher_id, subject, subject_key) values (%L, 'X', 'x')$s$, v_bruno),
+    format($s$insert into public.theory_review_rules (catalog_id, teacher_id, subject, subject_key, review_number, lesson_spacing) values (%L, %L, 'X', 'x', 1, 5)$s$, v_catalog, v_bruno),
+    format($s$insert into public.theory_catalog_subject_rules (catalog_id, teacher_id, subject, subject_key) values (%L, %L, 'X', 'x')$s$, v_catalog, v_bruno)
+  ];
+begin
+  foreach v_stmt in array v_stmts loop
+    begin
+      execute v_stmt;
+      raise exception 'FALHOU: o aluno gravou em tabela de professor: %', left(v_stmt, 60);
+    exception when insufficient_privilege then
+      raise notice '20 OK  aluno recusado: %', left(v_stmt, 48);
+    end;
+  end loop;
+end $$;
