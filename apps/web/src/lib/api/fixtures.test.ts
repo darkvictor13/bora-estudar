@@ -574,6 +574,30 @@ test("sair esquece o tema da conta", async () => {
   assert.equal(await api.loadThemePreference(), null);
 });
 
+test("excluir a conta encerra a sessão e esquece o tema (spec 46)", async () => {
+  await api.saveThemePreference("dark");
+  const deleted = await api.deleteAccount();
+  assert.ok(deleted.ok);
+
+  assert.equal(await api.loadSession(), null);
+  assert.equal(await api.loadThemePreference(), null);
+});
+
+test("o professor não exclui a própria conta por autoatendimento (R-LGPD-09)", async () => {
+  setFixtureRole("teacher");
+  const refused = await api.deleteAccount();
+  assert.ok(!refused.ok);
+  assert.equal(refused.error.code, "forbidden");
+  assert.notEqual(await api.loadSession(), null);
+});
+
+test("sem sessão, excluir a conta pede para entrar", async () => {
+  await api.signOut();
+  const refused = await api.deleteAccount();
+  assert.ok(!refused.ok);
+  assert.equal(refused.error.code, "unauthenticated");
+});
+
 test("cupom inválido é recusado e não libera acesso", async () => {
   const refused = await api.redeemCoupon("NAOEXISTE");
   assert.ok(!refused.ok);

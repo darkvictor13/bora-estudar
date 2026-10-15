@@ -160,6 +160,23 @@ export const authApi = {
     });
   },
 
+  deleteAccount(): Promise<Result<void>> {
+    return settle(async () => {
+      const found = await sessionForWrite();
+      if (!found.ok) return failure(found.error);
+      if (!found.data) return fail("unauthenticated", "Sua sessão expirou. Entre de novo.");
+
+      const { error } = await supabase.rpc("delete_my_account");
+      if (error) return failure(translateDbError(error));
+
+      // `local`: a sessão já foi destruída no servidor pela própria RPC, e uma
+      // chamada ao `/logout` com ela só devolveria 401. Falta limpar os cookies
+      // deste aparelho.
+      await supabase.auth.signOut({ scope: "local" });
+      return done(undefined);
+    });
+  },
+
   /**
    * O TEMA AINDA NÃO TEM ONDE MORAR NO BANCO — é a lacuna nº 1 do contrato.
    *

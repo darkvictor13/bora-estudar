@@ -362,6 +362,7 @@ Por GitHub Environment (`staging`, e depois `producao`):
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | **var** | `sb_publishable_…` |
 | `SITE_URL` | var | domínio publicado do ambiente |
 | `VITE_SENTRY_DSN` | **var** | DSN do projeto do Sentry daquele ambiente |
+| `VITE_LEGAL_CONTACT_EMAIL` | **var** | E-mail de contato da política de privacidade e dos termos — **obrigatório em produção** (spec 46). `VITE_LEGAL_CONTROLLER_NAME` é opcional e, vazio, vira "Fronteira Concursos" |
 | `SENTRY_ORG` | var | slug da organização no Sentry |
 | `SENTRY_PROJECT` | var | slug do projeto no Sentry |
 | `SENTRY_AUTH_TOKEN` | secret | token com escopo de envio de sourcemap |

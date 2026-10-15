@@ -86,6 +86,11 @@ export function SignUp() {
               Sua conta será criada como aluno e enviada ao professor responsável para montagem do
               planejamento.
             </Typography>
+            <Typography variant="caption" component="p" sx={{ textAlign: "center", mb: 2 }}>
+              Ao criar a conta você concorda com os{" "}
+              <Link component={RouterLink} to={ROUTES.terms} data-testid="legal-link-terms">Termos de uso</Link> e a{" "}
+              <Link component={RouterLink} to={ROUTES.privacy} data-testid="legal-link-privacy">Política de privacidade</Link>.
+            </Typography>
           </>
         )}
       </AuthForm>

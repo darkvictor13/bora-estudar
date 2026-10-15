@@ -117,7 +117,8 @@ kebab-case, em inglês, e sem o nome da tela. Os helpers estão em
 | Gráficos | `chart-bar`, `chart-point`, `chart-single-value`, `chart-table`, `chart-tooltip`, `ranked-row`, `ranked-target` |
 | Professor | `student-card` (+`data-student-id`), `plan-row` (+`data-plan-id`), `plan-dialog`, `plan-activate`, `plan-archive`, `plan-students`, `week-preview`, `preview-goal`, `goals-preview`, `goals-generate`, `quiz-session-row`, `topic-difficulties-empty` |
 | Cadernos e catálogo | `notebook-row`, `notebook-form`, `notebook-toggle`, `notebook-remove`, `notebook-restore`, `toggle-removed`, `subject-card`, `subject-item`, `subject-rule-form`, `master-input`, `import-result` |
-| Conta | `account-form`, `account-access`, `waitlist-form` |
+| Conta | `account-form`, `account-access`, `waitlist-form`, `delete-account-card`, `delete-account-open`, `delete-account-dialog`, `delete-account-confirm`, `delete-account-cancel`, `deletion-summary` |
+| Documentos legais | `legal-document`, `legal-link-privacy`, `legal-link-terms` |
 | Leitura e grifo | `flashcard-flip` (+`data-flipped`), `flashcard-answer`, `flashcard-mark` e `law-mark` (+`data-style`, `data-color`; o do cartão também `data-side`) |
 | Erro | `error-code` — o identificador do evento relatado, e só existe quando houve relato |
 

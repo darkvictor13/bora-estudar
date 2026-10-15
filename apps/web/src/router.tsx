@@ -11,6 +11,8 @@ import { AuthCallback, authCallbackLoader } from "@/routes/AuthCallback";
 import { SignIn, signInLoader } from "@/routes/public/SignIn";
 import { SignUp, signUpLoader } from "@/routes/public/SignUp";
 import { ForgotPassword } from "@/routes/public/ForgotPassword";
+import { Privacy } from "@/routes/public/Privacy";
+import { Terms } from "@/routes/public/Terms";
 import { ResetPassword, resetPasswordLoader } from "@/routes/public/ResetPassword";
 
 import { Overview, overviewLoader } from "@/routes/student/Overview";
@@ -78,6 +80,18 @@ export const router = createBrowserRouter([
         path: ROUTES.authCallback,
         loader: authCallbackLoader,
         Component: AuthCallback,
+      },
+
+      // Documentos legais: públicos, fora do cartão de vidro do acesso (R-LGPD-15).
+      {
+        path: ROUTES.privacy,
+        Component: Privacy,
+        handle: { title: "Política de privacidade · Fronteira Concursos" },
+      },
+      {
+        path: ROUTES.terms,
+        Component: Terms,
+        handle: { title: "Termos de uso · Fronteira Concursos" },
       },
 
       {

@@ -212,6 +212,16 @@ export interface AccountApi {
   loadAccount(): Promise<Account>;
   saveAccount(input: AccountInput): Promise<Result<Account>>;
   /**
+   * Exclui a PRÓPRIA conta do aluno (spec 46): apaga tudo o que ele fez, anula o
+   * login e deixa só o histórico sem identificação — as liberações de acesso e
+   * as notas de simulado. Encerra a sessão deste aparelho quando dá certo.
+   *
+   * Vale sem acesso vigente. Professor é recusado (`forbidden`): apagar um
+   * professor apaga o planejamento dos alunos dele. Segura a retentativa:
+   * excluir de novo uma conta já excluída devolve sucesso.
+   */
+  deleteAccount(): Promise<Result<void>>;
+  /**
    * `null` = nunca escolheu, e a ausência equivale a claro (R-TEMA-07).
    * Distinguir de `"light"` importa: é o que separa "prefere claro" de "não
    * opinou", e um dia pode virar "seguir o sistema".

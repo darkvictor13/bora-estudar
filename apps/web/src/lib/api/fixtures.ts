@@ -828,6 +828,21 @@ export const fixturesApi: BoraApi = {
 
   loadAccount: () => later<Account>(accountOf(state.session?.name ?? null)),
 
+  deleteAccount: () => {
+    if (!state.session) {
+      return later<Result<void>>({ ok: false, error: { code: "unauthenticated", message: "Sua sessão expirou. Entre de novo." } });
+    }
+    if (state.session.role !== "student") {
+      return later<Result<void>>({
+        ok: false,
+        error: { code: "forbidden", message: "A conta de professor não é excluída por aqui. Fale com o suporte." },
+      });
+    }
+    state.session = null;
+    state.theme = null;
+    return later(done(undefined));
+  },
+
   saveAccount: ({ name }: AccountInput) => {
     const invalid = checkName(name);
     if (invalid) return later<Result<Account>>({ ok: false, error: invalid });
