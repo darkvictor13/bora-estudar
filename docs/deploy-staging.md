@@ -539,7 +539,9 @@ inteiro, e o log fica com registro do que foi publicado.
    precisa ser feito com a conta `darkvictor13`: o `gh` autenticado nesta
    máquina é o `victor-almeida-xbri`, que não tem push no repositório e leva 403
    na API de administração.
-4. **No dia da produção**, criar o Environment `producao` **com a deployment
+4. **No dia da produção**, seguir [`plano-deploy-producao.md`](plano-deploy-producao.md),
+   que reúne tudo o que precisa estar feito antes do primeiro dispatch. O passo
+   mais fácil de errar: criar o Environment `producao` **com a deployment
    branch rule limitada a `main`** antes do primeiro dispatch. Referenciar um
    Environment que não existe faz o GitHub criá-lo na hora, sem proteção
    nenhuma — parece ter funcionado e não protegeu nada. O job `resolver` já
