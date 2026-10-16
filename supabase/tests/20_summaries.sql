@@ -189,24 +189,51 @@ do $$ begin
   raise notice '07 OK  user_id e topic_id fora do UPDATE, sem INSERT em nome alheio, sem DELETE';
 end $$;
 
--- ---------- 08: o formato tem teto no banco ----------
-do $$ begin
+-- ---------- 08: o formato tem teto, e o erro e uma frase (QA2-A04) ----------
+-- A CHECK da coluna continua sendo a regra; a RPC a antecipa com frase em
+-- portugues em vez de deixar o `23514` cru chegar a tela.
+do $$
+declare
+  v_prev jsonb;
+  v_big  jsonb;
+begin
   perform app_test.act_as('22222222-2222-4222-8222-222222222222');  -- Bruno
+  select notes into v_prev from public.summary_annotations
+   where user_id = '22222222-2222-4222-8222-222222222222' and topic_id = 'teste-resumo';
+
   begin
-    perform public.save_summary_notes('teste-resumo', (select notes from public.summary_annotations
-      where user_id = '22222222-2222-4222-8222-222222222222' and topic_id = 'teste-resumo'),
-      '{"nao":"e lista"}');
+    perform public.save_summary_notes('teste-resumo', v_prev, '{"nao":"e lista"}');
     raise exception 'FALHOU: o banco aceitou notes que nao e array';
-  exception when check_violation then null;
+  exception when raise_exception then
+    if sqlerrm not like 'As anotações vieram num formato inválido%' then raise; end if;
   end;
   begin
-    perform public.save_summary_notes('teste-resumo', (select notes from public.summary_annotations
-      where user_id = '22222222-2222-4222-8222-222222222222' and topic_id = 'teste-resumo'),
+    perform public.save_summary_notes('teste-resumo', v_prev, null);
+    raise exception 'FALHOU: o banco aceitou notes nulo';
+  exception when raise_exception then
+    if sqlerrm not like 'As anotações vieram num formato inválido%' then raise; end if;
+  end;
+  begin
+    perform public.save_summary_notes('teste-resumo', v_prev,
       (select jsonb_agg(jsonb_build_object('id', i::text)) from generate_series(1, 2001) i));
     raise exception 'FALHOU: o banco aceitou 2001 anotacoes';
-  exception when check_violation then null;
+  exception when raise_exception then
+    if sqlerrm not like 'Este resumo já tem anotações demais%' then raise; end if;
   end;
-  raise notice '08 OK  notes: so array, no maximo 2000';
+  v_big := jsonb_build_array(jsonb_build_object('id', 'x', 'comment', repeat('a', 2200000)));
+  begin
+    perform public.save_summary_notes('teste-resumo', v_prev, v_big);
+    raise exception 'FALHOU: o banco aceitou anotacao de mais de 2 MB';
+  exception when raise_exception then
+    if sqlerrm not like 'As anotações deste resumo passaram do limite%' then raise; end if;
+  end;
+  begin
+    perform public.save_summary_notes('nao-existe', '[]', '[]');
+    raise exception 'FALHOU: o banco aceitou anotacao de resumo que nao existe';
+  exception when raise_exception then
+    if sqlerrm <> 'Resumo não encontrado.' then raise; end if;
+  end;
+  raise notice '08 OK  notes: so array, no maximo 2000 e 2 MB, e resumo inexistente; tudo com frase em portugues';
 end $$;
 
 -- ---------- 09: acesso vencido — replay passa, escrita nova não ----------

@@ -84,6 +84,8 @@ test.describe("F-LGPD-02 · o cartão diz o que sai e o que fica", () => {
     await expect(card).toContainText("O que fica, sem identificar você");
     await expect(card).toContainText("liberações de acesso");
     await expect(card).toContainText("notas dos simulados presenciais");
+    // A spec 46 manda os resgates de cupom ficarem (R-CUP-11): o texto tem de dizer (QA2).
+    await expect(card).toContainText("cupons que você resgatou");
     await expect(card).toContainText("Não há como desfazer");
 
     // Cancelar fecha o diálogo e não exclui nada.
@@ -157,5 +159,33 @@ test.describe("F-LGPD-05 · o professor não exclui a conta por aqui", () => {
     // `count()` não espera: o h1 acima é a espera dos loaders da rota.
     await expect(testId(teacherPage, "delete-account-card")).toHaveCount(0);
     await expect(testId(teacherPage, "delete-account-open")).toHaveCount(0);
+  });
+});
+
+test.describe("F-LGPD-06 · a outra sessão da conta excluída é deslogada", () => {
+  test("o GoTrue recusa com 4xx, e a outra aba cai em /entrar em vez de ficar em 'Sem conexão'", async ({
+    studentPage,
+    page,
+    browser,
+    baseURL,
+  }) => {
+    // QA2-B01: `banned_until = 'infinity'` fazia o GoTrue responder 500 a
+    // `/user`, e o app trata 5xx como "não deu para verificar" — a segunda aba
+    // nunca deslogava. Duas abas com os MESMOS cookies, como dois aparelhos.
+    const other = await browser.newContext({ baseURL: baseURL! });
+    await other.addCookies(await page.context().cookies());
+    const otherPage = await other.newPage();
+    await otherPage.goto("/aluno");
+    await expect(otherPage.locator("h1")).toBeVisible();
+
+    await studentPage.goto("/aluno/conta");
+    await testId(studentPage, "delete-account-open").click();
+    await studentPage.getByLabel(/digite EXCLUIR/).fill("EXCLUIR");
+    await testId(studentPage, "delete-account-confirm").click();
+    await expect(page).toHaveURL(/\/entrar\?conta=excluida$/);
+
+    await otherPage.goto("/aluno/conta");
+    await expect(otherPage).toHaveURL(/\/entrar/);
+    await other.close();
   });
 });

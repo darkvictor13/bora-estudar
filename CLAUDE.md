@@ -79,11 +79,16 @@ Cinco tabelas de histórico referenciam `profiles` com `RESTRICT`, então o
 `DELETE` falharia para todo aluno que já teve acesso liberado. A RPC apaga tudo o
 que o aluno fez, deixa o perfil como "Conta excluída" (`profiles.deleted_at`) e
 mantém só `access_grants`, `coupon_redemptions` e as notas de simulado, sem identificar ninguém; o login
-em `auth.users` é anulado como no soft delete do GoTrue, e a FK `profiles ->
+em `auth.users` é anulado como no soft delete do GoTrue (`banned_until` é uma data a cem anos, **nunca
+`infinity`**: o GoTrue não lê esse valor e passa a responder 500 em `/user` e na listagem admin de todos
+os usuários), e a FK `profiles ->
 auth.users` (de que o cascade do e2e e do `db:test` depende) não se toca. É
 idempotente por `deleted_at`, recusa professor, e a lista de tabelas é explícita:
 tabela nova com FK para `profiles` reprova em `07_schema.sql` até alguém decidir se
 ela sai ou fica (spec 46). O app diz as duas listas ao aluno ANTES de confirmar.
+Conta excluída não volta pela porta do professor: `link_student` a recusa como "aluno não
+encontrado", `set_student_access` já a recusa (o vínculo foi zerado) e `has_active_access()`
+é falso para `deleted_at` preenchido — é por ela que o Worker de `/materials` decide o PDF.
 
 **A fronteira da escrita é entre planejar e executar.**
 
@@ -106,10 +111,10 @@ ela sai ou fica (spec 46). O app diz as duas listas ao aluno ANTES de confirmar.
 | `law_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar e alterar exigem acesso vigente |
 | `flashcard_marks` | o próprio aluno | direto, com RLS e grant por coluna; criar, alterar e apagar exigem acesso vigente. O cartão é `card_kind` mais um par de colunas por tipo, e a CHECK `flashcard_marks_card_ref_check` exige o par do tipo e nulos nos outros |
 | `summary_topics` | ninguém | SELECT e nada mais; o texto só com acesso vigente ou professor. Carga local por `scripts/load-flash-summaries.mjs`; o bucket `flash-summaries` só entrega `pf2029/<sha256>.<imagem>`, nunca o `.docx` original (spec 45) |
-| `summary_annotations` | o próprio aluno | direto, com RLS e grant por coluna; lê só o dono (nem o professor), criar e alterar exigem acesso vigente. **Gravar passa por `save_summary_notes`**, que compara o estado anterior no corpo da requisição — o filtro de URL não comporta o JSON |
+| `summary_annotations` | o próprio aluno | direto, com RLS e grant por coluna; lê só o dono (nem o professor), criar e alterar exigem acesso vigente. **Gravar passa por `save_summary_notes`**, que compara o estado anterior no corpo da requisição — o filtro de URL não comporta o JSON — e traduz tamanho e formato em frase antes da CHECK |
 | `goal_batches` | ninguém | SELECT para o professor dono; escrita é de `generate_week` |
 | `coupons` | ninguém | RLS ligada, zero policy, zero grant; o código nunca é validado no cliente |
-| `coupon_redemptions` | ninguém | SELECT do próprio aluno e nada mais; escrita é de `redeem_coupon`, que concede o acesso (spec 30). **Fica quando a conta é excluída**, como `access_grants` |
+| `coupon_redemptions` | ninguém | SELECT do próprio aluno e nada mais; escrita é de `redeem_coupon`, que concede o acesso (spec 30) e olha o ESTADO do aluno antes do código — com acesso vigente a resposta é a mesma para qualquer código, e quem o professor suspendeu não se reativa com cupom. **Fica quando a conta é excluída**, como `access_grants` |
 | `quiz_sessions`, `quiz_session_questions`, `reinforcement_cycles` | ninguém | SELECT e nada mais: escrita é de RPC |
 
 Escrita de execução continua fechada porque é onde moram a máquina de estados,

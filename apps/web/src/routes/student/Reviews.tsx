@@ -117,7 +117,7 @@ export function StudentReviews() {
               gridTemplateColumns: "repeat(3, 1fr)",
               gap: 1.25,
               mb: 1.75,
-              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "minmax(0, 1fr)" },
             })}
           >
             <Metric label="Disciplinas no ciclo" value={grid.filter((row) => row.selected).length} />

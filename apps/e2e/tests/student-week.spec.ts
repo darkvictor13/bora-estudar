@@ -428,6 +428,28 @@ test.describe("F-META-08 · sem acesso vigente, a semana não muda — QA-07", (
   });
 });
 
+test.describe("F-META-09 · a falha de um diálogo aparece UMA vez — QA2-B03", () => {
+  test("o erro fica no diálogo, e a página atrás dele não repete a frase", async ({
+    studentPage,
+    scenario,
+  }) => {
+    const goal = theoryGoalOf(scenario);
+    await studentPage.goto(STUDENT_WEEK_ALL_DAYS);
+    await expect(goalRow(studentPage, goal.id)).toHaveAttribute("data-status", "pending");
+
+    await goalRow(studentPage, goal.id).getByRole("button", { name: "Registrar" }).click();
+    const dialog = testId(studentPage, "record-study-dialog");
+    await expect(dialog).toBeVisible();
+    await setAccess(scenario.student.id, "suspended");
+    await field(studentPage, "minutes").fill("30");
+    await dialog.getByRole("button", { name: "Registrar" }).click();
+
+    await expect(alert(dialog, "error")).toContainText("acesso venceu");
+    // `count()` não espera: a asserção acima é a espera.
+    await expect(alert(content(studentPage), "error")).toHaveCount(0);
+  });
+});
+
 test.describe("F-EXTRA-01 · estudo fora das metas", () => {
   test("cria a meta e o registro numa operação só", async ({ studentPage, scenario }) => {
     await studentPage.goto(STUDENT_WEEK_ALL_DAYS);

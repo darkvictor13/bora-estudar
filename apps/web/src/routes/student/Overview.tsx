@@ -189,6 +189,21 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
   }
 
   /**
+   * Escrita que parte de um diálogo: devolve a falha, e quem a mostra é o diálogo.
+   *
+   * O `error` da página fica ATRÁS do modal; gravá-lo também fazia a mesma frase
+   * aparecer duas vezes (QA2-B03), e ela sobrava na tela depois de fechar o
+   * diálogo. É o mesmo desenho de `recordTheory`.
+   */
+  async function runInDialog(action: () => Promise<{ ok: boolean; error?: ApiError }>) {
+    const result = await action();
+    if (!result.ok && result.error) return result.error;
+    setError(null);
+    await revalidate();
+    return null;
+  }
+
+  /**
    * O modal da teoria guarda o `TheoryGoal` em estado, e não no loader.
    *
    * Ele é caro — catálogo, progresso e regras de revisão — e só interessa a
@@ -384,7 +399,7 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
         key={`record-${recording?.id ?? "closed"}`}
         goal={recording}
         onClose={() => setRecording(null)}
-        onSubmit={(input: RecordStudyInput) => run(() => api.recordStudy(input))}
+        onSubmit={(input: RecordStudyInput) => runInDialog(() => api.recordStudy(input))}
       />
 
       <StudyStreakDialog open={streakOpen} onClose={() => setStreakOpen(false)} startsOn={plan.startsOn} />
@@ -421,7 +436,7 @@ export function Overview({ interactive = true }: { interactive?: boolean }) {
         subjects={subjects}
         open={extraDate !== null}
         onClose={closeExtraStudy}
-        onSubmit={(input: ExtraStudyInput) => run(() => api.recordExtraStudy(input))}
+        onSubmit={(input: ExtraStudyInput) => runInDialog(() => api.recordExtraStudy(input))}
       />}
     </>
   );

@@ -315,7 +315,7 @@ export function StudyTimerBar({ timerHref, recordHref, profileId, theme }: { tim
         color: theme.vars.palette.text.primary,
         fontVariantNumeric: "tabular-nums",
       })}>{formatStudyTimer(displayMs)}</Typography>
-      <Button size="small" onClick={(event) => setMenuAnchor(event.currentTarget)} aria-label={`${modeLabel} — modos e tempo do cronômetro`} sx={{ minWidth: 0, flexShrink: 0, whiteSpace: "nowrap", px: 0.75, fontSize: "0.7rem" }}>
+      <Button size="small" onClick={(event) => setMenuAnchor(event.currentTarget)} aria-label={`${modeLabel} — modos e tempo do cronômetro`} sx={{ minWidth: 0, minHeight: 28, flexShrink: 0, whiteSpace: "nowrap", px: 0.75, fontSize: "0.7rem" }}>
         {modeLabel}
       </Button>
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>

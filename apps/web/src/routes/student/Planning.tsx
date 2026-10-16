@@ -48,7 +48,7 @@ function PlanIdentity({ plan }: { plan: StudyPlanSummary }) {
           gap: 2,
           m: 0,
           [theme.breakpoints.down("lg")]: { gridTemplateColumns: "repeat(2, 1fr)" },
-          [theme.breakpoints.down("sm")]: { gridTemplateColumns: "1fr" },
+          [theme.breakpoints.down("sm")]: { gridTemplateColumns: "minmax(0, 1fr)" },
         })}
       >
         {rows.map(([label, value]) => (

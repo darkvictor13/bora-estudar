@@ -198,8 +198,9 @@ diff mostra a omissão.
 | F-UI-08 | o item ativo é o da rota mais específica, e só ele |
 | F-UI-09 | o rodapé identifica quem está logado, nos dois papéis |
 | F-UI-10 | sem acesso liberado, os itens de estudo ficam inertes e os da conta não |
-| F-UI-11 | nenhuma tela do aluno nem do professor passa de 375px, com o cronômetro parado e rodando; o botão de modo diz o texto que mostra — QA-23 |
+| F-UI-11 | nenhuma tela do aluno nem do professor passa de 375px, com o cronômetro parado e rodando; o botão de modo diz o texto que mostra — QA-23. Com dados (estatísticas, semana, revisões, flashcards) também — QA2-B02 |
 | F-UI-12 | a primeira carga mostra "Carregando" sem `h1`, e sem o bundle a tela estática diz o que fazer, legível nos dois temas — QA-26 |
+| F-UI-13 | a caixa de concluir tem área de toque além do quadrado, o botão de modo do cronômetro tem altura, as buscas de leis nomeiam o `<input>` e o cronômetro tem `h1` — QA2-B05 |
 
 ### Aluno — semana e execução — `tests/student-week.spec.ts`
 
@@ -213,6 +214,7 @@ diff mostra a omissão.
 | F-META-06 | aluno sem planejamento ativo: as três telas explicam em vez de quebrar |
 | F-META-07 | planejamento em rascunho é o mesmo que nenhum |
 | F-META-08 | sem acesso vigente, a semana não muda: concluir e registrar recusam, a tela diz que o acesso venceu e o banco fica como estava — QA-07 |
+| F-META-09 | a falha de um diálogo (registrar estudo) aparece uma vez, no diálogo, e a página atrás não a repete — QA2-B03 |
 | F-EXTRA-01 | estudo fora das metas: cria meta e registro numa operação só; a leitura do plano que cai não prende o diálogo — N-01; a resposta que se perde cria uma meta só — QA-04; dois extras no mesmo dia cabem — N-02; data fora de [início do planejamento, hoje] é recusada — QA-11; com "Semana inteira" a data sugerida é hoje — QA-14; abrir com o cronômetro correndo não escreve no render e Cancelar o retoma — QA-27, D-16; o extra de ontem conta ontem na semana — N-07 |
 | F-PLAN-01 | o planejamento como o aluno o vê: identidade, números e ciclo por peso |
 | F-DISC-01 | disciplinas e blocos, só leitura |
@@ -244,6 +246,7 @@ diff mostra a omissão.
 | F-LGPD-03 | `/privacidade` e `/termos` abrem sem login e são linkadas do cadastro, do login e de Meus dados |
 | F-LGPD-04 | aluno com acesso vencido exclui a conta |
 | F-LGPD-05 | o professor não vê o cartão Excluir conta |
+| F-LGPD-06 | a outra sessão da conta excluída cai em `/entrar` (o GoTrue responde 4xx, não 500) — QA2-B01 |
 | F-CUP-01 | o código libera o acesso na hora, normalizado, grava o resgate e o cartão do cupom some — spec [30](specs/30-cupom-de-acesso.md) |
 | F-CUP-02 | inexistente, inativo e vencido recebem a MESMA resposta, nada é concedido, e o código vazio pede o código |
 | F-CUP-03 | com o acesso liberado a tela não oferece o resgate |

@@ -114,6 +114,9 @@ export function GoalRow({ goal, actions }: { goal: Goal; actions: GoalActions })
             sx={(theme) => ({
               width: 22,
               height: 22,
+              // O quadrado desenhado continua com 22px; a área de toque cresce para 28px
+              // (WCAG 2.5.8) sem mexer no espaçamento da linha.
+              "&::after": { content: '""', position: "absolute", inset: -3 },
               borderRadius: `${theme.brand.radius.xs}px`,
               border: `1.5px solid ${
                 done ? theme.vars.palette.success.main : theme.vars.palette.surface.controlBorder

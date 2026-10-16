@@ -19,7 +19,8 @@ insert into auth.users (instance_id, id, aud, role, email, raw_user_meta_data) v
   ('00000000-0000-0000-0000-000000000000','79000000-0000-4000-8000-000000000001','authenticated','authenticated','cupom-a@x.com','{"name":"Aluna Cupom A"}'),
   ('00000000-0000-0000-0000-000000000000','79000000-0000-4000-8000-000000000002','authenticated','authenticated','cupom-b@x.com','{"name":"Aluna Cupom B"}'),
   ('00000000-0000-0000-0000-000000000000','79000000-0000-4000-8000-000000000003','authenticated','authenticated','cupom-c@x.com','{"name":"Aluna Cupom C"}'),
-  ('00000000-0000-0000-0000-000000000000','79000000-0000-4000-8000-000000000004','authenticated','authenticated','cupom-d@x.com','{"name":"Aluna Cupom D"}');
+  ('00000000-0000-0000-0000-000000000000','79000000-0000-4000-8000-000000000004','authenticated','authenticated','cupom-d@x.com','{"name":"Aluna Cupom D"}'),
+  ('00000000-0000-0000-0000-000000000000','79000000-0000-4000-8000-000000000005','authenticated','authenticated','cupom-e@x.com','{"name":"Aluna Cupom E"}');
 
 insert into public.coupons (code, description, months_granted, active, valid_until, max_uses) values
   ('TESTE3',   'tres meses',        3, true,  null,                         null),
@@ -225,3 +226,65 @@ do $$ begin
 exception when unique_violation then
   raise notice '17 OK  coupons nao aceita codigos que so diferem na caixa';
 end $$;
+
+-- ---------- Bloqueado pelo professor não se reativa com cupom (QA2-A01) ----------
+-- Pelo caminho real: vincular, liberar e bloquear com as RPCs da professora.
+set role authenticated;
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+select public.link_student('79000000-0000-4000-8000-000000000005');
+select * from public.set_student_access('79000000-0000-4000-8000-000000000005', 'grant', 1, '79100000-0000-4000-8000-000000000001');
+select * from public.set_student_access('79000000-0000-4000-8000-000000000005', 'suspend', null, '79100000-0000-4000-8000-000000000002');
+
+select app_test.act_as('79000000-0000-4000-8000-000000000005');  -- E, suspensa
+do $$
+declare v_codigo text;
+begin
+  -- Com cupom válido e com código que não existe: a mesma recusa, porque o
+  -- estado da aluna vem antes de o código ser olhado.
+  foreach v_codigo in array array['TESTE3', 'NAOEXISTE'] loop
+    begin
+      perform public.redeem_coupon(v_codigo);
+      raise exception 'FALHOU: a aluna suspensa pela professora se reativou com %', v_codigo;
+    exception when raise_exception then
+      if sqlerrm <> 'Seu acesso está bloqueado. Fale com seu professor.' then
+        raise exception 'FALHOU: % respondeu "%"', v_codigo, sqlerrm;
+      end if;
+    end;
+  end loop;
+  if public.has_active_access() then
+    raise exception 'FALHOU: a aluna suspensa voltou a ter acesso';
+  end if;
+  raise notice '18 OK  suspenso pelo professor nao se reativa com cupom, valido ou nao';
+end $$;
+
+reset role;
+select app_test.act_as_owner();
+do $$ begin
+  if (select count(*) from public.access_grants where student_id = '79000000-0000-4000-8000-000000000005') <> 2
+     or exists (select 1 from public.coupon_redemptions where student_id = '79000000-0000-4000-8000-000000000005')
+     or (select access_status from public.profiles where id = '79000000-0000-4000-8000-000000000005') <> 'suspended' then
+    raise exception 'FALHOU: a tentativa de resgate mexeu no historico ou no estado da aluna suspensa';
+  end if;
+  raise notice '19 OK  a recusa nao grava resgate nem altera o acesso';
+end $$;
+
+-- ---------- Quem tem acesso não descobre códigos (QA2-A03) ----------
+set role authenticated;
+select app_test.act_as('79000000-0000-4000-8000-000000000001');  -- A, com acesso vigente
+do $$
+declare v_codigo text;
+begin
+  foreach v_codigo in array array['ULTIMO', 'INATIVO', 'VENCIDO', 'NAOEXISTE'] loop
+    begin
+      perform public.redeem_coupon(v_codigo);
+      raise exception 'FALHOU: quem tem acesso vigente resgatou %', v_codigo;
+    exception when raise_exception then
+      if sqlerrm <> 'Seu acesso já está liberado.' then
+        raise exception 'FALHOU: % respondeu "%" — com acesso vigente a resposta nao pode depender do codigo', v_codigo, sqlerrm;
+      end if;
+    end;
+  end loop;
+  raise notice '20 OK  com acesso vigente a resposta e a mesma para codigo valido e invalido';
+end $$;
+reset role;
+select app_test.act_as_owner();

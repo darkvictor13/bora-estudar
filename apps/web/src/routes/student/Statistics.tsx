@@ -167,9 +167,9 @@ export function StudentStatistics() {
           <Box
             sx={(theme) => ({
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
               gap: 1.5,
-              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+              [theme.breakpoints.down("lg")]: { gridTemplateColumns: "minmax(0, 1fr)" },
             })}
           >
             <Card>
@@ -226,7 +226,7 @@ export function StudentStatistics() {
                     py: 1,
                     borderRadius: `${theme.brand.radius.md}px`,
                     backgroundColor: theme.vars.palette.surface.sunken,
-                    [theme.breakpoints.down("sm")]: { gridTemplateColumns: "1fr", gap: 0.6 },
+                    [theme.breakpoints.down("sm")]: { gridTemplateColumns: "minmax(0, 1fr)", gap: 0.6 },
                   })}>
                     <Typography variant="body2" component="span" sx={{ fontWeight: 700 }}>
                       {formatDayMonth(day.date)}

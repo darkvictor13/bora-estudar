@@ -142,7 +142,7 @@ export function Account() {
                 gridTemplateColumns: "repeat(3, 1fr)",
                 gap: 2,
                 m: 0,
-                [theme.breakpoints.down("lg")]: { gridTemplateColumns: "1fr" },
+                [theme.breakpoints.down("lg")]: { gridTemplateColumns: "minmax(0, 1fr)" },
               })}
             >
               {(

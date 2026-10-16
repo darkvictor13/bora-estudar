@@ -215,8 +215,16 @@ begin
   select * into u from auth.users where id = '22222222-2222-4222-8222-222222222222';
   if u.email like '%bruno%' or u.email not like 'conta-excluida-%@excluida.invalid'
      or u.encrypted_password is not null or u.phone is not null
-     or u.raw_user_meta_data <> '{}'::jsonb or u.banned_until <> 'infinity' or u.deleted_at is null then
+     or u.raw_user_meta_data <> '{}'::jsonb or u.deleted_at is null then
     raise exception 'FALHOU: o login nao foi anulado: email=%, banido=%', u.email, u.banned_until;
+  end if;
+  -- O GoTrue le `banned_until` como time.Time e NAO le `infinity`: com ele, /user e
+  -- /logout da conta davam 500 e a listagem admin falhava para todos (QA2-B01).
+  if u.banned_until is null or u.banned_until = 'infinity' or u.banned_until < now() + interval '50 years' then
+    raise exception 'FALHOU: banned_until deve ser uma data finita bem no futuro, e nao infinity: %', u.banned_until;
+  end if;
+  if exists (select 1 from auth.users where banned_until = 'infinity') then
+    raise exception 'FALHOU: ha usuario com banned_until = infinity, que o GoTrue nao consegue ler';
   end if;
   if exists (select 1 from auth.identities where user_id = u.id)
      or exists (select 1 from auth.sessions where user_id = u.id)
@@ -296,3 +304,43 @@ do $$ begin
     raise exception 'FALHOU: a conta da Fabi nao foi marcada como excluida';
   end if;
 end $$;
+
+-- ---------- Conta excluída não volta pela porta do professor (QA2-A02) ----------
+-- O professor ainda enxerga o id do Bruno em `access_grants` (retida de
+-- propósito). Reabrir o vínculo e liberar de novo punha "Conta excluída" de volta
+-- na lista de alunos, com o JWT antigo voltando a gravar.
+set role authenticated;
+select app_test.act_as('11111111-1111-4111-8111-111111111111');  -- Ana
+do $$ begin
+  perform public.link_student('22222222-2222-4222-8222-222222222222');
+  raise exception 'FALHOU: o professor vinculou uma conta excluida';
+exception when raise_exception then
+  if sqlerrm <> 'aluno nao encontrado' then raise; end if;
+  raise notice '12 OK  link_student recusa conta excluida como "nao encontrado"';
+end $$;
+
+do $$ begin
+  perform * from public.set_student_access('22222222-2222-4222-8222-222222222222', 'grant', 12, '22900000-0000-4000-8000-000000000001');
+  raise exception 'FALHOU: o professor liberou acesso a uma conta excluida';
+exception when raise_exception then
+  if sqlerrm <> 'somente o professor do aluno libera o acesso dele' then raise; end if;
+  raise notice '13 OK  set_student_access recusa conta excluida (o vinculo foi zerado)';
+end $$;
+
+reset role;
+select app_test.act_as_owner();
+-- O estado que o vinculo reaberto produzia: ativo, com data futura e deleted_at.
+update public.profiles set access_status = 'active', access_expires_at = now() + interval '1 year'
+ where id = '22222222-2222-4222-8222-222222222222';
+set role authenticated;
+select app_test.act_as('22222222-2222-4222-8222-222222222222');
+do $$ begin
+  if public.has_active_access() then
+    raise exception 'FALHOU: has_active_access() e verdadeiro para conta excluida; o Worker de /materials entregaria PDF';
+  end if;
+  raise notice '14 OK  has_active_access() e falso para conta excluida, mesmo com status active';
+end $$;
+reset role;
+select app_test.act_as_owner();
+update public.profiles set access_status = 'suspended', access_expires_at = null
+ where id = '22222222-2222-4222-8222-222222222222';

@@ -663,6 +663,13 @@ export function setFixtureRole(role: "teacher" | "student") {
     name: role === "teacher" ? "Professor de Exemplo" : "Aluna de Exemplo" };
 }
 
+/** Somente na implementação de demonstração: põe o aluno num estado de acesso. */
+export function setFixtureAccess(access: "pending" | "active" | "suspended" | "expired") {
+  if (state.session) {
+    state.session = { ...state.session, access, accessExpiresAt: access === "active" ? state.session.accessExpiresAt : null };
+  }
+}
+
 /**
  * As baterias que o professor anulou nesta sessão de demonstração. `SESSIONS` é a
  * semente e não muda; a anulação vira uma sobreposição, e é por ela que a lista
@@ -1363,6 +1370,15 @@ export const fixturesApi: BoraApi = {
   redeemCoupon: (code: string) => {
     const invalid = checkCoupon(code);
     if (invalid) return later<Result<Session>>({ ok: false, error: invalid });
+    // O estado do aluno vem ANTES do código, como no servidor (R-CUP-04, R-CUP-06,
+    // R-CUP-15): com acesso vigente a resposta é a mesma para qualquer código, e
+    // quem o professor bloqueou não se reativa com cupom.
+    if (state.session?.access === "active") {
+      return later(fail<Session>("validation", "Seu acesso já está liberado.", "coupon"));
+    }
+    if (state.session?.access === "suspended") {
+      return later(fail<Session>("validation", "Seu acesso está bloqueado. Fale com seu professor.", "coupon"));
+    }
     // Normaliza como o servidor: sem espaços e em maiúsculas (R-CUP-02).
     if (code.replace(/\s+/g, "").toUpperCase() !== "BORA3") {
       return later(fail<Session>("validation", "Cupom inválido ou expirado.", "coupon"));

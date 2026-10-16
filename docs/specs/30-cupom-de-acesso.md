@@ -36,9 +36,9 @@ acesso.
 | R-CUP-01 | O resgate é `redeem_coupon(p_code text)`, `SECURITY DEFINER`, revogada de `public` e `anon`. O aluno **não** ganha grant de escrita em `profiles` nem em `coupons`: o acesso concedido é execução. |
 | R-CUP-02 | O código é comparado **normalizado**: sem espaços e em maiúsculas. "cupom 3meses" e "CUPOM3MESES" são o mesmo cupom, porque a pessoa digita o que está no papel. Código vazio recebe "Informe o código do cupom." |
 | R-CUP-03 | Um cupom só vale se estiver `active`, dentro de `valid_until` (quando houver) e abaixo de `max_uses` (quando houver). As três condições são lidas **com a linha do cupom travada** (`for update`), então dois resgates simultâneos do último uso não passam os dois. |
-| R-CUP-04 | Código inexistente, inativo, vencido ou esgotado recebem **a mesma resposta**: "Cupom inválido ou expirado." Distinguir os casos entregaria um oráculo para adivinhar códigos. |
+| R-CUP-04 | Código inexistente, inativo, vencido ou esgotado recebem **a mesma resposta**: "Cupom inválido ou expirado." Distinguir os casos entregaria um oráculo para adivinhar códigos. **O estado do aluno vem ANTES do código** (R-CUP-06, R-CUP-15): quem tem acesso vigente recebe "Seu acesso já está liberado." para qualquer código, válido ou não — se a checagem de acesso viesse depois da validade, as duas frases diriam ao aluno com acesso quais códigos existem. |
 | R-CUP-05 | O resgate concede `months_granted` meses **a partir de agora**: `access_status = 'active'`, `access_expires_at = now() + months_granted meses`, `coupon_used = <código>` e `access_origin = 'coupon'`. |
-| R-CUP-06 | **Aluno com acesso vigente não resgata**: "Seu acesso já está liberado." Empilhar cupons viraria renovação automática para sempre, e renovar é decisão do professor. |
+| R-CUP-06 | **Aluno com acesso vigente não resgata**: "Seu acesso já está liberado." Empilhar cupons viraria renovação automática para sempre, e renovar é decisão do professor. A resposta não depende do código. |
 | R-CUP-07 | **Um aluno resgata um cupom uma vez.** A PK `(coupon_id, student_id)` de `coupon_redemptions` é quem garante, e a segunda tentativa recebe "Você já usou este cupom." |
 | R-CUP-08 | **Naturalmente idempotente**, e quem sustenta é a PK de R-CUP-07 mais `profiles.coupon_used`: a retentativa de quem acabou de resgatar (a resposta se perdeu na rede) encontra o resgate gravado, o acesso ainda vigente e o mesmo código, e **devolve o resultado anterior** em vez de acusar "já usou". Só recusa quando o acesso desse cupom já acabou. |
 | R-CUP-09 | Só aluno resgata, e conta excluída não: professor recebe `42501`, e `deleted_at` preenchido também. |
@@ -47,6 +47,7 @@ acesso.
 | R-CUP-12 | O aluno lê os próprios resgates (`coupon_redemptions_select`). **Ninguém escreve direto**: a escrita é da RPC. |
 | R-CUP-13 | O resgate mora em `/aluno/lista-espera`, a tela de quem ainda não tem acesso, e some quando o acesso é liberado. Não há tela nova. O campo se chama `coupon`, e o erro de código marca esse campo. |
 | R-CUP-14 | **Cadastrar cupom não tem tela.** É operação de quem administra o produto, por SQL com `service_role`, como a carga das bibliotecas. |
+| R-CUP-15 | **Aluno bloqueado pelo professor não se reativa com cupom**: `access_status = 'suspended'` recebe "Seu acesso está bloqueado. Fale com seu professor.", **antes** de o código ser olhado, então a frase também não é oráculo. O cupom é para quem ainda não tem acesso (pendente) ou o deixou vencer; sem esta regra o bloqueio durava até o próximo cupom, e `access_grants` não registrava a reativação (QA2-A01). |
 
 ---
 
@@ -58,11 +59,12 @@ acesso.
 redeem_coupon(code)
       ├─ aluno autenticado, não professor, não excluído?     ─ não → 42501
       ├─ código normalizado vazio?                           ─ sim → "Informe o código…"
-      ├─ trava o cupom: ativo? vigente? abaixo do limite?    ─ não → "Cupom inválido ou expirado."
       ├─ já resgatou ESTE cupom?
       │        ├─ acesso ainda vigente, do mesmo código      → devolve o resultado anterior
       │        └─ senão                                      → "Você já usou este cupom."
       ├─ já tem acesso vigente?                              ─ sim → "Seu acesso já está liberado."
+      ├─ suspenso pelo professor?                            ─ sim → "Seu acesso está bloqueado. Fale com seu professor."
+      ├─ trava o cupom: ativo? vigente? abaixo do limite?    ─ não → "Cupom inválido ou expirado."
       └─ na MESMA transação:
              coupon_redemptions: (cupom, aluno, meses, validade)
              profiles: active, validade, coupon_used, access_origin = 'coupon'
@@ -91,7 +93,7 @@ redeem_coupon(code)
 | CA-01 | Código válido libera o acesso pelo prazo do cupom, grava o resgate, e o aluno passa a ver as telas de estudo | `23_coupon_redemption.sql`, F-CUP-01 |
 | CA-02 | Código inexistente, inativo, vencido e esgotado dão a mesma mensagem | `23_coupon_redemption.sql`, F-CUP-02 |
 | CA-03 | O código é normalizado (espaços e caixa) | `23_coupon_redemption.sql` |
-| CA-04 | Aluno com acesso vigente não resgata; quem já usou o cupom e perdeu o acesso não resgata de novo | `23_coupon_redemption.sql` |
+| CA-04 | Aluno com acesso vigente não resgata, qualquer que seja o código, e aluno suspenso pelo professor também não; quem já usou o cupom e perdeu o acesso não resgata de novo | `23_coupon_redemption.sql` |
 | CA-05 | A retentativa de quem acabou de resgatar devolve o resultado anterior, sem segundo resgate | `23_coupon_redemption.sql` |
 | CA-06 | O último uso de um cupom com `max_uses` não passa duas vezes | `23_coupon_redemption.sql` |
 | CA-07 | Professor, anônimo e conta excluída são recusados; o aluno não escreve em `coupons`, `coupon_redemptions` nem no próprio acesso | `23_coupon_redemption.sql`, `01_grants.sql` |
