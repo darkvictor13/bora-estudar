@@ -49,7 +49,7 @@ aula. Os recortes de edital e a incidência continuam sem dados homologados.
 
 Foram observadas as telas de cronograma, biblioteca/leitor de leis e entrada de
 flashcards do Caveira em 24/09/2026. A implementação usa os componentes e dados
-do Bora Estudar. Não importa materiais da plataforma de referência.
+da Fronteira Concursos. Não importa materiais da plataforma de referência.
 
 O lote de leis vem de `VADE_MECUM_POLICIAL_ORGANIZADO_V2.zip`, fornecido pelo
 responsável em 28/09/2026. Os 15 arquivos originais ficam em

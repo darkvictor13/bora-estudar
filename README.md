@@ -1,4 +1,4 @@
-# Bora Estudar
+# Fronteira Concursos
 
 Plataforma de estudos para concursos. Um repositório, dois entregáveis: o site
 e o banco.

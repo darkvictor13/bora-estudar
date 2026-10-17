@@ -254,15 +254,15 @@ otp_expiry = 3600
 # Todo texto que a pessoa lê fica em português — inclusive o único que ela
 # recebe fora do site.
 [auth.email.template.recovery]
-subject = "Redefinir sua senha — Bora Estudar"
+subject = "Redefinir sua senha — Fronteira Concursos"
 content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.confirmation]
-subject = "Confirme seu e-mail — Bora Estudar"
+subject = "Confirme seu e-mail — Fronteira Concursos"
 content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.invite]
-subject = "Você foi convidado — Bora Estudar"
+subject = "Você foi convidado — Fronteira Concursos"
 content_path = "./supabase/templates/invite.html"
 
 # Uncomment to customize notification email template

@@ -12,7 +12,7 @@ quando versionados separadamente, derivam.
 ## Mapa
 
 ```
-bora-estudar/
+fronteira-concursos/
 ├── apps/
 │   ├── web/                 # SPA React + MUI + Vite — painéis de aluno e professor
 │   └── e2e/                 # Suíte Playwright, contra o site

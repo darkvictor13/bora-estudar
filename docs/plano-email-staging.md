@@ -44,7 +44,7 @@ port = 465
 user = "resend"
 pass = "env(STAGING_SMTP_PASSWORD)"
 admin_email = "nao-responda@mail.<dominio>"
-sender_name = "Bora Estudar (staging)"
+sender_name = "Fronteira Concursos (staging)"
 
 [remotes.staging.auth.rate_limit]
 email_sent = 30
