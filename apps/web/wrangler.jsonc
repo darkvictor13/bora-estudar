@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "bora-estudar",
+  "name": "fronteira-concursos",
   "compatibility_date": "2026-08-23",
   // O portão dos materiais: só `/materials/*` executa código (`worker/index.ts`).
   // O resto do site continua sendo servido direto pela camada de assets.
@@ -16,12 +16,12 @@
   },
   "env": {
     // Vazio de propósito: pela regra do sufixo o Worker publicado é
-    // `bora-estudar-staging`, que é o nome que já está no ar.
+    // `fronteira-concursos-staging`, que é o nome que já está no ar.
     "staging": {},
     // Produção precisa de `name` explícito, senão o sufixo a transformaria em
-    // `bora-estudar-producao`. Deploy SEMPRE com `--env`: um `wrangler deploy`
-    // sem a flag publica o Worker `bora-estudar` do nível superior, que não é
+    // `fronteira-concursos-producao`. Deploy SEMPRE com `--env`: um `wrangler deploy`
+    // sem a flag publica o Worker `fronteira-concursos` do nível superior, que não é
     // ambiente nenhum.
-    "producao": { "name": "bora-estudar" }
+    "producao": { "name": "fronteira-concursos" }
   }
 }

@@ -254,7 +254,7 @@ Cloudflare:
 |---|---|
 | `.github/workflows/` | os quatro workflows; ver "Os workflows" |
 | `scripts/fumaca.sh` | teste de fumaça, usado pelo CI e executável à mão |
-| `apps/web/wrangler.jsonc` | `env.staging` vazio (o sufixo dá `bora-estudar-staging`) e `env.producao` com `name` explícito |
+| `apps/web/wrangler.jsonc` | `env.staging` vazio (o sufixo dá `fronteira-concursos-staging`) e `env.producao` com `name` explícito |
 | `apps/web/public/_headers` | política de cache, com a concatenação de regras já medida e contornada |
 | `supabase/config.toml` | bloco `[remotes.staging]` com `project_id` e o `site_url` do domínio real |
 | `package.json` | `wrangler` pinado em `4.149.0` — sem isso `npx wrangler` resolve o que houver de mais novo no dia, no CI e na sua máquina |
@@ -269,7 +269,7 @@ para revelar isso. O bloco é config, não recurso — não cria nada no Cloudfl
 Dry-run dos dois ambientes conferido.
 
 **Deploy sempre com `--env`.** Um `wrangler deploy` sem a flag publica o Worker
-`bora-estudar` do nível superior, que não é ambiente nenhum.
+`fronteira-concursos` do nível superior, que não é ambiente nenhum.
 
 ---
 

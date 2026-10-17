@@ -116,7 +116,7 @@ base desde 15/10/2026 e **ainda não está no Supabase de staging**.
 
 *Quem faz:* quem tem acesso à conta do Cloudflare.
 
-- [ ] **Worker `bora-estudar`** (nome de produção) e o domínio de produção ligado
+- [ ] **Worker `fronteira-concursos`** (nome de produção) e o domínio de produção ligado
   a ele. Lembrete: o deploy é SEMPRE com `--env`; sem a flag publica um Worker que
   não é ambiente nenhum.
 - [ ] **SSL/TLS em *Full (strict)*** e *Always Use HTTPS*.

@@ -442,9 +442,9 @@ enabled = true
 project_id = "gumvfizrjexbygrbceei"
 
 [remotes.staging.auth]
-site_url = "https://bora-estudar-staging.bora-estudar-saas.workers.dev"
+site_url = "https://fronteira-concursos-staging.bora-estudar-saas.workers.dev"
 # O `/**` não é decoração: o link do e-mail aponta para
 # /confirmar?next=/redefinir-senha, não para a raiz.
 additional_redirect_urls = [
-  "https://bora-estudar-staging.bora-estudar-saas.workers.dev/**",
+  "https://fronteira-concursos-staging.bora-estudar-saas.workers.dev/**",
 ]

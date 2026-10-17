@@ -78,7 +78,7 @@ segredo nenhum:
 ```jsonc
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bora-estudar",
+  "name": "fronteira-concursos",
   "compatibility_date": "2026-08-23",
   "assets": {
     "directory": "./dist",
@@ -90,7 +90,7 @@ segredo nenhum:
 }
 ```
 
-O `name` decide o subdomínio: `bora-estudar.<seu-subdominio>.workers.dev`.
+O `name` decide o subdomínio: `fronteira-concursos.<seu-subdominio>.workers.dev`.
 
 Acrescente ao `.gitignore` da raiz, no bloco de build:
 
@@ -211,8 +211,8 @@ do Cloudflare:
 
 ```toml
 [remotes.staging.auth]
-site_url = "https://bora-estudar.<subdominio>.workers.dev"
-additional_redirect_urls = ["https://bora-estudar.<subdominio>.workers.dev/**"]
+site_url = "https://fronteira-concursos.<subdominio>.workers.dev"
+additional_redirect_urls = ["https://fronteira-concursos.<subdominio>.workers.dev/**"]
 ```
 
 O `/**` não é decoração: o link do e-mail aponta para
